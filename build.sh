@@ -52,7 +52,7 @@ TRASH_DIR="${TRASH_DIR:-${TMPDIR:-/tmp}/XTools-build-archive}"
 
 SWIFT_BIN="${SWIFT_BIN:-$(xcrun --find swift)}"
 ARCH="${ARCH:-$(uname -m)}"
-LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+LSREGISTER="${LSREGISTER:-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister}"
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
@@ -255,13 +255,18 @@ PLIST
 
 package_app() {
   local configuration="${1:-debug}"
-  local t0 build_product_dir build_binary
+  local t0 build_product_dir build_binary icon_changed=0
   t0="$(now_ms)"
   build_product_dir="$(bin_path_for "$configuration")"
   build_binary="$build_product_dir/$PRODUCT_NAME"
 
   if [[ ! -x "$build_binary" ]]; then
     error "Missing build product: $build_binary"
+    exit 1
+  fi
+
+  if [[ ! -f "$ICON_SOURCE" ]]; then
+    error "Missing app icon: $ICON_SOURCE"
     exit 1
   fi
 
@@ -272,8 +277,10 @@ package_app() {
   cp "$build_binary" "$APP_BINARY"
   chmod +x "$APP_BINARY"
 
-  if [[ -f "$ICON_SOURCE" && ! -f "$APP_RESOURCES/$ICON_NAME.icns" ]]; then
+  # Compare content: an existing app still needs newly generated icon resources.
+  if ! cmp -s "$ICON_SOURCE" "$APP_RESOURCES/$ICON_NAME.icns"; then
     cp "$ICON_SOURCE" "$APP_RESOURCES/$ICON_NAME.icns"
+    icon_changed=1
   fi
 
   # Drop stale pre-rename product icon if an older packaging run left it behind.
@@ -296,8 +303,12 @@ package_app() {
   # Must run after strip — strip invalidates any prior code signature.
   codesign --force --sign - "$APP_PATH" >/dev/null
 
-  # lsregister is relatively slow and rarely needed every edit; opt-in.
-  if [[ "${LSREGISTER_EVERY_BUILD:-0}" == "1" && -x "$LSREGISTER" ]]; then
+  # Refresh Finder/Dock icon metadata when artwork changes, keeping the normal
+  # incremental path fast. Do this after signing so registration sees the final app.
+  if [[ "$icon_changed" == "1" ]]; then
+    touch "$APP_PATH"
+  fi
+  if [[ ( "$icon_changed" == "1" || "${LSREGISTER_EVERY_BUILD:-0}" == "1" ) && -x "$LSREGISTER" ]]; then
     "$LSREGISTER" -f "$APP_PATH" >/dev/null 2>&1 || true
   fi
 
