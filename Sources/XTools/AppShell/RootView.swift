@@ -129,6 +129,7 @@ final class RootViewModel: ObservableObject {
             commandText = ""
             commandPalettePreviewValue = UUID().uuidString.lowercased()
             commandPalettePresentationSession += 1
+            CommandPaletteTrace.opened(session: commandPalettePresentationSession)
             showsCommandPalette = true
         }
         focusCommandPalette()
@@ -148,6 +149,7 @@ final class RootViewModel: ObservableObject {
     func closeCommandPalette() {
         commandText = ""
         if showsCommandPalette {
+            CommandPaletteTrace.dismissed(session: commandPalettePresentationSession)
             commandPalettePresentationSession += 1
         }
         showsCommandPalette = false
@@ -174,6 +176,7 @@ struct RootView: View {
     @StateObject private var workspaceRepository: ToolWorkspaceRepository
     @StateObject private var dashboardStore: DashboardStore
     @StateObject private var smartPaste = SmartPasteMonitor()
+    @StateObject private var systemAppearanceSource: SystemAppearanceSource
     @State private var previousSelectedToolID: ToolID?
     @State private var showsPreferences = false
     // v3 continuity flight: palette-row icon → page title rail.
@@ -186,8 +189,14 @@ struct RootView: View {
 
     init(
         viewModel: RootViewModel? = nil,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        systemAppearanceSource: SystemAppearanceSource? = nil
     ) {
+        _themeName = AppStorage(
+            wrappedValue: defaults.string(forKey: "dt.theme") ?? AppThemePreference.system.rawValue,
+            "dt.theme",
+            store: defaults
+        )
         let preferences = ToolPreferenceStore(defaults: defaults)
         _viewModel = StateObject(wrappedValue: viewModel ?? RootViewModel(preferences: preferences))
         let validToolIDs = Set(
@@ -200,10 +209,20 @@ struct RootView: View {
             wrappedValue: ToolWorkspaceRepository(preferences: preferences)
         )
         _dashboardStore = StateObject(wrappedValue: DashboardStore(defaults: defaults))
+        _systemAppearanceSource = StateObject(
+            wrappedValue: systemAppearanceSource ?? SystemAppearanceSource()
+        )
     }
 
     private var themePreference: AppThemePreference {
         AppThemePreference(preferenceValue: themeName)
+    }
+
+    private var resolvedColorScheme: ColorScheme {
+        SystemAppearanceSource.resolvedColorScheme(
+            preference: themePreference,
+            systemColorScheme: systemAppearanceSource.colorScheme
+        )
     }
 
     var body: some View {
@@ -254,6 +273,7 @@ struct RootView: View {
         .focusedSceneObject(viewModel)
         .frame(minWidth: 960, minHeight: 640)
         .background(ToolTheme.windowBackground)
+        .background(WindowAppearanceOwner(preference: themePreference))
         .background(WindowChromeConfigurator())
         .background(FileInputPanelWindowBinder(coordinator: fileInputPanelCoordinator))
         .background(FileOutputPanelWindowBinder(coordinator: fileOutputPanelCoordinator))
@@ -262,7 +282,7 @@ struct RootView: View {
         .environment(\.fileInputPanelClient, fileInputPanelCoordinator.client)
         .environment(\.fileOutputPanelClient, fileOutputPanelCoordinator.client)
         .environmentObject(workspaceRepository)
-        .preferredColorScheme(themePreference.colorScheme)
+        .appThemeEnvironment(preference: themePreference, source: systemAppearanceSource)
         .toolbar {
             WindowToolbarContent(
                 selectedTool: selectedTool,
@@ -270,13 +290,15 @@ struct RootView: View {
                 isFavorite: selectedTool.map { favorites.isFavorite($0.id) } ?? false,
                 onToggleSidebar: toggleSidebar,
                 onToggleFavorite: toggleFavorite,
-                onCommandPalette: { toggleCommandPaletteAnimated() }
+                onCommandPalette: { toggleCommandPaletteAnimated() },
+                colorScheme: resolvedColorScheme
             )
         }
         .sheet(isPresented: $showsPreferences) {
             RootPreferencesSheet(
                 themeName: $themeName,
-                autoResumeLastTool: $viewModel.autoResumeLastTool
+                autoResumeLastTool: $viewModel.autoResumeLastTool,
+                systemAppearanceSource: systemAppearanceSource
             )
         }
         .onAppear {
@@ -383,6 +405,7 @@ struct RootView: View {
                 actions: commandActions,
                 query: $viewModel.commandText,
                 focusToken: viewModel.commandPaletteFocusToken,
+                presentationSession: presentationSession,
                 canRequestSearchFocus: {
                     viewModel.showsCommandPalette
                         && viewModel.commandPalettePresentationSession == presentationSession
@@ -593,6 +616,7 @@ struct RootView: View {
 private struct RootPreferencesSheet: View {
     @Binding var themeName: String
     @Binding var autoResumeLastTool: Bool
+    @ObservedObject var systemAppearanceSource: SystemAppearanceSource
     @Environment(\.dismiss) private var dismiss
 
     private var themePreference: AppThemePreference {
@@ -659,7 +683,8 @@ private struct RootPreferencesSheet: View {
         .padding(24)
         .frame(width: 440, height: 300)
         .background(ToolTheme.panelBackground)
-        .preferredColorScheme(themePreference.colorScheme)
+        .background(WindowAppearanceOwner(preference: themePreference))
+        .appThemeEnvironment(preference: themePreference, source: systemAppearanceSource)
     }
 }
 

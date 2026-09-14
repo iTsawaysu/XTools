@@ -46,6 +46,21 @@ final class SmartPasteMonitor: ObservableObject {
     private var dismissedChangeCount = -1
     private var currentToolID: ToolID?
 
+    static func isWithinInspectionLimit(
+        _ text: String,
+        limit: Int = SmartPasteDetector.maxInspectedLength
+    ) -> Bool {
+        guard limit >= 0 else { return false }
+        guard let boundary = text.index(
+            text.startIndex,
+            offsetBy: limit,
+            limitedBy: text.endIndex
+        ) else {
+            return true
+        }
+        return boundary == text.endIndex
+    }
+
     /// Re-samples the pasteboard when it changed since the last sample.
     func refresh(registry: ToolRegistry, pasteboard: NSPasteboard = .general) {
         let changeCount = pasteboard.changeCount
@@ -59,7 +74,7 @@ final class SmartPasteMonitor: ObservableObject {
         guard changeCount != dismissedChangeCount else { return }
         guard let text = pasteboard.string(forType: .string),
               !text.isEmpty,
-              text.count <= SmartPasteDetector.maxInspectedLength,
+              Self.isWithinInspectionLimit(text),
               let kind = SmartPasteDetector.detect(text),
               let route = Self.routes[kind],
               let tool = registry.tool(for: route.toolID),

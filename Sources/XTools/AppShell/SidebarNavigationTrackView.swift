@@ -47,7 +47,6 @@ final class SidebarNavigationTrackView: NSView {
         wantsLayer = true
         layer?.masksToBounds = true
         autoresizesSubviews = true
-        autoresizingMask = [.width]
         setAccessibilityElement(false)
         addSubview(hostedContentView)
     }
@@ -72,10 +71,15 @@ final class SidebarNavigationTrackView: NSView {
         return super.hitTest(point)
     }
 
-    func update(groupID: String, naturalContentHeight: CGFloat) {
+    @discardableResult
+    func update(groupID: String, naturalContentHeight: CGFloat) -> Bool {
         self.groupID = groupID
+        guard self.naturalContentHeight != naturalContentHeight else {
+            return false
+        }
         self.naturalContentHeight = naturalContentHeight
         needsLayout = true
+        return true
     }
 
     /// v3: activates this row for any point outside the trailing favorite

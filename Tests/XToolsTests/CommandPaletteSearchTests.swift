@@ -1,9 +1,53 @@
 import CoreGraphics
+import Foundation
 @testable import XTools
 import Testing
 
 /// Real behavior tests for the Command-K palette keyboard logic.
 struct CommandPaletteSearchTests {
+    @Test func commandPaletteRowSnapshotBenchmark() {
+        guard ProcessInfo.processInfo.environment["TOOLS_COMMAND_PALETTE_BENCHMARK"] == "1" else {
+            return
+        }
+
+        let projection = ToolNavigationProjection(
+            registry: .default,
+            favoriteIDs: [],
+            selectedToolID: nil,
+            query: ""
+        )
+        let snapshot = CommandPaletteNavigationState.snapshot(for: projection.commandPaletteEntries)
+        let rows = snapshot.rows
+        let state = CommandPaletteNavigationState()
+        let iterations = 1_000
+        var checksum = 0
+        let startedAt = ContinuousClock.now
+
+        for _ in 0..<iterations {
+            for row in rows {
+                if row.id == state.activeRowID(in: snapshot) {
+                    checksum &+= 1
+                }
+                if row.id == state.activeRowID(in: snapshot) {
+                    checksum &+= 1
+                }
+                checksum &+= state.selectableIndex(of: row, in: snapshot) ?? 0
+            }
+        }
+
+        let elapsed = ContinuousClock.now - startedAt
+        let components = elapsed.components
+        let milliseconds = Double(components.seconds) * 1_000
+            + Double(components.attoseconds) / 1_000_000_000_000_000
+        FileHandle.standardError.write(Data(String(
+            format: "COMMAND_PALETTE_ROW_SNAPSHOT_BENCHMARK rows=%d iterations=%d milliseconds=%.3f checksum=%d\n",
+            rows.count,
+            iterations,
+            milliseconds,
+            checksum
+        ).utf8))
+    }
+
     // MARK: - RootViewModel focus requests
 
     @MainActor
@@ -334,6 +378,35 @@ struct CommandPaletteSearchTests {
         #expect(state.activeSelectableIndex(in: emptyRows) == nil)
         #expect(state.activeRowID(in: emptyRows) == nil)
         #expect(state.activeToolID(in: emptyRows) == nil)
+    }
+
+    @Test func rowSnapshotPrecomputesSelectionWithoutChangingDisplayOrder() {
+        let action = CommandActionEntry(
+            id: .openPreferences,
+            title: "打开设置",
+            subtitle: nil,
+            systemImage: "gearshape"
+        )
+        let snapshot = CommandPaletteNavigationState.snapshot(
+            for: [
+                Self.entry(.json, title: "JSON Formatter"),
+                Self.entry(.jwt, title: "Token Inspector")
+            ],
+            actions: [action]
+        )
+
+        #expect(snapshot.rows.map(\.id) == [
+            "title.动作",
+            "command.\(CommandActionID.openPreferences.rawValue)",
+            "title.工具",
+            "tool.json",
+            "tool.jwt"
+        ])
+        #expect(snapshot.selectableCount == 3)
+        #expect(snapshot.selectableIndex(of: snapshot.rows[0]) == nil)
+        #expect(snapshot.selectableIndex(of: snapshot.rows[1]) == 0)
+        #expect(snapshot.selectableIndex(of: snapshot.rows[3]) == 1)
+        #expect(snapshot.selectableIndex(of: snapshot.rows[4]) == 2)
     }
 
     @Test func activeRowMovementResetAndPointerMoveUseTheSameSelectableRows() {

@@ -10,13 +10,15 @@ struct WindowToolbarContent: ToolbarContent {
     let onToggleSidebar: () -> Void
     let onToggleFavorite: () -> Void
     let onCommandPalette: () -> Void
+    let colorScheme: ColorScheme
 
     @ToolbarContentBuilder
     var body: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
             SidebarToggleButton(
                 isSidebarVisible: isSidebarVisible,
-                action: onToggleSidebar
+                action: onToggleSidebar,
+                colorScheme: colorScheme
             )
         }
 
@@ -36,6 +38,7 @@ struct WindowToolbarContent: ToolbarContent {
                         .toolMotionIconSwap(id: isFavorite)
                 }
                 .buttonStyle(QuietTitlebarButtonStyle())
+                .environment(\.colorScheme, colorScheme)
                 .foregroundStyle(isFavorite ? ToolTheme.accent : ToolTheme.textSecondary)
                 .help(isFavorite ? "Remove from Favorites" : "Add to Favorites")
                 .accessibilityLabel(isFavorite ? "Remove from Favorites" : "Add to Favorites")
@@ -64,6 +67,7 @@ struct WindowToolbarContent: ToolbarContent {
                 .fixedSize(horizontal: true, vertical: false)
             }
             .buttonStyle(CommandTriggerButtonStyle())
+            .environment(\.colorScheme, colorScheme)
             .help("命令面板 (Command-K)")
             .accessibilityLabel("跳转工具")
             .accessibilityHint("打开命令面板，快捷键 Command-K")
@@ -80,6 +84,7 @@ private enum WindowToolbarMetrics {
 private struct SidebarToggleButton: View {
     let isSidebarVisible: Bool
     let action: () -> Void
+    let colorScheme: ColorScheme
 
     @StateObject private var hoverState = HoverState()
 
@@ -99,6 +104,7 @@ private struct SidebarToggleButton: View {
                 .toolMotionIconSwap(id: isSidebarVisible)
         }
         .buttonStyle(SidebarChromeButtonStyle(isHovered: hoverState.isHovered))
+        .environment(\.colorScheme, colorScheme)
         .help(presentation.help)
         .accessibilityLabel(presentation.title)
         .accessibilityHint(SidebarTogglePresentation.accessibilityHint)

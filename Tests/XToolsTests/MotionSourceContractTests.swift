@@ -67,7 +67,7 @@ struct MotionSourceContractTests {
         contains(root, ".toolTransition(ToolMotion.Transition.scrim, reduceMotion: reduceMotion)", "Command palette scrim must use the opacity-only scrim transition")
         contains(root, ".toolTransition(ToolMotion.Transition.commandPalette, reduceMotion: reduceMotion)", "v3: palette panel must use the dedicated scale-and-settle transition")
         contains(root, "withToolAnimation(ToolMotion.Preset.modal) {\n            navigationActions.closeCommandPalette()", "v3: palette open/close must run inside one explicit animation transaction")
-        contains(commandPalette, "ToolMotion.Preset.orderedContent.delay(Double(min(index, 8)) * 0.025)", "v3: palette rows must arrive with the shared staggered list animation")
+        doesNotContain(commandPalette, "ToolMotion.Preset.orderedContent.delay", "Command palette rows must not create per-row arrival animations during modal presentation")
         contains(root, "commandPaletteOverlay\n                .toolAnimation(ToolMotion.Preset.modal, value: viewModel.showsCommandPalette)", "Command palette animation must be scoped to the overlay layers")
         contains(root, "withToolAnimation(ToolMotion.Preset.shellResize, reduceMotion: reduceMotion)", "Root shell explicit toggles must route through ToolMotion")
         contains(root, "PaletteIconGhostView(flight: flight", "v3: palette-to-title continuity must render through the shared decorative ghost")

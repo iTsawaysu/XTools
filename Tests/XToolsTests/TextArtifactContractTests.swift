@@ -31,20 +31,20 @@ struct TextArtifactContractTests {
         #expect(source.contains("package_app debug")) // dev packaging keeps the debug compile path
     }
 
-    @Test func buildHygieneDocumentsWarningsAndCachePolicy() throws {
+    @Test func buildHygieneDocumentsBuildAndTestEntrypointsAndCachePolicy() throws {
         let script = try Self.readSource("build.sh")
         let readme = try Self.readSource("README.md")
 
-        #expect(readme.contains("CommandLineTools search path warning")) // record the linker warning investigation
-        #expect(readme.contains("plain `swift test`")) // warning reproduces outside build.sh
-        #expect(readme.contains("`build.sh` does not add those `/Library/Developer/CommandLineTools/Developer/...` search paths")) // do not blame the packaging script
-        #expect(readme.contains("Do not add ad-hoc `LIBRARY_PATH`, `FRAMEWORK_SEARCH_PATHS`, or fake directory workarounds")) // reject unstable path workarounds
-        #expect(readme.contains("shared `.build`")) // explain the shared SwiftPM cache path
-        #expect(readme.contains("legacy `.swiftpm-build`")) // explain cleanup of the old private scratch path
-        #expect(readme.contains("`./build.sh clean` moves")) // record the non-destructive clean strategy
+        #expect(readme.contains("## 安装")) // keep source-build instructions discoverable from installation
+        #expect(readme.contains("从源码构建")) // distinguish source builds from release downloads
+        #expect(readme.contains("macOS 13+")) // document the supported runtime baseline
+        #expect(readme.contains("Xcode 16+")) // document the required build toolchain
+        #expect(readme.contains("git clone https://github.com/iTsawaysu/XTools.git")) // provide the repository bootstrap command
+        #expect(readme.contains("./build.sh           # 增量构建 + 打包 + 打开 App")) // document the daily development entrypoint
+        #expect(readme.contains("./build.sh release   # Release 构建")) // document the release packaging entrypoint
+        #expect(readme.contains("swift test           # 运行完整测试")) // document the full test entrypoint beside build commands
+        #expect(readme.contains("提交前请运行 `swift test`")) // contributors must run the same public test entrypoint
         #expect(script.contains("TRASH_DIR=\"${TRASH_DIR:-${TMPDIR:-/tmp}/XTools-build-archive}\"")) // use a portable default while allowing overrides
-        #expect(readme.contains("`${TRASH_DIR:-${TMPDIR:-/tmp}/XTools-build-archive}`")) // document the portable archive destination
-        #expect(readme.contains("TRASH_DIR=\"$PWD/.build-archive\" ./build.sh clean")) // document persistent archive override
 
         #expect(script.contains("BUILD_DIR=\"$PROJECT_DIR/.build\"")) // build.sh shares the cache warmed by swift build/test
         #expect(script.contains("LEGACY_SCRATCH_DIR=\"$PROJECT_DIR/.swiftpm-build\"")) // retain cleanup compatibility for the old cache

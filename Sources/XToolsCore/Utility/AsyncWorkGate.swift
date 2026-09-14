@@ -3,6 +3,7 @@ import Foundation
 @MainActor
 public final class AsyncWorkGate {
     private var generation = 0
+    private var requestIdentity = 0
     private var task: Task<Void, Never>?
 
     public init() {}
@@ -20,6 +21,7 @@ public final class AsyncWorkGate {
     public func invalidate() -> Int {
         task?.cancel()
         task = nil
+        requestIdentity &+= 1
         generation &+= 1
         return generation
     }
@@ -33,6 +35,8 @@ public final class AsyncWorkGate {
         operation: @escaping @MainActor () async -> Void
     ) {
         let scheduledToken = generation
+        requestIdentity &+= 1
+        let scheduledRequestIdentity = requestIdentity
         task?.cancel()
         task = Task { [weak self] in
             do {
@@ -40,9 +44,12 @@ public final class AsyncWorkGate {
                     try await Task.sleep(for: debounce)
                 }
                 try Task.checkCancellation()
-                guard let self, self.isCurrent(scheduledToken) else { return }
+                guard self?.isCurrent(scheduledToken) == true,
+                      self?.requestIdentity == scheduledRequestIdentity else { return }
                 await operation()
-                if self.isCurrent(scheduledToken) {
+                if let self,
+                   self.isCurrent(scheduledToken),
+                   self.requestIdentity == scheduledRequestIdentity {
                     self.task = nil
                 }
             } catch is CancellationError {
@@ -60,14 +67,27 @@ public final class AsyncWorkGate {
         publish: @escaping @MainActor (Output) -> Void
     ) {
         let scheduledToken = generation
+        requestIdentity &+= 1
+        let scheduledRequestIdentity = requestIdentity
         task?.cancel()
         task = Task { [weak self] in
-            let output = await Task.detached(priority: .userInitiated) {
+            guard !Task.isCancelled,
+                  self?.isCurrent(scheduledToken) == true,
+                  self?.requestIdentity == scheduledRequestIdentity else { return }
+            let worker = Task.detached(priority: .userInitiated) {
                 await operation()
-            }.value
+            }
+            let output = await withTaskCancellationHandler {
+                await worker.value
+            } onCancel: {
+                worker.cancel()
+            }
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                guard let self, self.isCurrent(scheduledToken), !Task.isCancelled else { return }
+                guard let self,
+                      self.isCurrent(scheduledToken),
+                      self.requestIdentity == scheduledRequestIdentity,
+                      !Task.isCancelled else { return }
                 self.task = nil
                 publish(output)
             }

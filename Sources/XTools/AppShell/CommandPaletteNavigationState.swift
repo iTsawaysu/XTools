@@ -43,6 +43,44 @@ enum CommandPaletteRowProjection: Identifiable, Hashable {
     }
 }
 
+struct CommandPaletteRowSnapshot: Equatable {
+    let rows: [CommandPaletteRowProjection]
+    private let selectableRows: [CommandPaletteRowProjection]
+    private let selectableIndicesByID: [String: Int]
+
+    init(rows: [CommandPaletteRowProjection]) {
+        self.rows = rows
+
+        var selectableRows: [CommandPaletteRowProjection] = []
+        var selectableIndicesByID: [String: Int] = [:]
+        selectableRows.reserveCapacity(rows.count)
+        selectableIndicesByID.reserveCapacity(rows.count)
+        for row in rows where row.isSelectable {
+            let index = selectableRows.count
+            selectableRows.append(row)
+            if selectableIndicesByID[row.id] == nil {
+                selectableIndicesByID[row.id] = index
+            }
+        }
+        self.selectableRows = selectableRows
+        self.selectableIndicesByID = selectableIndicesByID
+    }
+
+    var selectableCount: Int {
+        selectableRows.count
+    }
+
+    func selectableRow(at index: Int) -> CommandPaletteRowProjection? {
+        guard selectableRows.indices.contains(index) else { return nil }
+        return selectableRows[index]
+    }
+
+    func selectableIndex(of row: CommandPaletteRowProjection) -> Int? {
+        guard row.isSelectable else { return nil }
+        return selectableIndicesByID[row.id]
+    }
+}
+
 enum CommandPaletteRevealAnchor: Equatable {
     case keyboardEdge(delta: Int)
     case top
@@ -127,6 +165,13 @@ struct CommandPaletteNavigationState: Equatable {
         for entries: [ToolNavigationCommandEntry],
         actions: [CommandActionEntry] = []
     ) -> [CommandPaletteRowProjection] {
+        snapshot(for: entries, actions: actions).rows
+    }
+
+    static func snapshot(
+        for entries: [ToolNavigationCommandEntry],
+        actions: [CommandActionEntry] = []
+    ) -> CommandPaletteRowSnapshot {
         var rows: [CommandPaletteRowProjection] = []
         if !actions.isEmpty {
             rows.append(.sectionTitle("动作"))
@@ -136,26 +181,37 @@ struct CommandPaletteNavigationState: Equatable {
             rows.append(.sectionTitle("工具"))
             rows.append(contentsOf: entries.map(CommandPaletteRowProjection.tool))
         }
-        return rows.isEmpty ? [.empty] : rows
+        return CommandPaletteRowSnapshot(rows: rows.isEmpty ? [.empty] : rows)
     }
 
     func activeRowID(in rows: [CommandPaletteRowProjection]) -> String? {
-        activeRow(in: rows)?.id
+        activeRowID(in: CommandPaletteRowSnapshot(rows: rows))
+    }
+
+    func activeRowID(in snapshot: CommandPaletteRowSnapshot) -> String? {
+        activeRow(in: snapshot)?.id
     }
 
     func activeSelectableIndex(in rows: [CommandPaletteRowProjection]) -> Int? {
+        activeSelectableIndex(in: CommandPaletteRowSnapshot(rows: rows))
+    }
+
+    func activeSelectableIndex(in snapshot: CommandPaletteRowSnapshot) -> Int? {
         CommandPaletteSearch.activationIndex(
             highlight: activeIndex,
-            count: selectableRows(in: rows).count
+            count: snapshot.selectableCount
         )
     }
 
     func activeRow(in rows: [CommandPaletteRowProjection]) -> CommandPaletteRowProjection? {
-        let selectableRows = selectableRows(in: rows)
-        guard let index = activeSelectableIndex(in: rows) else {
+        activeRow(in: CommandPaletteRowSnapshot(rows: rows))
+    }
+
+    func activeRow(in snapshot: CommandPaletteRowSnapshot) -> CommandPaletteRowProjection? {
+        guard let index = activeSelectableIndex(in: snapshot) else {
             return nil
         }
-        return selectableRows[index]
+        return snapshot.selectableRow(at: index)
     }
 
     func activeToolID(in rows: [CommandPaletteRowProjection]) -> ToolID? {
@@ -167,23 +223,24 @@ struct CommandPaletteNavigationState: Equatable {
     }
 
     mutating func moveActive(by delta: Int, in rows: [CommandPaletteRowProjection]) {
+        let snapshot = CommandPaletteRowSnapshot(rows: rows)
         activeIndex = CommandPaletteSearch.clampedHighlight(
             activeIndex,
             movingBy: delta,
-            count: selectableRows(in: rows).count
+            count: snapshot.selectableCount
         )
     }
 
     func canMoveActive(by delta: Int, in rows: [CommandPaletteRowProjection]) -> Bool {
-        let selectableCount = selectableRows(in: rows).count
-        guard let currentIndex = activeSelectableIndex(in: rows) else {
+        let snapshot = CommandPaletteRowSnapshot(rows: rows)
+        guard let currentIndex = activeSelectableIndex(in: snapshot) else {
             return false
         }
 
         return CommandPaletteSearch.clampedHighlight(
             currentIndex,
             movingBy: delta,
-            count: selectableCount
+            count: snapshot.selectableCount
         ) != currentIndex
     }
 
@@ -195,9 +252,27 @@ struct CommandPaletteNavigationState: Equatable {
         hasPendingKeyboardRevealForCurrentActive: Bool,
         allowsVisibleHandoff: Bool
     ) -> CommandPaletteKeyboardMoveDecision {
+        keyboardMoveDecision(
+            by: delta,
+            in: CommandPaletteRowSnapshot(rows: rows),
+            visibleHandoffIndex: visibleHandoffIndex,
+            isCurrentActiveVisible: isCurrentActiveVisible,
+            hasPendingKeyboardRevealForCurrentActive: hasPendingKeyboardRevealForCurrentActive,
+            allowsVisibleHandoff: allowsVisibleHandoff
+        )
+    }
+
+    func keyboardMoveDecision(
+        by delta: Int,
+        in snapshot: CommandPaletteRowSnapshot,
+        visibleHandoffIndex: Int?,
+        isCurrentActiveVisible: Bool,
+        hasPendingKeyboardRevealForCurrentActive: Bool,
+        allowsVisibleHandoff: Bool
+    ) -> CommandPaletteKeyboardMoveDecision {
         CommandPaletteKeyboardMovePolicy(
-            currentSelectableIndex: activeSelectableIndex(in: rows),
-            selectableCount: selectableRows(in: rows).count,
+            currentSelectableIndex: activeSelectableIndex(in: snapshot),
+            selectableCount: snapshot.selectableCount,
             delta: delta,
             visibleHandoffIndex: visibleHandoffIndex,
             isCurrentActiveVisible: isCurrentActiveVisible,
@@ -211,9 +286,13 @@ struct CommandPaletteNavigationState: Equatable {
     }
 
     mutating func setActiveSelectableIndex(_ index: Int, in rows: [CommandPaletteRowProjection]) {
+        setActiveSelectableIndex(index, in: CommandPaletteRowSnapshot(rows: rows))
+    }
+
+    mutating func setActiveSelectableIndex(_ index: Int, in snapshot: CommandPaletteRowSnapshot) {
         guard let clampedIndex = CommandPaletteSearch.activationIndex(
             highlight: index,
-            count: selectableRows(in: rows).count
+            count: snapshot.selectableCount
         ) else {
             return
         }
@@ -221,16 +300,20 @@ struct CommandPaletteNavigationState: Equatable {
     }
 
     mutating func setActiveRow(_ row: CommandPaletteRowProjection, in rows: [CommandPaletteRowProjection]) {
-        guard let index = selectableRows(in: rows).firstIndex(of: row) else { return }
+        setActiveRow(row, in: CommandPaletteRowSnapshot(rows: rows))
+    }
+
+    mutating func setActiveRow(_ row: CommandPaletteRowProjection, in snapshot: CommandPaletteRowSnapshot) {
+        guard let index = snapshot.selectableIndex(of: row) else { return }
         activeIndex = index
     }
 
     func selectableIndex(of row: CommandPaletteRowProjection, in rows: [CommandPaletteRowProjection]) -> Int? {
-        selectableRows(in: rows).firstIndex(of: row)
+        CommandPaletteRowSnapshot(rows: rows).selectableIndex(of: row)
     }
 
-    private func selectableRows(in rows: [CommandPaletteRowProjection]) -> [CommandPaletteRowProjection] {
-        rows.filter(\.isSelectable)
+    func selectableIndex(of row: CommandPaletteRowProjection, in snapshot: CommandPaletteRowSnapshot) -> Int? {
+        snapshot.selectableIndex(of: row)
     }
 }
 

@@ -1,6 +1,61 @@
 import AppKit
 import SwiftUI
 
+@MainActor
+enum CommandPaletteTrace {
+#if DEBUG
+    private static var openedAt: [Int: ContinuousClock.Instant] = [:]
+    private static var emittedPhases: [Int: Set<String>] = [:]
+
+    private static var isEnabled: Bool {
+        ProcessInfo.processInfo.environment["TOOLS_COMMAND_PALETTE_BENCHMARK"] == "1"
+    }
+#endif
+
+    static func opened(session: Int) {
+#if DEBUG
+        guard isEnabled else { return }
+        openedAt[session] = .now
+        emittedPhases[session] = []
+#endif
+    }
+
+    static func appeared(session: Int) {
+#if DEBUG
+        emit(session: session, phase: "appeared")
+#endif
+    }
+
+    static func dismissed(session: Int) {
+#if DEBUG
+        openedAt.removeValue(forKey: session)
+        emittedPhases.removeValue(forKey: session)
+#endif
+    }
+
+#if DEBUG
+    private static func emit(session: Int, phase: String) {
+        guard isEnabled,
+              let startedAt = openedAt[session],
+              emittedPhases[session, default: []].insert(phase).inserted
+        else {
+            return
+        }
+        let elapsed = ContinuousClock.now - startedAt
+        let components = elapsed.components
+        let milliseconds = Double(components.seconds) * 1_000
+            + Double(components.attoseconds) / 1_000_000_000_000_000
+        let line = String(
+            format: "COMMAND_PALETTE_PRESENTATION_PHASE_RESULT session=%d phase=%@ milliseconds=%.3f\n",
+            session,
+            phase,
+            milliseconds
+        )
+        FileHandle.standardError.write(Data(line.utf8))
+    }
+#endif
+}
+
 private enum CommandPaletteMetrics {
     static let searchHeaderSpacing: CGFloat = 9
     static let searchHeaderLeadingPadding: CGFloat = 14
@@ -25,6 +80,7 @@ struct CommandPaletteView: View {
     let actions: [CommandActionEntry]
     @Binding var query: String
     let focusToken: Int
+    let presentationSession: Int
     let canRequestSearchFocus: AppKitSearchFieldCoordinator.FocusRequestValidity
     let onSelectTool: (ToolID) -> Void
     let onRunCommand: (CommandActionID) -> Void
@@ -38,33 +94,27 @@ struct CommandPaletteView: View {
     @State private var pointerMovementTracker = CommandPalettePointerMovementTracker()
     /// True when the active row was last set by keyboard arrows (not pointer).
     @State private var isActiveRowKeyboardDriven = false
-    /// v3 listArrival: rows settle in with a small per-row delay on open.
-    @State private var listArrived = false
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     private var matchingActions: [CommandActionEntry] {
         actions.filter { $0.matches(query: query) }
     }
 
-    private var paletteItems: [CommandPaletteRowProjection] {
-        CommandPaletteNavigationState.rows(for: projection.commandPaletteEntries, actions: matchingActions)
-    }
-
-    /// 当前 active 项在 paletteItems 中的 id，用于行视图判断是否高亮。
-    private var activeItemID: String? {
-        paletteState.activeRowID(in: paletteItems)
+    private var paletteSnapshot: CommandPaletteRowSnapshot {
+        CommandPaletteNavigationState.snapshot(
+            for: projection.commandPaletteEntries,
+            actions: matchingActions
+        )
     }
 
     private func moveActive(by delta: Int) {
+        let snapshot = paletteSnapshot
         isActiveRowKeyboardDriven = true
-        let previousActiveID = activeItemID
+        let previousActiveID = paletteState.activeRowID(in: snapshot)
         let visibleHandoffIndex = revealRegistry.visibleEdgeSelectableIndex(direction: delta)
         let isCurrentActiveVisible = previousActiveID.map(revealRegistry.isVisible(itemID:)) ?? false
         let hasPendingKeyboardRevealForCurrentActive = previousActiveID.map(revealRegistry.hasLatestPendingKeyboardReveal(itemID:)) ?? false
         let moveDecision = paletteState.keyboardMoveDecision(
             by: delta,
-            in: paletteItems,
+            in: snapshot,
             visibleHandoffIndex: visibleHandoffIndex,
             isCurrentActiveVisible: isCurrentActiveVisible,
             hasPendingKeyboardRevealForCurrentActive: hasPendingKeyboardRevealForCurrentActive,
@@ -73,32 +123,33 @@ struct CommandPaletteView: View {
 
         switch moveDecision {
         case .move(let index), .alignToVisibleSelectableIndex(let index):
-            paletteState.setActiveSelectableIndex(index, in: paletteItems)
+            paletteState.setActiveSelectableIndex(index, in: snapshot)
         case .revealCurrent:
             requestActiveReveal(for: .keyboard(delta: delta))
         case .none:
             break
         }
 
-        if activeItemID != previousActiveID {
-            requestActiveReveal(for: .keyboard(delta: delta))
+        if paletteState.activeRowID(in: snapshot) != previousActiveID {
+            requestActiveReveal(for: .keyboard(delta: delta), in: snapshot)
         }
     }
 
     private func resetActiveRowForQuery() {
         paletteState.resetActiveRow()
-        requestActiveReveal(for: .queryReset)
+        requestActiveReveal(for: .queryReset, in: paletteSnapshot)
     }
 
     private func activateActive() {
-        guard let item = paletteState.activeRow(in: paletteItems) else { return }
+        guard let item = paletteState.activeRow(in: paletteSnapshot) else { return }
         activate(item)
     }
 
     private func setActiveItem(_ item: CommandPaletteRowProjection) {
+        let snapshot = paletteSnapshot
         isActiveRowKeyboardDriven = false
-        guard item.id != activeItemID else { return }
-        paletteState.setActiveRow(item, in: paletteItems)
+        guard item.id != paletteState.activeRowID(in: snapshot) else { return }
+        paletteState.setActiveRow(item, in: snapshot)
         requestActiveReveal(for: .pointerMove)
     }
 
@@ -114,8 +165,15 @@ struct CommandPaletteView: View {
     }
 
     private func requestActiveReveal(for source: CommandPaletteActiveChangeSource) {
+        requestActiveReveal(for: source, in: paletteSnapshot)
+    }
+
+    private func requestActiveReveal(
+        for source: CommandPaletteActiveChangeSource,
+        in snapshot: CommandPaletteRowSnapshot
+    ) {
         guard let anchor = source.revealAnchor,
-              let activeID = activeItemID
+              let activeID = paletteState.activeRowID(in: snapshot)
         else {
             return
         }
@@ -138,7 +196,11 @@ struct CommandPaletteView: View {
     }
 
     @ViewBuilder
-    private func paletteItemView(for item: CommandPaletteRowProjection) -> some View {
+    private func paletteItemView(
+        for item: CommandPaletteRowProjection,
+        activeItemID: String?,
+        selectableIndex: Int?
+    ) -> some View {
         switch item {
         case .sectionTitle(let text):
             CommandPaletteSectionTitle(text)
@@ -159,7 +221,7 @@ struct CommandPaletteView: View {
             .background {
                 CommandPaletteRevealAttachment(
                     itemID: item.id,
-                    selectableIndex: paletteState.selectableIndex(of: item, in: paletteItems),
+                    selectableIndex: selectableIndex,
                     registry: revealRegistry,
                     revealRequest: revealRequest
                 )
@@ -181,7 +243,7 @@ struct CommandPaletteView: View {
             .background {
                 CommandPaletteRevealAttachment(
                     itemID: item.id,
-                    selectableIndex: paletteState.selectableIndex(of: item, in: paletteItems),
+                    selectableIndex: selectableIndex,
                     registry: revealRegistry,
                     revealRequest: revealRequest
                 )
@@ -195,6 +257,8 @@ struct CommandPaletteView: View {
     }
 
     var body: some View {
+        let snapshot = paletteSnapshot
+        let activeItemID = paletteState.activeRowID(in: snapshot)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: CommandPaletteMetrics.searchHeaderSpacing) {
                 Image(systemName: "magnifyingglass")
@@ -256,26 +320,20 @@ struct CommandPaletteView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(Array(paletteItems.enumerated()), id: \.element.id) { index, item in
-                        paletteItemView(for: item)
+                    ForEach(snapshot.rows) { item in
+                        paletteItemView(
+                            for: item,
+                            activeItemID: activeItemID,
+                            selectableIndex: snapshot.selectableIndex(of: item)
+                        )
                             .padding(.horizontal, 9)
                             .padding(.vertical, 1)
                             .id(item.id)
-                            .opacity(listArrived ? 1 : 0)
-                            .offset(y: listArrived ? 0 : ToolMotion.Distance.micro)
-                            .animation(
-                                ToolMotion.animation(
-                                    ToolMotion.Preset.orderedContent.delay(Double(min(index, 8)) * 0.025),
-                                    reduceMotion: reduceMotion
-                                ),
-                                value: listArrived
-                            )
                     }
                 }
                 .padding(.vertical, 4)
             }
             .frame(maxHeight: 360)
-            .onAppear { listArrived = true }
 
             CommandPaletteHintsBar()
         }
@@ -290,6 +348,9 @@ struct CommandPaletteView: View {
                 .strokeBorder(ToolTheme.strongBorder, lineWidth: 0.5)
         }
         .toolShadow(ToolTheme.Shadow.modal)
+        .onAppear {
+            CommandPaletteTrace.appeared(session: presentationSession)
+        }
     }
 
 }

@@ -225,16 +225,18 @@ final class SidebarNavigationListCoordinator {
         for target in plan.targets {
             guard let entry = entriesByID[target.id] else { continue }
             let wasActive = previousActiveIDs.contains(target.id)
+            let requiresNewTrack = tracksByID[target.id] == nil
             let track = tracksByID[target.id] ?? makeTrack(
                 entry: entry,
                 target: target,
                 configuration: configuration
             )
+            var requiresLayout = requiresNewTrack
             tracksByID[target.id] = track
-            track.update(
+            requiresLayout = track.update(
                 groupID: target.groupID,
                 naturalContentHeight: target.naturalHeight
-            )
+            ) || requiresLayout
 
             if track.superview !== documentView {
                 track.frame = CGRect(
@@ -247,6 +249,7 @@ final class SidebarNavigationListCoordinator {
                     ? (target.kind == .header || target.frame.height > 0 ? 1.0 : 0.0)
                     : (target.kind == .header ? 1.0 : 0.0)
                 documentView.addSubview(track)
+                requiresLayout = true
             }
 
             let interaction = interaction(
@@ -257,12 +260,16 @@ final class SidebarNavigationListCoordinator {
                 track: track
             )
             track.applyInteraction(interaction)
-            updateHostedContent(
+            requiresLayout = updateHostedContent(
                 track: track,
                 entry: entry,
                 configuration: configuration
-            )
-            track.layoutSubtreeIfNeeded()
+            ) || requiresLayout
+            // Immediate mode lands every frame and hosted root in applyImmediate.
+            // Avoid walking the same SwiftUI subtree once here and again there.
+            if mode != .immediate, requiresLayout {
+                track.layoutSubtreeIfNeeded()
+            }
             track.applyInteraction(interaction)
         }
 
@@ -350,15 +357,16 @@ final class SidebarNavigationListCoordinator {
         return track
     }
 
+    @discardableResult
     private func updateHostedContent(
         track: SidebarNavigationTrackView,
         entry: SidebarNavigationEntry,
         configuration: SidebarNavigationListConfiguration
-    ) {
+    ) -> Bool {
         guard let hostingView = track.hostedContentView
             as? NSHostingView<SidebarNavigationTrackRoot>
         else {
-            return
+            return false
         }
 
         let key = HostedContentKey(
@@ -374,7 +382,7 @@ final class SidebarNavigationListCoordinator {
             reduceMotion: configuration.reduceMotion
         )
         if hostedContentKeysByTrackID[track.trackID] == key {
-            return
+            return false
         }
 
         hostingView.rootView = trackRoot(
@@ -384,6 +392,7 @@ final class SidebarNavigationListCoordinator {
             hoverState: track.hoverState
         )
         hostedContentKeysByTrackID[track.trackID] = key
+        return true
     }
 
     private func trackRoot(
@@ -502,9 +511,14 @@ final class SidebarNavigationListCoordinator {
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0
             for target in plan.targets {
-                let track = tracksByID[target.id]
-                track?.frame = target.frame
-                track?.alphaValue = target.kind == .header || target.frame.height > 0 ? 1.0 : 0.0
+                guard let track = tracksByID[target.id] else { continue }
+                if track.frame != target.frame {
+                    track.frame = target.frame
+                }
+                let alpha: CGFloat = target.kind == .header || target.frame.height > 0 ? 1.0 : 0.0
+                if track.alphaValue != alpha {
+                    track.alphaValue = alpha
+                }
             }
             documentView.frame = documentFrame(
                 width: resolvedDocumentWidth(for: scrollView),
@@ -519,14 +533,21 @@ final class SidebarNavigationListCoordinator {
                 configuration: configuration
             )
             track.applyInteraction(interaction)
+            let contentChanged: Bool
             if let entry = entriesByID[target.id] {
-                updateHostedContent(
+                contentChanged = updateHostedContent(
                     track: track,
                     entry: entry,
                     configuration: configuration
                 )
+            } else {
+                contentChanged = false
             }
-            track.layoutSubtreeIfNeeded()
+            // The frame setter and root assignment both mark layout dirty. A
+            // clean existing track needs no recursive AppKit/SwiftUI walk.
+            if contentChanged || track.needsLayout || track.hostedContentView.needsLayout {
+                track.layoutSubtreeIfNeeded()
+            }
             track.applyInteraction(interaction)
         }
 
@@ -657,12 +678,14 @@ final class SidebarNavigationListCoordinator {
             var frame = track.frame
             frame.origin.x = target.frame.minX
             frame.size.width = target.frame.width
+            guard track.frame != frame else { continue }
             track.frame = frame
-            track.layoutSubtreeIfNeeded()
         }
         var frame = documentView.frame
         frame.size.width = resolvedDocumentWidth(for: scrollView)
-        documentView.frame = frame
+        if documentView.frame != frame {
+            documentView.frame = frame
+        }
     }
 
     private func resizeViewport(to size: CGSize) {
@@ -675,6 +698,7 @@ final class SidebarNavigationListCoordinator {
             entries: configuration.entries,
             width: size.width
         )
+        guard plan != currentPlan else { return }
         applyWidth(plan: plan)
         currentPlan = plan
         reconcilePointerLocation()
@@ -775,32 +799,29 @@ final class SidebarNavigationListCoordinator {
     }
 
     private func resolveHoveredTrackID(at point: CGPoint) -> String? {
-        var trackIDsByToolID: [ToolID: String] = [:]
-        let targets = currentPlan?.targets.compactMap { target -> SidebarNavigationPresentationHitTarget? in
-            guard case .tool(let toolID) = target.kind,
-                  let track = tracksByID[target.id],
+        // Static tracks do not overlap, but preserve the presentation helper's
+        // reverse-order semantics for the animated case. This path runs for
+        // every mouse move and scroll-bound change, so do not allocate a target
+        // array and a ToolID lookup dictionary before testing one point.
+        guard let currentPlan else { return nil }
+        for target in currentPlan.targets.reversed() {
+            guard case .tool = target.kind else { continue }
+            guard let track = tracksByID[target.id],
                   track.superview === documentView,
                   track.interaction.isInteractionEnabled,
                   !track.isHidden
             else {
-                return nil
+                continue
             }
 
             let frame = activeAnimationToken == nil
                 ? track.frame
                 : track.presentationFrame ?? track.frame
-            guard !frame.isEmpty else { return nil }
-            trackIDsByToolID[toolID] = target.id
-            return SidebarNavigationPresentationHitTarget(toolID: toolID, frame: frame)
-        } ?? []
-
-        guard let toolID = SidebarNavigationPresentationHitTesting.toolID(
-            at: point,
-            targets: targets
-        ) else {
-            return nil
+            if !frame.isEmpty && frame.contains(point) {
+                return target.id
+            }
         }
-        return trackIDsByToolID[toolID]
+        return nil
     }
 
     private func setHoveredTrackID(_ proposedTrackID: String?) {
