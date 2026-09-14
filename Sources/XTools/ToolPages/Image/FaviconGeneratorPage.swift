@@ -20,8 +20,8 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
 
     var body: some View {
         IndexPage("Favicon 生成器", subtitle: "上传图片，生成可直接放入站点根目录的五文件 Favicon 部署包。", workspaceSemantic: .imagePreviewStage) {
-            IndexPanel("上传图片") {
-                VStack(alignment: .leading, spacing: 12) {
+            IndexPanel("上传图片", fillsHeight: session.sourceImage == nil) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
                     imageSelectionActions
 
                     if let image = session.sourceImage {
@@ -54,10 +54,18 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                         IndexProgressLabel(message: "正在读取图片…")
                             .foregroundStyle(ToolTheme.textSecondary)
                             .accessibilityLabel("正在读取图片")
+                    } else {
+                        IndexEmptyState(
+                            title: "选择图片开始生成 Favicon",
+                            systemImage: "photo.on.rectangle.angled",
+                            message: IndexEmptyStateCopy.autoGenerate("图片"),
+                            density: .list
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 128)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
                 .indexDropZone(
                     isTargeted: $isImageDropTargeted,
                     onFile: receiveImageURL,

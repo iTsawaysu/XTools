@@ -2512,6 +2512,12 @@
     "选择图片开始添加水印": {
       "extractionState": "manual"
     },
+    "选择图片开始生成 Favicon": {
+      "extractionState": "manual"
+    },
+    "选择图片开始生成灰度图": {
+      "extractionState": "manual"
+    },
     "选择图片开始转换": {
       "extractionState": "manual"
     },

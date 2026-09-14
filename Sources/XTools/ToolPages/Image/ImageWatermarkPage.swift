@@ -253,34 +253,57 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                     )
                     .help("选择黑色或白色水印文字")
                     .onChange(of: textColor) { _ in recipeDidChange(previewCadence: .immediate) }
-                }
 
-                WatermarkAnchorOption(position: $position) {
-                    recipeDidChange(previewCadence: .immediate)
+                    IndexOptionDivider()
+
+                    WatermarkAnchorOption(position: $position) {
+                        recipeDidChange(previewCadence: .immediate)
+                    }
                 }
             }
 
-            IndexPanel("上传图片") {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .center, spacing: 24) {
-                        watermarkTextField
-                        sourceIdentity
-                    }
+            IndexPanel("上传图片", fillsHeight: session.source == nil) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+                    imageSelectionActions
 
-                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+                    if session.source == nil {
                         watermarkTextField
-                        sourceIdentity
+
+                        if session.isProcessing {
+                            IndexProgressLabel(message: "正在读取图片…")
+                                .foregroundStyle(ToolTheme.textSecondary)
+                                .accessibilityLabel("正在读取图片")
+                        } else {
+                            IndexEmptyState(
+                                title: "选择图片开始添加水印",
+                                systemImage: "photo.on.rectangle.angled",
+                                message: IndexEmptyStateCopy.autoGenerate("图片"),
+                                density: .list
+                            )
+                            .frame(maxWidth: .infinity, minHeight: 128)
+                        }
+                    } else {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .center, spacing: 24) {
+                                watermarkTextField
+                                sourceIdentity
+                            }
+
+                            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+                                watermarkTextField
+                                sourceIdentity
+                            }
+                        }
                     }
                 }
+                .indexWorkspaceDiagnostic(session.error)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, ToolMetrics.Spacing.xs)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
                 .indexDropZone(
                     isTargeted: $isImageDropTargeted,
                     onFile: receiveImageURL,
                     onMultipleFiles: rejectMultipleImageDrop
                 )
-            } accessory: {
-                imageSelectionActions
             }
 
             Group {
@@ -376,7 +399,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                         .truncationMode(.middle)
                         .help(source.url.lastPathComponent)
 
-                    Text("\(source.metadata.pixelWidth)×\(source.metadata.pixelHeight) · \(source.metadata.format?.displayName ?? "未知格式") · \(ByteSizeFormatter.format(bytes: source.metadata.byteCount))")
+                    Text(sourceMetadataSummary)
                         .font(ToolTypography.monoCaption)
                         .foregroundStyle(ToolTheme.textSecondary)
                         .lineLimit(1)
@@ -385,20 +408,19 @@ private struct IndexImageWatermarkWorkspaceContent: View {
             .frame(width: 300, alignment: .leading)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("源图片信息")
-            .accessibilityValue("\(source.url.lastPathComponent)，\(source.metadata.pixelWidth) 乘 \(source.metadata.pixelHeight)，\(source.metadata.format?.displayName ?? "未知格式")，\(ByteSizeFormatter.format(bytes: source.metadata.byteCount))")
-        } else if session.isProcessing {
-            IndexProgressLabel(message: "正在读取图片…")
-                .foregroundStyle(ToolTheme.textSecondary)
-                .accessibilityLabel("正在读取图片")
-        } else {
-            IndexEmptyState(
-                title: "选择图片开始添加水印",
-                systemImage: "photo.on.rectangle.angled",
-                message: IndexEmptyStateCopy.autoGenerate("图片"),
-                density: .list
-            )
-            .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+            .accessibilityValue(sourceAccessibilityValue)
         }
+    }
+
+    private var sourceMetadataSummary: String {
+        guard let metadata = session.source?.metadata else { return "" }
+        return "\(metadata.pixelWidth)×\(metadata.pixelHeight) · \(metadata.format?.displayName ?? "未知格式") · \(ByteSizeFormatter.format(bytes: metadata.byteCount))"
+    }
+
+    private var sourceAccessibilityValue: String {
+        guard let source = session.source else { return "" }
+        let metadata = source.metadata
+        return "\(source.url.lastPathComponent)，\(metadata.pixelWidth) 乘 \(metadata.pixelHeight)，\(metadata.format?.displayName ?? "未知格式")，\(ByteSizeFormatter.format(bytes: metadata.byteCount))"
     }
 
     @ViewBuilder
@@ -554,6 +576,9 @@ private struct IndexImageWatermarkWorkspaceContent: View {
     }
 }
 
+/// Compact spatial-position trigger. Rendered inside the shared watermark
+/// option group row, so the trigger keeps the group's inner-control surface
+/// instead of framing its own container.
 private struct WatermarkAnchorOption: View {
     @Binding var position: ImageWatermarkPosition
     let onChange: () -> Void
@@ -562,49 +587,47 @@ private struct WatermarkAnchorOption: View {
     private let columns = Array(repeating: GridItem(.fixed(28), spacing: 4), count: 3)
 
     var body: some View {
-        IndexOptionGroup {
-            IndexOptionLabel("位置")
+        IndexOptionLabel("位置")
 
-            Button {
-                isPickerPresented.toggle()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "square.grid.3x3")
-                        .accessibilityHidden(true)
+        Button {
+            isPickerPresented.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "square.grid.3x3")
+                    .accessibilityHidden(true)
 
-                    Text(position.displayName)
-                        .lineLimit(1)
+                Text(position.displayName)
+                    .lineLimit(1)
 
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
-                        .accessibilityHidden(true)
-                }
-                .font(ToolTypography.controlLabel(weight: .semibold))
-                .foregroundStyle(ToolTheme.textPrimary)
-                .padding(.horizontal, 9)
-                .frame(height: 24)
-                .indexSurface(.control, fill: ToolTheme.editorBackground, border: ToolTheme.border)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
+                    .accessibilityHidden(true)
             }
-            .buttonStyle(IndexBareButtonStyle())
-            .accessibilityLabel("水印位置")
-            .accessibilityValue(position.displayName)
-            .help("选择水印位置")
-            .popover(isPresented: $isPickerPresented, arrowEdge: .bottom) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("水印位置")
-                        .font(ToolTypography.panelTitle)
-                        .foregroundStyle(ToolTheme.textSecondary)
+            .font(ToolTypography.controlLabel(weight: .semibold))
+            .foregroundStyle(ToolTheme.textPrimary)
+            .padding(.horizontal, 9)
+            .frame(height: 24)
+            .indexSurface(.control, fill: ToolTheme.editorBackground, border: ToolTheme.border)
+        }
+        .buttonStyle(IndexBareButtonStyle())
+        .accessibilityLabel("水印位置")
+        .accessibilityValue(position.displayName)
+        .help("选择水印位置")
+        .popover(isPresented: $isPickerPresented, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("水印位置")
+                    .font(ToolTypography.panelTitle)
+                    .foregroundStyle(ToolTheme.textSecondary)
 
-                    LazyVGrid(columns: columns, spacing: 4) {
-                        ForEach(ImageWatermarkPosition.allCases, id: \.self) { item in
-                            anchorButton(item)
-                        }
+                LazyVGrid(columns: columns, spacing: 4) {
+                    ForEach(ImageWatermarkPosition.allCases, id: \.self) { item in
+                        anchorButton(item)
                     }
-                    .fixedSize()
-                    .accessibilityElement(children: .contain)
                 }
-                .padding(ToolMetrics.Spacing.md)
+                .fixedSize()
+                .accessibilityElement(children: .contain)
             }
+            .padding(ToolMetrics.Spacing.md)
         }
     }
 
@@ -646,7 +669,7 @@ private struct WatermarkAnchorCell: View {
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-                        .strokeBorder(isSelected ? ToolTheme.selectionStroke : ToolTheme.border, lineWidth: 0.5)
+                        .strokeBorder(isSelected ? ToolTheme.selectionStroke : ToolTheme.border, lineWidth: 1)
                 }
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
         }

@@ -134,7 +134,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
                         message: IndexEmptyStateCopy.autoGenerate("图片"),
                         density: .list
                     )
-                    .frame(maxWidth: .infinity, minHeight: 112)
+                    .frame(maxWidth: .infinity, minHeight: 128)
                 }
             }
             .indexWorkspaceDiagnostic(session.error)
@@ -146,6 +146,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
                 onMultipleFiles: rejectMultipleImageDrop
             )
         }
+        .verticallyFilling()
     }
 
     private var comparisonWorkspacePanel: some View {

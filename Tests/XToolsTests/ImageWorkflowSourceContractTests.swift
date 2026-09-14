@@ -223,7 +223,7 @@ struct ImageWorkflowSourceContractTests {
             doesNotContain(page, "Image(nsImage:", "Single-image workflows must not bypass the preview stage with direct Image(nsImage:) rendering")
         }
 
-        appearsBefore(favicon, "IndexPanel(\"上传图片\")", "IndexPanel(\"Favicon 部署包\")", "Favicon page must keep upload before its deployment package")
+        appearsBefore(favicon, "IndexPanel(\"上传图片\"", "IndexPanel(\"Favicon 部署包\")", "Favicon page must keep upload before its deployment package")
         contains(compressor, "if session.source == nil", "Image compressor must use a compact upload state before reserving result workspace height")
         contains(compressor, "private var emptyUploadPanel: some View", "Image compressor empty state must stay a natural-height upload panel")
         contains(compressor, "IndexProgressLabel(message: \"正在读取图片…\")", "Image compressor must communicate source preparation without showing an empty result canvas")

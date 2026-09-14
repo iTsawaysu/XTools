@@ -186,7 +186,7 @@ private struct IndexImageConverterWorkspaceContent: View {
             }
 
             IndexPanel("上传图片") {
-                VStack(spacing: ToolMetrics.Spacing.md) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
                     imageSelectionActions
 
                     if session.sourceImage != nil {

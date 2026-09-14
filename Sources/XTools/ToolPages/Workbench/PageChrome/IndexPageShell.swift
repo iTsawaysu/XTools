@@ -486,6 +486,24 @@ extension IndexPanel where Accessory == EmptyView {
             content: content
         )
     }
+
+    /// Panel that declares its fill behavior at the call site, for pages whose
+    /// single upload panel owns the empty state (fills) but yields height to a
+    /// result panel once a source exists (natural height). Equivalent to
+    /// `.verticallyFilling()` on a conditionally rendered panel, without
+    /// duplicating the panel branch.
+    init(
+        _ title: String,
+        fillsHeight: Bool,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(
+            title,
+            accessory: { EmptyView() },
+            content: content
+        )
+        self.fillsHeight = fillsHeight
+    }
 }
 
 extension IndexPanel {

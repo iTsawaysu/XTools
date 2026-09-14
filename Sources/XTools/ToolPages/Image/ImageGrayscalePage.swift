@@ -38,24 +38,33 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
 
     private var emptyUploadPanel: some View {
         IndexPanel("上传图片") {
-            HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
                 imageSelectionActions
 
                 if session.isProcessing {
                     IndexProgressLabel(message: "正在读取图片…")
                         .foregroundStyle(ToolTheme.textSecondary)
                         .accessibilityLabel("正在读取图片")
+                } else {
+                    IndexEmptyState(
+                        title: "选择图片开始生成灰度图",
+                        systemImage: "photo.on.rectangle.angled",
+                        message: IndexEmptyStateCopy.autoGenerate("图片"),
+                        density: .list
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 128)
                 }
             }
             .indexWorkspaceDiagnostic(session.error)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 8)
+            .padding(.vertical, ToolMetrics.Spacing.sm)
             .indexDropZone(
                 isTargeted: $isImageDropTargeted,
                 onFile: receiveImageURL,
                 onMultipleFiles: rejectMultipleImageDrop
             )
         }
+        .verticallyFilling()
     }
 
     private var comparisonWorkspacePanel: some View {
