@@ -1,0 +1,309 @@
+import XToolsCore
+import Testing
+
+struct DockerRunToDockerComposeServiceTests {
+    @Test func simpleContainerConversion() throws {
+        let result = try DockerRunToDockerComposeService.convert("docker run -d nginx")
+
+        #expect(result.yaml.contains("services:"))
+        #expect(result.yaml.contains("image: nginx"))
+        #expect(result.notTranslatable.isEmpty)
+        #expect(result.notImplemented == [])
+        #expect(result.warnings.isEmpty)
+    }
+
+    @Test func containerWithPortAndVolume() throws {
+        let result = try DockerRunToDockerComposeService.convert(
+            "docker run --name web -p 8080:80 -v $(pwd)/site:/usr/share/nginx/html:ro nginx"
+        )
+
+        #expect(result.yaml.contains("  web:"))
+        #expect(result.yaml.contains("container_name: web"))
+        #expect(result.yaml.contains("- \"8080:80\""))
+        #expect(result.yaml.contains("- \"./site:/usr/share/nginx/html:ro\""))
+    }
+
+    @Test func containerWithEnvironmentAndCommand() throws {
+        let result = try DockerRunToDockerComposeService.convert(
+            "docker run --env APP_ENV=prod --entrypoint sh alpine -c \"echo hello\""
+        )
+
+        #expect(result.yaml.contains("- APP_ENV=prod"))
+        #expect(result.yaml.contains("entrypoint:"))
+        #expect(result.yaml.contains("- sh"))
+        #expect(result.yaml.contains("command:"))
+        #expect(result.yaml.contains("- -c"))
+        #expect(result.yaml.contains("- \"echo hello\""))
+    }
+
+    @Test func combinedInteractiveFlags() throws {
+        let result = try DockerRunToDockerComposeService.convert("docker run -it ubuntu bash")
+
+        #expect(result.yaml.contains("stdin_open: true"))
+        #expect(result.yaml.contains("tty: true"))
+        #expect(result.yaml.contains("- bash"))
+    }
+
+    @Test func inlineLongOptions() throws {
+        let result = try DockerRunToDockerComposeService.convert(
+            "docker run --name=web --restart=unless-stopped --network=host nginx"
+        )
+
+        #expect(result.yaml.contains("  web:"))
+        #expect(result.yaml.contains("container_name: web"))
+        #expect(result.yaml.contains("restart: unless-stopped"))
+        #expect(result.yaml.contains("network_mode: host"))
+    }
+
+    @Test func stickyShortOptions() throws {
+        let result = try DockerRunToDockerComposeService.convert(
+            "docker run -p8080:80 -eAPP_ENV=prod -v$(pwd)/data:/data:ro nginx"
+        )
+
+        #expect(result.yaml.contains("- \"8080:80\""))
+        #expect(result.yaml.contains("APP_ENV=prod"))
+        #expect(result.yaml.contains("- \"./data:/data:ro\""))
+        #expect(result.yaml.contains("image: nginx"))
+    }
+
+    @Test func userShortOptionIsConverted() throws {
+        let separated = try DockerRunToDockerComposeService.convert("docker run -u 1000:1000 alpine")
+        let sticky = try DockerRunToDockerComposeService.convert("docker run -u1000:1000 alpine")
+
+        #expect(separated.yaml.contains("user: \"1000:1000\""))
+        #expect(sticky.yaml.contains("user: \"1000:1000\""))
+        #expect(separated.unknownFlags.isEmpty)
+        #expect(sticky.unknownFlags.isEmpty)
+    }
+
+    @Test func unsupportedValueFlagDoesNotConsumeImage() throws {
+        let result = try DockerRunToDockerComposeService.convert("docker run --cidfile /tmp/nginx.cid nginx")
+
+        #expect(result.yaml.contains("image: nginx"))
+        #expect(result.notImplemented == ["--cidfile"])
+        #expect(result.unknownFlags == [])
+        #expect(result.warnings.contains(.init(kind: .notImplemented, option: "--cidfile")))
+    }
+
+    @Test func unsupportedBooleanFlagDoesNotConsumeImage() throws {
+        let result = try DockerRunToDockerComposeService.convert("docker run --publish-all nginx")
+
+        #expect(result.yaml.contains("image: nginx"))
+        #expect(result.notImplemented == ["--publish-all"])
+        #expect(result.unknownFlags == [])
+        #expect(result.warnings.contains(.init(kind: .notImplemented, option: "--publish-all")))
+    }
+
+    @Test func supportedPlatformAndDisabledHealthcheckAreRendered() throws {
+        let result = try DockerRunToDockerComposeService.convert("docker run --platform linux/amd64 --no-healthcheck nginx")
+
+        #expect(result.yaml.contains("image: nginx"))
+        #expect(result.yaml.contains("platform: linux/amd64"))
+        #expect(result.yaml.contains("healthcheck:"))
+        #expect(result.yaml.contains("disable: true"))
+        #expect(result.notImplemented.isEmpty)
+        #expect(result.warnings.isEmpty)
+    }
+
+    @Test func runLifecycleOptionsAreIgnoredWithoutWarnings() throws {
+        let result = try DockerRunToDockerComposeService.convert(
+            #"docker run --rm -d -a stdout --sig-proxy=false -it --name job-runner --entrypoint /bin/sh -w /workspace -u 1000:1000 -v "$PWD":/workspace node:22-alpine -lc "npm ci && npm test""#
+        )
+
+        #expect(result.yaml.contains("container_name: job-runner"))
+        #expect(result.yaml.contains("stdin_open: true"))
+        #expect(result.yaml.contains("tty: true"))
+        #expect(result.yaml.contains("command:"))
+        #expect(result.yaml.contains(#"- "npm ci && npm test""#))
+        #expect(result.notTranslatable.isEmpty)
+        #expect(result.warnings.isEmpty)
+    }
+
+    @Test func resourceRuntimeSampleIgnoresDetachWithoutWarning() throws {
+        let result = try DockerRunToDockerComposeService.convert(
+            #"docker run -d --name gpu-worker --gpus all --privileged --cap-add NET_ADMIN --device /dev/fuse:/dev/fuse --memory 2g --cpus 1.5 --health-cmd "curl -f http://localhost:9000/health || exit 1" --health-interval 30s --label com.example.role=worker example/gpu-worker:latest"#
+        )
+
+        #expect(result.yaml.contains("container_name: gpu-worker"))
+        #expect(result.yaml.contains("privileged: true"))
+        #expect(result.yaml.contains("cap_add:"))
+        #expect(result.yaml.contains("- NET_ADMIN"))
+        #expect(result.yaml.contains("devices:"))
+        #expect(result.yaml.contains("- \"/dev/fuse:/dev/fuse\""))
+        #expect(result.yaml.contains("healthcheck:"))
+        #expect(result.yaml.contains("interval: 30s"))
+        #expect(result.yaml.contains("deploy:"))
+        #expect(result.notTranslatable.isEmpty)
+        #expect(result.warnings.isEmpty)
+    }
+
+    @Test func unknownFlagIsReportedSeparatelyFromKnownUnsupportedFlags() throws {
+        let result = try DockerRunToDockerComposeService.convert(
+            "docker run --naem typo-nginx -p 8080:80 nginx"
+        )
+
+        #expect(result.yaml.contains("image: nginx"))
+        #expect(result.yaml.contains("- \"8080:80\""))
+        #expect(result.notImplemented == [])
+        #expect(result.unknownFlags == ["--naem"])
+        #expect(result.warnings.contains(.init(kind: .unknownFlag, option: "--naem")))
+    }
+
+    @Test func diagnosticsStayLocalizedAndGroupWarnings() {
+        #expect(DockerRunToDockerComposeError.invalidCommand.errorDescription == "仅支持单条 docker run 命令。")
+        #expect(DockerRunToDockerComposeError.multipleCommands.errorDescription == "一次只能转换一条 docker run 命令。")
+        #expect(DockerRunToDockerComposeError.missingImage.errorDescription == "docker run 命令缺少镜像名称。")
+        #expect(DockerRunToDockerComposeError.missingOptionValue("--name").errorDescription == "选项 `--name` 缺少参数值。")
+        #expect(DockerRunToDockerComposeError.unterminatedQuote.errorDescription == "命令包含未闭合的引号。")
+        #expect(DockerRunToDockerComposeDiagnostics.inputTooLongMessage(maxCharacters: 200_000) == "输入内容过长，最多支持 200000 个字符。")
+        #expect(DockerRunToDockerComposeDiagnostics.emptyOutputMessage == "命令未包含可转换的服务配置。")
+        #expect(DockerRunToDockerComposeDiagnostics.fallbackErrorMessage == "docker run 命令格式无效。")
+        #expect(!(DockerRunToDockerComposeError.missingOptionValue("--name").errorDescription ?? "").contains("处理方式："))
+        #expect(!(DockerRunToDockerComposeError.invalidCommand.errorDescription ?? "").contains("Input must"))
+
+        let message = DockerRunToDockerComposeDiagnostics.warningMessage(
+            for: [
+                .init(kind: .notTranslatable, option: "-d"),
+                .init(kind: .notTranslatable, option: "--rm"),
+                .init(kind: .notTranslatable, option: "--rm"),
+                .init(kind: .notImplemented, option: "--cidfile"),
+                .init(kind: .unknownFlag, option: "--naem"),
+                .init(kind: .unknownFlag, option: "--mystery"),
+                .init(kind: .unknownFlag, option: "--future")
+            ],
+            maxOptionsPerGroup: 2
+        )
+
+        #expect(message == "部分 Docker 选项无法转换。")
+        ToolDiagnosticContract.expectFactual(message ?? "")
+
+        let secretWarning = DockerRunToDockerComposeDiagnostics.warningMessage(for: [
+            .init(kind: .unknownFlag, option: "--token=private-secret-value")
+        ])
+        #expect(secretWarning == "部分 Docker 选项无法转换。")
+        ToolDiagnosticContract.expectFactual(
+            secretWarning ?? "",
+            sensitiveInputs: ["--token=private-secret-value"]
+        )
+    }
+
+    @Test func invalidCommandThrows() throws {
+        #expect {
+            _ = try DockerRunToDockerComposeService.convert("docker compose up")
+        } throws: { error in
+            guard case DockerRunToDockerComposeError.invalidCommand = error else { return false }
+            return true
+        }
+    }
+
+    @Test func unterminatedQuoteThrows() throws {
+        #expect {
+            _ = try DockerRunToDockerComposeService.convert(#"docker run -e MESSAGE="hello nginx"#)
+        } throws: { error in
+            guard case DockerRunToDockerComposeError.unterminatedQuote = error else { return false }
+            return true
+        }
+    }
+
+    @Test func missingOptionValueThrows() throws {
+        #expect {
+            _ = try DockerRunToDockerComposeService.convert("docker run --name")
+        } throws: { error in
+            guard case DockerRunToDockerComposeError.missingOptionValue("--name") = error else { return false }
+            return true
+        }
+    }
+
+    @Test func splicedCommandsThrow() throws {
+        // Two complete commands pasted with a separating space.
+        #expect {
+            _ = try DockerRunToDockerComposeService.convert(
+                "docker run --rm -it alpine sh docker run --rm -it alpine sh"
+            )
+        } throws: { error in
+            guard case DockerRunToDockerComposeError.multipleCommands = error else { return false }
+            return true
+        }
+    }
+
+    @Test func concatenatedCommandsThrow() throws {
+        // Two commands pasted with NO separator: `sh` and `docker` fuse into the
+        // single token `shdocker`, so detection must scan the raw string rather
+        // than rely on a standalone `docker` token.
+        #expect {
+            _ = try DockerRunToDockerComposeService.convert(
+                "docker run --rm -it alpine shdocker run --rm -it alpine sh"
+            )
+        } throws: { error in
+            guard case DockerRunToDockerComposeError.multipleCommands = error else { return false }
+            return true
+        }
+    }
+
+    @Test func dockerRunInQuotedArgumentIsAllowed() throws {
+        // A literal `docker run` inside a quoted command argument must NOT be
+        // counted as a second command.
+        let result = try DockerRunToDockerComposeService.convert(
+            "docker run alpine echo \"docker run inside a string\""
+        )
+        #expect(result.yaml.contains("image: alpine"))
+    }
+
+    @Test func deploySectionsAreMergedForResourcesRestartPolicyAndGpu() throws {
+        let result = try DockerRunToDockerComposeService.convert(
+            "docker run --cpus=0.5 --memory=256m --restart on-failure:3 --gpus all nginx"
+        )
+
+        #expect(result.yaml.components(separatedBy: "    deploy:").count - 1 == 1)
+        #expect(result.yaml.contains("      resources:"))
+        #expect(result.yaml.contains("        limits:"))
+        #expect(result.yaml.contains("          cpus: \"0.5\""))
+        #expect(result.yaml.contains("          memory: 256m"))
+        #expect(result.yaml.contains("      restart_policy:"))
+        #expect(result.yaml.contains("        condition: on-failure"))
+        #expect(result.yaml.contains("        max_attempts: 3"))
+        #expect(result.yaml.contains("        reservations:"))
+        #expect(result.yaml.contains("          devices:"))
+        #expect(result.yaml.contains("              count: all"))
+    }
+
+    @Test func gpuReservationMergesWithExistingResourceReservations() throws {
+        let result = try DockerRunToDockerComposeService.convert(
+            "docker run --memory-reservation=128m --gpus=2 nginx"
+        )
+
+        #expect(result.yaml.components(separatedBy: "        reservations:").count - 1 == 1)
+        #expect(result.yaml.contains("          memory: 128m"))
+        #expect(result.yaml.contains("          devices:"))
+        #expect(result.yaml.contains("              count: \"2\""))
+    }
+
+    @Test func yamlScalarsEscapeBackslashesWhenQuoted() throws {
+        let result = try DockerRunToDockerComposeService.convert(
+            #"docker run --env WIN=C:\Temp\new nginx"#
+        )
+
+        #expect(result.yaml.contains(#"- "WIN=C:\\Temp\\new""#))
+    }
+
+    @Test func yamlScalarsQuoteAndEscapeEmbeddedControlCharacters() throws {
+        let tabbed = try DockerRunToDockerComposeService.convert(
+            "docker run --env \"CTRL=line\tbreak\" nginx"
+        )
+        #expect(tabbed.yaml.contains(#"- "CTRL=line\tbreak""#))
+
+        let controlled = try DockerRunToDockerComposeService.convert(
+            "docker run --env \"CTRL=a\u{8}b\" nginx"
+        )
+        #expect(controlled.yaml.contains(#"- "CTRL=a\u0008b""#))
+    }
+
+    @Test func numericComposeSchemaFieldsRemainNumbers() throws {
+        let result = try DockerRunToDockerComposeService.convert(
+            "docker run --blkio-weight 300 alpine"
+        )
+
+        #expect(result.yaml.contains("weight: 300"))
+        #expect(!result.yaml.contains("weight: \"300\""))
+    }
+}

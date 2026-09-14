@@ -1,0 +1,213 @@
+import Combine
+import XToolsCore
+import Foundation
+
+typealias HTMLToMarkdownURLOperation = @Sendable (
+    _ urlText: String,
+    _ progress: @escaping HTMLToMarkdownURLPipeline.ProgressHandler
+) async throws -> HTMLToMarkdownURLResult
+
+typealias HTMLToMarkdownManualOperation = @Sendable (
+    _ html: String
+) throws -> HTMLToMarkdownConversionResult
+
+@MainActor
+final class HTMLToMarkdownSession: ObservableObject {
+    @Published var urlText = ""
+    @Published private(set) var inputHTML = ""
+    @Published private(set) var markdown = ""
+    @Published private(set) var error: String?
+    @Published private(set) var warning: String?
+    @Published private(set) var phase: HTMLToMarkdownSessionPhase = .idle
+
+    private let urlOperation: HTMLToMarkdownURLOperation
+    private let manualOperation: HTMLToMarkdownManualOperation
+    private let manualDebounce: Duration
+    private let workGate = AsyncWorkGate()
+
+    init(
+        extractor: any HTMLReadableArticleExtracting = WebKitHTMLReadableArticleExtractor(),
+        urlOperation: HTMLToMarkdownURLOperation? = nil,
+        manualOperation: @escaping HTMLToMarkdownManualOperation = HTMLToMarkdownSession.defaultManualOperation,
+        manualDebounce: Duration = .milliseconds(250)
+    ) {
+        if let urlOperation {
+            self.urlOperation = urlOperation
+        } else {
+            let pipeline = HTMLToMarkdownURLPipeline(extractor: extractor)
+            self.urlOperation = { urlText, progress in
+                try await pipeline.convert(urlText: urlText, progress: progress)
+            }
+        }
+        self.manualOperation = manualOperation
+        self.manualDebounce = manualDebounce
+    }
+
+    var isURLProcessing: Bool {
+        HTMLToMarkdownSessionProjection.isURLProcessing(phase)
+    }
+
+    var processingText: String? {
+        HTMLToMarkdownSessionProjection.processingText(phase)
+    }
+
+    var canClear: Bool {
+        !urlText.isEmpty
+            || !inputHTML.isEmpty
+            || !markdown.isEmpty
+            || error != nil
+            || warning != nil
+            || phase != .idle
+    }
+
+    func fetchURL() {
+        let requestURLText = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !requestURLText.isEmpty else {
+            _ = workGate.invalidate()
+            markdown = ""
+            error = HTMLToMarkdownDiagnostics.urlFetchErrorMessage(for: .emptyURL)
+            warning = nil
+            phase = .failed
+            return
+        }
+
+        let currentGeneration = workGate.invalidate()
+        markdown = ""
+        error = nil
+        warning = nil
+        phase = .fetching
+        let urlOperation = self.urlOperation
+
+        workGate.schedule(debounce: .zero) { [weak self] in
+            guard let self, self.workGate.isCurrent(currentGeneration) else { return }
+            do {
+                let result = try await urlOperation(
+                    requestURLText,
+                    { [weak self] stage in
+                        await self?.receive(stage, generation: currentGeneration)
+                    }
+                )
+                guard self.workGate.isCurrent(currentGeneration) else { return }
+
+                self.inputHTML = result.cleanedHTML
+                self.markdown = result.markdown
+                self.error = nil
+                self.warning = HTMLToMarkdownDiagnostics.conversionWarningMessage(
+                    for: result.warnings
+                )
+                self.phase = .ready
+            } catch is CancellationError {
+                // A new action, clear, or session deallocation owns the replacement state.
+            } catch let fetchError as HTMLToMarkdownURLFetchError {
+                self.finishFailure(
+                    HTMLToMarkdownDiagnostics.urlFetchErrorMessage(for: fetchError),
+                    generation: currentGeneration
+                )
+            } catch let extractionError as HTMLReadableArticleExtractionError {
+                self.finishFailure(
+                    HTMLToMarkdownDiagnostics.articleExtractionErrorMessage(for: extractionError),
+                    generation: currentGeneration
+                )
+            } catch {
+                self.finishFailure(
+                    HTMLToMarkdownDiagnostics.urlFetchErrorMessage(for: .requestFailed),
+                    generation: currentGeneration
+                )
+            }
+        }
+    }
+
+    func userEditedHTML(_ html: String) {
+        let currentGeneration = workGate.invalidate()
+        inputHTML = html
+        markdown = ""
+        error = nil
+        warning = nil
+
+        let trimmed = html.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            phase = .idle
+            return
+        }
+
+        phase = .waitingForManualConversion
+        let manualOperation = self.manualOperation
+
+        workGate.schedule(debounce: manualDebounce) { [weak self] in
+            guard let self, self.workGate.isCurrent(currentGeneration) else { return }
+            self.phase = .converting(.manual)
+
+            let convertTask = Task.detached(priority: .userInitiated) {
+                try manualOperation(trimmed)
+            }
+
+            do {
+                let result = try await withTaskCancellationHandler {
+                    try await convertTask.value
+                } onCancel: {
+                    convertTask.cancel()
+                }
+
+                guard self.workGate.isCurrent(currentGeneration) else { return }
+                self.markdown = result.markdown
+                self.error = nil
+                self.warning = HTMLToMarkdownDiagnostics.conversionWarningMessage(
+                    for: result.warnings
+                )
+                self.phase = .ready
+            } catch is CancellationError {
+                // Superseded generation or explicit cancel — do not publish markdown.
+            } catch {
+                // Manual conversion only throws CancellationError in production.
+            }
+        }
+    }
+
+    func clear() {
+        _ = workGate.invalidate()
+        urlText = ""
+        inputHTML = ""
+        markdown = ""
+        error = nil
+        warning = nil
+        phase = .idle
+    }
+
+    func cancel() {
+        _ = workGate.invalidate()
+        phase = markdown.isEmpty && inputHTML.isEmpty ? .idle : .ready
+    }
+
+    private func receive(
+        _ stage: HTMLToMarkdownURLPipelineStage,
+        generation currentGeneration: Int
+    ) {
+        guard workGate.isCurrent(currentGeneration) else { return }
+        switch stage {
+        case .fetching:
+            phase = .fetching
+        case .extracting:
+            phase = .extracting
+        case .converting:
+            phase = .converting(.url)
+        }
+    }
+
+    private func finishFailure(_ message: String, generation currentGeneration: Int) {
+        guard workGate.isCurrent(currentGeneration) else { return }
+        markdown = ""
+        error = message
+        warning = nil
+        phase = .failed
+    }
+
+    nonisolated private static func defaultManualOperation(
+        _ html: String
+    ) throws -> HTMLToMarkdownConversionResult {
+        try HTMLToMarkdownConverter.convert(
+            html,
+            options: HTMLToMarkdownOptions(liveConversionByteLimit: .max),
+            shouldCancel: { Task.isCancelled }
+        )
+    }
+}

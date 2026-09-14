@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="base" x1="226" y1="130" x2="798" y2="920" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#232735"/>
+      <stop offset="0.58" stop-color="#171A24"/>
+      <stop offset="1" stop-color="#10131B"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="256" y1="116" x2="772" y2="906" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#384055"/>
+      <stop offset="1" stop-color="#0C0F16"/>
+    </linearGradient>
+    <linearGradient id="mint" x1="328" y1="242" x2="564" y2="746" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#78FF81"/>
+      <stop offset="0.45" stop-color="#38EB62"/>
+      <stop offset="1" stop-color="#16C779"/>
+    </linearGradient>
+    <linearGradient id="cream" x1="536" y1="434" x2="780" y2="724" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF8E7"/>
+      <stop offset="1" stop-color="#E9EDF5"/>
+    </linearGradient>
+    <filter id="softShadow" x="-15%" y="-15%" width="130%" height="130%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="30" stdDeviation="36" flood-color="#000000" flood-opacity="0.32"/>
+    </filter>
+    <filter id="glyphShadow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="12" stdDeviation="12" flood-color="#000000" flood-opacity="0.26"/>
+    </filter>
+    <filter id="pinShadow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="8" flood-color="#000000" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" fill="none"/>
+  <g filter="url(#softShadow)">
+    <path d="M512 72C269 72 72 269 72 512s197 440 440 440 440-197 440-440S755 72 512 72Z" fill="url(#edge)"/>
+    <path d="M512 96C282.3 96 96 282.3 96 512s186.3 416 416 416 416-186.3 416-416S741.7 96 512 96Z" fill="url(#base)"/>
+    <path d="M512 111c-221.4 0-401 179.6-401 401 0 83.4 25.5 160.8 69.2 224.9C221.5 791 287.2 832 363.9 857.5 412.1 873.5 462.6 882 512 882c204.4 0 370-165.6 370-370S716.4 111 512 111Z" fill="#FFFFFF" opacity="0.035"/>
+  </g>
+
+  <g filter="url(#glyphShadow)">
+    <path d="M318 282c0-14.4 11.6-26 26-26h268c14.4 0 26 11.6 26 26v48c0 14.4-11.6 26-26 26h-82v374c0 14.4-11.6 26-26 26h-64c-14.4 0-26-11.6-26-26V356h-70c-14.4 0-26-11.6-26-26v-48Z" fill="url(#mint)"/>
+    <path d="M392 256h220c14.4 0 26 11.6 26 26v48c0 14.4-11.6 26-26 26h-82v82L392 256Z" fill="#B2FF9B" opacity="0.18"/>
+    <path d="M344 256h268c14.4 0 26 11.6 26 26v48c0 14.4-11.6 26-26 26H344c-14.4 0-26-11.6-26-26v-48c0-14.4 11.6-26 26-26Z" fill="#FFFFFF" opacity="0.08"/>
+  </g>
+
+  <g filter="url(#pinShadow)">
+    <path d="M560 646c0-13.3 10.7-24 24-24h164c13.3 0 24 10.7 24 24v48c0 13.3-10.7 24-24 24H584c-13.3 0-24-10.7-24-24v-48Z" fill="url(#cream)"/>
+    <path d="M596 650h112c7.7 0 14 6.3 14 14v18c0 7.7-6.3 14-14 14H596c-7.7 0-14-6.3-14-14v-18c0-7.7 6.3-14 14-14Z" fill="#FFFFFF" opacity="0.24"/>
+  </g>
+</svg>

@@ -1,0 +1,2691 @@
+{
+  "sourceLanguage": "zh-Hans",
+  "strings": {
+    " · 截断": {
+      "extractionState": "manual"
+    },
+    "\" \"（空格）": {
+      "extractionState": "manual"
+    },
+    "644 或 4755": {
+      "extractionState": "manual"
+    },
+    "<h1>标题</h1>\n<p>段落</p>": {
+      "extractionState": "manual"
+    },
+    "@reboot 会在系统启动时执行，没有固定日历预览": {
+      "extractionState": "manual"
+    },
+    "ASCII / 二进制": {
+      "extractionState": "manual"
+    },
+    "ASCII 或二进制转换失败。": {
+      "extractionState": "manual"
+    },
+    "ASCII→文本": {
+      "extractionState": "manual"
+    },
+    "Alpha 透明度": {
+      "extractionState": "manual"
+    },
+    "Authorization 请求头": {
+      "extractionState": "manual"
+    },
+    "Base64 字符串": {
+      "extractionState": "manual"
+    },
+    "Base64 文件": {
+      "extractionState": "manual"
+    },
+    "Base64 解码失败。": {
+      "extractionState": "manual"
+    },
+    "Base64 输入": {
+      "extractionState": "manual"
+    },
+    "Basic Auth 请求头或 Base64 凭据": {
+      "extractionState": "manual"
+    },
+    "CPU 核心": {
+      "extractionState": "manual"
+    },
+    "CSS 颜色": {
+      "extractionState": "manual"
+    },
+    "Chmod 八进制只能包含数字。": {
+      "extractionState": "manual"
+    },
+    "Chmod 八进制权限": {
+      "extractionState": "manual"
+    },
+    "Chmod 八进制每一位只能是 0–7。": {
+      "extractionState": "manual"
+    },
+    "Chmod 八进制需要 3 位或 4 位数字。": {
+      "extractionState": "manual"
+    },
+    "Chmod 计算器": {
+      "extractionState": "manual"
+    },
+    "Cron 表达式": {
+      "extractionState": "manual"
+    },
+    "Crontab 生成": {
+      "extractionState": "manual"
+    },
+    "Emoji 与符号": {
+      "extractionState": "manual"
+    },
+    "Emoji 肤色": {
+      "extractionState": "manual"
+    },
+    "Esc 停止": {
+      "extractionState": "manual"
+    },
+    "Favicon 外观检查提示": {
+      "extractionState": "manual"
+    },
+    "Favicon 源图片预览": {
+      "extractionState": "manual"
+    },
+    "Favicon 生成器": {
+      "extractionState": "manual"
+    },
+    "Favicon 生成失败。": {
+      "extractionState": "manual"
+    },
+    "Favicon 部署包": {
+      "extractionState": "manual"
+    },
+    "HTML 引用片段（假设文件位于站点根目录）": {
+      "extractionState": "manual"
+    },
+    "HTTP 状态码": {
+      "extractionState": "manual"
+    },
+    "Hash 文本": {
+      "extractionState": "manual"
+    },
+    "Header 和 Payload 仅为解码内容，不代表可信输入或具体应用会接受此 Token。": {
+      "extractionState": "manual"
+    },
+    "Header 将显示在这里": {
+      "extractionState": "manual"
+    },
+    "JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。": {
+      "extractionState": "manual"
+    },
+    "JSON 对比": {
+      "extractionState": "manual"
+    },
+    "JSON 格式化": {
+      "extractionState": "manual"
+    },
+    "SQL 格式化": {
+      "extractionState": "manual"
+    },
+    "Token 生成器": {
+      "extractionState": "manual"
+    },
+    "URL 编解码": {
+      "extractionState": "manual"
+    },
+    "URL 解码失败。": {
+      "extractionState": "manual"
+    },
+    "UUID 生成器": {
+      "extractionState": "manual"
+    },
+    "Unicode 转义解码失败。": {
+      "extractionState": "manual"
+    },
+    "Unicode 转换": {
+      "extractionState": "manual"
+    },
+    "Unicode→文本": {
+      "extractionState": "manual"
+    },
+    "Unix 时间戳与人类可读时间互转。": {
+      "extractionState": "manual"
+    },
+    "Unix 时间戳（秒）": {
+      "extractionState": "manual"
+    },
+    "Unix 毫秒": {
+      "extractionState": "manual"
+    },
+    "Unix 秒": {
+      "extractionState": "manual"
+    },
+    "User-Agent 结构无效。": {
+      "extractionState": "manual"
+    },
+    "User-Agent 解析": {
+      "extractionState": "manual"
+    },
+    "XML 格式化": {
+      "extractionState": "manual"
+    },
+    "YAML 格式化": {
+      "extractionState": "manual"
+    },
+    "cron 表达式需要 5 个字段": {
+      "extractionState": "manual"
+    },
+    "docker run 命令": {
+      "extractionState": "manual"
+    },
+    "macOS 设备信息": {
+      "extractionState": "manual"
+    },
+    "site.webmanifest 内容": {
+      "extractionState": "manual"
+    },
+    "yyyy年 M月": {
+      "extractionState": "manual"
+    },
+    "一": {
+      "extractionState": "manual"
+    },
+    "一次只能拖入一个文件。": {
+      "extractionState": "manual"
+    },
+    "七日趋势": {
+      "extractionState": "manual"
+    },
+    "三": {
+      "extractionState": "manual"
+    },
+    "三角函数": {
+      "extractionState": "manual"
+    },
+    "上一个月": {
+      "extractionState": "manual"
+    },
+    "上中": {
+      "extractionState": "manual"
+    },
+    "上传图片": {
+      "extractionState": "manual"
+    },
+    "上传图片，生成可直接放入站点根目录的五文件 Favicon 部署包。": {
+      "extractionState": "manual"
+    },
+    "上传文件": {
+      "extractionState": "manual"
+    },
+    "上传文件，对比扩展名与文件内容证据。": {
+      "extractionState": "manual"
+    },
+    "上次有效颜色提示": {
+      "extractionState": "manual"
+    },
+    "上次生成 ": {
+      "extractionState": "manual"
+    },
+    "下一个月": {
+      "extractionState": "manual"
+    },
+    "下中": {
+      "extractionState": "manual"
+    },
+    "下次运行时间": {
+      "extractionState": "manual"
+    },
+    "不含空格": {
+      "extractionState": "manual"
+    },
+    "不支持所选图片的文件格式。": {
+      "extractionState": "manual"
+    },
+    "东京": {
+      "extractionState": "manual"
+    },
+    "两日期间隔": {
+      "extractionState": "manual"
+    },
+    "个人行动面板 · 今天先从上次停下的地方继续。": {
+      "extractionState": "manual"
+    },
+    "中": {
+      "extractionState": "manual"
+    },
+    "为图片添加黑色或白色文字水印，并保持原格式与尺寸。": {
+      "extractionState": "manual"
+    },
+    "主屏幕": {
+      "extractionState": "manual"
+    },
+    "主屏幕像素": {
+      "extractionState": "manual"
+    },
+    "主机名": {
+      "extractionState": "manual"
+    },
+    "主题": {
+      "extractionState": "manual"
+    },
+    "主题:浅色": {
+      "extractionState": "manual"
+    },
+    "主题:深色": {
+      "extractionState": "manual"
+    },
+    "主题:跟随系统": {
+      "extractionState": "manual"
+    },
+    "也可拖入单个普通文件": {
+      "extractionState": "manual"
+    },
+    "事件类型": {
+      "extractionState": "manual"
+    },
+    "二": {
+      "extractionState": "manual"
+    },
+    "二进制": {
+      "extractionState": "manual"
+    },
+    "二进制 (2)": {
+      "extractionState": "manual"
+    },
+    "二进制→文本": {
+      "extractionState": "manual"
+    },
+    "五": {
+      "extractionState": "manual"
+    },
+    "亚洲": {
+      "extractionState": "manual"
+    },
+    "亮度": {
+      "extractionState": "manual"
+    },
+    "人类可读时间（本地时区）": {
+      "extractionState": "manual"
+    },
+    "人类时间（本地）": {
+      "extractionState": "manual"
+    },
+    "仅兼容": {
+      "extractionState": "manual"
+    },
+    "仅展示前 200 个结果": {
+      "extractionState": "manual"
+    },
+    "仅当其他系统提供的是 Base64 密钥时使用；签名或本地检查前会先解码为原始字节。": {
+      "extractionState": "manual"
+    },
+    "今": {
+      "extractionState": "manual"
+    },
+    "今天": {
+      "extractionState": "manual"
+    },
+    "今日概览": {
+      "extractionState": "manual"
+    },
+    "仍然保存更大的文件": {
+      "extractionState": "manual"
+    },
+    "从一个动作开始": {
+      "extractionState": "manual"
+    },
+    "从侧边栏选择工具，或按 ⌘K 搜索。": {
+      "extractionState": "manual"
+    },
+    "优化偏好": {
+      "extractionState": "manual"
+    },
+    "优化工作区": {
+      "extractionState": "manual"
+    },
+    "优化结果": {
+      "extractionState": "manual"
+    },
+    "伦敦": {
+      "extractionState": "manual"
+    },
+    "位置": {
+      "extractionState": "manual"
+    },
+    "使用 ICU 引擎实时测试正则并高亮匹配。": {
+      "extractionState": "manual"
+    },
+    "使用弧度，例如 sin(pi/2) = 1。": {
+      "extractionState": "manual"
+    },
+    "使用当前时间": {
+      "extractionState": "manual"
+    },
+    "使用系统安全随机数生成 Base64url、Hex 或字符集 Token。": {
+      "extractionState": "manual"
+    },
+    "例如 (3 + 4) * 2 / sqrt(16)": {
+      "extractionState": "manual"
+    },
+    "例如 1718900000": {
+      "extractionState": "manual"
+    },
+    "例如 2024 或 MMXXIV": {
+      "extractionState": "manual"
+    },
+    "例如 {": {
+      "extractionState": "manual"
+    },
+    "侧栏": {
+      "extractionState": "manual"
+    },
+    "侧边栏": {
+      "extractionState": "manual"
+    },
+    "保存": {
+      "extractionState": "manual"
+    },
+    "保存与当前水印设置一致的原尺寸图片": {
+      "extractionState": "manual"
+    },
+    "保存优化图片": {
+      "extractionState": "manual"
+    },
+    "保存全部五个 Favicon 部署文件": {
+      "extractionState": "manual"
+    },
+    "保存前可修改文件名": {
+      "extractionState": "manual"
+    },
+    "保存完整输出": {
+      "extractionState": "manual"
+    },
+    "保存水印图片": {
+      "extractionState": "manual"
+    },
+    "保存灰度图": {
+      "extractionState": "manual"
+    },
+    "保存解码后的文件": {
+      "extractionState": "manual"
+    },
+    "保存输出": {
+      "extractionState": "manual"
+    },
+    "保留尾": {
+      "extractionState": "manual"
+    },
+    "保留易混淆字符": {
+      "extractionState": "manual"
+    },
+    "保留空格": {
+      "extractionState": "manual"
+    },
+    "保留首": {
+      "extractionState": "manual"
+    },
+    "保留首尾指定位数并遮蔽中部；遮蔽不是加密，仍可能泄露长度和结构。": {
+      "extractionState": "manual"
+    },
+    "信息": {
+      "extractionState": "manual"
+    },
+    "修饰键": {
+      "extractionState": "manual"
+    },
+    "偏好": {
+      "extractionState": "manual"
+    },
+    "允许注释与空白 (x)": {
+      "extractionState": "manual"
+    },
+    "全局匹配 (g)": {
+      "extractionState": "manual"
+    },
+    "全部": {
+      "extractionState": "manual"
+    },
+    "全部保存": {
+      "extractionState": "manual"
+    },
+    "全部复制": {
+      "extractionState": "manual"
+    },
+    "全部清空": {
+      "extractionState": "manual"
+    },
+    "八进制": {
+      "extractionState": "manual"
+    },
+    "八进制 (8)": {
+      "extractionState": "manual"
+    },
+    "八进制权限": {
+      "extractionState": "manual"
+    },
+    "六": {
+      "extractionState": "manual"
+    },
+    "关键字": {
+      "extractionState": "manual"
+    },
+    "关闭": {
+      "extractionState": "manual"
+    },
+    "关闭提示": {
+      "extractionState": "manual"
+    },
+    "关闭时，XTools 会直接打开个人工作台。": {
+      "extractionState": "manual"
+    },
+    "其他": {
+      "extractionState": "manual"
+    },
+    "内容": {
+      "extractionState": "manual"
+    },
+    "内容签名 MIME": {
+      "extractionState": "manual"
+    },
+    "内容较大，点击输入区右上角的“计算摘要”后显示结果": {
+      "extractionState": "manual"
+    },
+    "内建": {
+      "extractionState": "manual"
+    },
+    "内罗毕": {
+      "extractionState": "manual"
+    },
+    "写 w": {
+      "extractionState": "manual"
+    },
+    "准备探索工具": {
+      "extractionState": "manual"
+    },
+    "减": {
+      "extractionState": "manual"
+    },
+    "减少": {
+      "extractionState": "manual"
+    },
+    "凭据": {
+      "extractionState": "manual"
+    },
+    "函数": {
+      "extractionState": "manual"
+    },
+    "分类筛选": {
+      "extractionState": "manual"
+    },
+    "分类脉冲": {
+      "extractionState": "manual"
+    },
+    "分钟 (0-59)": {
+      "extractionState": "manual"
+    },
+    "切换主题": {
+      "extractionState": "manual"
+    },
+    "切换到该工具": {
+      "extractionState": "manual"
+    },
+    "利马": {
+      "extractionState": "manual"
+    },
+    "刷新": {
+      "extractionState": "manual"
+    },
+    "刷新设备信息": {
+      "extractionState": "manual"
+    },
+    "剪贴板写入失败。": {
+      "extractionState": "manual"
+    },
+    "剪贴板里是 Base64": {
+      "extractionState": "manual"
+    },
+    "剪贴板里是 CSS 颜色": {
+      "extractionState": "manual"
+    },
+    "剪贴板里是 Data URL": {
+      "extractionState": "manual"
+    },
+    "剪贴板里是 HTML": {
+      "extractionState": "manual"
+    },
+    "剪贴板里是 JSON": {
+      "extractionState": "manual"
+    },
+    "剪贴板里是 JWT": {
+      "extractionState": "manual"
+    },
+    "剪贴板里是 URL 编码文本": {
+      "extractionState": "manual"
+    },
+    "剪贴板里是 Unix 时间戳": {
+      "extractionState": "manual"
+    },
+    "剪贴板里是 XML": {
+      "extractionState": "manual"
+    },
+    "加": {
+      "extractionState": "manual"
+    },
+    "加入收藏": {
+      "extractionState": "manual"
+    },
+    "加密": {
+      "extractionState": "manual"
+    },
+    "加密与生成": {
+      "extractionState": "manual"
+    },
+    "加密口令": {
+      "extractionState": "manual"
+    },
+    "加密口令不能为空。": {
+      "extractionState": "manual"
+    },
+    "加密操作失败。": {
+      "extractionState": "manual"
+    },
+    "加载设备信息中…": {
+      "extractionState": "manual"
+    },
+    "动作": {
+      "extractionState": "manual"
+    },
+    "包含结束日（+1 天）": {
+      "extractionState": "manual"
+    },
+    "北京": {
+      "extractionState": "manual"
+    },
+    "北美": {
+      "extractionState": "manual"
+    },
+    "匹配": {
+      "extractionState": "manual"
+    },
+    "匹配规则": {
+      "extractionState": "manual"
+    },
+    "十六进制": {
+      "extractionState": "manual"
+    },
+    "十六进制 (16)": {
+      "extractionState": "manual"
+    },
+    "十进制": {
+      "extractionState": "manual"
+    },
+    "十进制 (10)": {
+      "extractionState": "manual"
+    },
+    "单词": {
+      "extractionState": "manual"
+    },
+    "南美": {
+      "extractionState": "manual"
+    },
+    "压缩": {
+      "extractionState": "manual"
+    },
+    "原图": {
+      "extractionState": "manual"
+    },
+    "原始大小": {
+      "extractionState": "manual"
+    },
+    "原始文本…": {
+      "extractionState": "manual"
+    },
+    "取消收藏": {
+      "extractionState": "manual"
+    },
+    "取色": {
+      "extractionState": "manual"
+    },
+    "句子": {
+      "extractionState": "manual"
+    },
+    "可用端口": {
+      "extractionState": "manual"
+    },
+    "可编辑的 Base64 或 Data URL 不能超过限制。": {
+      "extractionState": "manual"
+    },
+    "右上": {
+      "extractionState": "manual"
+    },
+    "右下": {
+      "extractionState": "manual"
+    },
+    "右中": {
+      "extractionState": "manual"
+    },
+    "各格式": {
+      "extractionState": "manual"
+    },
+    "各进制结果": {
+      "extractionState": "manual"
+    },
+    "否": {
+      "extractionState": "manual"
+    },
+    "启动时继续上次使用的工具": {
+      "extractionState": "manual"
+    },
+    "启动时继续上次工具": {
+      "extractionState": "manual"
+    },
+    "周数+天数": {
+      "extractionState": "manual"
+    },
+    "周末午夜": {
+      "extractionState": "manual"
+    },
+    "命令面板": {
+      "extractionState": "manual"
+    },
+    "命令面板…": {
+      "extractionState": "manual"
+    },
+    "命令面板 (Command-K)": {
+      "extractionState": "manual"
+    },
+    "命名组": {
+      "extractionState": "manual"
+    },
+    "四": {
+      "extractionState": "manual"
+    },
+    "图像与颜色": {
+      "extractionState": "manual"
+    },
+    "图标": {
+      "extractionState": "manual"
+    },
+    "图片": {
+      "extractionState": "manual"
+    },
+    "图片优化原图预览": {
+      "extractionState": "manual"
+    },
+    "图片优化结果预览": {
+      "extractionState": "manual"
+    },
+    "图片压缩失败。": {
+      "extractionState": "manual"
+    },
+    "图片处理失败。": {
+      "extractionState": "manual"
+    },
+    "图片文件保存失败。": {
+      "extractionState": "manual"
+    },
+    "图片文件读取失败。": {
+      "extractionState": "manual"
+    },
+    "图片格式转换": {
+      "extractionState": "manual"
+    },
+    "图片格式转换失败。": {
+      "extractionState": "manual"
+    },
+    "图片水印": {
+      "extractionState": "manual"
+    },
+    "图片灰阶生成器": {
+      "extractionState": "manual"
+    },
+    "圣保罗": {
+      "extractionState": "manual"
+    },
+    "在 camelCase、snake_case、kebab-case 等之间转换。": {
+      "extractionState": "manual"
+    },
+    "在二进制、八进制、十进制、十六进制之间转换。": {
+      "extractionState": "manual"
+    },
+    "在八进制与 rwx（含特殊权限位）之间双向换算。": {
+      "extractionState": "manual"
+    },
+    "在其他用户执行位位置显示 t 或 T": {
+      "extractionState": "manual"
+    },
+    "在所属组执行位位置显示 s 或 S": {
+      "extractionState": "manual"
+    },
+    "在所有者执行位位置显示 s 或 S": {
+      "extractionState": "manual"
+    },
+    "在此粘贴 JSON…": {
+      "extractionState": "manual"
+    },
+    "在此粘贴文本或 Base64…": {
+      "extractionState": "manual"
+    },
+    "在纯文本与 Base64 之间互转，支持 UTF-8。": {
+      "extractionState": "manual"
+    },
+    "在解析中打开": {
+      "extractionState": "manual"
+    },
+    "在解析中检查": {
+      "extractionState": "manual"
+    },
+    "在解码结果中预览": {
+      "extractionState": "manual"
+    },
+    "基准日期": {
+      "extractionState": "manual"
+    },
+    "填写有效 Payload 和 Secret 后自动生成": {
+      "extractionState": "manual"
+    },
+    "增加": {
+      "extractionState": "manual"
+    },
+    "墨尔本": {
+      "extractionState": "manual"
+    },
+    "墨西哥城": {
+      "extractionState": "manual"
+    },
+    "声明": {
+      "extractionState": "manual"
+    },
+    "处理中…": {
+      "extractionState": "manual"
+    },
+    "复制": {
+      "extractionState": "manual"
+    },
+    "复制 Favicon HTML 引用片段": {
+      "extractionState": "manual"
+    },
+    "复制 site.webmanifest 内容": {
+      "extractionState": "manual"
+    },
+    "复制全部": {
+      "extractionState": "manual"
+    },
+    "复制八进制": {
+      "extractionState": "manual"
+    },
+    "复制匹配结果": {
+      "extractionState": "manual"
+    },
+    "复制完整输出": {
+      "extractionState": "manual"
+    },
+    "复制总天数": {
+      "extractionState": "manual"
+    },
+    "复制此 Token": {
+      "extractionState": "manual"
+    },
+    "复制此 UUID": {
+      "extractionState": "manual"
+    },
+    "复制此密码": {
+      "extractionState": "manual"
+    },
+    "复制此摘要": {
+      "extractionState": "manual"
+    },
+    "复制此项": {
+      "extractionState": "manual"
+    },
+    "外接": {
+      "extractionState": "manual"
+    },
+    "外观": {
+      "extractionState": "manual"
+    },
+    "外观与启动行为": {
+      "extractionState": "manual"
+    },
+    "多伦多": {
+      "extractionState": "manual"
+    },
+    "多行模式 (m)": {
+      "extractionState": "manual"
+    },
+    "大": {
+      "extractionState": "manual"
+    },
+    "大写": {
+      "extractionState": "manual"
+    },
+    "大小": {
+      "extractionState": "manual"
+    },
+    "大小写": {
+      "extractionState": "manual"
+    },
+    "大小写转换": {
+      "extractionState": "manual"
+    },
+    "大洋洲": {
+      "extractionState": "manual"
+    },
+    "奥克兰": {
+      "extractionState": "manual"
+    },
+    "字符": {
+      "extractionState": "manual"
+    },
+    "字符串遮蔽": {
+      "extractionState": "manual"
+    },
+    "字符集": {
+      "extractionState": "manual"
+    },
+    "字节": {
+      "extractionState": "manual"
+    },
+    "字节数": {
+      "extractionState": "manual"
+    },
+    "存储": {
+      "extractionState": "manual"
+    },
+    "完成": {
+      "extractionState": "manual"
+    },
+    "定时": {
+      "extractionState": "manual"
+    },
+    "容器": {
+      "extractionState": "manual"
+    },
+    "密文": {
+      "extractionState": "manual"
+    },
+    "密码": {
+      "extractionState": "manual"
+    },
+    "密码生成器": {
+      "extractionState": "manual"
+    },
+    "密钥格式": {
+      "extractionState": "manual"
+    },
+    "对比": {
+      "extractionState": "manual"
+    },
+    "对比两段 JSON，以左右对齐视图显示差异。": {
+      "extractionState": "manual"
+    },
+    "对比文本…": {
+      "extractionState": "manual"
+    },
+    "对路径片段、查询参数值等 URL 组件进行百分号编码与解码。": {
+      "extractionState": "manual"
+    },
+    "导入": {
+      "extractionState": "manual"
+    },
+    "导入编码文本文件": {
+      "extractionState": "manual"
+    },
+    "将当前 JWT 和 Secret 送入解析模式进行本地检查": {
+      "extractionState": "manual"
+    },
+    "将当前请求头送入解析模式": {
+      "extractionState": "manual"
+    },
+    "将彩色图片转为灰度图。": {
+      "extractionState": "manual"
+    },
+    "将文件编码为 Base64 / Data URL，或从 Base64 解码回文件。": {
+      "extractionState": "manual"
+    },
+    "将解析出的用户名和密码送入生成模式": {
+      "extractionState": "manual"
+    },
+    "将解析后的 Header、Payload 和当前 Secret 送入生成模式": {
+      "extractionState": "manual"
+    },
+    "小": {
+      "extractionState": "manual"
+    },
+    "小写": {
+      "extractionState": "manual"
+    },
+    "小时 (0-23)": {
+      "extractionState": "manual"
+    },
+    "尚未检测文件": {
+      "extractionState": "manual"
+    },
+    "尚未生成": {
+      "extractionState": "manual"
+    },
+    "尚未输入颜色": {
+      "extractionState": "manual"
+    },
+    "尚未选择": {
+      "extractionState": "manual"
+    },
+    "居中": {
+      "extractionState": "manual"
+    },
+    "工作台": {
+      "extractionState": "manual"
+    },
+    "工作日 9 点": {
+      "extractionState": "manual"
+    },
+    "工具": {
+      "extractionState": "manual"
+    },
+    "左上": {
+      "extractionState": "manual"
+    },
+    "左下": {
+      "extractionState": "manual"
+    },
+    "左中": {
+      "extractionState": "manual"
+    },
+    "已保存": {
+      "extractionState": "manual"
+    },
+    "已关闭": {
+      "extractionState": "manual"
+    },
+    "已切换为跟随系统外观": {
+      "extractionState": "manual"
+    },
+    "已切换到浅色": {
+      "extractionState": "manual"
+    },
+    "已切换到深色": {
+      "extractionState": "manual"
+    },
+    "已加入收藏": {
+      "extractionState": "manual"
+    },
+    "已取消收藏": {
+      "extractionState": "manual"
+    },
+    "已复制": {
+      "extractionState": "manual"
+    },
+    "已展开": {
+      "extractionState": "manual"
+    },
+    "已开启": {
+      "extractionState": "manual"
+    },
+    "已收起": {
+      "extractionState": "manual"
+    },
+    "已有文件选择器正在打开。": {
+      "extractionState": "manual"
+    },
+    "已用时间": {
+      "extractionState": "manual"
+    },
+    "已选择": {
+      "extractionState": "manual"
+    },
+    "巴黎": {
+      "extractionState": "manual"
+    },
+    "布宜诺斯艾利斯": {
+      "extractionState": "manual"
+    },
+    "布局和活动统计仅保存在本机": {
+      "extractionState": "manual"
+    },
+    "常用范围": {
+      "extractionState": "manual"
+    },
+    "常用预设": {
+      "extractionState": "manual"
+    },
+    "常用：直接使用输入文本的 UTF-8 字节作为密钥。": {
+      "extractionState": "manual"
+    },
+    "常量": {
+      "extractionState": "manual"
+    },
+    "平台": {
+      "extractionState": "manual"
+    },
+    "开发": {
+      "extractionState": "manual"
+    },
+    "开启": {
+      "extractionState": "manual"
+    },
+    "开启后按 key 字典序输出": {
+      "extractionState": "manual"
+    },
+    "开始": {
+      "extractionState": "manual"
+    },
+    "开始使用工具后显示": {
+      "extractionState": "manual"
+    },
+    "开始搜索": {
+      "extractionState": "manual"
+    },
+    "开始日期": {
+      "extractionState": "manual"
+    },
+    "开罗": {
+      "extractionState": "manual"
+    },
+    "强度": {
+      "extractionState": "manual"
+    },
+    "当前 Payload 中没有可解释的注册声明。": {
+      "extractionState": "manual"
+    },
+    "当前压缩结果不小于原图，不能作为压缩结果保存。": {
+      "extractionState": "manual"
+    },
+    "当前只显示前后片段，复制或保存会使用完整输出": {
+      "extractionState": "manual"
+    },
+    "当前图片格式没有可用的转换目标。": {
+      "extractionState": "manual"
+    },
+    "当前布局": {
+      "extractionState": "manual"
+    },
+    "当前生成配置低于 64 bit；可增加长度来提高随机空间。": {
+      "extractionState": "manual"
+    },
+    "当前算法安全性较弱。": {
+      "extractionState": "manual"
+    },
+    "当前颜色超出 sRGB，HSL 调整将从映射后的显示颜色开始": {
+      "extractionState": "manual"
+    },
+    "待转换的原图": {
+      "extractionState": "manual"
+    },
+    "德里": {
+      "extractionState": "manual"
+    },
+    "快捷动作": {
+      "extractionState": "manual"
+    },
+    "忽略大小写 (i)": {
+      "extractionState": "manual"
+    },
+    "忽略这个建议": {
+      "extractionState": "manual"
+    },
+    "总分钟": {
+      "extractionState": "manual"
+    },
+    "总天数": {
+      "extractionState": "manual"
+    },
+    "总小时": {
+      "extractionState": "manual"
+    },
+    "恢复默认": {
+      "extractionState": "manual"
+    },
+    "悉尼": {
+      "extractionState": "manual"
+    },
+    "成功": {
+      "extractionState": "manual"
+    },
+    "所属组": {
+      "extractionState": "manual"
+    },
+    "所有者": {
+      "extractionState": "manual"
+    },
+    "所有设置只保存在本机。": {
+      "extractionState": "manual"
+    },
+    "所选文件不包含可读取的图片数据。": {
+      "extractionState": "manual"
+    },
+    "打开个人工作台": {
+      "extractionState": "manual"
+    },
+    "打开命令面板": {
+      "extractionState": "manual"
+    },
+    "打开命令面板，快捷键 Command-K": {
+      "extractionState": "manual"
+    },
+    "打开系统取色器": {
+      "extractionState": "manual"
+    },
+    "打开系统取色器（包含透明度）": {
+      "extractionState": "manual"
+    },
+    "打开设置": {
+      "extractionState": "manual"
+    },
+    "执行": {
+      "extractionState": "manual"
+    },
+    "执行 x": {
+      "extractionState": "manual"
+    },
+    "扩展名推断 MIME": {
+      "extractionState": "manual"
+    },
+    "扩展屏幕": {
+      "extractionState": "manual"
+    },
+    "批量生成 UUID v4 或按时间排序的 UUID v7，支持单个复制与全部复制。": {
+      "extractionState": "manual"
+    },
+    "把 docker run 命令转换为 compose YAML。": {
+      "extractionState": "manual"
+    },
+    "把图片另存为不同格式；不用于压缩体积。": {
+      "extractionState": "manual"
+    },
+    "拉各斯": {
+      "extractionState": "manual"
+    },
+    "按下以复制字符": {
+      "extractionState": "manual"
+    },
+    "按下任意键": {
+      "extractionState": "manual"
+    },
+    "按下任意键；Esc 结束监听": {
+      "extractionState": "manual"
+    },
+    "按下按键查看事件；按 Escape 停止监听，点击此区域恢复监听。": {
+      "extractionState": "manual"
+    },
+    "按包含首尾日期的方式计算天数": {
+      "extractionState": "manual"
+    },
+    "按图片宽度比例设置水印大小": {
+      "extractionState": "manual"
+    },
+    "按工具切换次数排序": {
+      "extractionState": "manual"
+    },
+    "按键": {
+      "extractionState": "manual"
+    },
+    "捕获": {
+      "extractionState": "manual"
+    },
+    "排序、尺寸和显隐会即时保存在本机": {
+      "extractionState": "manual"
+    },
+    "排除易混淆": {
+      "extractionState": "manual"
+    },
+    "排除易混淆字符": {
+      "extractionState": "manual"
+    },
+    "控制 setgid 特殊权限位": {
+      "extractionState": "manual"
+    },
+    "控制 setuid 特殊权限位": {
+      "extractionState": "manual"
+    },
+    "控制 sticky 特殊权限位": {
+      "extractionState": "manual"
+    },
+    "搜索 Emoji 或符号（如 right / 右 / 播放）…": {
+      "extractionState": "manual"
+    },
+    "搜索一个工具开始": {
+      "extractionState": "manual"
+    },
+    "搜索全部工具和动作": {
+      "extractionState": "manual"
+    },
+    "搜索工具": {
+      "extractionState": "manual"
+    },
+    "搜索工具…": {
+      "extractionState": "manual"
+    },
+    "搜索工具或命令…": {
+      "extractionState": "manual"
+    },
+    "搜索工具或打开命令面板。使用后，收藏、最近使用和活动趋势会自动出现在这里。": {
+      "extractionState": "manual"
+    },
+    "搜索并添加隐藏卡片": {
+      "extractionState": "manual"
+    },
+    "搜索状态码、名称或描述…": {
+      "extractionState": "manual"
+    },
+    "搜索结果": {
+      "extractionState": "manual"
+    },
+    "摘要": {
+      "extractionState": "manual"
+    },
+    "摘要结果": {
+      "extractionState": "manual"
+    },
+    "撤销": {
+      "extractionState": "manual"
+    },
+    "操作模式": {
+      "extractionState": "manual"
+    },
+    "操作系统": {
+      "extractionState": "manual"
+    },
+    "支持 Base64 与 Data URL": {
+      "extractionState": "manual"
+    },
+    "支持导入编码文本文件": {
+      "extractionState": "manual"
+    },
+    "支持粘贴 ISO 8601 或 yyyy-MM-dd HH:mm:ss": {
+      "extractionState": "manual"
+    },
+    "支持输入 yyyy-MM-dd 或粘贴 yyyy/MM/dd": {
+      "extractionState": "manual"
+    },
+    "收藏": {
+      "extractionState": "manual"
+    },
+    "收藏工具": {
+      "extractionState": "manual"
+    },
+    "收藏常用工具，快速回来": {
+      "extractionState": "manual"
+    },
+    "数值": {
+      "extractionState": "manual"
+    },
+    "数字": {
+      "extractionState": "manual"
+    },
+    "数字→罗马": {
+      "extractionState": "manual"
+    },
+    "数学计算": {
+      "extractionState": "manual"
+    },
+    "数量": {
+      "extractionState": "manual"
+    },
+    "文件": {
+      "extractionState": "manual"
+    },
+    "文件名": {
+      "extractionState": "manual"
+    },
+    "文件大小": {
+      "extractionState": "manual"
+    },
+    "文件头（前 16 字节）": {
+      "extractionState": "manual"
+    },
+    "文件已保存": {
+      "extractionState": "manual"
+    },
+    "文件扩展名": {
+      "extractionState": "manual"
+    },
+    "文件类型探测器": {
+      "extractionState": "manual"
+    },
+    "文本": {
+      "extractionState": "manual"
+    },
+    "文本→ASCII": {
+      "extractionState": "manual"
+    },
+    "文本→Unicode": {
+      "extractionState": "manual"
+    },
+    "文本→二进制": {
+      "extractionState": "manual"
+    },
+    "文本与 ASCII 码、二进制串之间互转。": {
+      "extractionState": "manual"
+    },
+    "文本与 Unicode 转义序列互转。": {
+      "extractionState": "manual"
+    },
+    "文本加密": {
+      "extractionState": "manual"
+    },
+    "文本对比": {
+      "extractionState": "manual"
+    },
+    "文本统计": {
+      "extractionState": "manual"
+    },
+    "斐济": {
+      "extractionState": "manual"
+    },
+    "新加坡": {
+      "extractionState": "manual"
+    },
+    "方向": {
+      "extractionState": "manual"
+    },
+    "无": {
+      "extractionState": "manual"
+    },
+    "无匹配结果": {
+      "extractionState": "manual"
+    },
+    "无变化": {
+      "extractionState": "manual"
+    },
+    "无可转换目标": {
+      "extractionState": "manual"
+    },
+    "无效颜色": {
+      "extractionState": "manual"
+    },
+    "无法保存文件。": {
+      "extractionState": "manual"
+    },
+    "无法保存输出": {
+      "extractionState": "manual"
+    },
+    "无法复制编码结果。": {
+      "extractionState": "manual"
+    },
+    "无法识别时间。支持 ISO 8601 或 yyyy-MM-dd HH:mm:ss。": {
+      "extractionState": "manual"
+    },
+    "无法读取所选文件。": {
+      "extractionState": "manual"
+    },
+    "无法转换 docker run 命令。": {
+      "extractionState": "manual"
+    },
+    "无法转换当前输入。": {
+      "extractionState": "manual"
+    },
+    "无注册声明": {
+      "extractionState": "manual"
+    },
+    "无结果": {
+      "extractionState": "manual"
+    },
+    "日": {
+      "extractionState": "manual"
+    },
+    "日 (1-31)": {
+      "extractionState": "manual"
+    },
+    "日期": {
+      "extractionState": "manual"
+    },
+    "日期与时间": {
+      "extractionState": "manual"
+    },
+    "日期加减": {
+      "extractionState": "manual"
+    },
+    "日期计算": {
+      "extractionState": "manual"
+    },
+    "时区": {
+      "extractionState": "manual"
+    },
+    "时区列表": {
+      "extractionState": "manual"
+    },
+    "时区查看器": {
+      "extractionState": "manual"
+    },
+    "时间": {
+      "extractionState": "manual"
+    },
+    "时间与日期": {
+      "extractionState": "manual"
+    },
+    "时间戳": {
+      "extractionState": "manual"
+    },
+    "时间戳或时间": {
+      "extractionState": "manual"
+    },
+    "时间戳转换": {
+      "extractionState": "manual"
+    },
+    "时间状态按本机当前时间判断；iss、sub、aud、jti 仅解释原始值，不执行应用级验证。": {
+      "extractionState": "manual"
+    },
+    "明文": {
+      "extractionState": "manual"
+    },
+    "星期 (0-7)": {
+      "extractionState": "manual"
+    },
+    "映射到 sRGB": {
+      "extractionState": "manual"
+    },
+    "是": {
+      "extractionState": "manual"
+    },
+    "显示侧边栏": {
+      "extractionState": "manual"
+    },
+    "显示侧边栏（⌘B）": {
+      "extractionState": "manual"
+    },
+    "显示器": {
+      "extractionState": "manual"
+    },
+    "显示器数量": {
+      "extractionState": "manual"
+    },
+    "显示密码": {
+      "extractionState": "manual"
+    },
+    "显示精选全球城市的当前时间，按大洲折叠并按 UTC 偏移量分组。": {
+      "extractionState": "manual"
+    },
+    "普通文件 · 50 MB 以内": {
+      "extractionState": "manual"
+    },
+    "普通文本": {
+      "extractionState": "manual"
+    },
+    "智能压缩图片": {
+      "extractionState": "manual"
+    },
+    "暂停": {
+      "extractionState": "manual"
+    },
+    "暂无匹配结果": {
+      "extractionState": "manual"
+    },
+    "暂无按键结果": {
+      "extractionState": "manual"
+    },
+    "暂无数据": {
+      "extractionState": "manual"
+    },
+    "暂无解析结果": {
+      "extractionState": "manual"
+    },
+    "暂无记录": {
+      "extractionState": "manual"
+    },
+    "暂时无法打开文件选择器。": {
+      "extractionState": "manual"
+    },
+    "更多颜色空间": {
+      "extractionState": "manual"
+    },
+    "更换 Favicon 源图片": {
+      "extractionState": "manual"
+    },
+    "更换图片": {
+      "extractionState": "manual"
+    },
+    "更换要优化的图片": {
+      "extractionState": "manual"
+    },
+    "更换要添加水印的图片": {
+      "extractionState": "manual"
+    },
+    "更换要生成灰度图的图片": {
+      "extractionState": "manual"
+    },
+    "更换要转换的图片": {
+      "extractionState": "manual"
+    },
+    "曼谷": {
+      "extractionState": "manual"
+    },
+    "替换字符": {
+      "extractionState": "manual"
+    },
+    "最终判定 MIME": {
+      "extractionState": "manual"
+    },
+    "最近 7 天工具切换": {
+      "extractionState": "manual"
+    },
+    "最近事件": {
+      "extractionState": "manual"
+    },
+    "最近使用": {
+      "extractionState": "manual"
+    },
+    "月 (1-12)": {
+      "extractionState": "manual"
+    },
+    "有效 CSS 颜色": {
+      "extractionState": "manual"
+    },
+    "未找到匹配。": {
+      "extractionState": "manual"
+    },
+    "未检测到": {
+      "extractionState": "manual"
+    },
+    "未生成更小文件": {
+      "extractionState": "manual"
+    },
+    "未监听": {
+      "extractionState": "manual"
+    },
+    "未知": {
+      "extractionState": "manual"
+    },
+    "未选择": {
+      "extractionState": "manual"
+    },
+    "本地尽力识别浏览器、操作系统与设备类型，仅供调试，不用于能力判断或安全决策。": {
+      "extractionState": "manual"
+    },
+    "本地日历 · 最近 90 天": {
+      "extractionState": "manual"
+    },
+    "本地时间": {
+      "extractionState": "manual"
+    },
+    "本地检查（可选）": {
+      "extractionState": "manual"
+    },
+    "本机 IPv4": {
+      "extractionState": "manual"
+    },
+    "机器型号": {
+      "extractionState": "manual"
+    },
+    "权限": {
+      "extractionState": "manual"
+    },
+    "权限矩阵": {
+      "extractionState": "manual"
+    },
+    "架构": {
+      "extractionState": "manual"
+    },
+    "柏林": {
+      "extractionState": "manual"
+    },
+    "查询 HTTP 状态码及其含义。": {
+      "extractionState": "manual"
+    },
+    "根据本机按键事件推导对应的 Web KeyboardEvent 字段。": {
+      "extractionState": "manual"
+    },
+    "格式": {
+      "extractionState": "manual"
+    },
+    "格式化": {
+      "extractionState": "manual"
+    },
+    "格式化 SQL，支持关键字大小写和基础校验。缩进固定2空格，逗号固定行尾。": {
+      "extractionState": "manual"
+    },
+    "格式化 XML，自动缩进。": {
+      "extractionState": "manual"
+    },
+    "格式化、压缩和验证 JSON，支持自定义选项。": {
+      "extractionState": "manual"
+    },
+    "格式化结果": {
+      "extractionState": "manual"
+    },
+    "格式无效，请输入井号和六位十六进制颜色": {
+      "extractionState": "manual"
+    },
+    "检查明细": {
+      "extractionState": "manual"
+    },
+    "检测结果": {
+      "extractionState": "manual"
+    },
+    "欧洲": {
+      "extractionState": "manual"
+    },
+    "正则": {
+      "extractionState": "manual"
+    },
+    "正则匹配失败。": {
+      "extractionState": "manual"
+    },
+    "正则测试": {
+      "extractionState": "manual"
+    },
+    "正则表达式": {
+      "extractionState": "manual"
+    },
+    "正在优化图片": {
+      "extractionState": "manual"
+    },
+    "正在保存完整输出": {
+      "extractionState": "manual"
+    },
+    "正在保存解码后的文件": {
+      "extractionState": "manual"
+    },
+    "正在准备解码预览": {
+      "extractionState": "manual"
+    },
+    "正在复制完整输出": {
+      "extractionState": "manual"
+    },
+    "正在导入编码文本文件": {
+      "extractionState": "manual"
+    },
+    "正在换算…": {
+      "extractionState": "manual"
+    },
+    "正在更新匹配…": {
+      "extractionState": "manual"
+    },
+    "正在更新水印预览": {
+      "extractionState": "manual"
+    },
+    "正在更新水印预览…": {
+      "extractionState": "manual"
+    },
+    "正在更新遮蔽结果…": {
+      "extractionState": "manual"
+    },
+    "正在检测…": {
+      "extractionState": "manual"
+    },
+    "正在生成 Favicon 部署包": {
+      "extractionState": "manual"
+    },
+    "正在生成可保存原图…": {
+      "extractionState": "manual"
+    },
+    "正在生成灰度图": {
+      "extractionState": "manual"
+    },
+    "正在生成部署包…": {
+      "extractionState": "manual"
+    },
+    "正在监听": {
+      "extractionState": "manual"
+    },
+    "正在统计": {
+      "extractionState": "manual"
+    },
+    "正在解析…": {
+      "extractionState": "manual"
+    },
+    "正在解析网页": {
+      "extractionState": "manual"
+    },
+    "正在解析输入…": {
+      "extractionState": "manual"
+    },
+    "正在解码输入": {
+      "extractionState": "manual"
+    },
+    "正在计算摘要": {
+      "extractionState": "manual"
+    },
+    "正在计算摘要…": {
+      "extractionState": "manual"
+    },
+    "正在读取图片": {
+      "extractionState": "manual"
+    },
+    "正在读取图片…": {
+      "extractionState": "manual"
+    },
+    "正在转换…": {
+      "extractionState": "manual"
+    },
+    "每 10 分钟": {
+      "extractionState": "manual"
+    },
+    "每 30 分钟": {
+      "extractionState": "manual"
+    },
+    "每 6 小时": {
+      "extractionState": "manual"
+    },
+    "每分钟": {
+      "extractionState": "manual"
+    },
+    "每周": {
+      "extractionState": "manual"
+    },
+    "每周一 8 点": {
+      "extractionState": "manual"
+    },
+    "每天": {
+      "extractionState": "manual"
+    },
+    "每天两次": {
+      "extractionState": "manual"
+    },
+    "每季度": {
+      "extractionState": "manual"
+    },
+    "每小时": {
+      "extractionState": "manual"
+    },
+    "每年": {
+      "extractionState": "manual"
+    },
+    "每月 1 号": {
+      "extractionState": "manual"
+    },
+    "水印": {
+      "extractionState": "manual"
+    },
+    "水印位置": {
+      "extractionState": "manual"
+    },
+    "水印大小": {
+      "extractionState": "manual"
+    },
+    "水印成品": {
+      "extractionState": "manual"
+    },
+    "水印成品预览": {
+      "extractionState": "manual"
+    },
+    "水印文字": {
+      "extractionState": "manual"
+    },
+    "水印源图片缩略图": {
+      "extractionState": "manual"
+    },
+    "水印生成失败。": {
+      "extractionState": "manual"
+    },
+    "水印透明度": {
+      "extractionState": "manual"
+    },
+    "水印预览生成失败。": {
+      "extractionState": "manual"
+    },
+    "没有匹配工具": {
+      "extractionState": "manual"
+    },
+    "没有匹配的 Emoji 或符号": {
+      "extractionState": "manual"
+    },
+    "没有匹配的工具": {
+      "extractionState": "manual"
+    },
+    "没有匹配的工具或命令": {
+      "extractionState": "manual"
+    },
+    "没有匹配的状态码": {
+      "extractionState": "manual"
+    },
+    "没有取得可用的文件。": {
+      "extractionState": "manual"
+    },
+    "波哥大": {
+      "extractionState": "manual"
+    },
+    "洛杉矶": {
+      "extractionState": "manual"
+    },
+    "活动统计仅保存在本机，不记录输入、输出、文件或剪贴板内容。": {
+      "extractionState": "manual"
+    },
+    "浅色": {
+      "extractionState": "manual"
+    },
+    "测试文本": {
+      "extractionState": "manual"
+    },
+    "浏览": {
+      "extractionState": "manual"
+    },
+    "浏览器": {
+      "extractionState": "manual"
+    },
+    "浏览器版本": {
+      "extractionState": "manual"
+    },
+    "深色": {
+      "extractionState": "manual"
+    },
+    "混淆": {
+      "extractionState": "manual"
+    },
+    "添加卡片": {
+      "extractionState": "manual"
+    },
+    "清空": {
+      "extractionState": "manual"
+    },
+    "清空 Base64 输入和解码结果": {
+      "extractionState": "manual"
+    },
+    "清空 Cron 表达式": {
+      "extractionState": "manual"
+    },
+    "清空 Emoji 搜索": {
+      "extractionState": "manual"
+    },
+    "清空对比": {
+      "extractionState": "manual"
+    },
+    "清空工作区": {
+      "extractionState": "manual"
+    },
+    "清空所有内容": {
+      "extractionState": "manual"
+    },
+    "清空搜索": {
+      "extractionState": "manual"
+    },
+    "清空状态码搜索": {
+      "extractionState": "manual"
+    },
+    "清空生成和解析模式中的所有内容": {
+      "extractionState": "manual"
+    },
+    "清除图片": {
+      "extractionState": "manual"
+    },
+    "清除当前 Favicon 图片": {
+      "extractionState": "manual"
+    },
+    "清除当前优化图片": {
+      "extractionState": "manual"
+    },
+    "清除当前水印图片": {
+      "extractionState": "manual"
+    },
+    "清除当前灰阶图片": {
+      "extractionState": "manual"
+    },
+    "清除当前转换图片": {
+      "extractionState": "manual"
+    },
+    "清除搜索": {
+      "extractionState": "manual"
+    },
+    "温哥华": {
+      "extractionState": "manual"
+    },
+    "源图片": {
+      "extractionState": "manual"
+    },
+    "源图片信息": {
+      "extractionState": "manual"
+    },
+    "源文件": {
+      "extractionState": "manual"
+    },
+    "源文件不会被修改": {
+      "extractionState": "manual"
+    },
+    "灰度": {
+      "extractionState": "manual"
+    },
+    "灰度图": {
+      "extractionState": "manual"
+    },
+    "灰度图片生成失败。": {
+      "extractionState": "manual"
+    },
+    "灰阶工作区": {
+      "extractionState": "manual"
+    },
+    "灰阶转换原图预览": {
+      "extractionState": "manual"
+    },
+    "灰阶转换结果预览": {
+      "extractionState": "manual"
+    },
+    "点击更换，或拖入另一个 50 MB 以内的文件": {
+      "extractionState": "manual"
+    },
+    "点击此区域继续监听": {
+      "extractionState": "manual"
+    },
+    "点号匹配换行 (s)": {
+      "extractionState": "manual"
+    },
+    "版本": {
+      "extractionState": "manual"
+    },
+    "物理内存": {
+      "extractionState": "manual"
+    },
+    "特殊符号": {
+      "extractionState": "manual"
+    },
+    "现在": {
+      "extractionState": "manual"
+    },
+    "生成": {
+      "extractionState": "manual"
+    },
+    "生成 1024-65535 范围内的随机端口号。": {
+      "extractionState": "manual"
+    },
+    "生成 Token（⌘↩）": {
+      "extractionState": "manual"
+    },
+    "生成 UUID（⌘↩）": {
+      "extractionState": "manual"
+    },
+    "生成、解析并执行有限的本地 JWT 检查，所有处理均在本地完成。": {
+      "extractionState": "manual"
+    },
+    "生成密码（⌘↩）": {
+      "extractionState": "manual"
+    },
+    "生成并复制 UUID": {
+      "extractionState": "manual"
+    },
+    "生成或解析 Basic Auth 请求头；Base64 不是加密，请仅通过 HTTPS 使用。": {
+      "extractionState": "manual"
+    },
+    "生成结果": {
+      "extractionState": "manual"
+    },
+    "生成网站兼容的随机密码，可设置长度与字符类别。": {
+      "extractionState": "manual"
+    },
+    "生成设置": {
+      "extractionState": "manual"
+    },
+    "用于生成": {
+      "extractionState": "manual"
+    },
+    "用户名": {
+      "extractionState": "manual"
+    },
+    "用预设拼出 cron 表达式并给出说明。": {
+      "extractionState": "manual"
+    },
+    "白色": {
+      "extractionState": "manual"
+    },
+    "监听已暂停": {
+      "extractionState": "manual"
+    },
+    "目标格式": {
+      "extractionState": "manual"
+    },
+    "秒表": {
+      "extractionState": "manual"
+    },
+    "秒表计时，支持计次与暂停。": {
+      "extractionState": "manual"
+    },
+    "符号": {
+      "extractionState": "manual"
+    },
+    "符号在 URL、Shell 命令或 HTTP Header 中可能需要转义。": {
+      "extractionState": "manual"
+    },
+    "等待原图信息": {
+      "extractionState": "manual"
+    },
+    "等待原图预览": {
+      "extractionState": "manual"
+    },
+    "等待可解码的 JWT": {
+      "extractionState": "manual"
+    },
+    "等待按键…": {
+      "extractionState": "manual"
+    },
+    "等待检查": {
+      "extractionState": "manual"
+    },
+    "等待水印预览": {
+      "extractionState": "manual"
+    },
+    "等待灰度图结果": {
+      "extractionState": "manual"
+    },
+    "等待解析": {
+      "extractionState": "manual"
+    },
+    "等待输入": {
+      "extractionState": "manual"
+    },
+    "签名": {
+      "extractionState": "manual"
+    },
+    "签名配置": {
+      "extractionState": "manual"
+    },
+    "算法": {
+      "extractionState": "manual"
+    },
+    "类型": {
+      "extractionState": "manual"
+    },
+    "粘贴 Base64 或 Data URL": {
+      "extractionState": "manual"
+    },
+    "粘贴 HTML 或获取 URL，转换为 Markdown。": {
+      "extractionState": "manual"
+    },
+    "粘贴 JWT（eyJ...）": {
+      "extractionState": "manual"
+    },
+    "粘贴 User-Agent 字符串…": {
+      "extractionState": "manual"
+    },
+    "粘贴待匹配文本…": {
+      "extractionState": "manual"
+    },
+    "粘贴文本，实时统计…": {
+      "extractionState": "manual"
+    },
+    "系统": {
+      "extractionState": "manual"
+    },
+    "系统取色器": {
+      "extractionState": "manual"
+    },
+    "系统版本": {
+      "extractionState": "manual"
+    },
+    "系统运行时间": {
+      "extractionState": "manual"
+    },
+    "系统颜色和透明度": {
+      "extractionState": "manual"
+    },
+    "约翰内斯堡": {
+      "extractionState": "manual"
+    },
+    "纽约": {
+      "extractionState": "manual"
+    },
+    "结束日期": {
+      "extractionState": "manual"
+    },
+    "结果": {
+      "extractionState": "manual"
+    },
+    "结果基于上次有效颜色，当前输入仍未完成或无效。": {
+      "extractionState": "manual"
+    },
+    "统计": {
+      "extractionState": "manual"
+    },
+    "统计中": {
+      "extractionState": "manual"
+    },
+    "统计字符、单词、行数、字节等。": {
+      "extractionState": "manual"
+    },
+    "继续": {
+      "extractionState": "manual"
+    },
+    "继续工作": {
+      "extractionState": "manual"
+    },
+    "继续打开": {
+      "extractionState": "manual"
+    },
+    "编码": {
+      "extractionState": "manual"
+    },
+    "编码与转换": {
+      "extractionState": "manual"
+    },
+    "编码输出": {
+      "extractionState": "manual"
+    },
+    "编辑卡片": {
+      "extractionState": "manual"
+    },
+    "编辑工作台": {
+      "extractionState": "manual"
+    },
+    "罗马": {
+      "extractionState": "manual"
+    },
+    "罗马→数字": {
+      "extractionState": "manual"
+    },
+    "罗马数字": {
+      "extractionState": "manual"
+    },
+    "罗马数字转换失败。": {
+      "extractionState": "manual"
+    },
+    "美化": {
+      "extractionState": "manual"
+    },
+    "脱敏": {
+      "extractionState": "manual"
+    },
+    "自动优化图片体积，可按偏好和尺寸限制调整输出。": {
+      "extractionState": "manual"
+    },
+    "自动检测 Base64 与 Data URL": {
+      "extractionState": "manual"
+    },
+    "自定义": {
+      "extractionState": "manual"
+    },
+    "自定义透明区域填充颜色": {
+      "extractionState": "manual"
+    },
+    "色相": {
+      "extractionState": "manual"
+    },
+    "芝加哥": {
+      "extractionState": "manual"
+    },
+    "莫斯科": {
+      "extractionState": "manual"
+    },
+    "获取": {
+      "extractionState": "manual"
+    },
+    "获取网页": {
+      "extractionState": "manual"
+    },
+    "获取网页并转换为 Markdown": {
+      "extractionState": "manual"
+    },
+    "行数": {
+      "extractionState": "manual"
+    },
+    "表情": {
+      "extractionState": "manual"
+    },
+    "表达式": {
+      "extractionState": "manual"
+    },
+    "规整 YAML 空白与键值间距。": {
+      "extractionState": "manual"
+    },
+    "解密": {
+      "extractionState": "manual"
+    },
+    "解密操作失败。": {
+      "extractionState": "manual"
+    },
+    "解析": {
+      "extractionState": "manual"
+    },
+    "解析 JWT 后将在此显示注册声明。": {
+      "extractionState": "manual"
+    },
+    "解析并解码输入": {
+      "extractionState": "manual"
+    },
+    "解析现代 CSS 颜色，统一转换为带 Alpha 的多种格式。": {
+      "extractionState": "manual"
+    },
+    "解析结果": {
+      "extractionState": "manual"
+    },
+    "解码": {
+      "extractionState": "manual"
+    },
+    "解码后显示文件信息": {
+      "extractionState": "manual"
+    },
+    "解码后显示文件预览": {
+      "extractionState": "manual"
+    },
+    "解码结果": {
+      "extractionState": "manual"
+    },
+    "解码输入": {
+      "extractionState": "manual"
+    },
+    "警告": {
+      "extractionState": "manual"
+    },
+    "计时": {
+      "extractionState": "manual"
+    },
+    "计时器": {
+      "extractionState": "manual"
+    },
+    "计次": {
+      "extractionState": "manual"
+    },
+    "计次记录": {
+      "extractionState": "manual"
+    },
+    "计算 SHA-2、SHA-3、RIPEMD-160 摘要；SHA-1 与 MD5 仅用于兼容校验。": {
+      "extractionState": "manual"
+    },
+    "计算两个日期之间的间隔，或在某个日期上加减时间。": {
+      "extractionState": "manual"
+    },
+    "计算中": {
+      "extractionState": "manual"
+    },
+    "计算当前大文本的全部摘要": {
+      "extractionState": "manual"
+    },
+    "计算摘要": {
+      "extractionState": "manual"
+    },
+    "设为今天": {
+      "extractionState": "manual"
+    },
+    "设备": {
+      "extractionState": "manual"
+    },
+    "设备信息": {
+      "extractionState": "manual"
+    },
+    "设备名称": {
+      "extractionState": "manual"
+    },
+    "设备类型": {
+      "extractionState": "manual"
+    },
+    "设置": {
+      "extractionState": "manual"
+    },
+    "该 manifest 只声明图标资源，不包含应用名称、启动地址等完整 PWA 安装配置。": {
+      "extractionState": "manual"
+    },
+    "说明": {
+      "extractionState": "manual"
+    },
+    "请修正上方正则表达式。": {
+      "extractionState": "manual"
+    },
+    "请选择普通图片文件。": {
+      "extractionState": "manual"
+    },
+    "读 r": {
+      "extractionState": "manual"
+    },
+    "读取 macOS 系统、硬件与显示器信息。": {
+      "extractionState": "manual"
+    },
+    "调整 XTools 的外观和启动行为。": {
+      "extractionState": "manual"
+    },
+    "质量": {
+      "extractionState": "manual"
+    },
+    "超出 sRGB；HSL 调整将从映射后的显示颜色开始。": {
+      "extractionState": "manual"
+    },
+    "跟随系统": {
+      "extractionState": "manual"
+    },
+    "跳转工具": {
+      "extractionState": "manual"
+    },
+    "跳转工具…": {
+      "extractionState": "manual"
+    },
+    "转换": {
+      "extractionState": "manual"
+    },
+    "转换失败。": {
+      "extractionState": "manual"
+    },
+    "转换并保存": {
+      "extractionState": "manual"
+    },
+    "转换结果": {
+      "extractionState": "manual"
+    },
+    "转换质量": {
+      "extractionState": "manual"
+    },
+    "辅助工具": {
+      "extractionState": "manual"
+    },
+    "输入": {
+      "extractionState": "manual"
+    },
+    "输入 #RRGGBB 格式的填充颜色": {
+      "extractionState": "manual"
+    },
+    "输入 DT-AES-GCM-v1 密文…": {
+      "extractionState": "manual"
+    },
+    "输入 HEX、命名颜色或现代 CSS 颜色函数": {
+      "extractionState": "manual"
+    },
+    "输入 HMAC Secret": {
+      "extractionState": "manual"
+    },
+    "输入 HMAC Secret（用于 HS256/HS384/HS512）": {
+      "extractionState": "manual"
+    },
+    "输入 HTML": {
+      "extractionState": "manual"
+    },
+    "输入 JWT 后可检查签名与时间声明": {
+      "extractionState": "manual"
+    },
+    "输入 JWT 后将在此显示本地检查结果。": {
+      "extractionState": "manual"
+    },
+    "输入 OpenSSL Salted__ Base64 密文…": {
+      "extractionState": "manual"
+    },
+    "输入 SQL": {
+      "extractionState": "manual"
+    },
+    "输入 XML": {
+      "extractionState": "manual"
+    },
+    "输入 YAML": {
+      "extractionState": "manual"
+    },
+    "输入三位 rwx 权限或四位特殊权限模式": {
+      "extractionState": "manual"
+    },
+    "输入不是有效的 Base64 或 Base64 Data URL。": {
+      "extractionState": "manual"
+    },
+    "输入与预览": {
+      "extractionState": "manual"
+    },
+    "输入关键词搜索工具": {
+      "extractionState": "manual"
+    },
+    "输入数值": {
+      "extractionState": "manual"
+    },
+    "输入数值…": {
+      "extractionState": "manual"
+    },
+    "输入数学表达式即时求值。": {
+      "extractionState": "manual"
+    },
+    "输入文本后实时显示摘要": {
+      "extractionState": "manual"
+    },
+    "输入文本或 \\u 转义…": {
+      "extractionState": "manual"
+    },
+    "输入文本或二进制串…": {
+      "extractionState": "manual"
+    },
+    "输入文本，自动转换所有格式…": {
+      "extractionState": "manual"
+    },
+    "输入正则表达式后显示匹配。": {
+      "extractionState": "manual"
+    },
+    "输入水印文字后显示成品预览": {
+      "extractionState": "manual"
+    },
+    "输入要加密的文本…": {
+      "extractionState": "manual"
+    },
+    "输入要计算摘要的文本…": {
+      "extractionState": "manual"
+    },
+    "输入要遮蔽的字符串…": {
+      "extractionState": "manual"
+    },
+    "输入路径片段或查询参数值": {
+      "extractionState": "manual"
+    },
+    "输入进制": {
+      "extractionState": "manual"
+    },
+    "输入颜色后显示 Lab、OKLCH、color() 等格式": {
+      "extractionState": "manual"
+    },
+    "输出": {
+      "extractionState": "manual"
+    },
+    "输出大小": {
+      "extractionState": "manual"
+    },
+    "输出字符数": {
+      "extractionState": "manual"
+    },
+    "输出将显示在这里": {
+      "extractionState": "manual"
+    },
+    "输出尺寸不超过": {
+      "extractionState": "manual"
+    },
+    "输出已保存": {
+      "extractionState": "manual"
+    },
+    "输出最大像素边长": {
+      "extractionState": "manual"
+    },
+    "输出预览将显示在这里": {
+      "extractionState": "manual"
+    },
+    "运算符": {
+      "extractionState": "manual"
+    },
+    "还没有最近使用记录": {
+      "extractionState": "manual"
+    },
+    "这里只显示有界预览，复制和保存会读取完整输出。": {
+      "extractionState": "manual"
+    },
+    "进制": {
+      "extractionState": "manual"
+    },
+    "进制转换": {
+      "extractionState": "manual"
+    },
+    "迪拜": {
+      "extractionState": "manual"
+    },
+    "选择 Favicon 源图片": {
+      "extractionState": "manual"
+    },
+    "选择 Favicon 部署包保存目录": {
+      "extractionState": "manual"
+    },
+    "选择一个工具": {
+      "extractionState": "manual"
+    },
+    "选择保存目录": {
+      "extractionState": "manual"
+    },
+    "选择图片": {
+      "extractionState": "manual"
+    },
+    "选择图片后显示": {
+      "extractionState": "manual"
+    },
+    "选择图片后显示优化结果": {
+      "extractionState": "manual"
+    },
+    "选择图片开始优化": {
+      "extractionState": "manual"
+    },
+    "选择图片开始添加水印": {
+      "extractionState": "manual"
+    },
+    "选择图片开始转换": {
+      "extractionState": "manual"
+    },
+    "选择或拖入文件": {
+      "extractionState": "manual"
+    },
+    "选择或粘贴时间": {
+      "extractionState": "manual"
+    },
+    "选择支持肤色变体的 Emoji 默认肤色": {
+      "extractionState": "manual"
+    },
+    "选择文件": {
+      "extractionState": "manual"
+    },
+    "选择文件后显示检测结果": {
+      "extractionState": "manual"
+    },
+    "选择文件后生成": {
+      "extractionState": "manual"
+    },
+    "选择日期": {
+      "extractionState": "manual"
+    },
+    "选择水印位置": {
+      "extractionState": "manual"
+    },
+    "选择目录并保存全部五个 Favicon 部署文件": {
+      "extractionState": "manual"
+    },
+    "选择要优化的图片": {
+      "extractionState": "manual"
+    },
+    "选择要添加水印的图片": {
+      "extractionState": "manual"
+    },
+    "选择要生成灰度图的图片": {
+      "extractionState": "manual"
+    },
+    "选择要转换的图片": {
+      "extractionState": "manual"
+    },
+    "选择转换前用于填充透明像素的颜色": {
+      "extractionState": "manual"
+    },
+    "选择转换后的图片格式": {
+      "extractionState": "manual"
+    },
+    "选择黑色或白色水印文字": {
+      "extractionState": "manual"
+    },
+    "选项": {
+      "extractionState": "manual"
+    },
+    "透明区域填充颜色": {
+      "extractionState": "manual"
+    },
+    "透明填充": {
+      "extractionState": "manual"
+    },
+    "透明度": {
+      "extractionState": "manual"
+    },
+    "逐行对比两段文本的差异。": {
+      "extractionState": "manual"
+    },
+    "遮蔽": {
+      "extractionState": "manual"
+    },
+    "遮蔽后": {
+      "extractionState": "manual"
+    },
+    "部署文件": {
+      "extractionState": "manual"
+    },
+    "重做": {
+      "extractionState": "manual"
+    },
+    "重复事件": {
+      "extractionState": "manual"
+    },
+    "重新生成": {
+      "extractionState": "manual"
+    },
+    "重新生成一个 1024–65535 范围内的随机端口号": {
+      "extractionState": "manual"
+    },
+    "重新计算": {
+      "extractionState": "manual"
+    },
+    "重置": {
+      "extractionState": "manual"
+    },
+    "重置文件名": {
+      "extractionState": "manual"
+    },
+    "错误": {
+      "extractionState": "manual"
+    },
+    "键排序": {
+      "extractionState": "manual"
+    },
+    "键盘事件": {
+      "extractionState": "manual"
+    },
+    "键盘事件捕获": {
+      "extractionState": "manual"
+    },
+    "键盘快捷键 Command-B": {
+      "extractionState": "manual"
+    },
+    "长度": {
+      "extractionState": "manual"
+    },
+    "阿姆斯特丹": {
+      "extractionState": "manual"
+    },
+    "阿拉伯数字与罗马数字互转。": {
+      "extractionState": "manual"
+    },
+    "限制尺寸": {
+      "extractionState": "manual"
+    },
+    "随机": {
+      "extractionState": "manual"
+    },
+    "随机端口": {
+      "extractionState": "manual"
+    },
+    "隐藏侧边栏": {
+      "extractionState": "manual"
+    },
+    "隐藏侧边栏（⌘B）": {
+      "extractionState": "manual"
+    },
+    "隐藏密码": {
+      "extractionState": "manual"
+    },
+    "非洲": {
+      "extractionState": "manual"
+    },
+    "预设": {
+      "extractionState": "manual"
+    },
+    "颜色": {
+      "extractionState": "manual"
+    },
+    "颜色转换": {
+      "extractionState": "manual"
+    },
+    "颜色预览": {
+      "extractionState": "manual"
+    },
+    "饱和度": {
+      "extractionState": "manual"
+    },
+    "首尔": {
+      "extractionState": "manual"
+    },
+    "香港": {
+      "extractionState": "manual"
+    },
+    "马德里": {
+      "extractionState": "manual"
+    },
+    "黑色": {
+      "extractionState": "manual"
+    },
+    "默认使用 AES-GCM 认证加密，并保留 OpenSSL 旧格式兼容。": {
+      "extractionState": "manual"
+    },
+    "（空）": {
+      "extractionState": "manual"
+    }
+  },
+  "version": "1.0"
+}

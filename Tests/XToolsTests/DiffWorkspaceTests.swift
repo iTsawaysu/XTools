@@ -1,0 +1,74 @@
+@testable import XTools
+@testable import XToolsCore
+import Foundation
+import Testing
+
+@MainActor
+struct DiffWorkspaceTests {
+    @Test func clearDuringRunSynchronouslyEmptiesEveryStateAndRejectsLateResult() async throws {
+        let probe = DiffWorkspaceOperationProbe()
+        let workspace = DiffToolWorkspaceModel(
+            kind: .text,
+            debounce: .zero,
+            operation: { request in
+                probe.recordStart(request)
+                while !Task.isCancelled {
+                    Thread.sleep(forTimeInterval: 0.002)
+                }
+                probe.recordCancellation()
+                throw CancellationError()
+            }
+        )
+        workspace.left = "private-left"
+        try await Self.waitUntil { probe.startedCount == 1 }
+
+        workspace.clear()
+
+        #expect(workspace.left.isEmpty)
+        #expect(workspace.right.isEmpty)
+        #expect(workspace.execution.binding == DiffExecutionBinding())
+        #expect(!workspace.execution.isRunning)
+        #expect(!workspace.hasAnyContent)
+        try await Self.waitUntil { probe.cancellationCount == 1 }
+        #expect(workspace.execution.binding == DiffExecutionBinding())
+    }
+
+    private static func waitUntil(
+        timeout: Duration = .seconds(20),
+        _ condition: @escaping @MainActor () -> Bool
+    ) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: timeout)
+        while !condition() {
+            if clock.now >= deadline {
+                Issue.record("Timed out waiting for diff workspace state")
+                return
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+}
+
+private final class DiffWorkspaceOperationProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedStartedCount = 0
+    private var storedCancellationCount = 0
+
+    var startedCount: Int {
+        lock.withLock { storedStartedCount }
+    }
+
+    var cancellationCount: Int {
+        lock.withLock { storedCancellationCount }
+    }
+
+    func recordStart(_: DiffExecutionRequest) {
+        lock.withLock {
+            storedStartedCount += 1
+        }
+    }
+
+    func recordCancellation() {
+        lock.withLock { storedCancellationCount += 1 }
+    }
+}
