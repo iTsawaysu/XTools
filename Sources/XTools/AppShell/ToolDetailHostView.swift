@@ -32,27 +32,21 @@ struct ToolDetailHostView: View {
                             .id(tool.id)
                             .onAppear { ToolPageEntryTrace.pageAppeared(traceContext) }
                     }
+                    .toolPageArrival(id: tool.id.rawValue)
             } else {
                 if let dashboardStore {
-                    DashboardView(store: dashboardStore, registry: registry, favoriteIDs: favoriteIDs,
-                                  onSelectTool: onSelectTool, onOpenCommandPalette: onOpenCommandPalette,
-                                  autoResumeLastTool: autoResumeLastTool,
-                                  onSetAutoResumeLastTool: onSetAutoResumeLastTool)
+                    DashboardView(
+                        store: dashboardStore,
+                        registry: registry,
+                        onSelectTool: onSelectTool
+                    )
                 } else {
                     EmptyToolSelectionView()
                 }
             }
         }
-        .toolPageArrival(id: pageArrivalID)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ToolTheme.workspaceBackground)
-    }
-
-    /// Identity of the currently presented page: one tool id, or the dashboard
-    /// bucket when no tool is selected. Tool switches (and tool↔dashboard
-    /// swaps) replay the shared `pageArrival` transition through this id.
-    private var pageArrivalID: String {
-        selectedToolID?.rawValue ?? "dashboard"
     }
 
     private func tracedPage(for tool: RegisteredTool) -> AnyView {

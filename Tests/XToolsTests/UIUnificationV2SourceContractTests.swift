@@ -158,16 +158,23 @@ struct UIUnificationV2SourceContractTests {
         }
     }
 
-    @Test func dashboardEditorUsesClayControls() throws {
+    @Test func workbenchUsesNamedControlsAndOwnsItsSession() throws {
         let dashboard = try readSource("Sources/XTools/AppShell/DashboardView.swift")
-        doesNotContain(dashboard, ".buttonStyle(.plain)", "Dashboard composition must use named shared button styles")
-        doesNotContain(dashboard, ".buttonStyle(.bordered", "Dashboard editor must not reintroduce system bordered chrome")
-        doesNotContain(dashboard, ".textFieldStyle(.roundedBorder)", "Dashboard editor search must use the shared field surface")
-        doesNotContain(dashboard, "List {", "Dashboard editor must keep list rows inside the Clay surface")
-        contains(dashboard, "IndexSegmentedControl(", "Dashboard editor span choices must use the shared segmented control")
-        contains(dashboard, "IndexSwitch(", "Dashboard editor visibility/settings must use the shared switch")
-        contains(dashboard, "withToolAnimation(ToolMotion.Preset.controlFeedback", "Dashboard header transitions must use shared motion")
-        contains(dashboard, ".toolAnimation(ToolMotion.Preset.settle, value: cards)", "v3: waterfall span/order/visibility edits must replay as one continuous settle")
+        let workbench = try readSource("Sources/XTools/AppShell/HomeContentWorkbench.swift")
+        let session = try readSource("Sources/XTools/AppShell/HomeContentSession.swift")
+
+        contains(dashboard, "ToolWorkspaceHost(key: HomeContentSession.key)", "Workbench input must stay in the window-scoped session repository")
+        contains(dashboard, "ToolMetrics.Workbench.mainMaxWidth", "Workbench layout must use the approved named geometry tokens")
+        contains(dashboard, "Shortcut(id: \"json-formatter\"", "Workbench must expose real registered shortcut identifiers")
+        contains(dashboard, "Shortcut(id: \"color-picker\"", "Workbench must keep all six approved default shortcuts")
+        doesNotContain(dashboard, "DashboardWaterfall", "Retired waterfall rendering must not remain in the V3 workbench")
+        doesNotContain(dashboard, "showsLayoutEditor", "V3 workbench must not retain card-layout editing")
+        contains(workbench, "IndexTextArea(", "Workbench input must use the shared native text surface")
+        contains(workbench, "IndexCopyButton(", "Workbench result copy must use the shared feedback control")
+        contains(workbench, "HomeContentAction.allCases", "Workbench must derive its action menu from the approved Core action set")
+        contains(workbench, "WorkbenchSecondaryButton(title: \"粘贴\"", "Clipboard input must have one explicit paste control")
+        contains(workbench, "private func paste()", "Clipboard reading must stay owned by the explicit paste action")
+        doesNotContain(session, "NSPasteboard", "Home session must not import or monitor clipboard content")
     }
 
     // MARK: - Helpers

@@ -88,35 +88,4 @@ final class DashboardStoreTests: XCTestCase {
         XCTAssertTrue(store.cards.contains { $0.kind == .recent })
     }
 
-    func testWaterfallPlannerBalancesColumnsAndSpansLargeCards() {
-        let placements = DashboardWaterfallPlanner.placements(
-            for: [.medium, .medium, .medium, .medium, .large],
-            compact: false
-        )
-
-        XCTAssertEqual(placements.map(\.column), [0, 1, 0, 1, 0])
-        XCTAssertEqual(placements.map(\.row), [0, 0, 1, 1, 2])
-        XCTAssertEqual(placements.last?.columnSpan, 2)
-    }
-
-    func testWaterfallPlannerUsesOneOrderedColumnWhenCompact() {
-        let placements = DashboardWaterfallPlanner.placements(
-            for: [.large, .small, .medium],
-            compact: true
-        )
-
-        XCTAssertEqual(placements.map(\.column), [0, 0, 0])
-        XCTAssertEqual(placements.map(\.row), [0, 1, 2])
-        XCTAssertTrue(placements.allSatisfy { $0.columnSpan == 1 })
-    }
-
-    func testDashboardChromeUsesSharedTitleRailRhythm() {
-        let chrome = IndexPageChrome.dashboard
-
-        XCTAssertEqual(chrome.horizontalPadding, 30)
-        XCTAssertEqual(chrome.topPadding, 2)
-        XCTAssertEqual(chrome.headerLeadingPadding, ToolMetrics.Spacing.sm)
-        XCTAssertEqual(chrome.headerRailWidth, ToolMetrics.Spacing.xs / 2)
-        XCTAssertGreaterThan(chrome.bottomPadding, chrome.topPadding)
-    }
 }

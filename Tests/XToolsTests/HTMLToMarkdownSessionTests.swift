@@ -156,14 +156,20 @@ struct HTMLToMarkdownSessionTests {
     @Test func rapidManualEditsDoNotPublishCancelledConversion() async throws {
         let started = HTMLSessionAtomicCounter()
         let finished = HTMLSessionAtomicCounter()
+        let cancelled = HTMLSessionAtomicCounter()
+        let firstOperationGate = HTMLSessionManualOperationGate()
+        defer { firstOperationGate.release() }
         let session = HTMLToMarkdownSession(
             urlOperation: { _, _ in Self.urlResult(title: "URL", marker: "url") },
             manualOperation: { html in
                 started.increment()
-                let deadline = ContinuousClock.now + .milliseconds(500)
-                while ContinuousClock.now < deadline {
-                    try Task.checkCancellation()
-                    Thread.sleep(forTimeInterval: 0.01)
+                if html == "<p>first</p>" {
+                    do {
+                        try firstOperationGate.waitForRelease()
+                    } catch is CancellationError {
+                        cancelled.increment()
+                        throw CancellationError()
+                    }
                 }
                 try Task.checkCancellation()
                 finished.increment()
@@ -173,10 +179,11 @@ struct HTMLToMarkdownSessionTests {
         )
 
         session.userEditedHTML("<p>first</p>")
-        try await Self.waitUntil { session.phase == .converting(.manual) || started.value > 0 }
+        try await Self.waitUntil { started.value == 1 }
         session.userEditedHTML("<p>second</p>")
+        firstOperationGate.release()
+        try await Self.waitUntil { cancelled.value == 1 }
         try await Self.waitUntil { session.markdown == "done:<p>second</p>" }
-        try await Task.sleep(for: .milliseconds(250))
 
         #expect(session.markdown == "done:<p>second</p>")
         #expect(session.phase == .ready)
@@ -234,5 +241,22 @@ private final class HTMLSessionAtomicCounter: @unchecked Sendable {
             storedValue += 1
             return storedValue
         }
+    }
+}
+
+private final class HTMLSessionManualOperationGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var released = false
+
+    func release() {
+        lock.withLock { released = true }
+    }
+
+    func waitForRelease() throws {
+        while !lock.withLock({ released }) {
+            try Task.checkCancellation()
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+        try Task.checkCancellation()
     }
 }

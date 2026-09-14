@@ -7,6 +7,20 @@ import Foundation
 ///   .padding(ToolMetrics.Spacing.base)
 ///   .cornerRadius(ToolMetrics.CornerRadius.field)
 enum ToolMetrics {
+    /// Geometry for the approved V3 workbench. Shell and home components use
+    /// these values instead of changing the shared tool-page scale.
+    enum Workbench {
+        static let mainMaxWidth: CGFloat = 880
+        static let horizontalInset: CGFloat = 32
+        static let topInset: CGFloat = 38
+        static let inputHeight: CGFloat = 82
+        static let resultMaxHeight: CGFloat = 180
+        static let shortcutRowHeight: CGFloat = 58
+        static let sectionGap: CGFloat = 32
+        static let compactCorner: CGFloat = 6
+        static let groupCorner: CGFloat = 8
+    }
+
     // MARK: - Spacing (4x scale)
 
     enum Spacing {

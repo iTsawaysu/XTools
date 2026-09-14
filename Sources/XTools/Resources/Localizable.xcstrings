@@ -37,6 +37,9 @@
     "Base64 文件": {
       "extractionState": "manual"
     },
+    "Base64 解码": {
+      "extractionState": "manual"
+    },
     "Base64 解码失败。": {
       "extractionState": "manual"
     },
@@ -127,7 +130,13 @@
     "Token 生成器": {
       "extractionState": "manual"
     },
+    "URL 编码": {
+      "extractionState": "manual"
+    },
     "URL 编解码": {
+      "extractionState": "manual"
+    },
+    "URL 解码": {
       "extractionState": "manual"
     },
     "URL 解码失败。": {
@@ -481,6 +490,12 @@
     "内容": {
       "extractionState": "manual"
     },
+    "内容只在当前页面处理": {
+      "extractionState": "manual"
+    },
+    "内容处理": {
+      "extractionState": "manual"
+    },
     "内容签名 MIME": {
       "extractionState": "manual"
     },
@@ -533,6 +548,9 @@
       "extractionState": "manual"
     },
     "刷新设备信息": {
+      "extractionState": "manual"
+    },
+    "剪贴板中没有可粘贴的文本。": {
       "extractionState": "manual"
     },
     "剪贴板写入失败。": {
@@ -685,10 +703,10 @@
     "命令面板": {
       "extractionState": "manual"
     },
-    "命令面板…": {
+    "命令面板 (Command-K)": {
       "extractionState": "manual"
     },
-    "命令面板 (Command-K)": {
+    "命令面板…": {
       "extractionState": "manual"
     },
     "命名组": {
@@ -793,7 +811,16 @@
     "声明": {
       "extractionState": "manual"
     },
+    "处理": {
+      "extractionState": "manual"
+    },
     "处理中…": {
+      "extractionState": "manual"
+    },
+    "处理方式": {
+      "extractionState": "manual"
+    },
+    "处理百分号编码": {
       "extractionState": "manual"
     },
     "复制": {
@@ -970,6 +997,9 @@
     "居中": {
       "extractionState": "manual"
     },
+    "展开": {
+      "extractionState": "manual"
+    },
     "工作台": {
       "extractionState": "manual"
     },
@@ -1039,6 +1069,9 @@
     "布局和活动统计仅保存在本机": {
       "extractionState": "manual"
     },
+    "常用本地工具": {
+      "extractionState": "manual"
+    },
     "常用范围": {
       "extractionState": "manual"
     },
@@ -1105,6 +1138,9 @@
     "当前颜色超出 sRGB，HSL 调整将从映射后的显示颜色开始": {
       "extractionState": "manual"
     },
+    "待处理内容": {
+      "extractionState": "manual"
+    },
     "待转换的原图": {
       "extractionState": "manual"
     },
@@ -1112,6 +1148,9 @@
       "extractionState": "manual"
     },
     "快捷动作": {
+      "extractionState": "manual"
+    },
+    "快捷工具": {
       "extractionState": "manual"
     },
     "忽略大小写 (i)": {
@@ -1157,6 +1196,9 @@
       "extractionState": "manual"
     },
     "打开命令面板，快捷键 Command-K": {
+      "extractionState": "manual"
+    },
+    "打开工具后会显示在这里。": {
       "extractionState": "manual"
     },
     "打开系统取色器": {
@@ -1301,6 +1343,9 @@
       "extractionState": "manual"
     },
     "收藏常用工具，快速回来": {
+      "extractionState": "manual"
+    },
+    "收起": {
       "extractionState": "manual"
     },
     "数值": {
@@ -1561,6 +1606,9 @@
     "最近使用": {
       "extractionState": "manual"
     },
+    "最近打开": {
+      "extractionState": "manual"
+    },
     "月 (1-12)": {
       "extractionState": "manual"
     },
@@ -1600,6 +1648,9 @@
     "本机 IPv4": {
       "extractionState": "manual"
     },
+    "本机使用记录": {
+      "extractionState": "manual"
+    },
     "机器型号": {
       "extractionState": "manual"
     },
@@ -1615,7 +1666,13 @@
     "柏林": {
       "extractionState": "manual"
     },
+    "查看常用颜色格式": {
+      "extractionState": "manual"
+    },
     "查询 HTTP 状态码及其含义。": {
+      "extractionState": "manual"
+    },
+    "校验与整理结构": {
       "extractionState": "manual"
     },
     "根据本机按键事件推导对应的 Web KeyboardEvent 字段。": {
@@ -1733,6 +1790,9 @@
       "extractionState": "manual"
     },
     "正在计算摘要…": {
+      "extractionState": "manual"
+    },
+    "正在识别…": {
       "extractionState": "manual"
     },
     "正在读取图片": {
@@ -1889,6 +1949,9 @@
       "extractionState": "manual"
     },
     "清空生成和解析模式中的所有内容": {
+      "extractionState": "manual"
+    },
+    "清空输入": {
       "extractionState": "manual"
     },
     "清除图片": {
@@ -2068,16 +2131,25 @@
     "类型": {
       "extractionState": "manual"
     },
+    "粘贴": {
+      "extractionState": "manual"
+    },
     "粘贴 Base64 或 Data URL": {
       "extractionState": "manual"
     },
     "粘贴 HTML 或获取 URL，转换为 Markdown。": {
       "extractionState": "manual"
     },
+    "粘贴 JSON、Base64 或 URL 编码内容…": {
+      "extractionState": "manual"
+    },
     "粘贴 JWT（eyJ...）": {
       "extractionState": "manual"
     },
     "粘贴 User-Agent 字符串…": {
+      "extractionState": "manual"
+    },
+    "粘贴一段内容，或直接打开常用工具。": {
       "extractionState": "manual"
     },
     "粘贴待匹配文本…": {
@@ -2137,6 +2209,9 @@
     "编码": {
       "extractionState": "manual"
     },
+    "编码与解码文本": {
+      "extractionState": "manual"
+    },
     "编码与转换": {
       "extractionState": "manual"
     },
@@ -2168,6 +2243,9 @@
       "extractionState": "manual"
     },
     "自动优化图片体积，可按偏好和尺寸限制调整输出。": {
+      "extractionState": "manual"
+    },
+    "自动推荐": {
       "extractionState": "manual"
     },
     "自动检测 Base64 与 Data URL": {
@@ -2293,6 +2371,9 @@
     "设置": {
       "extractionState": "manual"
     },
+    "识别": {
+      "extractionState": "manual"
+    },
     "该 manifest 只声明图标资源，不包含应用名称、启动地址等完整 PWA 安装配置。": {
       "extractionState": "manual"
     },
@@ -2336,6 +2417,9 @@
       "extractionState": "manual"
     },
     "转换并保存": {
+      "extractionState": "manual"
+    },
+    "转换日期与时间": {
       "extractionState": "manual"
     },
     "转换结果": {
@@ -2681,6 +2765,9 @@
       "extractionState": "manual"
     },
     "马德里": {
+      "extractionState": "manual"
+    },
+    "验证文本匹配": {
       "extractionState": "manual"
     },
     "黑色": {

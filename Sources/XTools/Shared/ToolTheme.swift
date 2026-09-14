@@ -13,6 +13,24 @@ import SwiftUI
 /// Existing semantic token *names* are kept so all 36 tools restyle by value;
 /// SPEC §7.1's suggested names are noted in comments for cross-reference.
 enum ToolTheme {
+    /// V3 workbench aliases. The home layout has its own geometry, while its
+    /// color language deliberately remains inside the established app theme.
+    enum Workbench {
+        static let canvas = workspaceBackground
+        static let surface = panelBackground
+        static let surfaceSecondary = utilityBackground
+
+        static let textPrimary = ToolTheme.textPrimary
+        static let textSecondary = ToolTheme.textSecondary
+        static let textFaint = ToolTheme.textTertiary
+
+        static let border = ToolTheme.border
+        static let action = ToolTheme.accent
+        static let onAction = ToolTheme.onAccent
+        static let danger = ToolTheme.error
+        static let dangerBackground = ToolTheme.errorSoft
+    }
+
     // MARK: - Accent (Claude 黏土橙)
 
     static let accent = dynamicColor(light: 0xC15F3C, dark: 0xD97757)          // §7.1 accent · Clay

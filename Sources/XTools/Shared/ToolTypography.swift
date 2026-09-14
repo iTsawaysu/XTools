@@ -7,6 +7,20 @@ import SwiftUI
 /// semantic tokens keep page, panel, body, control, editor, and display text
 /// consistent without a second app-level scaling system.
 enum ToolTypography {
+    /// Compact V3 workbench hierarchy. Existing tool pages continue using the
+    /// top-level tokens above and below this namespace.
+    enum Workbench {
+        static let title = Font.system(size: 20, weight: .semibold)
+        static let subtitle = Font.system(size: 13)
+        static let sectionTitle = Font.system(size: 13, weight: .semibold)
+        static let body = Font.system(size: 12.5)
+        static let caption = Font.system(size: 11)
+        static let input = Font.system(size: 12.5, design: .monospaced)
+        static let icon = Font.system(size: 14)
+        static let smallIcon = Font.system(size: 11)
+        static let chevron = Font.system(size: 10, weight: .medium)
+    }
+
     // MARK: - Page Level
 
     static let pageTitle = Font.system(size: 18, weight: .semibold)
