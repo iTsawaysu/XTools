@@ -55,12 +55,6 @@ cd XTools
 swift test           # 运行完整测试
 ```
 
-## 🙌 致谢
-
-- [CryptoSwift](https://github.com/krzyzanowskim/CryptoSwift)
-- [SwiftSoup](https://github.com/scinfu/SwiftSoup)
-- [Yams](https://github.com/jpsim/Yams)
-
 ## 🤝 参与贡献
 
 欢迎 Issue 与 PR！提交前请跑一遍 `swift test`，并遵循仓库内 `.trellis/` 的开发约定。
