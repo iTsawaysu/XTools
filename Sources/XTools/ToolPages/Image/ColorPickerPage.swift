@@ -293,7 +293,10 @@ private struct IndexColorWorkspaceContent: View {
             )
             .frame(maxWidth: .infinity, minHeight: 70, alignment: .center)
         } else {
-            LazyVStack(spacing: 0) {
+            // 这里必须是普通 VStack：结果列表嵌在 ToolDisclosureBody 里，由它
+            // 测量内容高度后裁剪展开；LazyVStack 依赖外层滚动视口实现行复用，
+            // 在自测量容器里首帧高度失真，展开后要滚动一次才会触发重新布局。
+            VStack(spacing: 0) {
                 ForEach(values) { value in
                     ColorFormatResultRow(value: value, valueMotion: .immediate)
                     if value.id != values.last?.id {

@@ -26,6 +26,10 @@ struct ColorPickerUXSourceContractTests {
         contains(source, ".inline()", "Advanced disclosure must stay nested inside the results panel as an inline region")
         doesNotContain(source, "DisclosureGroup(", "The page must not return to the arrow-only DisclosureGroup interaction")
         doesNotContain(source, "private struct ColorAdvancedFormatsHeader", "The page must not hand-roll a local disclosure header")
+        // ToolDisclosureBody 通过 preference 测量内容高度再裁剪展开；LazyVStack
+        // 依赖外层滚动视口做行复用，在自测量容器里首帧高度失真，表现为展开后
+        // 布局错乱、要滚动一次才恢复（2026-09 用户报告）。行数有限，禁止懒加载。
+        doesNotContain(source, "LazyVStack(", "Disclosure-measured result rows must use eager VStack so the disclosure measures a stable first-frame height")
     }
 
     @Test func hslControlsStayDirectAndDiscloseWideGamutMappingOnlyWhenNeeded() throws {
