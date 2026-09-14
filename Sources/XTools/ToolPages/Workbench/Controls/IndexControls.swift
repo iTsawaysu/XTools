@@ -54,7 +54,7 @@ struct IndexButtonStyle: ButtonStyle {
                 .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                        .strokeBorder(primary ? ToolTheme.accent : (hovering ? ToolTheme.strongBorder : Color.clear), lineWidth: 0.5)
+                        .strokeBorder(primary ? ToolTheme.accent : (hovering ? ToolTheme.strongBorder : Color.clear), lineWidth: 1)
                 }
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
                 .scaleEffect(!reduceMotion && configuration.isPressed ? ToolMotion.Scale.modal : 1)
@@ -118,7 +118,7 @@ struct IndexSmallButtonStyle: ButtonStyle {
                 .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
-                        .strokeBorder(border, lineWidth: 0.5)
+                        .strokeBorder(border, lineWidth: 1)
                 }
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
                 .scaleEffect(!reduceMotion && configuration.isPressed ? ToolMotion.Scale.pressed : 1)
@@ -513,7 +513,7 @@ struct IndexSegmentedControl: View {
         .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                .strokeBorder(ToolTheme.border, lineWidth: 0.5)
+                .strokeBorder(ToolTheme.border, lineWidth: 1)
         }
     }
 
@@ -604,7 +604,7 @@ private struct IndexSwitchTrack: View {
                 .fill(isOn ? ToolTheme.accentSoft : offBackground)
                 .overlay {
                     Capsule(style: .continuous)
-                        .strokeBorder(isOn ? ToolTheme.accentBorder : offBorder, lineWidth: 0.5)
+                        .strokeBorder(isOn ? ToolTheme.accentBorder : offBorder, lineWidth: 1)
                 }
 
             Circle()
@@ -653,7 +653,7 @@ struct IndexOptionGroup<Content: View>: View {
         .background(ToolTheme.utilityBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                .strokeBorder(ToolTheme.strongBorder, lineWidth: 0.5)
+                .strokeBorder(ToolTheme.strongBorder, lineWidth: 1)
         }
         .fixedSize(horizontal: true, vertical: false)
     }
@@ -745,7 +745,7 @@ struct IndexOptionPicker<Value: Hashable>: View {
                         .overlay {
                             if isSelected {
                                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-                                    .strokeBorder(ToolTheme.selectionStroke, lineWidth: 0.5)
+                                    .strokeBorder(ToolTheme.selectionStroke, lineWidth: 1)
                             }
                         }
                         .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
@@ -757,7 +757,7 @@ struct IndexOptionPicker<Value: Hashable>: View {
         .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                .strokeBorder(tone?.tint.opacity(0.7) ?? ToolTheme.border, lineWidth: tone == nil ? 0.5 : 1)
+                .strokeBorder(tone?.tint.opacity(0.7) ?? ToolTheme.border, lineWidth: 1)
         }
         .fixedSize(horizontal: true, vertical: false)
         .toolAnimation(ToolMotion.Preset.settle, value: selection)
@@ -793,7 +793,7 @@ struct IndexOptionMenu: View {
         .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                .strokeBorder(tone?.tint.opacity(0.7) ?? ToolTheme.border, lineWidth: tone == nil ? 0.5 : 1)
+                .strokeBorder(tone?.tint.opacity(0.7) ?? ToolTheme.border, lineWidth: 1)
         }
         .overlay(alignment: .trailing) {
             Image(systemName: "chevron.down")
@@ -901,13 +901,13 @@ struct IndexSlider: View {
             Capsule()
                 .fill(ToolTheme.editorBackground)
                 .overlay {
-                    Capsule().strokeBorder(ToolTheme.border, lineWidth: 0.5)
+                    Capsule().strokeBorder(ToolTheme.border, lineWidth: 1)
                 }
         case .gradient(let gradient):
             Capsule()
                 .fill(gradient)
                 .overlay {
-                    Capsule().strokeBorder(ToolTheme.border, lineWidth: 0.5)
+                    Capsule().strokeBorder(ToolTheme.border, lineWidth: 1)
                 }
         case .alpha(let color):
             ZStack {
@@ -920,7 +920,7 @@ struct IndexSlider: View {
             }
             .clipShape(Capsule(style: .continuous))
             .overlay {
-                Capsule().strokeBorder(ToolTheme.border, lineWidth: 0.5)
+                Capsule().strokeBorder(ToolTheme.border, lineWidth: 1)
             }
         }
     }
