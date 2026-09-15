@@ -348,6 +348,10 @@ final class CommandPalettePointerMovementTracker {
         movement.reset(to: location)
     }
 
+    func clear() {
+        movement.reset(to: nil)
+    }
+
     func acceptsMouseMoved(at location: CGPoint) -> Bool {
         movement.acceptsMouseMoved(at: location)
     }

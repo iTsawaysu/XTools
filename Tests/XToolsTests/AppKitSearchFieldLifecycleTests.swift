@@ -187,6 +187,40 @@ struct AppKitSearchFieldLifecycleTests {
         #expect(!secondRequest())
     }
 
+    @Test @MainActor func focusAttemptObserverReportsInvalidRequestWithoutMakingFirstResponderRequest() async throws {
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 196, height: 32))
+        let window = FocusRequestTrackingWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 120),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentView = field
+        var attempts: [AppKitSearchFieldFocusAttempt] = []
+
+        AppKitSearchFieldLifecycle.requestFocus(
+            field,
+            delayedRetries: [],
+            isValid: { false },
+            observer: { attempts.append($0) }
+        )
+
+        let deadline = Date(timeIntervalSinceNow: 1)
+        while attempts.isEmpty, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        let attempt = try #require(attempts.first)
+
+        #expect(attempt.source == .immediate)
+        #expect(!attempt.isRequestValid)
+        #expect(attempt.hasWindow)
+        #expect(attempt.hasNonzeroFrame)
+        #expect(attempt.makeFirstResponderResult == nil)
+        #expect(attempt.makeFirstResponderMilliseconds == nil)
+        #expect(!attempt.firstResponderIsFieldEditor)
+        #expect(window.makeFirstResponderRequestCount == 0)
+    }
+
     @Test @MainActor func optionalCommandHandlerOwnsPaletteSpecificCommands() {
         let state = TestState(text: "")
         let coordinator = AppKitSearchFieldCoordinator(
@@ -212,6 +246,16 @@ struct AppKitSearchFieldLifecycleTests {
 
         #expect(handled)
         #expect(state.commandSelectors == [#selector(NSResponder.moveDown(_:))])
+    }
+}
+
+@MainActor
+private final class FocusRequestTrackingWindow: NSWindow {
+    private(set) var makeFirstResponderRequestCount = 0
+
+    override func makeFirstResponder(_ responder: NSResponder?) -> Bool {
+        makeFirstResponderRequestCount += 1
+        return super.makeFirstResponder(responder)
     }
 }
 

@@ -43,6 +43,23 @@ struct ToolNavigationCommandEntry: Identifiable, Hashable {
     let systemImage: String
 }
 
+/// Palette-only projection. It intentionally skips favorite grouping,
+/// selection lookup, sidebar sections, and default-tool calculation.
+struct ToolNavigationCommandProjection: Equatable {
+    let entries: [ToolNavigationCommandEntry]
+
+    init(registry: ToolRegistry, query: String) {
+        entries = registry.matchingTools(query: query).map { tool in
+            ToolNavigationCommandEntry(
+                toolID: tool.id,
+                title: tool.title,
+                categoryTitle: registry.categoryTitle(for: tool.categoryID),
+                systemImage: tool.systemImage
+            )
+        }
+    }
+}
+
 struct ToolNavigationProjection {
     let selectedTool: ToolNavigationItem?
     let selectedSection: ToolNavigationSection?

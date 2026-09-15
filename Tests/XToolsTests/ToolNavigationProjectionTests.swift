@@ -51,6 +51,40 @@ struct ToolNavigationProjectionTests {
         #expect(projection.commandPaletteEntries.map(\.categoryTitle) == ["Web", "Development"])
     }
 
+    @Test func narrowCommandProjectionPreservesEmptyQueryRegistryOrder() {
+        let projection = ToolNavigationCommandProjection(registry: Self.registry(), query: "  \n")
+
+        #expect(projection.entries.map(\.toolID) == [.json, .regex, .jwt])
+        #expect(projection.entries.map(\.categoryTitle) == ["Development", "Development", "Web"])
+    }
+
+    @Test func narrowCommandProjectionPreservesTitleThenKeywordRanking() {
+        let projection = ToolNavigationCommandProjection(registry: Self.registry(), query: "token")
+
+        #expect(projection.entries.map(\.toolID) == [.jwt, .json])
+    }
+
+    @Test func narrowCommandProjectionUsesUnicodeAndDiacriticInsensitiveMatching() {
+        let registry = ToolRegistry(
+            categories: [
+                ToolCategory(id: .development, title: "Development", systemImage: "hammer")
+            ],
+            tools: [
+                Self.tool(.cafe, title: "Cafe Menu", categoryID: .development, keywords: ["菜单"]),
+                Self.tool(.json, title: "JSON Formatter", categoryID: .development, keywords: [])
+            ]
+        )
+
+        #expect(ToolNavigationCommandProjection(registry: registry, query: "café").entries.map(\.toolID) == [.cafe])
+        #expect(ToolNavigationCommandProjection(registry: registry, query: "菜单").entries.map(\.toolID) == [.cafe])
+    }
+
+    @Test func narrowCommandProjectionReturnsNoEntriesForNoMatch() {
+        let projection = ToolNavigationCommandProjection(registry: Self.registry(), query: "definitely-missing")
+
+        #expect(projection.entries.isEmpty)
+    }
+
     @Test func sidebarSearchUsesSameDiacriticInsensitiveMatchingButKeepsGroups() {
         let registry = ToolRegistry(
             categories: [

@@ -38,4 +38,24 @@ struct CommandActionEntry: Identifiable, Hashable {
             $0.localizedCaseInsensitiveContains(normalized)
         }
     }
+
+    /// Builds the session-complete command list from stable shell actions.
+    /// Preview rows are replaced rather than carried across sessions so a
+    /// consumed UUID cannot remove the command from the next presentation.
+    static func paletteActions(
+        baseActions: [CommandActionEntry],
+        previewValue: String?
+    ) -> [CommandActionEntry] {
+        let stableActions = baseActions.filter { $0.id != .copyGeneratedUUID }
+        guard let previewValue else { return stableActions }
+        return stableActions + [
+            CommandActionEntry(
+                id: .copyGeneratedUUID,
+                title: "生成并复制 UUID",
+                subtitle: previewValue,
+                systemImage: "barcode",
+                keywords: ["uuid", "复制", "生成"]
+            )
+        ]
+    }
 }

@@ -67,6 +67,100 @@ enum SidebarVisibility: Equatable {
 }
 
 @MainActor
+protocol CommandPalettePresentationLifecycle: AnyObject {
+    func commandPaletteDidOpen(session: Int, previewValue: String?)
+    func commandPaletteDidClose(session: Int)
+}
+
+/// Lightweight presentation state observed only by the palette overlay host.
+/// RootViewModel deliberately does not forward this object's notifications, so
+/// opening or focusing the palette does not invalidate the full app shell.
+@MainActor
+final class CommandPalettePresentationModel: ObservableObject {
+    private struct State {
+        var shows = false
+        var focusToken = 0
+        var session = 0
+        var previewValue: String?
+        var hasPresented = false
+    }
+
+    @Published private var state = State()
+    private weak var lifecycle: (any CommandPalettePresentationLifecycle)?
+
+    var shows: Bool { state.shows }
+    var focusToken: Int { state.focusToken }
+    var session: Int { state.session }
+    var previewValue: String? { state.previewValue }
+    var hasPresented: Bool { state.hasPresented }
+
+    func installLifecycle(_ lifecycle: any CommandPalettePresentationLifecycle) {
+        self.lifecycle = lifecycle
+    }
+
+    func removeLifecycle(_ lifecycle: any CommandPalettePresentationLifecycle) {
+        guard self.lifecycle === lifecycle else { return }
+        self.lifecycle = nil
+    }
+
+    func consumePreviewValue() {
+        guard state.previewValue != nil else { return }
+        var next = state
+        next.previewValue = nil
+        state = next
+    }
+
+    func focus() {
+        var next = state
+        next.focusToken += 1
+        state = next
+    }
+
+    func open() {
+        if state.shows {
+            focus()
+            return
+        }
+
+        let nextSession = state.session + 1
+        CommandPaletteTrace.requestStarted(session: nextSession)
+        var next = state
+        next.shows = true
+        next.focusToken += 1
+        next.session = nextSession
+        next.previewValue = UUID().uuidString.lowercased()
+        next.hasPresented = true
+        CommandPaletteTrace.opened(session: nextSession)
+        lifecycle?.commandPaletteDidOpen(
+            session: nextSession,
+            previewValue: next.previewValue
+        )
+        state = next
+    }
+
+    func toggle() {
+        if state.shows {
+            close()
+        } else {
+            open()
+        }
+    }
+
+    func close() {
+        guard state.shows else { return }
+        let closingSession = state.session
+        CommandPaletteTrace.dismissed(session: closingSession)
+        var next = state
+        next.shows = false
+        next.session += 1
+        state = next
+        // MainActor serialization makes the new invalid session visible before
+        // native callbacks are synchronously suspended.
+        lifecycle?.commandPaletteDidClose(session: closingSession)
+    }
+}
+
+@MainActor
 final class RootViewModel: ObservableObject {
     @Published var selectedToolID: ToolID? {
         didSet {
@@ -79,8 +173,6 @@ final class RootViewModel: ObservableObject {
         }
     }
     @Published var searchText = ""
-    @Published var commandText = ""
-    @Published var showsCommandPalette = false
     @Published var autoResumeLastTool: Bool {
         didSet { preferences?.set(autoResumeLastTool, for: AppShellPreferenceKeys.autoResumeLastTool) }
     }
@@ -91,12 +183,12 @@ final class RootViewModel: ObservableObject {
         }
     }
     @Published private(set) var searchFocusToken = 0
-    @Published private(set) var commandPaletteFocusToken = 0
-    @Published private(set) var commandPalettePresentationSession = 0
-    /// Live preview payload for preview-style command rows (e.g. a freshly
-    /// generated UUID). Refreshed once per palette presentation so the row
-    /// stays stable while typing.
-    @Published private(set) var commandPalettePreviewValue: String?
+    let commandPalettePresentation = CommandPalettePresentationModel()
+
+    var showsCommandPalette: Bool { commandPalettePresentation.shows }
+    var commandPaletteFocusToken: Int { commandPalettePresentation.focusToken }
+    var commandPalettePresentationSession: Int { commandPalettePresentation.session }
+    var commandPalettePreviewValue: String? { commandPalettePresentation.previewValue }
 
     private let preferences: ToolPreferenceStore?
 
@@ -117,42 +209,26 @@ final class RootViewModel: ObservableObject {
 
     /// Expires the palette's one-shot preview payload after it is consumed.
     func consumeCommandPalettePreviewValue() {
-        commandPalettePreviewValue = nil
+        commandPalettePresentation.consumePreviewValue()
     }
 
     func focusCommandPalette() {
-        commandPaletteFocusToken += 1
+        commandPalettePresentation.focus()
     }
 
     func openCommandPalette() {
-        if !showsCommandPalette {
-            commandText = ""
-            commandPalettePreviewValue = UUID().uuidString.lowercased()
-            commandPalettePresentationSession += 1
-            CommandPaletteTrace.opened(session: commandPalettePresentationSession)
-            showsCommandPalette = true
-        }
-        focusCommandPalette()
+        commandPalettePresentation.open()
     }
 
     /// Toggles the command palette for the Command-K and toolbar triggers.
     /// Keeping this separate from `openCommandPalette()` preserves idempotent
     /// opening for navigation flows that need to reveal the palette.
     func toggleCommandPalette() {
-        if showsCommandPalette {
-            closeCommandPalette()
-        } else {
-            openCommandPalette()
-        }
+        commandPalettePresentation.toggle()
     }
 
     func closeCommandPalette() {
-        commandText = ""
-        if showsCommandPalette {
-            CommandPaletteTrace.dismissed(session: commandPalettePresentationSession)
-            commandPalettePresentationSession += 1
-        }
-        showsCommandPalette = false
+        commandPalettePresentation.close()
     }
 
     var sidebarTogglePresentation: SidebarTogglePresentation {
@@ -226,6 +302,7 @@ struct RootView: View {
     }
 
     var body: some View {
+        let _ = CommandPaletteTrace.count(.rootBody)
         ZStack {
             HStack(spacing: 0) {
                 SidebarView(
@@ -254,8 +331,17 @@ struct RootView: View {
             }
 
 
-            commandPaletteOverlay
-                .toolAnimation(ToolMotion.Preset.modal, value: viewModel.showsCommandPalette)
+            CommandPaletteOverlayHost(
+                presentation: viewModel.commandPalettePresentation,
+                registry: registry,
+                baseActions: commandBaseActions,
+                reduceMotion: reduceMotion,
+                onSelectTool: launchFromPalette,
+                onRunCommand: runPaletteCommand,
+                onRequestFocus: viewModel.focusCommandPalette,
+                onDismiss: closeCommandPaletteAnimated
+            )
+            .zIndex(2)
 
             if let flight = iconFlight.flight {
                 PaletteIconGhostView(flight: flight) {
@@ -373,53 +459,13 @@ struct RootView: View {
     }
 
     private var sidebarProjection: ToolNavigationProjection {
-        ToolNavigationProjection(
+        CommandPaletteTrace.count(.sidebarProjection)
+        return ToolNavigationProjection(
             registry: registry,
             favoriteIDs: favorites.favoriteIDs,
             selectedToolID: viewModel.selectedToolID,
             query: viewModel.searchText
         )
-    }
-
-    private var commandProjection: ToolNavigationProjection {
-        ToolNavigationProjection(
-            registry: registry,
-            favoriteIDs: favorites.favoriteIDs,
-            selectedToolID: viewModel.selectedToolID,
-            query: viewModel.commandText
-        )
-    }
-
-    @ViewBuilder
-    private var commandPaletteOverlay: some View {
-        if viewModel.showsCommandPalette {
-            let presentationSession = viewModel.commandPalettePresentationSession
-            CommandPaletteScrim {
-                closeCommandPaletteAnimated()
-            }
-            .toolTransition(ToolMotion.Transition.scrim, reduceMotion: reduceMotion)
-            .zIndex(1)
-
-            CommandPaletteView(
-                projection: commandProjection,
-                actions: commandActions,
-                query: $viewModel.commandText,
-                focusToken: viewModel.commandPaletteFocusToken,
-                presentationSession: presentationSession,
-                canRequestSearchFocus: {
-                    viewModel.showsCommandPalette
-                        && viewModel.commandPalettePresentationSession == presentationSession
-                },
-                onSelectTool: { toolID in
-                    launchFromPalette(toolID)
-                },
-                onRunCommand: { runPaletteCommand($0) },
-                onRequestFocus: viewModel.focusCommandPalette,
-                onDismiss: { closeCommandPaletteAnimated() }
-            )
-            .toolTransition(ToolMotion.Transition.commandPalette, reduceMotion: reduceMotion)
-            .zIndex(2)
-        }
     }
 
     private var selectedTool: RegisteredTool? {
@@ -433,7 +479,9 @@ struct RootView: View {
     /// Sidebar and keyboard launches skip the flight — the palette is the one
     /// surface whose geometry this owns.
     private func launchFromPalette(_ toolID: ToolID) {
-        if !reduceMotion,
+        iconFlight.cancelPendingLaunch()
+        if viewModel.selectedToolID != toolID,
+           !reduceMotion,
            let tool = registry.tool(for: toolID),
            let fromRect = iconFlight.paletteIconRects["tool.\(toolID.rawValue)"] {
             iconFlight.beginLaunch(
@@ -475,7 +523,7 @@ struct RootView: View {
 
     /// Shell commands shown beside tool navigation in the palette. The list is
     /// bounded by `CommandActionID`; execution lives in `runPaletteCommand`.
-    private var commandActions: [CommandActionEntry] {
+    private var commandBaseActions: [CommandActionEntry] {
         [
             CommandActionEntry(
                 id: .toggleAppearance,
@@ -498,17 +546,7 @@ struct RootView: View {
                 systemImage: "gearshape",
                 keywords: ["偏好", "设置", "preferences"]
             ),
-        ] + (viewModel.commandPalettePreviewValue.map { preview in
-            [
-                CommandActionEntry(
-                    id: .copyGeneratedUUID,
-                    title: "生成并复制 UUID",
-                    subtitle: preview,
-                    systemImage: "barcode",
-                    keywords: ["uuid", "复制", "生成"]
-                )
-            ]
-        } ?? [])
+        ]
     }
 
     private func runPaletteCommand(_ action: CommandActionID) {
@@ -603,7 +641,7 @@ struct RootView: View {
 
     private func cancelCurrentMode() {
         if viewModel.showsCommandPalette {
-            navigationActions.closeCommandPalette()
+            closeCommandPaletteAnimated()
             return
         }
 
@@ -688,6 +726,67 @@ private struct RootPreferencesSheet: View {
     }
 }
 
+/// Stable lightweight observer for presentation-only state. The first open
+/// creates one retained palette tree; later sessions reset its local model while
+/// its native row identities remain stable.
+private struct CommandPaletteOverlayHost: View {
+    @ObservedObject var presentation: CommandPalettePresentationModel
+    let registry: ToolRegistry
+    let baseActions: [CommandActionEntry]
+    let reduceMotion: Bool
+    let onSelectTool: (ToolID) -> Void
+    let onRunCommand: (CommandActionID) -> Void
+    let onRequestFocus: () -> Void
+    let onDismiss: () -> Void
+
+    private var actions: [CommandActionEntry] {
+        CommandActionEntry.paletteActions(
+            baseActions: baseActions,
+            previewValue: presentation.previewValue
+        )
+    }
+
+    var body: some View {
+        ZStack {
+            if presentation.hasPresented {
+                CommandPaletteScrim(onDismiss: onDismiss)
+                    .opacity(presentation.shows ? 1 : 0)
+                    .allowsHitTesting(presentation.shows)
+                    .accessibilityHidden(!presentation.shows)
+                    .animation(
+                        ToolMotion.animation(ToolMotion.Preset.modal, reduceMotion: reduceMotion),
+                        value: presentation.shows
+                    )
+                    .toolTransition(ToolMotion.Transition.scrim, reduceMotion: reduceMotion)
+                    .zIndex(1)
+
+                let presentationSession = presentation.session
+                CommandPaletteView(
+                    presentation: presentation,
+                    registry: registry,
+                    actions: actions,
+                    isPresented: presentation.shows,
+                    reduceMotion: reduceMotion,
+                    focusToken: presentation.focusToken,
+                    presentationSession: presentationSession,
+                    canRequestSearchFocus: {
+                        presentation.shows && presentation.session == presentationSession
+                    },
+                    onSelectTool: onSelectTool,
+                    onRunCommand: onRunCommand,
+                    onRequestFocus: onRequestFocus,
+                    onDismiss: onDismiss
+                )
+                .toolTransition(
+                    ToolMotion.Transition.commandPalette,
+                    reduceMotion: reduceMotion
+                )
+                .zIndex(2)
+            }
+        }
+    }
+}
+
 private struct CommandPaletteScrim: View {
     let onDismiss: () -> Void
 
@@ -712,12 +811,17 @@ private final class PaletteIconFlightCoordinator: ObservableObject {
         self.pending = pending
     }
 
+    func cancelPendingLaunch() {
+        pending = nil
+    }
+
     func clearFlight() {
         flight = nil
         pending = nil
     }
 
     func resolve(proxy: GeometryProxy, iconAnchors: [String: Anchor<CGRect>], railAnchor: Anchor<CGRect>?) {
+        CommandPaletteTrace.count(.iconAnchorResolution)
         paletteIconRects = iconAnchors.mapValues { proxy[$0] }
         guard let pending, let railRect = railAnchor.map({ proxy[$0] }) else { return }
         flight = PaletteIconFlight(

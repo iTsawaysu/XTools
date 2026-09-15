@@ -17,6 +17,22 @@ struct AppKitSearchFieldConfiguration {
     }
 }
 
+enum AppKitSearchFieldFocusAttemptSource: Equatable, Sendable {
+    case immediate
+    case delayed(TimeInterval)
+}
+
+struct AppKitSearchFieldFocusAttempt: Sendable {
+    let source: AppKitSearchFieldFocusAttemptSource
+    let isRequestValid: Bool
+    let hasWindow: Bool
+    let isKeyWindow: Bool
+    let hasNonzeroFrame: Bool
+    let makeFirstResponderResult: Bool?
+    let makeFirstResponderMilliseconds: Double?
+    let firstResponderIsFieldEditor: Bool
+}
+
 @MainActor
 final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
     typealias CommandHandler = (NSTextView, Selector) -> Bool
@@ -109,6 +125,8 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
 
 @MainActor
 enum AppKitSearchFieldLifecycle {
+    typealias FocusAttemptObserver = @MainActor @Sendable (AppKitSearchFieldFocusAttempt) -> Void
+
     static func makeTextField(
         configuration: AppKitSearchFieldConfiguration,
         text: Binding<String>,
@@ -163,16 +181,109 @@ enum AppKitSearchFieldLifecycle {
         delayedRetries: [TimeInterval],
         isValid: @escaping AppKitSearchFieldCoordinator.FocusRequestValidity
     ) {
+        requestFocus(
+            textField,
+            delayedRetries: delayedRetries,
+            isValid: isValid,
+            observer: nil
+        )
+    }
+
+    static func requestFocus(
+        _ textField: NSTextField,
+        delayedRetries: [TimeInterval],
+        isValid: @escaping AppKitSearchFieldCoordinator.FocusRequestValidity,
+        observer: FocusAttemptObserver?
+    ) {
         DispatchQueue.main.async { [weak textField] in
-            guard isValid() else { return }
-            textField?.window?.makeFirstResponder(textField)
+            performFocusAttempt(
+                textField,
+                source: .immediate,
+                isValid: isValid,
+                observer: observer
+            )
         }
         for delay in delayedRetries {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak textField] in
-                guard isValid() else { return }
-                textField?.window?.makeFirstResponder(textField)
+                performFocusAttempt(
+                    textField,
+                    source: .delayed(delay),
+                    isValid: isValid,
+                    observer: observer
+                )
             }
         }
+    }
+
+    private static func performFocusAttempt(
+        _ textField: NSTextField?,
+        source: AppKitSearchFieldFocusAttemptSource,
+        isValid: AppKitSearchFieldCoordinator.FocusRequestValidity,
+        observer: FocusAttemptObserver?
+    ) {
+        guard let observer else {
+            guard isValid() else { return }
+            textField?.window?.makeFirstResponder(textField)
+            return
+        }
+
+        let isRequestValid = isValid()
+        guard let textField else {
+            observer(
+                AppKitSearchFieldFocusAttempt(
+                    source: source,
+                    isRequestValid: isRequestValid,
+                    hasWindow: false,
+                    isKeyWindow: false,
+                    hasNonzeroFrame: false,
+                    makeFirstResponderResult: nil,
+                    makeFirstResponderMilliseconds: nil,
+                    firstResponderIsFieldEditor: false
+                )
+            )
+            return
+        }
+
+        let window = textField.window
+        let isKeyWindow = window?.isKeyWindow ?? false
+        let hasNonzeroFrame = textField.frame.width > 0 && textField.frame.height > 0
+        let makeFirstResponderStartedAt = isRequestValid && window != nil
+            ? ContinuousClock.now
+            : nil
+        let makeFirstResponderResult = isRequestValid
+            ? window?.makeFirstResponder(textField)
+            : nil
+        let makeFirstResponderMilliseconds = makeFirstResponderStartedAt.map {
+            milliseconds(from: $0, to: .now)
+        }
+        let firstResponderIsFieldEditor: Bool
+        if let window, let editor = textField.currentEditor() {
+            firstResponderIsFieldEditor = window.firstResponder === editor
+        } else {
+            firstResponderIsFieldEditor = false
+        }
+
+        observer(
+            AppKitSearchFieldFocusAttempt(
+                source: source,
+                isRequestValid: isRequestValid,
+                hasWindow: window != nil,
+                isKeyWindow: isKeyWindow,
+                hasNonzeroFrame: hasNonzeroFrame,
+                makeFirstResponderResult: makeFirstResponderResult,
+                makeFirstResponderMilliseconds: makeFirstResponderMilliseconds,
+                firstResponderIsFieldEditor: firstResponderIsFieldEditor
+            )
+        )
+    }
+
+    private static func milliseconds(
+        from start: ContinuousClock.Instant,
+        to end: ContinuousClock.Instant
+    ) -> Double {
+        let value = (end - start).components
+        return Double(value.seconds) * 1_000
+            + Double(value.attoseconds) / 1_000_000_000_000_000
     }
 
     /// Accept the complete proposed height for hit testing instead of the

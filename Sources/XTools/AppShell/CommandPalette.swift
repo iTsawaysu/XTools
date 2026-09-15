@@ -1,61 +1,6 @@
 import AppKit
 import SwiftUI
 
-@MainActor
-enum CommandPaletteTrace {
-#if DEBUG
-    private static var openedAt: [Int: ContinuousClock.Instant] = [:]
-    private static var emittedPhases: [Int: Set<String>] = [:]
-
-    private static var isEnabled: Bool {
-        ProcessInfo.processInfo.environment["TOOLS_COMMAND_PALETTE_BENCHMARK"] == "1"
-    }
-#endif
-
-    static func opened(session: Int) {
-#if DEBUG
-        guard isEnabled else { return }
-        openedAt[session] = .now
-        emittedPhases[session] = []
-#endif
-    }
-
-    static func appeared(session: Int) {
-#if DEBUG
-        emit(session: session, phase: "appeared")
-#endif
-    }
-
-    static func dismissed(session: Int) {
-#if DEBUG
-        openedAt.removeValue(forKey: session)
-        emittedPhases.removeValue(forKey: session)
-#endif
-    }
-
-#if DEBUG
-    private static func emit(session: Int, phase: String) {
-        guard isEnabled,
-              let startedAt = openedAt[session],
-              emittedPhases[session, default: []].insert(phase).inserted
-        else {
-            return
-        }
-        let elapsed = ContinuousClock.now - startedAt
-        let components = elapsed.components
-        let milliseconds = Double(components.seconds) * 1_000
-            + Double(components.attoseconds) / 1_000_000_000_000_000
-        let line = String(
-            format: "COMMAND_PALETTE_PRESENTATION_PHASE_RESULT session=%d phase=%@ milliseconds=%.3f\n",
-            session,
-            phase,
-            milliseconds
-        )
-        FileHandle.standardError.write(Data(line.utf8))
-    }
-#endif
-}
-
 private enum CommandPaletteMetrics {
     static let searchHeaderSpacing: CGFloat = 9
     static let searchHeaderLeadingPadding: CGFloat = 14
@@ -64,21 +9,152 @@ private enum CommandPaletteMetrics {
     static let searchClearButtonSize: CGFloat = 24
 }
 
-private struct CommandPaletteRevealRequest: Equatable {
-    let id: String
-    let anchor: CommandPaletteRevealAnchor
-    let token: Int
+@MainActor
+private final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePresentationLifecycle {
+    let revealRegistry = CommandPaletteRevealRegistry()
+    let pointerMovementTracker = CommandPalettePointerMovementTracker()
+    private(set) var sessionRevealRequest: CommandPaletteRevealRequest?
+
+    private var liveSession: Int?
+    private weak var sessionModel: CommandPaletteSessionModel?
+    private var baseActions: [CommandActionEntry]
+    private var revealRequestToken = 0
+    private weak var searchField: NSTextField?
+    private weak var searchCoordinator: AppKitSearchFieldCoordinator?
+    private var searchSession: Int?
+
+    init(
+        session: Int,
+        actions: [CommandActionEntry]
+    ) {
+        self.baseActions = actions.filter { $0.id != .copyGeneratedUUID }
+        resume(session: session)
+    }
+
+    func attachSessionModel(_ sessionModel: CommandPaletteSessionModel) {
+        self.sessionModel = sessionModel
+    }
+
+    func updateActions(_ actions: [CommandActionEntry]) {
+        baseActions = actions.filter { $0.id != .copyGeneratedUUID }
+    }
+
+    func commandPaletteDidOpen(session: Int, previewValue: String?) {
+        let actions = CommandActionEntry.paletteActions(
+            baseActions: baseActions,
+            previewValue: previewValue
+        )
+        withTransaction(ToolMotion.disabledTransaction) {
+            sessionModel?.beginSession(session, actions: actions)
+            resume(session: session)
+            sessionRevealRequest = makeRevealRequest(
+                source: .openReset,
+                snapshot: sessionModel?.snapshot,
+                session: session
+            )
+        }
+    }
+
+    func prepareSessionIfNeeded(
+        session: Int,
+        previewValue: String?
+    ) {
+        guard sessionModel?.session != session else { return }
+        commandPaletteDidOpen(session: session, previewValue: previewValue)
+    }
+
+    func makeRevealRequest(
+        source: CommandPaletteActiveChangeSource,
+        snapshot: CommandPaletteRowSnapshot?,
+        session: Int
+    ) -> CommandPaletteRevealRequest? {
+        guard liveSession == session,
+              let snapshot,
+              let anchor = source.revealAnchor,
+              let activeID = sessionModel?.navigationState.activeRowID(in: snapshot)
+        else {
+            return nil
+        }
+
+        revealRequestToken &+= 1
+        revealRegistry.markRevealRequest(
+            token: revealRequestToken,
+            session: session
+        )
+        if case .keyboard = source {
+            revealRegistry.markKeyboardRevealPending(
+                itemID: activeID,
+                token: revealRequestToken,
+                session: session
+            )
+        }
+        return CommandPaletteRevealRequest(
+            id: activeID,
+            anchor: anchor,
+            token: revealRequestToken,
+            session: session
+        )
+    }
+
+    func resume(session: Int) {
+        liveSession = session
+        pointerMovementTracker.clear()
+        revealRegistry.resume(session: session)
+    }
+
+    func attachSearchField(
+        _ field: NSTextField,
+        coordinator: AppKitSearchFieldCoordinator,
+        session: Int
+    ) {
+        searchField = field
+        searchCoordinator = coordinator
+        searchSession = session
+        field.isEnabled = liveSession == session
+    }
+
+    func detachSearchField(_ field: NSTextField) {
+        guard searchField === field else { return }
+        searchField = nil
+        searchCoordinator = nil
+        searchSession = nil
+    }
+
+    func commandPaletteDidClose(session: Int) {
+        guard liveSession == session else { return }
+        liveSession = nil
+        revealRegistry.suspend(session: session)
+        pointerMovementTracker.clear()
+
+        guard searchSession == session else { return }
+        searchCoordinator?.invalidateFocusRequests()
+        searchField?.isEnabled = false
+        if let field = searchField,
+           let window = field.window,
+           let editor = field.currentEditor(),
+           window.firstResponder === editor {
+            window.makeFirstResponder(nil)
+        }
+    }
+
+    func tearDown() {
+        if let liveSession {
+            commandPaletteDidClose(session: liveSession)
+        }
+    }
 }
 
-/// Modal "jump to anything" palette (Command-K). Fully self-contained: it reads
-/// a navigation projection plus shell-supplied command actions and reports
-/// selections back through injected closures, holding no reference to the app
-/// shell's own state. Row projection and active selection live in
-/// `CommandPaletteNavigationState` so they can be unit-tested.
+
+/// Modal "jump to anything" palette (Command-K). Fully self-contained: it owns
+/// the presentation-local query, narrow tool projection, and active selection,
+/// while reporting selections through injected closures. It holds no reference
+/// to the app shell's own state.
+@MainActor
 struct CommandPaletteView: View {
-    let projection: ToolNavigationProjection
+    let presentation: CommandPalettePresentationModel
     let actions: [CommandActionEntry]
-    @Binding var query: String
+    let isPresented: Bool
+    let reduceMotion: Bool
     let focusToken: Int
     let presentationSession: Int
     let canRequestSearchFocus: AppKitSearchFieldCoordinator.FocusRequestValidity
@@ -87,112 +163,181 @@ struct CommandPaletteView: View {
     let onRequestFocus: () -> Void
     let onDismiss: () -> Void
 
-    @State private var paletteState = CommandPaletteNavigationState()
+    @StateObject private var sessionModel: CommandPaletteSessionModel
     @State private var revealRequest: CommandPaletteRevealRequest?
-    @State private var revealRequestToken = 0
-    @State private var revealRegistry = CommandPaletteRevealRegistry()
-    @State private var pointerMovementTracker = CommandPalettePointerMovementTracker()
+    @StateObject private var contentLifecycle: CommandPaletteContentLifecycle
     /// True when the active row was last set by keyboard arrows (not pointer).
-    @State private var isActiveRowKeyboardDriven = false
-    private var matchingActions: [CommandActionEntry] {
-        actions.filter { $0.matches(query: query) }
-    }
-
-    private var paletteSnapshot: CommandPaletteRowSnapshot {
-        CommandPaletteNavigationState.snapshot(
-            for: projection.commandPaletteEntries,
-            actions: matchingActions
+    @State private var keyboardDrivenSession: Int?
+    init(
+        presentation: CommandPalettePresentationModel,
+        registry: ToolRegistry,
+        actions: [CommandActionEntry],
+        isPresented: Bool,
+        reduceMotion: Bool,
+        focusToken: Int,
+        presentationSession: Int,
+        canRequestSearchFocus: @escaping AppKitSearchFieldCoordinator.FocusRequestValidity,
+        onSelectTool: @escaping (ToolID) -> Void,
+        onRunCommand: @escaping (CommandActionID) -> Void,
+        onRequestFocus: @escaping () -> Void,
+        onDismiss: @escaping () -> Void
+    ) {
+        self.presentation = presentation
+        self.actions = actions
+        self.isPresented = isPresented
+        self.reduceMotion = reduceMotion
+        self.focusToken = focusToken
+        self.presentationSession = presentationSession
+        self.canRequestSearchFocus = canRequestSearchFocus
+        self.onSelectTool = onSelectTool
+        self.onRunCommand = onRunCommand
+        self.onRequestFocus = onRequestFocus
+        self.onDismiss = onDismiss
+        _sessionModel = StateObject(
+            wrappedValue: CommandPaletteSessionModel(
+                registry: registry,
+                actions: actions,
+                session: presentationSession
+            )
+        )
+        _contentLifecycle = StateObject(
+            wrappedValue: CommandPaletteContentLifecycle(
+                session: presentationSession,
+                actions: actions
+            )
         )
     }
 
+    private var isPresentationReady: Bool {
+        isPresented && sessionModel.session == presentationSession
+    }
+
+    private func isLiveSession() -> Bool {
+        isPresentationReady && canRequestSearchFocus()
+    }
+
+    private func isInputSessionLive(_ inputSession: Int) -> Bool {
+        inputSession == presentationSession
+            && inputSession == sessionModel.session
+            && isLiveSession()
+    }
+
+    private func queryBinding(inputSession: Int) -> Binding<String> {
+        Binding(
+            get: { sessionModel.query },
+            set: { query in
+                guard isInputSessionLive(inputSession) else { return }
+                updateQuery(query)
+            }
+        )
+    }
+
+    private func updateQuery(_ query: String) {
+        guard isLiveSession(), sessionModel.setQuery(query) else { return }
+        requestActiveReveal(for: .queryReset, in: sessionModel.snapshot)
+    }
+
     private func moveActive(by delta: Int) {
-        let snapshot = paletteSnapshot
-        isActiveRowKeyboardDriven = true
-        let previousActiveID = paletteState.activeRowID(in: snapshot)
-        let visibleHandoffIndex = revealRegistry.visibleEdgeSelectableIndex(direction: delta)
-        let isCurrentActiveVisible = previousActiveID.map(revealRegistry.isVisible(itemID:)) ?? false
-        let hasPendingKeyboardRevealForCurrentActive = previousActiveID.map(revealRegistry.hasLatestPendingKeyboardReveal(itemID:)) ?? false
-        let moveDecision = paletteState.keyboardMoveDecision(
+        guard isLiveSession() else { return }
+        let snapshot = sessionModel.snapshot
+        keyboardDrivenSession = presentationSession
+        let previousActiveID = sessionModel.navigationState.activeRowID(in: snapshot)
+        let visibleHandoffIndex = contentLifecycle.revealRegistry.visibleEdgeSelectableIndex(direction: delta)
+        let isCurrentActiveVisible = previousActiveID.map(
+            contentLifecycle.revealRegistry.isVisible(itemID:)
+        ) ?? false
+        let hasPendingKeyboardRevealForCurrentActive = previousActiveID.map(
+            contentLifecycle.revealRegistry.hasLatestPendingKeyboardReveal(itemID:)
+        ) ?? false
+        let moveDecision = sessionModel.navigationState.keyboardMoveDecision(
             by: delta,
             in: snapshot,
             visibleHandoffIndex: visibleHandoffIndex,
             isCurrentActiveVisible: isCurrentActiveVisible,
             hasPendingKeyboardRevealForCurrentActive: hasPendingKeyboardRevealForCurrentActive,
-            allowsVisibleHandoff: revealRegistry.hasManualScrollAfterLatestKeyboardReveal()
+            allowsVisibleHandoff: contentLifecycle.revealRegistry.hasManualScrollAfterLatestKeyboardReveal()
         )
 
         switch moveDecision {
         case .move(let index), .alignToVisibleSelectableIndex(let index):
-            paletteState.setActiveSelectableIndex(index, in: snapshot)
+            sessionModel.navigationState.setActiveSelectableIndex(index, in: snapshot)
         case .revealCurrent:
             requestActiveReveal(for: .keyboard(delta: delta))
         case .none:
             break
         }
 
-        if paletteState.activeRowID(in: snapshot) != previousActiveID {
+        if sessionModel.navigationState.activeRowID(in: snapshot) != previousActiveID {
             requestActiveReveal(for: .keyboard(delta: delta), in: snapshot)
         }
     }
 
-    private func resetActiveRowForQuery() {
-        paletteState.resetActiveRow()
-        requestActiveReveal(for: .queryReset, in: paletteSnapshot)
-    }
-
     private func activateActive() {
-        guard let item = paletteState.activeRow(in: paletteSnapshot) else { return }
+        guard isLiveSession(),
+              let item = sessionModel.navigationState.activeRow(in: sessionModel.snapshot)
+        else {
+            return
+        }
         activate(item)
     }
 
     private func setActiveItem(_ item: CommandPaletteRowProjection) {
-        let snapshot = paletteSnapshot
-        isActiveRowKeyboardDriven = false
-        guard item.id != paletteState.activeRowID(in: snapshot) else { return }
-        paletteState.setActiveRow(item, in: snapshot)
+        guard isLiveSession() else { return }
+        let snapshot = sessionModel.snapshot
+        keyboardDrivenSession = nil
+        guard item.id != sessionModel.navigationState.activeRowID(in: snapshot) else { return }
+        sessionModel.navigationState.setActiveRow(item, in: snapshot)
         requestActiveReveal(for: .pointerMove)
     }
 
     private func activate(_ item: CommandPaletteRowProjection) {
+        guard isLiveSession() else { return }
         if let commandID = item.commandID {
             requestActiveReveal(for: .directActivation)
             onRunCommand(commandID)
             return
         }
-        guard let toolID = paletteState.toolID(for: item) else { return }
+        guard let toolID = sessionModel.navigationState.toolID(for: item) else { return }
         requestActiveReveal(for: .directActivation)
         onSelectTool(toolID)
     }
 
     private func requestActiveReveal(for source: CommandPaletteActiveChangeSource) {
-        requestActiveReveal(for: source, in: paletteSnapshot)
+        requestActiveReveal(for: source, in: sessionModel.snapshot)
     }
 
     private func requestActiveReveal(
         for source: CommandPaletteActiveChangeSource,
         in snapshot: CommandPaletteRowSnapshot
     ) {
-        guard let anchor = source.revealAnchor,
-              let activeID = paletteState.activeRowID(in: snapshot)
-        else {
-            return
-        }
-
-        revealRequestToken += 1
-        revealRegistry.markRevealRequest(token: revealRequestToken)
-        if case .keyboard = source {
-            revealRegistry.markKeyboardRevealPending(itemID: activeID, token: revealRequestToken)
-        }
-        let request = CommandPaletteRevealRequest(
-            id: activeID,
-            anchor: anchor,
-            token: revealRequestToken
-        )
+        guard let request = contentLifecycle.makeRevealRequest(
+            source: source,
+            snapshot: snapshot,
+            session: presentationSession
+        ) else { return }
         revealRequest = request
 
         if case .keyboard = source {
-            revealRegistry.revealImmediately(request: request)
+            contentLifecycle.revealRegistry.revealImmediately(request: request)
         }
+    }
+
+    private func preparePresentationIfNeeded() {
+        guard isPresented else { return }
+        contentLifecycle.prepareSessionIfNeeded(
+            session: presentationSession,
+            previewValue: presentation.previewValue
+        )
+    }
+
+    private var currentRevealRequest: CommandPaletteRevealRequest? {
+        if revealRequest?.session == presentationSession {
+            return revealRequest
+        }
+        guard contentLifecycle.sessionRevealRequest?.session == presentationSession else {
+            return nil
+        }
+        return contentLifecycle.sessionRevealRequest
     }
 
     @ViewBuilder
@@ -208,44 +353,50 @@ struct CommandPaletteView: View {
             CommandPaletteRow(
                 id: entry.id,
                 title: entry.title,
-                highlight: query,
+                highlight: sessionModel.query,
                 subtitle: entry.categoryTitle,
                 systemImage: entry.systemImage,
                 isActive: item.id == activeItemID,
-                isKeyboardActive: item.id == activeItemID && isActiveRowKeyboardDriven,
-                pointerMovementTracker: pointerMovementTracker,
-                onMouseMoveActive: { setActiveItem(item) }
+                isKeyboardActive: item.id == activeItemID
+                    && keyboardDrivenSession == sessionModel.session
             ) {
                 activate(item)
             }
             .background {
-                CommandPaletteRevealAttachment(
+                CommandPaletteRowAttachment(
                     itemID: item.id,
                     selectableIndex: selectableIndex,
-                    registry: revealRegistry,
-                    revealRequest: revealRequest
+                    registry: contentLifecycle.revealRegistry,
+                    session: presentationSession,
+                    interactionEnabled: isPresentationReady,
+                    revealRequest: currentRevealRequest,
+                    pointerMovementTracker: contentLifecycle.pointerMovementTracker,
+                    onMouseMove: { setActiveItem(item) }
                 )
             }
         case .command(let entry):
             CommandPaletteRow(
                 id: entry.id.rawValue,
                 title: entry.title,
-                highlight: query,
+                highlight: sessionModel.query,
                 subtitle: entry.subtitle,
                 systemImage: entry.systemImage,
                 isActive: item.id == activeItemID,
-                isKeyboardActive: item.id == activeItemID && isActiveRowKeyboardDriven,
-                pointerMovementTracker: pointerMovementTracker,
-                onMouseMoveActive: { setActiveItem(item) }
+                isKeyboardActive: item.id == activeItemID
+                    && keyboardDrivenSession == sessionModel.session
             ) {
                 activate(item)
             }
             .background {
-                CommandPaletteRevealAttachment(
+                CommandPaletteRowAttachment(
                     itemID: item.id,
                     selectableIndex: selectableIndex,
-                    registry: revealRegistry,
-                    revealRequest: revealRequest
+                    registry: contentLifecycle.revealRegistry,
+                    session: presentationSession,
+                    interactionEnabled: isPresentationReady,
+                    revealRequest: currentRevealRequest,
+                    pointerMovementTracker: contentLifecycle.pointerMovementTracker,
+                    onMouseMove: { setActiveItem(item) }
                 )
             }
         case .empty:
@@ -257,8 +408,11 @@ struct CommandPaletteView: View {
     }
 
     var body: some View {
-        let snapshot = paletteSnapshot
-        let activeItemID = paletteState.activeRowID(in: snapshot)
+        let _ = CommandPaletteTrace.count(.paletteBody, session: presentationSession)
+        let _ = contentLifecycle.updateActions(actions)
+        let snapshot = sessionModel.snapshot
+        let activeItemID = sessionModel.navigationState.activeRowID(in: snapshot)
+        let inputSession = sessionModel.session
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: CommandPaletteMetrics.searchHeaderSpacing) {
                 Image(systemName: "magnifyingglass")
@@ -267,26 +421,39 @@ struct CommandPaletteView: View {
 
                 CommandPaletteSearchField(
                     placeholder: "搜索工具或命令…",
-                    text: $query,
+                    text: queryBinding(inputSession: inputSession),
                     focusToken: focusToken,
-                    canRequestFocus: canRequestSearchFocus,
-                    onSubmit: activateActive,
-                    onMoveUp: { moveActive(by: -1) },
-                    onMoveDown: { moveActive(by: 1) },
-                    onCancel: onDismiss
+                    presentationSession: inputSession,
+                    canRequestFocus: {
+                        isInputSessionLive(inputSession)
+                    },
+                    contentLifecycle: contentLifecycle,
+                    onSubmit: {
+                        guard isInputSessionLive(inputSession) else { return }
+                        activateActive()
+                    },
+                    onMoveUp: {
+                        guard isInputSessionLive(inputSession) else { return }
+                        moveActive(by: -1)
+                    },
+                    onMoveDown: {
+                        guard isInputSessionLive(inputSession) else { return }
+                        moveActive(by: 1)
+                    },
+                    onCancel: {
+                        guard isInputSessionLive(inputSession) else { return }
+                        onDismiss()
+                    }
                 )
+                .id(inputSession)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .frame(height: 24)
-                .onChange(of: query) { _ in
-                    // 过滤结果变化后 active row 重置到首项，避免越界 / 停在已消失的行。
-                    resetActiveRowForQuery()
-                }
 
                 ZStack {
-                    if !query.isEmpty {
+                    if !sessionModel.query.isEmpty {
                         Button {
-                            query = ""
-                            paletteState.resetActiveRow()
+                            guard isLiveSession() else { return }
+                            updateQuery("")
                             onRequestFocus()
                         } label: {
                             Image(systemName: "xmark.circle.fill")
@@ -309,8 +476,8 @@ struct CommandPaletteView: View {
                     width: CommandPaletteMetrics.searchClearLayoutSize,
                     height: CommandPaletteMetrics.searchClearLayoutSize
                 )
-                .allowsHitTesting(!query.isEmpty)
-                .toolAnimation(ToolMotion.Preset.controlFeedback, value: query.isEmpty)
+                .allowsHitTesting(!sessionModel.query.isEmpty)
+                .toolAnimation(ToolMotion.Preset.controlFeedback, value: sessionModel.query.isEmpty)
             }
             .padding(.leading, CommandPaletteMetrics.searchHeaderLeadingPadding)
             .padding(.trailing, CommandPaletteMetrics.searchHeaderTrailingPadding)
@@ -348,352 +515,87 @@ struct CommandPaletteView: View {
                 .strokeBorder(ToolTheme.strongBorder, lineWidth: 0.5)
         }
         .toolShadow(ToolTheme.Shadow.modal)
-        .onAppear {
-            CommandPaletteTrace.appeared(session: presentationSession)
-        }
-    }
-
-}
-
-private struct CommandPaletteRevealAttachment: NSViewRepresentable {
-    let itemID: String
-    let selectableIndex: Int?
-    let registry: CommandPaletteRevealRegistry
-    let revealRequest: CommandPaletteRevealRequest?
-
-    func makeNSView(context: Context) -> CommandPaletteRevealView {
-        CommandPaletteRevealView()
-    }
-
-    func updateNSView(_ view: CommandPaletteRevealView, context: Context) {
-        view.configure(
-            itemID: itemID,
-            selectableIndex: selectableIndex,
-            registry: registry
-        )
-
-        guard let revealRequest, revealRequest.id == itemID else { return }
-        view.reveal(request: revealRequest)
-    }
-
-    static func dismantleNSView(_ view: CommandPaletteRevealView, coordinator: ()) {
-        view.unregister()
-    }
-}
-
-@MainActor
-private final class CommandPaletteRevealRegistry: NSObject {
-    private final class Entry {
-        weak var view: CommandPaletteRevealView?
-        let selectableIndex: Int
-
-        init(view: CommandPaletteRevealView, selectableIndex: Int) {
-            self.view = view
-            self.selectableIndex = selectableIndex
-        }
-    }
-
-    private var entries: [String: Entry] = [:]
-    private var pendingKeyboardReveal: PendingKeyboardReveal?
-    private var latestRevealRequestToken = 0
-    private var manualScrollGeneration = 0
-    private var manualScrollGenerationAtLatestKeyboardReveal = 0
-    private var observedClipViews: [ObjectIdentifier: NSClipView] = [:]
-
-    private struct PendingKeyboardReveal {
-        let itemID: String
-        let token: Int
-    }
-
-    func register(itemID: String, selectableIndex: Int?, view: CommandPaletteRevealView) {
-        guard let selectableIndex else {
-            unregister(itemID: itemID, view: view)
-            return
-        }
-        entries[itemID] = Entry(view: view, selectableIndex: selectableIndex)
-        observeScrollView(containing: view)
-    }
-
-    func unregister(itemID: String?, view: CommandPaletteRevealView) {
-        guard let itemID,
-              let entry = entries[itemID],
-              entry.view === view
-        else {
-            return
-        }
-        entries.removeValue(forKey: itemID)
-
-        guard let clipView = view.enclosingScrollView?.contentView else { return }
-        let clipViewID = ObjectIdentifier(clipView)
-        let stillUsed = entries.values.contains { entry in
-            entry.view?.enclosingScrollView?.contentView === clipView
-        }
-        guard !stillUsed else { return }
-        NotificationCenter.default.removeObserver(
-            self,
-            name: NSView.boundsDidChangeNotification,
-            object: clipView
-        )
-        observedClipViews.removeValue(forKey: clipViewID)
-    }
-
-    func visibleEdgeSelectableIndex(direction: Int) -> Int? {
-        pruneDeadEntries()
-
-        var edgeIndex: Int?
-        for entry in entries.values where isVisible(entry) {
-            guard let currentEdge = edgeIndex else {
-                edgeIndex = entry.selectableIndex
-                continue
-            }
-
-            if direction < 0 {
-                edgeIndex = max(currentEdge, entry.selectableIndex)
-            } else {
-                edgeIndex = min(currentEdge, entry.selectableIndex)
-            }
-        }
-        return edgeIndex
-    }
-
-    func isVisible(itemID: String) -> Bool {
-        pruneDeadEntries()
-        guard let entry = entries[itemID] else { return false }
-        return isVisible(entry)
-    }
-
-    func hasLatestPendingKeyboardReveal(itemID: String) -> Bool {
-        pendingKeyboardReveal?.itemID == itemID
-            && pendingKeyboardReveal?.token == latestRevealRequestToken
-    }
-
-    func hasManualScrollAfterLatestKeyboardReveal() -> Bool {
-        manualScrollGeneration > manualScrollGenerationAtLatestKeyboardReveal
-    }
-
-    func markKeyboardRevealPending(itemID: String, token: Int) {
-        pendingKeyboardReveal = PendingKeyboardReveal(itemID: itemID, token: token)
-        manualScrollGenerationAtLatestKeyboardReveal = manualScrollGeneration
-    }
-
-    func finishKeyboardReveal(request: CommandPaletteRevealRequest) {
-        guard pendingKeyboardReveal?.itemID == request.id,
-              pendingKeyboardReveal?.token == request.token
-        else {
-            return
-        }
-        pendingKeyboardReveal = nil
-    }
-
-    func markRevealRequest(token: Int) {
-        latestRevealRequestToken = token
-        if pendingKeyboardReveal?.token != token {
-            pendingKeyboardReveal = nil
-        }
-    }
-
-    func isLatestRevealRequest(_ request: CommandPaletteRevealRequest) -> Bool {
-        request.token == latestRevealRequestToken
-    }
-
-    func revealImmediately(request: CommandPaletteRevealRequest) {
-        guard isLatestRevealRequest(request),
-              let entry = entries[request.id],
-              let view = entry.view
-        else {
-            return
-        }
-
-        view.reveal(request: request)
-    }
-
-    func observeScrollView(containing view: NSView) {
-        guard let clipView = view.enclosingScrollView?.contentView else { return }
-
-        let id = ObjectIdentifier(clipView)
-        guard observedClipViews[id] == nil else { return }
-
-        clipView.postsBoundsChangedNotifications = true
-        observedClipViews[id] = clipView
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(scrollViewBoundsDidChange(_:)),
-            name: NSView.boundsDidChangeNotification,
-            object: clipView
-        )
-    }
-
-    @objc private func scrollViewBoundsDidChange(_ notification: Notification) {
-        guard NSApp.currentEvent?.type == .scrollWheel else { return }
-        manualScrollGeneration += 1
-    }
-
-    private func isVisible(_ entry: Entry) -> Bool {
-        guard let view = entry.view,
-              let scrollView = view.enclosingScrollView,
-              let documentView = scrollView.documentView
-        else {
-            return false
-        }
-
-        let visibleRect = scrollView.contentView.bounds
-        let rowRect = view.convert(view.bounds, to: documentView)
-        return visibleRect.intersects(rowRect)
-    }
-
-    private func pruneDeadEntries() {
-        entries = entries.filter { _, entry in
-            entry.view != nil
-        }
-
-        let activeClipViewIDs = Set(
-            entries.values.compactMap { entry -> ObjectIdentifier? in
-                guard let clipView = entry.view?.enclosingScrollView?.contentView else {
-                    return nil
-                }
-                return ObjectIdentifier(clipView)
-            }
-        )
-        for (id, clipView) in observedClipViews where !activeClipViewIDs.contains(id) {
-            NotificationCenter.default.removeObserver(
-                self,
-                name: NSView.boundsDidChangeNotification,
-                object: clipView
+        // The retained row/search subtree ignores the surrounding modal
+        // transaction so a session reset cannot animate row insertion or text
+        // replacement. Explicit control animations deeper in the subtree can
+        // still opt in because this does not set `disablesAnimations`.
+        .transaction { transaction in
+            CommandPaletteTrace.presentationTransaction(
+                session: isPresented ? presentationSession : sessionModel.session,
+                isPresented: isPresented,
+                isVisible: isPresentationReady,
+                hasAnimation: transaction.animation != nil,
+                disablesAnimations: transaction.disablesAnimations
             )
-            observedClipViews.removeValue(forKey: id)
+            transaction.animation = nil
+        }
+        .modifier(
+            CommandPaletteVisibilityModifier(
+                progress: isPresentationReady ? 1 : 0,
+                isPresented: isPresented,
+                reduceMotion: reduceMotion,
+                traceSession: isPresented ? presentationSession : sessionModel.session
+            )
+        )
+        .animation(
+            ToolMotion.animation(ToolMotion.Preset.modal, reduceMotion: reduceMotion),
+            value: isPresentationReady
+        )
+        .allowsHitTesting(isPresentationReady)
+        .accessibilityHidden(!isPresentationReady)
+        .onAppear {
+            contentLifecycle.attachSessionModel(sessionModel)
+            presentation.installLifecycle(contentLifecycle)
+            CommandPaletteTrace.appeared(session: presentationSession)
+            preparePresentationIfNeeded()
+        }
+        .onDisappear {
+            presentation.removeLifecycle(contentLifecycle)
+            contentLifecycle.tearDown()
+        }
+        .onChange(of: presentationSession) { _ in
+            preparePresentationIfNeeded()
+        }
+        .onChange(of: isPresented) { _ in
+            preparePresentationIfNeeded()
+        }
+        .onChange(of: actions) { newActions in
+            guard isPresentationReady else { return }
+            sessionModel.replaceActions(newActions)
         }
     }
 
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
 }
 
-private final class CommandPaletteRevealView: NSView {
-    private var lastRevealToken = 0
-    private var scheduledRevealRetryToken = 0
-    private weak var registry: CommandPaletteRevealRegistry?
-    private var itemID: String?
+/// Retained content cannot use an insertion transition after its first mount.
+/// Drive the same modal geometry from one presentation-owned progress value:
+/// opening settles upward by six points, while closing keeps the original
+/// opacity-and-scale-only removal.
+private struct CommandPaletteVisibilityModifier: @MainActor AnimatableModifier {
+    var progress: CGFloat
+    let isPresented: Bool
+    let reduceMotion: Bool
+    let traceSession: Int
 
-    override var isFlipped: Bool {
-        true
+    var animatableData: CGFloat {
+        get { progress }
+        set { progress = newValue }
     }
 
-    func configure(
-        itemID: String,
-        selectableIndex: Int?,
-        registry: CommandPaletteRevealRegistry
-    ) {
-        if self.itemID != itemID {
-            unregister()
-        }
-
-        self.itemID = itemID
-        self.registry = registry
-        registry.register(
-            itemID: itemID,
-            selectableIndex: selectableIndex,
-            view: self
+    func body(content: Content) -> some View {
+        let _ = CommandPaletteTrace.presentationProgress(
+            session: traceSession,
+            isPresented: isPresented,
+            progress: progress
         )
-        registry.observeScrollView(containing: self)
-    }
-
-    func unregister() {
-        registry?.unregister(itemID: itemID, view: self)
-    }
-
-    func reveal(request: CommandPaletteRevealRequest) {
-        guard request.token != lastRevealToken else { return }
-        guard window != nil else {
-            guard scheduledRevealRetryToken != request.token else { return }
-            scheduledRevealRetryToken = request.token
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.window != nil else { return }
-                self.reveal(request: request)
-            }
-            return
-        }
-
-        lastRevealToken = request.token
-        guard let registry,
-              registry.isLatestRevealRequest(request)
-        else {
-            return
-        }
-
-        switch request.anchor {
-        case .keyboardEdge(let delta):
-            scrollToKeyboardEdge(delta: delta)
-        case .top:
-            scrollToTop()
-        }
-        registry.finishKeyboardReveal(request: request)
-    }
-
-    private func scrollToKeyboardEdge(delta: Int) {
-        guard let scrollView = enclosingScrollView,
-              let documentView = scrollView.documentView
-        else {
-            scrollToVisible(bounds)
-            return
-        }
-
-        let clipView = scrollView.contentView
-        let visibleRect = clipView.bounds
-        let rowRect = viewRectInDocumentView(documentView)
-        let targetY: CGFloat?
-
-        if delta > 0 {
-            targetY = rowRect.maxY > visibleRect.maxY
-                ? rowRect.maxY - visibleRect.height
-                : nil
-        } else if delta < 0 {
-            targetY = rowRect.minY < visibleRect.minY
-                ? rowRect.minY
-                : nil
-        } else {
-            targetY = nil
-        }
-
-        guard let targetY else { return }
-
-        let documentBounds = documentView.bounds
-        let maxY = max(documentBounds.minY, documentBounds.maxY - visibleRect.height)
-        let clampedY = min(max(targetY, documentBounds.minY), maxY)
-        clipView.scroll(to: NSPoint(x: visibleRect.origin.x, y: clampedY))
-        scrollView.reflectScrolledClipView(clipView)
-    }
-
-    private func viewRectInDocumentView(_ documentView: NSView) -> NSRect {
-        if bounds.width > 0, bounds.height > 0 {
-            return convert(bounds, to: documentView)
-        }
-
-        if let superview, superview.bounds.width > 0, superview.bounds.height > 0 {
-            return superview.convert(superview.bounds, to: documentView)
-        }
-
-        return convert(bounds, to: documentView)
-    }
-
-    private func scrollToTop() {
-        guard let scrollView = enclosingScrollView,
-              let documentView = scrollView.documentView
-        else {
-            scrollToVisible(bounds)
-            return
-        }
-
-        let clipView = scrollView.contentView
-        let topY: CGFloat
-        if documentView.isFlipped {
-            topY = documentView.bounds.minY
-        } else {
-            topY = max(documentView.bounds.minY, documentView.bounds.maxY - clipView.bounds.height)
-        }
-
-        clipView.scroll(to: NSPoint(x: clipView.bounds.origin.x, y: topY))
-        scrollView.reflectScrolledClipView(clipView)
+        content
+            .opacity(progress)
+            .scaleEffect(reduceMotion ? 1 : ToolMotion.Scale.modal + (1 - ToolMotion.Scale.modal) * progress)
+            .offset(
+                y: reduceMotion || !isPresented
+                    ? 0
+                    : -ToolMotion.Distance.small * (1 - progress)
+            )
     }
 }
 
@@ -701,11 +603,27 @@ private struct CommandPaletteSearchField: NSViewRepresentable {
     let placeholder: String
     @Binding var text: String
     let focusToken: Int
+    let presentationSession: Int
     let canRequestFocus: AppKitSearchFieldCoordinator.FocusRequestValidity
+    let contentLifecycle: CommandPaletteContentLifecycle
     let onSubmit: () -> Void
     let onMoveUp: () -> Void
     let onMoveDown: () -> Void
     let onCancel: () -> Void
+
+    @MainActor
+    final class Coordinator {
+        let search: AppKitSearchFieldCoordinator
+        weak var contentLifecycle: CommandPaletteContentLifecycle?
+
+        init(
+            search: AppKitSearchFieldCoordinator,
+            contentLifecycle: CommandPaletteContentLifecycle
+        ) {
+            self.search = search
+            self.contentLifecycle = contentLifecycle
+        }
+    }
 
     private var configuration: AppKitSearchFieldConfiguration {
         // Arc-style large prompt input — the palette's primary affordance.
@@ -740,11 +658,25 @@ private struct CommandPaletteSearchField: NSViewRepresentable {
         }
     }
 
-    func makeCoordinator() -> AppKitSearchFieldCoordinator {
-        AppKitSearchFieldCoordinator(
-            text: $text,
-            processedFocusToken: nil,
-            focusRetryDelays: [0.05, 0.15]
+    func makeCoordinator() -> Coordinator {
+        let presentationSession = presentationSession
+        return Coordinator(
+            search: AppKitSearchFieldCoordinator(
+                text: $text,
+                processedFocusToken: nil,
+                focusRetryDelays: [0.05, 0.15],
+                requestFocus: { textField, delayedRetries, isValid in
+                    AppKitSearchFieldLifecycle.requestFocus(
+                        textField,
+                        delayedRetries: delayedRetries,
+                        isValid: isValid,
+                        observer: CommandPaletteTrace.focusAttemptObserver(
+                            session: presentationSession
+                        )
+                    )
+                }
+            ),
+            contentLifecycle: contentLifecycle
         )
     }
 
@@ -753,11 +685,21 @@ private struct CommandPaletteSearchField: NSViewRepresentable {
             configuration: configuration,
             text: $text,
             focusToken: focusToken,
-            coordinator: context.coordinator,
+            coordinator: context.coordinator.search,
             commandHandler: commandHandler,
             canRequestFocus: canRequestFocus
         )
         textField.setAccessibilityIdentifier("command-palette.search")
+        contentLifecycle.attachSearchField(
+            textField,
+            coordinator: context.coordinator.search,
+            session: presentationSession
+        )
+        CommandPaletteTrace.observeNativeReady(
+            textField,
+            session: presentationSession,
+            isValid: canRequestFocus
+        )
         return textField
     }
 
@@ -768,9 +710,19 @@ private struct CommandPaletteSearchField: NSViewRepresentable {
             configuration: configuration,
             text: $text,
             focusToken: focusToken,
-            coordinator: context.coordinator,
+            coordinator: context.coordinator.search,
             commandHandler: commandHandler,
             canRequestFocus: canRequestFocus
+        )
+        contentLifecycle.attachSearchField(
+            textField,
+            coordinator: context.coordinator.search,
+            session: presentationSession
+        )
+        CommandPaletteTrace.observeNativeReady(
+            textField,
+            session: presentationSession,
+            isValid: canRequestFocus
         )
     }
 
@@ -785,9 +737,10 @@ private struct CommandPaletteSearchField: NSViewRepresentable {
 
     static func dismantleNSView(
         _ textField: NSTextField,
-        coordinator: AppKitSearchFieldCoordinator
+        coordinator: Coordinator
     ) {
-        coordinator.invalidateFocusRequests()
+        coordinator.contentLifecycle?.detachSearchField(textField)
+        coordinator.search.invalidateFocusRequests()
     }
 
     private static func markedTextShouldHandle(_ commandSelector: Selector) -> Bool {
@@ -868,8 +821,6 @@ private struct CommandPaletteRow: View {
     let systemImage: String
     var isActive: Bool = false
     var isKeyboardActive: Bool = false
-    let pointerMovementTracker: CommandPalettePointerMovementTracker
-    let onMouseMoveActive: () -> Void
     let action: () -> Void
 
     var body: some View {
@@ -929,12 +880,6 @@ private struct CommandPaletteRow: View {
         }
         .buttonStyle(.plain)
         .toolInteractionFeedback()
-        .overlay {
-            CommandPaletteMouseMoveActivation(
-                pointerMovementTracker: pointerMovementTracker,
-                onMouseMove: onMouseMoveActive
-            )
-        }
     }
 
     /// Accent-highlight the first case-insensitive query match in the title.
@@ -950,72 +895,5 @@ private struct CommandPaletteRow: View {
         return AttributedString(String(title[..<range.lowerBound]))
             + highlighted
             + AttributedString(String(title[range.upperBound...]))
-    }
-}
-
-private struct CommandPaletteMouseMoveActivation: NSViewRepresentable {
-    let pointerMovementTracker: CommandPalettePointerMovementTracker
-    let onMouseMove: () -> Void
-
-    func makeNSView(context: Context) -> CommandPaletteMouseMoveActivationView {
-        let view = CommandPaletteMouseMoveActivationView()
-        view.pointerMovementTracker = pointerMovementTracker
-        view.onMouseMove = onMouseMove
-        return view
-    }
-
-    func updateNSView(_ view: CommandPaletteMouseMoveActivationView, context: Context) {
-        view.pointerMovementTracker = pointerMovementTracker
-        view.onMouseMove = onMouseMove
-    }
-}
-
-private final class CommandPaletteMouseMoveActivationView: NSView {
-    var pointerMovementTracker: CommandPalettePointerMovementTracker?
-    var onMouseMove: (() -> Void)?
-    private var mouseTrackingArea: NSTrackingArea?
-
-    override var isFlipped: Bool {
-        true
-    }
-
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-
-        if let mouseTrackingArea {
-            removeTrackingArea(mouseTrackingArea)
-        }
-
-        let trackingArea = NSTrackingArea(
-            rect: .zero,
-            options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect],
-            owner: self,
-            userInfo: nil
-        )
-        addTrackingArea(trackingArea)
-        mouseTrackingArea = trackingArea
-
-        resetPointerBaselineToCurrentWindowLocation()
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        resetPointerBaselineToCurrentWindowLocation()
-    }
-
-    override func mouseMoved(with event: NSEvent) {
-        guard pointerMovementTracker?.acceptsMouseMoved(at: event.locationInWindow) == true else {
-            return
-        }
-        onMouseMove?()
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        nil
-    }
-
-    private func resetPointerBaselineToCurrentWindowLocation() {
-        guard let window, pointerMovementTracker?.isSeeded != true else { return }
-        pointerMovementTracker?.reset(to: window.mouseLocationOutsideOfEventStream)
     }
 }

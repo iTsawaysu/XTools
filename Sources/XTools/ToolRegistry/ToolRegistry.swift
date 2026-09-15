@@ -79,6 +79,10 @@ struct ToolRegistry {
 
     func matchRank(for tool: RegisteredTool, query rawQuery: String) -> MatchRank? {
         let query = Self.normalizedSearchText(rawQuery.trimmingCharacters(in: .whitespacesAndNewlines))
+        return matchRank(for: tool, normalizedQuery: query)
+    }
+
+    private func matchRank(for tool: RegisteredTool, normalizedQuery query: String) -> MatchRank? {
         let record = searchRecordByID[tool.id] ?? SearchRecord(
             title: Self.normalizedSearchText(tool.title),
             keywords: tool.keywords.map(Self.normalizedSearchText)
@@ -105,10 +109,11 @@ struct ToolRegistry {
         guard !query.isEmpty else {
             return tools
         }
+        let normalizedQuery = Self.normalizedSearchText(query)
 
         return tools.enumerated()
             .compactMap { originalIndex, tool -> (rank: MatchRank, originalIndex: Int, tool: RegisteredTool)? in
-                guard let rank = matchRank(for: tool, query: query) else { return nil }
+                guard let rank = matchRank(for: tool, normalizedQuery: normalizedQuery) else { return nil }
                 return (rank, originalIndex, tool)
             }
             .sorted { left, right in

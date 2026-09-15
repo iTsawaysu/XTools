@@ -1,4 +1,5 @@
 import CoreGraphics
+import Combine
 import Foundation
 @testable import XTools
 import Testing
@@ -59,36 +60,29 @@ struct CommandPaletteSearchTests {
         #expect(viewModel.commandPalettePresentationSession == 1)
         #expect(viewModel.commandPaletteFocusToken == 1)
 
-        viewModel.commandText = "json"
         viewModel.toggleCommandPalette()
         #expect(!viewModel.showsCommandPalette)
-        #expect(viewModel.commandText == "")
         #expect(viewModel.commandPalettePresentationSession == 2)
 
         viewModel.toggleCommandPalette()
         #expect(viewModel.showsCommandPalette)
-        #expect(viewModel.commandText == "")
         #expect(viewModel.commandPalettePresentationSession == 3)
         #expect(viewModel.commandPaletteFocusToken == 2)
     }
 
     @MainActor
-    @Test func commandPaletteOpenRefocusesWithoutResettingExistingQuery() {
+    @Test func commandPaletteOpenRefocusesWithoutStartingAnotherSession() {
         let viewModel = RootViewModel()
 
-        viewModel.commandText = "stale"
         viewModel.openCommandPalette()
 
         #expect(viewModel.showsCommandPalette)
-        #expect(viewModel.commandText == "")
         #expect(viewModel.commandPaletteFocusToken == 1)
         #expect(viewModel.commandPalettePresentationSession == 1)
 
-        viewModel.commandText = "json"
         viewModel.openCommandPalette()
 
         #expect(viewModel.showsCommandPalette)
-        #expect(viewModel.commandText == "json")
         #expect(viewModel.commandPaletteFocusToken == 2)
         #expect(viewModel.commandPalettePresentationSession == 1)
 
@@ -99,6 +93,93 @@ struct CommandPaletteSearchTests {
         viewModel.openCommandPalette()
         #expect(viewModel.showsCommandPalette)
         #expect(viewModel.commandPalettePresentationSession == 3)
+    }
+
+    @MainActor
+    @Test func palettePresentationPublishesAtomicallyWithoutForwardingThroughRoot() {
+        let viewModel = RootViewModel()
+        var rootPublications = 0
+        var presentationPublications = 0
+        let rootCancellable = viewModel.objectWillChange.sink { rootPublications += 1 }
+        let presentationCancellable = viewModel.commandPalettePresentation.objectWillChange.sink {
+            presentationPublications += 1
+        }
+
+        viewModel.openCommandPalette()
+        let preview = viewModel.commandPalettePreviewValue
+        #expect(rootPublications == 0)
+        #expect(presentationPublications == 1)
+
+        viewModel.openCommandPalette()
+        #expect(rootPublications == 0)
+        #expect(presentationPublications == 2)
+        #expect(viewModel.commandPalettePreviewValue == preview)
+
+        viewModel.closeCommandPalette()
+        #expect(rootPublications == 0)
+        #expect(presentationPublications == 3)
+        #expect(viewModel.commandPalettePreviewValue == preview)
+
+        viewModel.closeCommandPalette()
+        #expect(presentationPublications == 3)
+
+        viewModel.consumeCommandPalettePreviewValue()
+        #expect(rootPublications == 0)
+        #expect(presentationPublications == 4)
+        #expect(viewModel.commandPalettePreviewValue == nil)
+
+        withExtendedLifetime((rootCancellable, presentationCancellable)) {}
+    }
+
+    @MainActor
+    @Test func paletteSessionQuerySynchronouslyRebuildsSnapshotAndResetsActiveRow() throws {
+        let registry = ToolRegistry.default
+        let model = CommandPaletteSessionModel(registry: registry, actions: [])
+        model.navigationState.moveActive(by: 8, in: model.snapshot.rows)
+        #expect(model.navigationState.activeSelectableIndex(in: model.snapshot) == 8)
+
+        let changed = model.setQuery("jwt")
+        let expectedToolID = try #require(registry.matchingTools(query: "jwt").first?.id)
+
+        #expect(changed)
+        #expect(model.query == "jwt")
+        #expect(model.navigationState.activeSelectableIndex(in: model.snapshot) == 0)
+        #expect(model.navigationState.activeRow(in: model.snapshot)?.toolID == expectedToolID)
+        #expect(!model.setQuery("jwt"))
+    }
+
+    @MainActor
+    @Test func paletteSessionBeginsWithOneAtomicResetPublication() throws {
+        let model = CommandPaletteSessionModel(registry: .default, actions: [], session: 1)
+        #expect(model.setQuery("jwt"))
+        model.navigationState.moveActive(by: 1, in: model.snapshot.rows)
+        var publications = 0
+        let cancellable = model.objectWillChange.sink { publications += 1 }
+
+        model.beginSession(3, actions: [])
+
+        #expect(publications == 1)
+        #expect(model.session == 3)
+        #expect(model.query.isEmpty)
+        #expect(model.navigationState.activeSelectableIndex(in: model.snapshot) == 0)
+        #expect(model.snapshot.rows.count > 1)
+        withExtendedLifetime(cancellable) {}
+    }
+
+    @MainActor
+    @Test func paletteCloseSynchronouslyNotifiesItsInstalledLifecycle() {
+        let presentation = CommandPalettePresentationModel()
+        let lifecycle = RecordingPalettePresentationLifecycle()
+        presentation.installLifecycle(lifecycle)
+        presentation.open()
+
+        #expect(lifecycle.openedSessions == [1])
+
+        presentation.close()
+
+        #expect(lifecycle.closedSessions == [1])
+        #expect(!presentation.shows)
+        #expect(presentation.session == 2)
     }
 
     // MARK: - clampedHighlight (keyboard navigation)
@@ -587,6 +668,34 @@ struct CommandPaletteSearchTests {
         #expect(!action.matches(query: "jwt"))
     }
 
+    @Test func sessionCommandActionsRecreateConsumedUUIDPreview() throws {
+        let baseAction = CommandActionEntry(
+            id: .openPreferences,
+            title: "打开设置",
+            subtitle: nil,
+            systemImage: "gearshape"
+        )
+        let stalePreview = CommandActionEntry.paletteActions(
+            baseActions: [baseAction],
+            previewValue: "first"
+        )
+        let consumed = CommandActionEntry.paletteActions(
+            baseActions: stalePreview,
+            previewValue: nil
+        )
+        let reopened = CommandActionEntry.paletteActions(
+            baseActions: consumed,
+            previewValue: "second"
+        )
+
+        #expect(consumed == [baseAction])
+        #expect(reopened.filter { $0.id == .copyGeneratedUUID }.count == 1)
+        #expect(
+            try #require(reopened.first { $0.id == .copyGeneratedUUID }).subtitle
+                == "second"
+        )
+    }
+
     @MainActor
     @Test func commandPalettePresentationRefreshesPreviewPayloadOncePerSession() {
         let viewModel = RootViewModel()
@@ -595,7 +704,6 @@ struct CommandPaletteSearchTests {
         let first = viewModel.commandPalettePreviewValue
         #expect(first != nil)
 
-        viewModel.commandText = "筛选"
         viewModel.focusCommandPalette()
         #expect(viewModel.commandPalettePreviewValue == first)
 
@@ -612,6 +720,20 @@ struct CommandPaletteSearchTests {
             categoryTitle: "Development",
             systemImage: "gear"
         )
+    }
+}
+
+@MainActor
+private final class RecordingPalettePresentationLifecycle: CommandPalettePresentationLifecycle {
+    private(set) var openedSessions: [Int] = []
+    private(set) var closedSessions: [Int] = []
+
+    func commandPaletteDidOpen(session: Int, previewValue: String?) {
+        openedSessions.append(session)
+    }
+
+    func commandPaletteDidClose(session: Int) {
+        closedSessions.append(session)
     }
 }
 

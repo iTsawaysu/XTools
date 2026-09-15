@@ -9,8 +9,7 @@ struct ToolNavigationActionsTests {
         let fixture = Self.fixture()
         fixture.favorites.toggle(.jwt)
         fixture.sidebarSections.toggle(ToolNavigationSection.favorites.groupID)
-        fixture.viewModel.commandText = "token"
-        fixture.viewModel.showsCommandPalette = true
+        fixture.viewModel.openCommandPalette()
 
         let didSelect = fixture.actions.selectTool(.jwt, dismissCommandPalette: true)
 
@@ -18,7 +17,6 @@ struct ToolNavigationActionsTests {
         #expect(fixture.viewModel.selectedToolID == .jwt)
         #expect(fixture.sidebarSections.isExpanded(ToolNavigationSection.favorites.groupID))
         #expect(!fixture.viewModel.showsCommandPalette)
-        #expect(fixture.viewModel.commandText == "")
     }
 
     @MainActor
@@ -94,8 +92,7 @@ struct ToolNavigationActionsTests {
     @Test func unknownToolIDDoesNotMutateNavigationState() {
         let fixture = Self.fixture()
         fixture.viewModel.selectedToolID = .json
-        fixture.viewModel.commandText = "json"
-        fixture.viewModel.showsCommandPalette = true
+        fixture.viewModel.openCommandPalette()
         fixture.sidebarSections.toggle(ToolNavigationSection.category(.web).groupID)
 
         let didSelect = fixture.actions.selectTool(.missing, dismissCommandPalette: true)
@@ -105,7 +102,6 @@ struct ToolNavigationActionsTests {
         #expect(favoriteResult == nil)
         #expect(fixture.viewModel.selectedToolID == .json)
         #expect(fixture.viewModel.showsCommandPalette)
-        #expect(fixture.viewModel.commandText == "json")
         #expect(!fixture.sidebarSections.isExpanded(ToolNavigationSection.category(.web).groupID))
     }
 
