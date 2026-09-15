@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Regenerate the README image and every macOS icon size from the vector source.
+# Regenerate the source artwork and every macOS icon size from the vector source.
 # Requires librsvg (brew install librsvg) and macOS iconutil.
+# After packaging, refresh the README's native macOS preview with:
+# swift Assets/AppIcon/render-preview.swift build/XTools.app Assets/AppIcon/XToolsIconPreview.png
 set -euo pipefail
 
 ICON_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="Assets/AppIcon/XToolsIcon.png" width="128" height="128" alt="XTools 应用图标"/>
+<img src="Assets/AppIcon/XToolsIconPreview.png" width="128" height="128" alt="XTools 应用图标"/>
 
 # XTools
 
