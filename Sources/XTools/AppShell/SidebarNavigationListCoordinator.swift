@@ -71,17 +71,23 @@ final class SidebarNavigationListCoordinator {
         let scrollView = SidebarNavigationScrollView(
             frame: CGRect(x: 0, y: 0, width: SidebarView.idealWidth, height: 600)
         )
+        scrollView.wantsLayer = true
         scrollView.drawsBackground = false
+        scrollView.contentView.wantsLayer = true
         scrollView.contentView.drawsBackground = false
         scrollView.hasHorizontalScroller = false
         // Overlay scroller that fades in while scrolling (autohides) so long
         // tool lists read as scrollable without a permanent scroller lane.
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
+        scrollView.scrollerStyle = .overlay
         scrollView.horizontalScrollElasticity = .none
         scrollView.verticalScrollElasticity = .automatic
+        scrollView.usesPredominantAxisScrolling = true
         scrollView.setAccessibilityIdentifier("sidebar.navigation")
         scrollView.documentView = documentView
+        documentView.wantsLayer = true
+        documentView.layerContentsRedrawPolicy = .onSetNeedsDisplay
         documentView.frame = CGRect(x: 0, y: 0, width: SidebarView.idealWidth, height: 0)
         scrollView.onViewportSizeChange = { [weak self] size in
             self?.resizeViewport(to: size)

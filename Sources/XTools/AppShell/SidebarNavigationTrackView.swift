@@ -180,9 +180,22 @@ final class SidebarNavigationDocumentView: NSView {
     var onPointerLocationChange: ((CGPoint?) -> Void)?
 
     private var pointerTrackingArea: NSTrackingArea?
+    private var lastKnownPointerLocationInWindow: CGPoint?
 
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layerContentsRedrawPolicy = .onSetNeedsDisplay
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        wantsLayer = true
+        layerContentsRedrawPolicy = .onSetNeedsDisplay
+    }
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
@@ -212,22 +225,26 @@ final class SidebarNavigationDocumentView: NSView {
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
+        lastKnownPointerLocationInWindow = event.locationInWindow
         publishPointerLocation(from: event)
     }
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
+        lastKnownPointerLocationInWindow = event.locationInWindow
         publishPointerLocation(from: event)
     }
 
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
+        lastKnownPointerLocationInWindow = nil
         onPointerLocationChange?(nil)
     }
 
     var currentPointerLocation: CGPoint? {
         guard let window, window.isKeyWindow else { return nil }
-        let point = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        let rawPoint = lastKnownPointerLocationInWindow ?? window.mouseLocationOutsideOfEventStream
+        let point = convert(rawPoint, from: nil)
         return visibleRect.contains(point) ? point : nil
     }
 
@@ -278,6 +295,45 @@ final class SidebarNavigationScrollView: NSScrollView {
     var onViewportSizeChange: ((CGSize) -> Void)?
     var onViewportBoundsChange: (() -> Void)?
     private var lastViewportSize = CGSize.zero
+    private(set) var isLiveScrolling = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        installLiveScrollObservers()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        installLiveScrollObservers()
+    }
+
+    private func installLiveScrollObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleWillStartLiveScroll),
+            name: NSScrollView.willStartLiveScrollNotification,
+            object: self
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleDidEndLiveScroll),
+            name: NSScrollView.didEndLiveScrollNotification,
+            object: self
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func handleWillStartLiveScroll() {
+        isLiveScrolling = true
+    }
+
+    @objc private func handleDidEndLiveScroll() {
+        isLiveScrolling = false
+        onViewportBoundsChange?()
+    }
 
     override func layout() {
         super.layout()
@@ -289,6 +345,7 @@ final class SidebarNavigationScrollView: NSScrollView {
 
     override func reflectScrolledClipView(_ cView: NSClipView) {
         super.reflectScrolledClipView(cView)
+        guard !isLiveScrolling else { return }
         onViewportBoundsChange?()
     }
 }

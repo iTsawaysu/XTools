@@ -120,7 +120,7 @@ enum ToolMotion {
         /// presentation; do not bind this preset to SwiftUI `searchText` or Root.
         static let navigationReorder = accordion
         static let shellResize = Curve.smoothOut(duration: Duration.fast)
-        static let modal = Curve.smoothOut(duration: Duration.fast)
+        static let modal = Animation.spring(response: 0.25, dampingFraction: 0.86, blendDuration: 0)
         static let panelReveal = Curve.smoothOut(duration: Duration.medium)
         /// v3: tool-switch page arrival (host-owned whitelist; see
         /// `MotionSourceContractTests`). Light crossfade that keeps the entry

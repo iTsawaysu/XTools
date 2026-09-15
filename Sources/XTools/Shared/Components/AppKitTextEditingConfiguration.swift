@@ -13,6 +13,10 @@ enum AppKitTextEditingConfiguration {
 
     static func configureCurrentFieldEditor(for textField: NSTextField, allowsUndo: Bool = true) {
         guard let fieldEditor = textField.currentEditor() as? NSTextView else { return }
+        if !textField.drawsBackground {
+            fieldEditor.drawsBackground = false
+            fieldEditor.backgroundColor = NSColor.clear
+        }
         configurePlainTextEditor(fieldEditor, allowsUndo: allowsUndo)
     }
 }
