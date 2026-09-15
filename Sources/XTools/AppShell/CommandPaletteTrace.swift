@@ -12,7 +12,8 @@ enum CommandPaletteTrace {
         case hoverMake, hoverUpdate, hoverDismantle
         case iconAnchorResolution
         case visibleAnimatedTransaction, visibleDisabledTransaction, hiddenTransaction
-        case visibilityIntermediateFrame, visibilityTerminalFrame
+        case visibilityIntermediateSample, visibilityTerminalSample
+        case visibilityClosingIntermediateSample, visibilityClosingTerminalSample
     }
 
     struct Snapshot {
@@ -20,6 +21,16 @@ enum CommandPaletteTrace {
         let openedMilliseconds: [String: Double]
         let counters: [Counter: Int]
     }
+
+#if DEBUG
+    struct PresentationProgressSample {
+        let session: Int
+        let isPresented: Bool
+        let progress: CGFloat
+        let reduceMotion: Bool
+        let geometry: CommandPaletteVisibilityGeometry
+    }
+#endif
 
 #if DEBUG
     private final class SessionState {
@@ -45,6 +56,8 @@ enum CommandPaletteTrace {
         || isNativeReadyTraceEnabled
     private static var sessions: [Int: SessionState] = [:]
     private static var nativeReadyProbeSessions: Set<Int> = []
+    private static var presentationProgressObserver: ((PresentationProgressSample) -> Void)?
+    private static var presentationShellObserver: (() -> Void)?
     private(set) static var currentSession: Int?
 #else
     static let currentSession: Int? = nil
@@ -117,14 +130,52 @@ enum CommandPaletteTrace {
 #endif
     }
 
-    static func presentationProgress(session: Int, isPresented: Bool, progress: CGFloat) {
+    static func presentationProgress(
+        session: Int,
+        isPresented: Bool,
+        progress: CGFloat,
+        reduceMotion: Bool,
+        geometry: CommandPaletteVisibilityGeometry
+    ) {
 #if DEBUG
-        guard isPresentationTraceEnabled, currentSession == session, isPresented else { return }
+        presentationProgressObserver?(PresentationProgressSample(
+            session: session,
+            isPresented: isPresented,
+            progress: progress,
+            reduceMotion: reduceMotion,
+            geometry: geometry
+        ))
+        guard isPresentationTraceEnabled, currentSession == session else { return }
         if progress > 0.001, progress < 0.999 {
-            count(.visibilityIntermediateFrame, session: session)
-        } else if progress >= 0.999 {
-            count(.visibilityTerminalFrame, session: session)
+            count(
+                isPresented
+                    ? .visibilityIntermediateSample
+                    : .visibilityClosingIntermediateSample,
+                session: session
+            )
+        } else if isPresented, progress >= 0.999 {
+            count(.visibilityTerminalSample, session: session)
+        } else if !isPresented, progress <= 0.001 {
+            count(.visibilityClosingTerminalSample, session: session)
         }
+#endif
+    }
+
+#if DEBUG
+    static func observePresentationProgress(
+        _ observer: ((PresentationProgressSample) -> Void)?
+    ) {
+        presentationProgressObserver = observer
+    }
+
+    static func observePresentationShell(_ observer: (() -> Void)?) {
+        presentationShellObserver = observer
+    }
+#endif
+
+    static func presentationShellMounted() {
+#if DEBUG
+        presentationShellObserver?()
 #endif
     }
 

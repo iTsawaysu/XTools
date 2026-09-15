@@ -438,14 +438,14 @@ struct CommandPalettePresentationTests {
             return layoutMilliseconds != nil && focusMilliseconds != nil
         }
 
-        // Field readiness may precede the end of the modal animation. Observe
-        // its real terminal frame separately without adding that duration to
-        // the layout/focus latency sample.
-        try await waitForCondition(label: "palette session \(session) animation terminal") {
+        // Field readiness may precede the end of the modal interpolation.
+        // Observe its terminal modifier sample separately without treating it
+        // as a displayed frame or adding it to layout/focus latency.
+        try await waitForCondition(label: "palette session \(session) interpolation terminal") {
             fixture.flush()
-            let terminalFrameCount = CommandPaletteTrace.snapshot(session: session)?
-                .counters[.visibilityTerminalFrame, default: 0] ?? 0
-            return terminalFrameCount > 0
+            let terminalSampleCount = CommandPaletteTrace.snapshot(session: session)?
+                .counters[.visibilityTerminalSample, default: 0] ?? 0
+            return terminalSampleCount > 0
         }
         let snapshot = try #require(CommandPaletteTrace.snapshot(session: session))
         #expect(snapshot.counters[.rootBody, default: 0] == 0)
@@ -454,7 +454,7 @@ struct CommandPalettePresentationTests {
         #expect(snapshot.counters[.rowSnapshot, default: 0] == 1)
         #expect(snapshot.counters[.visibleAnimatedTransaction, default: 0] > 0)
         #expect(snapshot.counters[.visibleDisabledTransaction, default: 0] == 0)
-        #expect(snapshot.counters[.visibilityTerminalFrame, default: 0] > 0)
+        #expect(snapshot.counters[.visibilityTerminalSample, default: 0] > 0)
         if ordinal == 0 {
             #expect(snapshot.counters[.revealMake, default: 0] == 50)
         } else {
@@ -635,19 +635,22 @@ struct CommandPalettePresentationTests {
 }
 
 @MainActor
-private final class Fixture {
+final class CommandPaletteWindowFixture {
     let suiteName: String
     let defaults: UserDefaults
     let viewModel: RootViewModel
-    let hostingView: NSHostingView<RootView>
+    let hostingView: NSHostingView<AnyView>
     let window: NSWindow
 
-    init() throws {
+    init(reduceMotion: Bool = false) throws {
         suiteName = "CommandPalettePresentationTests.\(UUID().uuidString)"
         defaults = try #require(UserDefaults(suiteName: suiteName))
         viewModel = RootViewModel()
         viewModel.selectedToolID = ToolID(rawValue: "base64-file-converter")
-        hostingView = NSHostingView(rootView: RootView(viewModel: viewModel, defaults: defaults))
+        hostingView = NSHostingView(rootView: AnyView(
+            RootView(viewModel: viewModel, defaults: defaults)
+                .environment(\._accessibilityReduceMotion, reduceMotion)
+        ))
         hostingView.frame = NSRect(x: 0, y: 0, width: 1_200, height: 800)
         window = NSWindow(
             contentRect: hostingView.frame,
@@ -681,6 +684,8 @@ private final class Fixture {
         defaults.removePersistentDomain(forName: suiteName)
     }
 }
+
+private typealias Fixture = CommandPaletteWindowFixture
 
 private struct PresentationSample {
     let layoutMilliseconds: Double

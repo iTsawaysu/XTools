@@ -529,18 +529,6 @@ struct CommandPaletteView: View {
             )
             transaction.animation = nil
         }
-        .modifier(
-            CommandPaletteVisibilityModifier(
-                progress: isPresentationReady ? 1 : 0,
-                isPresented: isPresented,
-                reduceMotion: reduceMotion,
-                traceSession: isPresented ? presentationSession : sessionModel.session
-            )
-        )
-        .animation(
-            ToolMotion.animation(ToolMotion.Preset.modal, reduceMotion: reduceMotion),
-            value: isPresentationReady
-        )
         .allowsHitTesting(isPresentationReady)
         .accessibilityHidden(!isPresentationReady)
         .onAppear {
@@ -567,35 +555,25 @@ struct CommandPaletteView: View {
 
 }
 
-/// Retained content cannot use an insertion transition after its first mount.
-/// Drive the same modal geometry from one presentation-owned progress value:
-/// opening settles upward by six points, while closing keeps the original
-/// opacity-and-scale-only removal.
-private struct CommandPaletteVisibilityModifier: @MainActor AnimatableModifier {
-    var progress: CGFloat
-    let isPresented: Bool
-    let reduceMotion: Bool
-    let traceSession: Int
+struct CommandPaletteVisibilityGeometry: Equatable {
+    let opacity: Double
+    let scale: CGFloat
+    let offsetY: CGFloat
 
-    var animatableData: CGFloat {
-        get { progress }
-        set { progress = newValue }
-    }
-
-    func body(content: Content) -> some View {
-        let _ = CommandPaletteTrace.presentationProgress(
-            session: traceSession,
-            isPresented: isPresented,
-            progress: progress
+    static func resolve(
+        progress: CGFloat,
+        reduceMotion: Bool
+    ) -> Self {
+        let progress = min(max(progress, 0), 1)
+        return Self(
+            opacity: Double(progress),
+            scale: reduceMotion
+                ? 1
+                : ToolMotion.Scale.modal + (1 - ToolMotion.Scale.modal) * progress,
+            offsetY: reduceMotion
+                ? 0
+                : -ToolMotion.Distance.small * (1 - progress)
         )
-        content
-            .opacity(progress)
-            .scaleEffect(reduceMotion ? 1 : ToolMotion.Scale.modal + (1 - ToolMotion.Scale.modal) * progress)
-            .offset(
-                y: reduceMotion || !isPresented
-                    ? 0
-                    : -ToolMotion.Distance.small * (1 - progress)
-            )
     }
 }
 

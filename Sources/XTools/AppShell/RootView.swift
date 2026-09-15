@@ -498,9 +498,8 @@ struct RootView: View {
 
     // MARK: - Animated palette presentation (v3)
 
-    /// Palette open/close must run inside one explicit animation transaction:
-    /// an `.animation(value:)` wrapper alone is unreliable across the if-branch
-    /// plus AppKit search field insertion, which read as a hard pop.
+    /// Palette open/close uses one explicit transaction shared by the stable
+    /// presentation shell; AppKit field/session replacement stays inside it.
     private func toggleCommandPaletteAnimated() {
         withToolAnimation(ToolMotion.Preset.modal) {
             navigationActions.toggleCommandPalette()
@@ -747,42 +746,103 @@ private struct CommandPaletteOverlayHost: View {
     }
 
     var body: some View {
-        ZStack {
-            if presentation.hasPresented {
-                CommandPaletteScrim(onDismiss: onDismiss)
-                    .opacity(presentation.shows ? 1 : 0)
-                    .allowsHitTesting(presentation.shows)
-                    .accessibilityHidden(!presentation.shows)
-                    .animation(
-                        ToolMotion.animation(ToolMotion.Preset.modal, reduceMotion: reduceMotion),
-                        value: presentation.shows
-                    )
-                    .toolTransition(ToolMotion.Transition.scrim, reduceMotion: reduceMotion)
-                    .zIndex(1)
+        Color.clear
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .modifier(CommandPalettePresentationMotionModifier(
+                progress: presentation.shows ? 1 : 0,
+                isPresented: presentation.shows,
+                reduceMotion: reduceMotion,
+                traceSession: presentation.shows
+                    ? presentation.session
+                    : max(0, presentation.session - 1),
+                scrim: CommandPaletteScrim(onDismiss: onDismiss),
+                palette: Group {
+                    if presentation.hasPresented {
+                        let presentationSession = presentation.session
+                        CommandPaletteView(
+                            presentation: presentation,
+                            registry: registry,
+                            actions: actions,
+                            isPresented: presentation.shows,
+                            reduceMotion: reduceMotion,
+                            focusToken: presentation.focusToken,
+                            presentationSession: presentationSession,
+                            canRequestSearchFocus: {
+                                presentation.shows
+                                    && presentation.session == presentationSession
+                            },
+                            onSelectTool: onSelectTool,
+                            onRunCommand: onRunCommand,
+                            onRequestFocus: onRequestFocus,
+                            onDismiss: onDismiss
+                        )
+                        .transition(.identity)
+                    }
+                }
+            ))
+        .onAppear {
+            CommandPaletteTrace.presentationShellMounted()
+        }
+        .animation(
+            ToolMotion.animation(ToolMotion.Preset.modal, reduceMotion: reduceMotion),
+            value: presentation.shows
+        )
+    }
+}
 
-                let presentationSession = presentation.session
-                CommandPaletteView(
-                    presentation: presentation,
-                    registry: registry,
-                    actions: actions,
-                    isPresented: presentation.shows,
-                    reduceMotion: reduceMotion,
-                    focusToken: presentation.focusToken,
-                    presentationSession: presentationSession,
-                    canRequestSearchFocus: {
-                        presentation.shows && presentation.session == presentationSession
-                    },
-                    onSelectTool: onSelectTool,
-                    onRunCommand: onRunCommand,
-                    onRequestFocus: onRequestFocus,
-                    onDismiss: onDismiss
-                )
-                .toolTransition(
-                    ToolMotion.Transition.commandPalette,
-                    reduceMotion: reduceMotion
-                )
+/// This lightweight shell exists before the first command-palette session.
+/// Only its `progress` animates, so the first mount and every warm reopen share
+/// the same interpolation path without mirroring presentation state locally.
+private struct CommandPalettePresentationMotionModifier<
+    Scrim: View,
+    Palette: View
+>: @MainActor AnimatableModifier {
+    var progress: CGFloat
+    let isPresented: Bool
+    let reduceMotion: Bool
+    let traceSession: Int
+    let scrim: Scrim
+    let palette: Palette
+
+    var animatableData: CGFloat {
+        get { progress }
+        set {
+            progress = newValue
+            let geometry = CommandPaletteVisibilityGeometry.resolve(
+                progress: newValue,
+                reduceMotion: reduceMotion
+            )
+            CommandPaletteTrace.presentationProgress(
+                session: traceSession,
+                isPresented: isPresented,
+                progress: newValue,
+                reduceMotion: reduceMotion,
+                geometry: geometry
+            )
+        }
+    }
+
+    func body(content: Content) -> some View {
+        let geometry = CommandPaletteVisibilityGeometry.resolve(
+            progress: progress,
+            reduceMotion: reduceMotion
+        )
+        ZStack {
+            content
+                .zIndex(0)
+
+            scrim
+                .opacity(geometry.opacity)
+                .allowsHitTesting(isPresented)
+                .accessibilityHidden(!isPresented)
+                .zIndex(1)
+
+            palette
+                .opacity(geometry.opacity)
+                .scaleEffect(geometry.scale)
+                .offset(y: geometry.offsetY)
                 .zIndex(2)
-            }
         }
     }
 }
