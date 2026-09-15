@@ -282,6 +282,59 @@ struct SidebarNavigationListTests {
         #expect(pointerAreas.first?.owner === documentView)
     }
 
+    @Test @MainActor func scrollViewAndDocumentViewConfigureFullLayerBackingAndPredominantScrolling() {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = coordinator.makeScrollView()
+
+        #expect(scrollView.wantsLayer)
+        #expect(scrollView.contentView.wantsLayer)
+        #expect(coordinator.documentView.wantsLayer)
+        #expect(coordinator.documentView.layerContentsRedrawPolicy == .onSetNeedsDisplay)
+        #expect(scrollView.usesPredominantAxisScrolling)
+        #expect(scrollView.scrollerStyle == .overlay)
+    }
+
+    @Test @MainActor func liveScrollingSuspendsHoverReconciliationUntilScrollEnds() throws {
+        let pointer = SidebarPointerLocationBox()
+        let coordinator = SidebarNavigationListCoordinator(
+            pointerLocationProvider: { _ in pointer.point }
+        )
+        let scrollView = coordinator.makeScrollView()
+        let entries = Self.entries(
+            groups: [Self.group(section: .category(.development), items: [Self.alpha, Self.beta])]
+        )
+        pointer.point = Self.center(of: "tool.list-alpha", in: entries)
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(entries: entries, favoriteOrder: [])
+        )
+        #expect(coordinator.debugTrackState(for: "tool.list-alpha")?.isHovered == true)
+        #expect(coordinator.debugTrackState(for: "tool.list-beta")?.isHovered == false)
+
+        NotificationCenter.default.post(
+            name: NSScrollView.willStartLiveScrollNotification,
+            object: scrollView
+        )
+        guard let customScrollView = scrollView as? SidebarNavigationScrollView else {
+            Issue.record("scrollView must be SidebarNavigationScrollView")
+            return
+        }
+        #expect(customScrollView.isLiveScrolling)
+
+        pointer.point = Self.center(of: "tool.list-beta", in: entries)
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        #expect(coordinator.debugTrackState(for: "tool.list-alpha")?.isHovered == true)
+        #expect(coordinator.debugTrackState(for: "tool.list-beta")?.isHovered == false)
+
+        NotificationCenter.default.post(
+            name: NSScrollView.didEndLiveScrollNotification,
+            object: scrollView
+        )
+        #expect(!customScrollView.isLiveScrolling)
+        #expect(coordinator.debugTrackState(for: "tool.list-alpha")?.isHovered == false)
+        #expect(coordinator.debugTrackState(for: "tool.list-beta")?.isHovered == true)
+    }
+
     @Test @MainActor func unchangedPresentationShortCircuitsWhileSelectionStillRewrites() throws {
         let coordinator = SidebarNavigationListCoordinator()
         let scrollView = coordinator.makeScrollView()

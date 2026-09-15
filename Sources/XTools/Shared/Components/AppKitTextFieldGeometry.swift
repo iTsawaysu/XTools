@@ -55,6 +55,24 @@ protocol IndexTextFieldContentInsetConfiguring: AnyObject {
 final class IndexUndoIsolatedFieldEditor: NSTextView {
     private let boundedUndoManager = UndoManager()
     override var undoManager: UndoManager? { boundedUndoManager }
+
+    override init(frame frameRect: NSRect, textContainer: NSTextContainer?) {
+        super.init(frame: frameRect, textContainer: textContainer)
+        drawsBackground = false
+        backgroundColor = NSColor.clear
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        drawsBackground = false
+        backgroundColor = NSColor.clear
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        drawsBackground = false
+        backgroundColor = NSColor.clear
+    }
 }
 
 class IndexPaddedTextFieldCell: NSTextFieldCell, IndexTextFieldContentInsetConfiguring {
@@ -75,6 +93,8 @@ class IndexPaddedTextFieldCell: NSTextFieldCell, IndexTextFieldContentInsetConfi
         // through the responder chain to the shared window manager (the crash
         // path). Enabling it keeps undo working and scoped to the private stack.
         editor.allowsUndo = true
+        editor.drawsBackground = false
+        editor.backgroundColor = NSColor.clear
         isolatedFieldEditor = editor
         return editor
     }

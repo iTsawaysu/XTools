@@ -585,9 +585,6 @@ struct RootView: View {
             Button("Focus Search", action: focusSidebarSearch)
                 .keyboardShortcut("f", modifiers: .command)
 
-            Button("Command Palette", action: { toggleCommandPaletteAnimated() })
-                .keyboardShortcut("k", modifiers: .command)
-
             Button("Workbench", action: { navigationActions.openDashboard() })
                 .keyboardShortcut("0", modifiers: .command)
 

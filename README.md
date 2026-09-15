@@ -1,66 +1,85 @@
 <div align="center">
+  <a href="https://github.com/iTsawaysu/XTools">
+    <img src="Assets/AppIcon/XToolsIconPreview.png" width="128" height="128" alt="XTools Icon" />
+  </a>
+  <h1>XTools</h1>
+  <p><em>A quiet, native macOS developer toolbox. Fast, local-first, and keyboard-driven.</em></p>
 
-<img src="Assets/AppIcon/XToolsIconPreview.png" width="128" height="128" alt="XTools 应用图标"/>
-
-# XTools
-
-**原生 macOS 工具箱，收录日常开发与文本处理常用工具**
-
-_An open-source, native macOS toolbox for everyday development and text processing._
-
-[![macOS](https://img.shields.io/badge/macOS-13.0%2B-black?logo=apple&logoColor=white)](https://www.apple.com/macos/)
-[![Swift](https://img.shields.io/badge/Swift-6.0-F05138?logo=swift&logoColor=white)](https://www.swift.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-3DA639)](LICENSE)
-
-[下载](https://github.com/iTsawaysu/XTools/releases) · [工具列表](#工具列表) · [参与贡献](#参与贡献)
-
+  <p>
+    <a href="https://github.com/iTsawaysu/XTools/releases"><img src="https://img.shields.io/github/v/release/iTsawaysu/XTools?style=flat-square&color=black" alt="Release"></a>
+    <a href="https://github.com/iTsawaysu/XTools/stargazers"><img src="https://img.shields.io/github/stars/iTsawaysu/XTools?style=flat-square&color=orange" alt="Stars"></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
+    <img src="https://img.shields.io/badge/macOS-13.0%2B-orange?style=flat-square" alt="macOS 13+">
+    <img src="https://img.shields.io/badge/Swift-6.0-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift 6">
+  </p>
 </div>
 
-## 为什么做 XTools
+## Why
 
-写代码、处理文本时，总会遇到一些顺手就要用一下的小事：转个 Base64、格式化一段 JSON、看一眼时间戳、生成一个强密码……为了这些事反复开网页、装一堆零散软件，太重了。
+Developers constantly run into small, recurring tasks: formatting JSON, converting timestamps, decoding Base64, testing regexes, generating UUIDs, or inspecting HTTP status codes.
 
-XTools 把这些工具放进一个原生 macOS 应用，通过侧边栏分类浏览，也可以按 `⌘K` 搜索直达。常用转换在本地完成，读取网页等功能按需联网。
+Opening browser tabs is tedious and leaks sensitive data (tokens, configs, keys) to third-party servers. Cross-platform Electron utilities eat gigabytes of RAM and take seconds to boot.
 
-## 工具列表
+XTools packs 46 essential developer utilities into a single native macOS application. It runs completely offline, opens in milliseconds, and stays out of your way until you summon it via `Cmd + K`.
 
-共 46 个工具，分为 7 类。
+## Quick Start
 
-| 分类 | 工具 |
-|---|---|
-| 编码与转换 | Base64 文件 · Base64 字符串 · URL 编解码 · ASCII / 二进制 · Unicode 转换 · 进制转换 · 罗马数字 · 大小写转换 |
-| 加密与生成 | Hash 文本 · 文本加密 · 字符串遮蔽 · Token 生成器 · UUID 生成器 · 密码生成器 |
-| 开发 | JSON 格式化 · SQL 格式化 · XML 格式化 · YAML 格式化 · JSON 对比 · 文本对比 · 正则测试 · Docker Run → Compose · HTML → Markdown · Crontab 生成 · 随机端口 · Chmod 计算器 |
-| Web | JWT · Basic Auth · HTTP 状态码 · User-Agent 解析 · 键盘事件 |
-| 图像与颜色 | 图片格式转换 · 智能压缩图片 · 图片水印 · 图片灰阶生成器 · Favicon 生成器 · 颜色转换 |
-| 时间与日期 | 时间戳转换 · 时区查看器 · 日期计算 · 计时器 |
-| 辅助工具 | 设备信息 · 文件类型探测 · 数学计算 · 文本统计 · Emoji 与符号 |
+### 1. Download DMG (Recommended)
 
-## 特性
+Download the latest DMG from [GitHub Releases](https://github.com/iTsawaysu/XTools/releases/latest), open it, and drag XTools into `Applications`. Supports macOS 13.0+ on Apple Silicon and Intel.
 
-- 使用 SwiftUI 构建，采用原生单窗口界面。
-- 解析、转换和加解密在本地完成，无需上传待处理内容。
-- 支持 `⌘K` 命令面板、工具收藏和最近使用记录。
-- 核心逻辑独立在 `XToolsCore`，配套单元测试。
-
-## 安装
-
-**下载 App**：前往 [Releases](https://github.com/iTsawaysu/XTools/releases) 获取最新版本。
-
-**从源码构建**（需要 macOS 13+ 和 Xcode 16+）：
+### 2. Build from Source
 
 ```bash
 git clone https://github.com/iTsawaysu/XTools.git
 cd XTools
-./build.sh           # 增量构建 + 打包 + 打开 App
-./build.sh release   # Release 构建
-swift test           # 运行完整测试
+./build.sh           # Incremental debug build & open app
+./build.sh release   # Production release build
+swift test           # Run automated test suite
 ```
 
-## 参与贡献
+## Features
 
-欢迎通过 Issue 反馈问题，或提交 PR 改进工具。提交前请运行 `swift test`，并遵循仓库内 `.trellis/` 的开发约定。
+- **Swift 6 Native**: Built purely with SwiftUI and AppKit. Uses tens of megabytes of memory with near-instant cold launch and smooth animations.
+- **100% Local-First**: Cryptography, hashing, regex evaluation, and image processing execute entirely on-device. Zero telemetry, zero cloud tracking.
+- **Keyboard-First**: Press `Cmd + K` anywhere for fuzzy search across all tools. Use `Cmd + 1` through `Cmd + 7` to switch categories, and `Cmd + Return` to run actions.
+- **Linear Design System**: Disciplined dark surface ladder anchored on warm Clay, subtle hairlines instead of heavy shadows, and monospaced typography reserved for data.
+- **46 Built-in Utilities**: Curated essentials across conversions, cryptography, developer tools, Web debugging, image handling, time math, and system inspectors.
+- **Decoupled Engine**: Core algorithmic logic lives in `XToolsCore`, backed by over 1,700 unit tests.
+
+## Tool Catalog
+
+| Category | Tools |
+| :--- | :--- |
+| **Converters (8)** | Base64 File, Base64 String, URL Encoder/Decoder, ASCII & Binary, Unicode Converter, Base Converter, Roman Numerals, Case Converter |
+| **Crypto & Generators (6)** | Hash Text (MD5, SHA-1/256/512), AES Text Encryption, String Obfuscator, Token Generator, UUID Generator, Password Generator |
+| **Development (12)** | JSON Formatter, SQL Prettifier, XML Formatter, YAML Formatter, JSON Diff, Text Diff, Regex Tester, Docker Run → Compose, HTML → Markdown, Crontab Generator, Random Port, Chmod Calculator |
+| **Web (5)** | JWT Parser & Signer, Basic Auth Generator, HTTP Status Codes, User-Agent Parser, Keycode Inspector |
+| **Image & Color (6)** | Image Format Converter (PNG, JPEG, WebP), Smart Compressor, Watermark, Grayscale Generator, Favicon Suite Generator, Color Converter (HEX, RGB, HSL) |
+| **Time & Date (4)** | Unix Timestamp Converter (s/ms), Timezone Viewer, Date Calculator, Chronometer & Stopwatch |
+| **Utilities (5)** | Device & Hardware Info, MIME File Type Detector, Math Evaluator, Text Statistics, Emoji & Symbol Catalog |
+
+## Shortcuts
+
+| Shortcut | Action | Description |
+| :--- | :--- | :--- |
+| `Cmd + K` | **Command Palette** | Global search across all 46 tools and commands |
+| `Cmd + 0` | **Workbench** | Return to dashboard with recent and favorite tools |
+| `Cmd + 1` – `Cmd + 7` | **Switch Category** | Jump directly to any tool category |
+| `Cmd + F` | **Filter Sidebar** | Focus the sidebar search filter |
+| `Cmd + B` | **Toggle Sidebar** | Expand to full-width distraction-free workspace |
+| `Cmd + Return` | **Primary Action** | Run format, generate, encrypt, or convert |
+| `Cmd + ,` | **Preferences** | Toggle appearance, workbench cards, and settings |
+| `Esc` | **Dismiss** | Close command palette or reset current focus |
+
+## Contributing
+
+Contributions, bug reports, and tool suggestions are welcome!
+
+1. Fork the repository and create your feature branch.
+2. Follow the established code style and keep core algorithms inside `XToolsCore`.
+3. Run `swift test` before submitting to ensure all tests pass.
 
 ## License
 
-[XTools](https://github.com/iTsawaysu/XTools) 基于 [MIT License](LICENSE) 开源发布。
+[XTools](https://github.com/iTsawaysu/XTools) is released under the [MIT License](LICENSE).
