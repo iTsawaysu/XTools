@@ -9,6 +9,12 @@ final class DiffToolWorkspaceModel: ObservableObject {
     @Published var right = "" {
         didSet { draftDidChange() }
     }
+    @Published var ignoreWhitespace: Bool = false {
+        didSet { optionDidChange() }
+    }
+    @Published var ignoreCase: Bool = false {
+        didSet { optionDidChange() }
+    }
 
     let execution: DiffExecutionSession
     let kind: DiffExecutionKind
@@ -53,6 +59,11 @@ final class DiffToolWorkspaceModel: ObservableObject {
         scheduleCurrent()
     }
 
+    private func optionDidChange() {
+        guard !isMutatingDrafts else { return }
+        scheduleCurrent()
+    }
+
     private func mutateDrafts(_ mutation: () -> Void) {
         isMutatingDrafts = true
         mutation()
@@ -60,7 +71,17 @@ final class DiffToolWorkspaceModel: ObservableObject {
     }
 
     private func scheduleCurrent() {
-        let request = DiffExecutionRequest(kind: kind, left: left, right: right)
+        let effectiveKind: DiffExecutionKind
+        switch kind {
+        case .text:
+            effectiveKind = .text(options: TextDiffOptions(
+                ignoreWhitespace: ignoreWhitespace,
+                ignoreCase: ignoreCase
+            ))
+        case .json:
+            effectiveKind = kind
+        }
+        let request = DiffExecutionRequest(kind: effectiveKind, left: left, right: right)
         execution.schedule(
             request: request,
             delay: debounce,
@@ -72,7 +93,7 @@ final class DiffToolWorkspaceModel: ObservableObject {
 struct IndexJSONDiffPage: View {
     private static let key = ToolWorkspaceKey<DiffToolWorkspaceModel>(toolID: "json-diff") { _ in
         DiffToolWorkspaceModel(
-            kind: .json(labels: .init(left: "Original JSON", right: "Compared JSON"))
+            kind: .json(labels: .init(left: "原始 JSON", right: "对比 JSON"))
         )
     }
 

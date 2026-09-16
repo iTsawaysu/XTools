@@ -463,14 +463,33 @@ struct JSONFormattingTests {
         )
     }
 
-    // MARK: - Round-trip: format then minify
-
     @Test func minifyReversesFormatWithoutDataLoss() throws {
         let original = #"{"b":2,"a":[1,{"nested":true}],"s":"x/y"}"#
         let formatted = try JSONFormatting.format(original, sortKeys: false, indentWidth: 4)
         let reminified = try JSONFormatting.minify(formatted)
 
         #expect(reminified == original)
+    }
+
+    // MARK: - Depth, container tracing & minify sort keys
+
+    @Test func maxNestingDepthSafelyRejectsDeepNesting() throws {
+        let deepJSON = String(repeating: "[", count: 40) + String(repeating: "]", count: 40)
+        let diagnostic = try invalidJSONDiagnostic(for: deepJSON)
+        #expect(diagnostic.message.contains("超过最大安全深度"))
+    }
+
+    @Test func unclosedNestedObjectReportsContainerKey() throws {
+        let sample = #"{"matrix": {"level_1": {"target": 1"#
+        let diagnostic = try invalidJSONDiagnostic(for: sample)
+        #expect(diagnostic.message.contains("对象没有完整闭合"))
+        #expect(diagnostic.message.contains("level_1") || diagnostic.message.contains("matrix"))
+    }
+
+    @Test func minifySupportsKeySorting() throws {
+        let input = #"{"z":1,"a":2,"m":3}"#
+        let result = try JSONFormatting.minifyResult(input, sortKeys: true)
+        #expect(result.text == #"{"a":2,"m":3,"z":1}"#)
     }
 
     private func invalidJSONDiagnostic(for input: String) throws -> FormatDiagnostic {

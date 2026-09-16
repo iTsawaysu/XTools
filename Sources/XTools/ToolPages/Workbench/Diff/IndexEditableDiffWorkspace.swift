@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import XToolsCore
 
-struct IndexEditableDiffWorkspace: View {
+struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     var inputTitle: String = "原始文本"
     var outputTitle: String = "对比文本"
     let leftPlaceholder: String
@@ -17,6 +17,59 @@ struct IndexEditableDiffWorkspace: View {
     var warning: String?
     var onClear: (() -> Void)? = nil
     var clearDisabled = false
+    var leadingControl: () -> LeadingControl
+
+    init(
+        inputTitle: String = "原始文本",
+        outputTitle: String = "对比文本",
+        leftPlaceholder: String,
+        rightPlaceholder: String,
+        leftDisplayText: String? = nil,
+        rightDisplayText: String? = nil,
+        left: Binding<String>,
+        right: Binding<String>,
+        rows: [DiffAlignedRow],
+        syntax: IndexDiffSyntax = .plain,
+        error: String? = nil,
+        warning: String? = nil,
+        onClear: (() -> Void)? = nil,
+        clearDisabled: Bool = false,
+        @ViewBuilder leadingControl: @escaping () -> LeadingControl
+    ) {
+        self.inputTitle = inputTitle
+        self.outputTitle = outputTitle
+        self.leftPlaceholder = leftPlaceholder
+        self.rightPlaceholder = rightPlaceholder
+        self.leftDisplayText = leftDisplayText
+        self.rightDisplayText = rightDisplayText
+        self._left = left
+        self._right = right
+        self.rows = rows
+        self.syntax = syntax
+        self.error = error
+        self.warning = warning
+        self.onClear = onClear
+        self.clearDisabled = clearDisabled
+        self.leadingControl = leadingControl
+    }
+
+    private var isIdentical: Bool {
+        guard error == nil,
+              !left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !right.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !rows.isEmpty else {
+            return false
+        }
+        return rows.allSatisfy { !$0.kind.isDifference }
+    }
+
+    private var diffCount: Int {
+        guard error == nil,
+              (!left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !right.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) else {
+            return 0
+        }
+        return rows.filter { $0.kind.isDifference }.count
+    }
 
     private var diagnosticText: String? {
         if let error, !error.isEmpty {
@@ -25,6 +78,12 @@ struct IndexEditableDiffWorkspace: View {
         if let warning, !warning.isEmpty {
             return warning
         }
+        if isIdentical {
+            return syntax == .json ? "两段 JSON 完全一致" : "两段文本完全一致"
+        }
+        if diffCount > 0 {
+            return "共 \(diffCount) 处差异"
+        }
         return nil
     }
 
@@ -32,7 +91,13 @@ struct IndexEditableDiffWorkspace: View {
         if let error, !error.isEmpty {
             return .error
         }
-        return .warning
+        if let warning, !warning.isEmpty {
+            return .warning
+        }
+        if isIdentical {
+            return .success
+        }
+        return .info
     }
 
     private var showsErrorState: Bool {
@@ -85,6 +150,8 @@ struct IndexEditableDiffWorkspace: View {
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(9)
 
+                leadingControl()
+
                 Spacer(minLength: 24)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -135,16 +202,53 @@ struct IndexEditableDiffWorkspace: View {
                     .font(.system(size: ToolMetrics.IconSize.small, weight: .semibold))
                 Text(diagnosticText)
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(.tail)
             }
             .font(ToolTypography.caption)
             .foregroundStyle(diagnosticTone.tint)
-            .frame(maxWidth: 200, alignment: .leading)
-            .layoutPriority(-1)
+            .frame(maxWidth: 320, alignment: .leading)
+            .layoutPriority(1)
             .help(diagnosticText)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(diagnosticTone.accessibilityPrefix)：\(diagnosticText)")
         }
+    }
+}
+
+extension IndexEditableDiffWorkspace where LeadingControl == EmptyView {
+    init(
+        inputTitle: String = "原始文本",
+        outputTitle: String = "对比文本",
+        leftPlaceholder: String,
+        rightPlaceholder: String,
+        leftDisplayText: String? = nil,
+        rightDisplayText: String? = nil,
+        left: Binding<String>,
+        right: Binding<String>,
+        rows: [DiffAlignedRow],
+        syntax: IndexDiffSyntax = .plain,
+        error: String? = nil,
+        warning: String? = nil,
+        onClear: (() -> Void)? = nil,
+        clearDisabled: Bool = false
+    ) {
+        self.init(
+            inputTitle: inputTitle,
+            outputTitle: outputTitle,
+            leftPlaceholder: leftPlaceholder,
+            rightPlaceholder: rightPlaceholder,
+            leftDisplayText: leftDisplayText,
+            rightDisplayText: rightDisplayText,
+            left: left,
+            right: right,
+            rows: rows,
+            syntax: syntax,
+            error: error,
+            warning: warning,
+            onClear: onClear,
+            clearDisabled: clearDisabled,
+            leadingControl: { EmptyView() }
+        )
     }
 }
 
@@ -728,6 +832,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         }
 
         private func applyJSONSyntax(_ line: String, lineRange: NSRange, layoutManager: NSLayoutManager) {
+            guard line.utf16.count <= 10_000 else { return }
             for token in JSONHighlighting.tokens(in: line) {
                 guard let range = nsRange(for: token, in: line, lineRange: lineRange) else {
                     continue

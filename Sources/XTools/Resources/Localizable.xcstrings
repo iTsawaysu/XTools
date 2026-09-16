@@ -7,6 +7,12 @@
     "\" \"（空格）": {
       "extractionState": "manual"
     },
+    "2 空格": {
+      "extractionState": "manual"
+    },
+    "4 空格": {
+      "extractionState": "manual"
+    },
     "644 或 4755": {
       "extractionState": "manual"
     },
@@ -122,6 +128,9 @@
       "extractionState": "manual"
     },
     "JSON 格式化": {
+      "extractionState": "manual"
+    },
+    "Key 排序": {
       "extractionState": "manual"
     },
     "SQL 格式化": {
@@ -251,6 +260,12 @@
       "extractionState": "manual"
     },
     "两日期间隔": {
+      "extractionState": "manual"
+    },
+    "两段 JSON 完全一致": {
+      "extractionState": "manual"
+    },
+    "两段文本完全一致": {
       "extractionState": "manual"
     },
     "个人行动面板 · 今天先从上次停下的地方继续。": {
@@ -649,7 +664,13 @@
     "原图": {
       "extractionState": "manual"
     },
+    "原始 JSON": {
+      "extractionState": "manual"
+    },
     "原始大小": {
+      "extractionState": "manual"
+    },
+    "原始文本": {
       "extractionState": "manual"
     },
     "原始文本…": {
@@ -940,7 +961,13 @@
     "对比": {
       "extractionState": "manual"
     },
+    "对比 JSON": {
+      "extractionState": "manual"
+    },
     "对比两段 JSON，以左右对齐视图显示差异。": {
+      "extractionState": "manual"
+    },
+    "对比文本": {
       "extractionState": "manual"
     },
     "对比文本…": {
@@ -1153,7 +1180,13 @@
     "快捷工具": {
       "extractionState": "manual"
     },
+    "忽略大小写": {
+      "extractionState": "manual"
+    },
     "忽略大小写 (i)": {
+      "extractionState": "manual"
+    },
+    "忽略空白": {
       "extractionState": "manual"
     },
     "忽略这个建议": {

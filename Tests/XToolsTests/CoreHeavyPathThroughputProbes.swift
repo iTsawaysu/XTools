@@ -37,6 +37,22 @@ struct CoreHeavyPathThroughputProbes {
         }
     }
 
+    @Test func lineDifferPrefixSuffixTrimmingThroughput() throws {
+        let leftPrefix = (1...1500).map { "log-entry-\($0)-timestamp-2026-09-16-level-info" }.joined(separator: "\n")
+        let suffix = (1506...3000).map { "log-entry-\($0)-timestamp-2026-09-16-level-info" }.joined(separator: "\n")
+        let left = "\(leftPrefix)\nerror-1\nerror-2\nerror-3\nerror-4\nerror-5\n\(suffix)"
+        let right = "\(leftPrefix)\nwarning-1\nwarning-2\nwarning-3\nwarning-4\nwarning-5\n\(suffix)"
+
+        let samples = try Self.measureMillisecondsThrowing(
+            label: "line-differ-trimmed-3k",
+            size: 3000
+        ) {
+            _ = try LineDiffer.safeAlignedDiff(left: left, right: right)
+        }
+        #expect(samples.count == Self.sampleIterations)
+        #expect(samples.allSatisfy { $0 < 50.0 })
+    }
+
     @Test func jsonFormatThroughputAtRepresentativeSizes() throws {
         let sizes = [32_768, 131_072]
         for byteTarget in sizes {

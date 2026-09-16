@@ -43,11 +43,11 @@ public enum JSONFormatting {
         )
     }
 
-    public static func minifyResult(_ text: String) throws -> FormattingResult {
+    public static func minifyResult(_ text: String, sortKeys: Bool = false) throws -> FormattingResult {
         let document = try parseOrderedJSON(text)
         let duplicateKeys = uniqueDuplicateKeys(document.duplicateKeys)
         return FormattingResult(
-            text: renderCompact(document.value, sortKeys: false),
+            text: renderCompact(document.value, sortKeys: sortKeys),
             warning: duplicateKeyWarning(from: duplicateKeys),
             duplicateKeys: duplicateKeys
         )
@@ -172,27 +172,28 @@ public enum JSONFormatting {
 
     private static func escapeString(_ value: String) -> String {
         var result = ""
+        result.reserveCapacity(value.utf8.count)
 
         for scalar in value.unicodeScalars {
             switch scalar {
             case "\"":
-                result += "\\\""
+                result.append("\\\"")
             case "\\":
-                result += "\\\\"
+                result.append("\\\\")
             case "\u{08}":
-                result += "\\b"
+                result.append("\\b")
             case "\u{0C}":
-                result += "\\f"
+                result.append("\\f")
             case "\n":
-                result += "\\n"
+                result.append("\\n")
             case "\r":
-                result += "\\r"
+                result.append("\\r")
             case "\t":
-                result += "\\t"
+                result.append("\\t")
             case let scalar where scalar.value < 0x20:
-                result += String(format: "\\u%04X", scalar.value)
+                result.append(String(format: "\\u%04X", scalar.value))
             default:
-                result += String(scalar)
+                result.unicodeScalars.append(scalar)
             }
         }
 
@@ -250,6 +251,17 @@ private enum JSONStringIssue {
     case unescapedControlCharacter
 }
 
+private enum ContainerKind {
+    case object
+    case array
+}
+
+private struct OpenContainer {
+    let kind: ContainerKind
+    let startIndex: String.Index
+    let key: String?
+}
+
 private enum JSONParseIssue {
     case trailingContent
     case unexpectedEnd
@@ -270,12 +282,17 @@ private enum JSONParseIssue {
     case invalidString(JSONStringIssue)
     case incompleteLiteral(String)
     case unexpectedCharacter(Character)
+    case exceededMaxDepth
+    case containerNotClosed(kind: ContainerKind, startIndex: String.Index, key: String?)
 }
 
 private struct OrderedJSONParser {
     private let text: String
     private var index: String.Index
     private var duplicateKeys: [String] = []
+    private var openContainers: [OpenContainer] = []
+    private var depth: Int = 0
+    private static let maxDepth: Int = 32
 
     init(_ text: String) {
         self.text = text
@@ -294,10 +311,16 @@ private struct OrderedJSONParser {
 
     private mutating func parseValue() throws -> OrderedJSONValue {
         skipWhitespace()
-        return try parseValue(context: .root)
+        return try parseValue(context: .root, currentKey: nil)
     }
 
-    private mutating func parseValue(context: JSONParseContext) throws -> OrderedJSONValue {
+    private mutating func parseValue(context: JSONParseContext, currentKey: String? = nil) throws -> OrderedJSONValue {
+        depth += 1
+        defer { depth -= 1 }
+        guard depth <= Self.maxDepth else {
+            throw error(.exceededMaxDepth)
+        }
+
         skipWhitespace()
         guard let char = peek() else {
             throw error(.unexpectedEnd)
@@ -305,9 +328,9 @@ private struct OrderedJSONParser {
 
         switch char {
         case "{":
-            return try parseObject()
+            return try parseObject(currentKey: currentKey)
         case "[":
-            return try parseArray()
+            return try parseArray(currentKey: currentKey)
         case "\"":
             return .string(try parseString())
         case "t":
@@ -352,9 +375,13 @@ private struct OrderedJSONParser {
         }
     }
 
-    private mutating func parseObject() throws -> OrderedJSONValue {
+    private mutating func parseObject(currentKey: String? = nil) throws -> OrderedJSONValue {
+        let openIndex = index
         try consume("{")
         skipWhitespace()
+
+        openContainers.append(OpenContainer(kind: .object, startIndex: openIndex, key: currentKey))
+        defer { openContainers.removeLast() }
 
         var pairs: [(key: String, value: OrderedJSONValue)] = []
         var seenKeys = Set<String>()
@@ -365,7 +392,7 @@ private struct OrderedJSONParser {
         while true {
             skipWhitespace()
             guard let next = peek() else {
-                throw error(.objectNotClosed)
+                throw error(.containerNotClosed(kind: .object, startIndex: openIndex, key: currentKey))
             }
             guard next == "\"" else {
                 throw error(objectMemberStartIssue(for: next, afterComma: false))
@@ -384,7 +411,7 @@ private struct OrderedJSONParser {
             if peek() == nil || peek() == "}" || peek() == "," {
                 throw error(.missingObjectValue)
             }
-            let value = try parseValue(context: .objectValue)
+            let value = try parseValue(context: .objectValue, currentKey: key)
             pairs.append((key, value))
             skipWhitespace()
 
@@ -393,7 +420,7 @@ private struct OrderedJSONParser {
             }
             guard consumeIfPresent(",") else {
                 if peek() == nil {
-                    throw error(.objectNotClosed)
+                    throw error(.containerNotClosed(kind: .object, startIndex: openIndex, key: currentKey))
                 }
                 if isCommentStart() {
                     throw error(.commentNotAllowed)
@@ -403,7 +430,7 @@ private struct OrderedJSONParser {
 
             skipWhitespace()
             guard let nextMember = peek() else {
-                throw error(.objectNotClosed)
+                throw error(.containerNotClosed(kind: .object, startIndex: openIndex, key: currentKey))
             }
             if nextMember == "}" {
                 throw error(.objectTrailingComma)
@@ -414,9 +441,13 @@ private struct OrderedJSONParser {
         }
     }
 
-    private mutating func parseArray() throws -> OrderedJSONValue {
+    private mutating func parseArray(currentKey: String? = nil) throws -> OrderedJSONValue {
+        let openIndex = index
         try consume("[")
         skipWhitespace()
+
+        openContainers.append(OpenContainer(kind: .array, startIndex: openIndex, key: currentKey))
+        defer { openContainers.removeLast() }
 
         var values: [OrderedJSONValue] = []
         if consumeIfPresent("]") {
@@ -424,7 +455,7 @@ private struct OrderedJSONParser {
         }
 
         while true {
-            values.append(try parseValue(context: .array))
+            values.append(try parseValue(context: .array, currentKey: currentKey))
             skipWhitespace()
 
             if consumeIfPresent("]") {
@@ -432,7 +463,7 @@ private struct OrderedJSONParser {
             }
             guard consumeIfPresent(",") else {
                 if peek() == nil {
-                    throw error(.arrayNotClosed)
+                    throw error(.containerNotClosed(kind: .array, startIndex: openIndex, key: currentKey))
                 }
                 if isCommentStart() {
                     throw error(.commentNotAllowed)
@@ -442,7 +473,7 @@ private struct OrderedJSONParser {
 
             skipWhitespace()
             guard let nextValue = peek() else {
-                throw error(.arrayNotClosed)
+                throw error(.containerNotClosed(kind: .array, startIndex: openIndex, key: currentKey))
             }
             if nextValue == "]" {
                 throw error(.arrayTrailingComma)
@@ -758,11 +789,18 @@ private struct OrderedJSONParser {
     }
 
     private func diagnostic(for issue: JSONParseIssue) -> FormatDiagnostic {
+        let diagnosticIndex: String.Index
+        switch issue {
+        case .containerNotClosed(_, let startIndex, _):
+            diagnosticIndex = startIndex
+        default:
+            diagnosticIndex = index
+        }
         return FormatDiagnostic(
             formatName: "JSON",
             message: mappedJSONMessage(issue),
             input: text,
-            index: index
+            index: diagnosticIndex
         )
     }
 
@@ -786,6 +824,13 @@ private struct OrderedJSONParser {
             return "数组元素之间多了逗号或缺少元素"
         case .arrayNotClosed:
             return "数组没有完整闭合"
+        case .containerNotClosed(let kind, _, let key):
+            if let key, !key.isEmpty {
+                return "\(kind == .object ? "对象" : "数组")没有完整闭合（键名 \"\(key)\" 缺少匹配的 '\(kind == .object ? "}" : "]")'）"
+            }
+            return "\(kind == .object ? "对象" : "数组")没有完整闭合（缺少匹配的 '\(kind == .object ? "}" : "]")'）"
+        case .exceededMaxDepth:
+            return "JSON 嵌套层级过深，超过最大安全深度 (32 层)"
         case .singleQuotedString:
             return "JSON 字符串和对象键必须使用双引号"
         case .commentNotAllowed:

@@ -1,8 +1,12 @@
 import Foundation
 
 public enum DiffExecutionKind: Equatable, Sendable {
-    case text
+    case text(options: TextDiffOptions = TextDiffOptions())
     case json(labels: JSONDiffValidation.SideLabels)
+
+    public static var text: DiffExecutionKind {
+        .text()
+    }
 }
 
 public struct DiffExecutionRequest: Equatable, Sendable {
@@ -46,11 +50,12 @@ public typealias DiffExecutionOperation = @Sendable (
 public enum DiffExecution {
     public static func project(_ request: DiffExecutionRequest) throws -> DiffExecutionBinding {
         switch request.kind {
-        case .text:
+        case .text(let options):
             do {
                 return DiffExecutionBinding(rows: try LineDiffer.safeAlignedDiff(
                     left: request.left,
-                    right: request.right
+                    right: request.right,
+                    options: options
                 ))
             } catch let error as LineDiffError {
                 return DiffExecutionBinding(

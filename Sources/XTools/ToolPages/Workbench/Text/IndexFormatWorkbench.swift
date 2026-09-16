@@ -152,7 +152,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
 
     /// Maximum width of the inline toolbar diagnostic; it compresses before
     /// the fixed action buttons when the output half runs out of room.
-    private var diagnosticSlotWidth: CGFloat { 200 }
+    private var diagnosticSlotWidth: CGFloat { 260 }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -259,12 +259,12 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                     .font(.system(size: ToolMetrics.IconSize.small, weight: .semibold))
                 Text(diagnostic)
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(.tail)
             }
             .font(ToolTypography.caption)
             .foregroundStyle(diagnosticTone.tint)
             .frame(maxWidth: diagnosticSlotWidth, alignment: .leading)
-            .layoutPriority(-1)
+            .layoutPriority(1)
             .help(diagnostic)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(diagnosticTone.accessibilityPrefix)：\(diagnostic)")
