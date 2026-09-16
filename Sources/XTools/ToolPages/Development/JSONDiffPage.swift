@@ -97,6 +97,8 @@ private struct IndexJSONDiffWorkspaceContent: View {
             workspaceSemantic: .editableDiffWorkspace
         ) {
             IndexEditableDiffWorkspace(
+                inputTitle: "原始 JSON",
+                outputTitle: "对比 JSON",
                 leftPlaceholder: #"{"name":"Alice","age":30}"#,
                 rightPlaceholder: #"{"name":"Bob","age":30,"city":"NY"}"#,
                 leftDisplayText: execution.binding.leftDisplayText,

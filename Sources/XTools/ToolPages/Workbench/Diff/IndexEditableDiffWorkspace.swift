@@ -3,6 +3,8 @@ import SwiftUI
 import XToolsCore
 
 struct IndexEditableDiffWorkspace: View {
+    var inputTitle: String = "原始文本"
+    var outputTitle: String = "对比文本"
     let leftPlaceholder: String
     let rightPlaceholder: String
     var leftDisplayText: String?
@@ -33,8 +35,13 @@ struct IndexEditableDiffWorkspace: View {
         return .warning
     }
 
+    private var showsErrorState: Bool {
+        diagnosticText != nil && diagnosticTone == .error
+    }
+
     var body: some View {
-        IndexPanel("对比") {
+        VStack(spacing: 0) {
+            toolbar
             IndexEditableDiffMergeView(
                 left: $left,
                 right: $right,
@@ -45,45 +52,116 @@ struct IndexEditableDiffWorkspace: View {
                 rows: rows,
                 syntax: syntax
             )
+            .padding(.horizontal, ToolMetrics.Spacing.md)
+            .padding(.bottom, ToolMetrics.Spacing.md)
+            .padding(.top, ToolMetrics.Spacing.sm)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .indexWorkspaceDiagnostic(diagnosticText, tone: diagnosticTone)
-        } accessory: {
-            if let onClear {
-                IndexClearButton(
+        }
+        .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))
+        .background(
+            ToolTheme.panelBackground,
+            in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous)
+        )
+        .overlay {
+            if showsErrorState {
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous)
+                    .strokeBorder(ToolTheme.error.opacity(0.55), lineWidth: 1)
+            }
+        }
+        .toolShadow(ToolTheme.Shadow.panel)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var toolbar: some View {
+        HStack(spacing: 0) {
+            HStack(spacing: 8) {
+                IndexBadge("STDIN", tone: .accent, isCapsule: true)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(10)
+                Text(inputTitle)
+                    .font(ToolTypography.panelTitle)
+                    .foregroundStyle(ToolTheme.textSecondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(9)
+
+                Spacer(minLength: 24)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 8) {
+                IndexBadge("STDOUT", tone: .accent, isCapsule: true)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(10)
+                Text(outputTitle)
+                    .font(ToolTypography.panelTitle)
+                    .foregroundStyle(ToolTheme.textSecondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(9)
+
+                inlineDiagnostic
+
+                Spacer(minLength: 16)
+
+                if let onClear {
+                    IndexClearButton(
                     isDisabled: clearDisabled,
                     title: "清空对比",
                     showsIcon: false,
                     framed: true,
                     action: onClear
                 )
+                    .layoutPriority(2)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .contentInsets(EdgeInsets(
-            top: 0,
-            leading: ToolMetrics.Spacing.xs,
-            bottom: ToolMetrics.Spacing.xs,
-            trailing: ToolMetrics.Spacing.xs
-        ))
-        .terminal("DIFF")
-        .verticallyFilling()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(height: 44)
+        .padding(.horizontal, 12)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(ToolTheme.border)
+                .frame(height: 0.5)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    @ViewBuilder
+    private var inlineDiagnostic: some View {
+        if let diagnosticText {
+            HStack(spacing: 4) {
+                Image(systemName: diagnosticTone.systemImage)
+                    .font(.system(size: ToolMetrics.IconSize.small, weight: .semibold))
+                Text(diagnosticText)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .font(ToolTypography.caption)
+            .foregroundStyle(diagnosticTone.tint)
+            .frame(maxWidth: 200, alignment: .leading)
+            .layoutPriority(-1)
+            .help(diagnosticText)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(diagnosticTone.accessibilityPrefix)：\(diagnosticText)")
+        }
     }
 }
 
 private enum IndexDiffEditorMetrics {
-    static let textInset = NSSize(width: 34, height: 14)
-    static let rulerWidth: CGFloat = 30
+    static let rulerWidth: CGFloat = 44
+    static let textInset = NSSize(width: rulerWidth + 13, height: 14)
     static let paneGap: CGFloat = 8
     static let dividerThickness: CGFloat = paneGap
-    static let stageInset: CGFloat = 8
+    static let stageInset: CGFloat = 0
     static let frameCornerRadius: CGFloat = 0
     static let frameBorderWidth: CGFloat = 0
-    static let paneCornerRadius: CGFloat = 7
+    static let paneCornerRadius: CGFloat = ToolMetrics.CornerRadius.field
     static let trailingReadingGuard: CGFloat = 16
     static let placeholderTrailing: CGFloat = trailingReadingGuard
     static let placeholderTopInset: CGFloat = textInset.height + 1
-    static let lineNumberLeadingPadding: CGFloat = 3
-    static let lineNumberTrailingPadding: CGFloat = 3
+    static let lineNumberLeadingPadding: CGFloat = 6
+    static let lineNumberTrailingPadding: CGFloat = 10
     static let gutterAccentWidth: CGFloat = 2
     static let gutterAccentLeadingPadding: CGFloat = 4
 }
@@ -785,7 +863,7 @@ private final class IndexEditableDiffScrollHostView: NSView {
 
     override func updateLayer() {
         layer?.cornerRadius = IndexDiffEditorMetrics.frameCornerRadius
-        layer?.backgroundColor = IndexDiffNSPalette.panelBackground(for: effectiveAppearance).cgColor
+        layer?.backgroundColor = NSColor.clear.cgColor
         layer?.borderColor = NSColor.clear.cgColor
         layer?.borderWidth = IndexDiffEditorMetrics.frameBorderWidth
     }
@@ -839,7 +917,7 @@ private final class IndexEditableDiffSplitView: NSSplitView {
     }
 
     override func drawDivider(in rect: NSRect) {
-        IndexDiffNSPalette.panelBackground(for: effectiveAppearance).setFill()
+        NSColor.clear.setFill()
         NSBezierPath(rect: rect).fill()
     }
 
@@ -901,8 +979,8 @@ private final class IndexDiffEditorPaneView: NSView {
     override func updateLayer() {
         layer?.cornerRadius = IndexDiffEditorMetrics.paneCornerRadius
         layer?.backgroundColor = IndexDiffNSPalette.editorBackground(for: effectiveAppearance).cgColor
-        layer?.borderColor = NSColor.clear.cgColor
-        layer?.borderWidth = 0
+        layer?.borderColor = NSColor(ToolTheme.border).cgColor
+        layer?.borderWidth = 0.5
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -998,6 +1076,10 @@ private final class IndexDiffLineNumberOverlayView: NSView {
             return
         }
 
+        let hairline = NSRect(x: bounds.width - 0.5, y: 0, width: 0.5, height: bounds.height)
+        NSColor(ToolTheme.border).setFill()
+        NSBezierPath(rect: hairline).fill()
+
         let visibleRect = scrollView.contentView.bounds
         let lineRects = IndexDiffTextLayoutGeometry.lineBlockRects(for: textView)
 
@@ -1009,6 +1091,23 @@ private final class IndexDiffLineNumberOverlayView: NSView {
             bounds.width - IndexDiffEditorMetrics.lineNumberLeadingPadding - IndexDiffEditorMetrics.lineNumberTrailingPadding
         )
         let labelHeight = IndexDiffTextLayoutGeometry.defaultLineHeight(for: textView)
+
+        let nsText = textView.string as NSString
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
+            .foregroundColor: lineNumberColor(for: .unchanged),
+            .paragraphStyle: paragraphStyle
+        ]
+
+        if nsText.length == 0 {
+            let y = textView.textContainerOrigin.y - visibleRect.minY
+            let label = "1" as NSString
+            label.draw(
+                in: NSRect(x: labelX, y: y + 3, width: labelWidth, height: min(bounds.height, labelHeight)),
+                withAttributes: attributes
+            )
+            return
+        }
 
         for lineNumber in lineRects.keys.sorted() {
             guard let lineRect = lineRects[lineNumber] else { continue }
@@ -1024,15 +1123,15 @@ private final class IndexDiffLineNumberOverlayView: NSView {
                     yRadius: 1
                 ).fill()
             }
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .regular),
+            let lineAttributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
                 .foregroundColor: lineNumberColor(for: status),
                 .paragraphStyle: paragraphStyle
             ]
             let lineText = "\(lineNumber)" as NSString
             lineText.draw(
                 in: NSRect(x: labelX, y: y, width: labelWidth, height: min(height, labelHeight)),
-                withAttributes: attributes
+                withAttributes: lineAttributes
             )
 
         }
@@ -1058,9 +1157,9 @@ private final class IndexDiffLineNumberOverlayView: NSView {
 }
 
 private enum IndexDiffNSPalette {
-    // 语义色一律取自 ToolTheme 单一真相源;只有 diff 专属度量(行号)保留本地定义。
+    // 语义色一律取自 ToolTheme 单一真相源
     static let textPrimary = NSColor(ToolTheme.textPrimary)
-    static let lineNumber = dynamicColor(light: 0x7A736A, dark: 0x777068, alpha: 0.62, darkAlpha: 0.66)
+    static let lineNumber = NSColor(ToolTheme.textTertiary)
     static let textTertiary = NSColor(ToolTheme.textTertiary)
     static let success = NSColor(ToolTheme.success)
     static let error = NSColor(ToolTheme.error)
