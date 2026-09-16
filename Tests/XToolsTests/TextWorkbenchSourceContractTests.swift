@@ -581,4 +581,36 @@ struct TextWorkbenchSourceContractTests {
         #expect(presentation.label(for: "abcdef") == "6 B UTF-8")
         #expect(IndexInputCountPresentation.characters.label(for: "👩🏽‍💻") == "1 字符")
     }
+
+    @Test @MainActor func caretTextViewConformsToAsymmetricSurfaceAndEliminatesTrailingDeadZone() {
+        let textView = IndexCaretTextView(frame: NSRect(x: 0, y: 0, width: 350, height: 200))
+        #expect((textView as AnyObject) is IndexAsymmetricTextContainerSurface, "IndexCaretTextView must conform to IndexAsymmetricTextContainerSurface")
+
+        // 1. With line numbers (gutter 44 + padding 13 = 57 inset)
+        textView.textContainerInset = NSSize(width: IndexEditorLineNumberGutter.width + 13, height: 12)
+        textView.textContainer?.lineFragmentPadding = 0
+
+        IndexTextKitGeometry.synchronizeTextGeometry(
+            for: textView,
+            visibleWidth: 350,
+            minimumHeight: 200,
+            trailingReadingGuard: IndexTextKitGeometry.trailingWrapGuard
+        )
+
+        let rightMarginGutter = textView.bounds.width - (textView.textContainerOrigin.x + (textView.textContainer?.containerSize.width ?? 0))
+        #expect(rightMarginGutter == IndexTextKitGeometry.trailingWrapGuard, "Gutter-backed editors must eliminate the 57pt dead zone and leave exactly trailingWrapGuard margin")
+
+        // 2. Without line numbers (13 inset)
+        textView.textContainerInset = NSSize(width: 13, height: 12)
+
+        IndexTextKitGeometry.synchronizeTextGeometry(
+            for: textView,
+            visibleWidth: 350,
+            minimumHeight: 200,
+            trailingReadingGuard: IndexTextKitGeometry.trailingWrapGuard
+        )
+
+        let rightMarginPlain = textView.bounds.width - (textView.textContainerOrigin.x + (textView.textContainer?.containerSize.width ?? 0))
+        #expect(rightMarginPlain == IndexTextKitGeometry.trailingWrapGuard, "Plain editors must also leave exactly trailingWrapGuard margin")
+    }
 }

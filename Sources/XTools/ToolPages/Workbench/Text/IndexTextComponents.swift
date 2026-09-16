@@ -3,7 +3,11 @@ import SwiftUI
 
 // MARK: - Caret
 
-final class IndexCaretTextView: NSTextView {
+final class IndexCaretTextView: NSTextView, IndexAsymmetricTextContainerSurface {
+    var leadingTextContainerInset: CGFloat {
+        textContainerInset.width
+    }
+
     private let caretWidth: CGFloat = 2
 
     /// Private undo stack used only when this view acts as a single-line field
