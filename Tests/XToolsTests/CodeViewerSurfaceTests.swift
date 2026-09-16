@@ -207,4 +207,30 @@ struct CodeViewerSurfaceTests {
             #expect(nsAttr.string == line)
         }
     }
+
+    @MainActor
+    @Test func jsonFormatterInitializesWithCleanEmptyState() {
+        let defaults = UserDefaults(suiteName: "CodeViewerSurfaceTests.\(UUID().uuidString)")!
+        let store = ToolPreferenceStore(defaults: defaults)
+        let model = JSONFormatterToolWorkspaceModel(preferences: store)
+        #expect(model.input.isEmpty, "JSON formatter input must start empty without pre-seeded sample text")
+        #expect(model.output.isEmpty, "JSON formatter output must start empty")
+        #expect(model.error == nil)
+        #expect(model.warning == nil)
+    }
+
+    @MainActor
+    @Test func jsonFormatterPageMountsWithCleanEmptyStateInHostingView() {
+        let defaults = UserDefaults(suiteName: "CodeViewerSurfaceTests.Mount.\(UUID().uuidString)")!
+        let repository = ToolWorkspaceRepository(defaults: defaults)
+        let view = IndexJSONFormatterPage().environmentObject(repository)
+        let hostingView = NSHostingView(rootView: view)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 800, height: 600)
+        hostingView.layoutSubtreeIfNeeded()
+
+        let key = JSONFormatterToolWorkspaceModel.key
+        let model = repository.model(for: key)
+        #expect(model.input.isEmpty, "JSON input must be completely empty on initial mount")
+        #expect(model.output.isEmpty, "JSON output must be completely empty on initial mount")
+    }
 }

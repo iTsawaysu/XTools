@@ -50,9 +50,6 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
 
     let execution = IndexFormatExecutionSession()
     private let preferences: ToolPreferenceStore
-    /// Session-scoped: the entry example seeds once per tool session and is
-    /// never persisted or re-seeded after an explicit 清空.
-    private(set) var hasSeededEntryExample = false
 
     var output: String { execution.binding.output }
     var error: String? { execution.binding.error }
@@ -68,17 +65,6 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
         execution.invalidate()
         input = ""
     }
-
-    /// Seeds the prototype entry example on first appearance; returns whether
-    /// seeding happened so the page can format the first frame.
-    func seedEntryExampleIfNeeded() -> Bool {
-        guard !hasSeededEntryExample, input.isEmpty else { return false }
-        hasSeededEntryExample = true
-        input = Self.entryExample
-        return true
-    }
-
-    static let entryExample = #"{"name":"XTools","version":"3.0","tools":36,"tags":["dev","macos"],"config":{"theme":"system","density":"compact"}}"#
 }
 
 struct IndexJSONFormatterPage: View {
@@ -137,11 +123,6 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                     }
                 }
             )
-        }
-        .onAppear {
-            if workspace.seedEntryExampleIfNeeded() {
-                format()
-            }
         }
         .onChange(of: workspace.sortKeys) { _ in
             if !execution.binding.output.isEmpty {

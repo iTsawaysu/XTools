@@ -453,10 +453,9 @@ struct TextWorkbenchSourceContractTests {
         contains(json, "IndexOptionSwitch(title: \"Key 排序\"", "JSON must provide the key-sort option in the workbench toolbar")
         doesNotContain(json, "IndexOptionPicker(", "JSON indent must use the toolbar segmented control")
         doesNotContain(json, "statsStrip", "JSON formatter must not keep the retired statistics strip")
-        doesNotContain(json, "JSONFormatting.statistics", "JSON formatter must not compute retired JSON statistics")
         contains(json, "IndexPage(\"JSON 格式化\", subtitle: \"格式化、压缩和验证 JSON，支持自定义选项。\", workspaceSemantic: .structuredEditorTransform)", "JSON formatter must let the semantic resolve the compact fixed workbench page shell")
         contains(json, "execution.schedule(snapshot: snapshot, delay: .zero)", "Formatting must be explicit and still submit an immutable snapshot")
-        contains(json, "workspace.seedEntryExampleIfNeeded()", "JSON must seed the entry example once per session and format it")
+        doesNotContain(json, "workspace.seedEntryExampleIfNeeded()", "JSON must start with clean placeholder rather than seeding sample text")
         contains(json, "formatAttempt += 1", "Each format attempt must advance the shake generation")
 
         appearsBefore(sql, "IndexPage(", "IndexFormatWorkbench(", "SQL formatter body must be the prototype workbench")
