@@ -231,6 +231,8 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
 
                 HStack(spacing: 6) {
                     IndexCopyButton(text: output, title: "复制", showsIcon: false, framed: true)
+                        .keyboardShortcut("c", modifiers: [.command, .shift])
+                        .help("复制全部输出（⇧⌘C）")
                     IndexClearButton(isDisabled: clearDisabled, showsIcon: false, framed: true, action: onClear)
                     if showsOutputSave {
                         IndexSaveTextButton(text: output, fileName: outputFileName, showsIcon: false, framed: true)
@@ -305,14 +307,13 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         } else {
             switch outputPresentation {
             case .standard:
-                IndexWorkspaceOutputSurface(
+                IndexCodeViewerSurface(
                     text: output,
                     placeholder: outputPlaceholder,
-                    fillsHeight: true,
                     lineNumbers: outputLineNumbers,
                     colorize: outputColorize,
-                    embedsFlat: false,
-                    workspaceSemantic: workspaceSemantic
+                    fillsHeight: true,
+                    embedsFlat: false
                 )
                 .accessibilityLabel(outputTitle)
             case .nativeReadOnlyText:

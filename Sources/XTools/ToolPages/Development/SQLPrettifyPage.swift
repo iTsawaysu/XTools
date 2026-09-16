@@ -64,12 +64,12 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
                 onFormat: format,
                 onClear: workspace.clear,
                 leadingControl: {
-                    IndexOptionLabel("关键字")
                     IndexSegmentedControl(
                         items: [("upper", "大写"), ("lower", "小写")],
                         selection: keywordCaseSelection,
                         density: .compact
                     )
+                    .help("关键字大小写 (UPPER / lower)")
                 }
             )
         }

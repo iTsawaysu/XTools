@@ -94,6 +94,7 @@ private struct IndexReadOnlyTextView: NSViewRepresentable {
     private func configure(_ textView: NSTextView) {
         textView.isEditable = false
         textView.isSelectable = true
+        textView.usesFindPanel = true
         textView.drawsBackground = false
         textView.backgroundColor = .clear
         textView.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)

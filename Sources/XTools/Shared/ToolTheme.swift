@@ -152,24 +152,41 @@ enum ToolTheme {
     static let synBool = dynamicColor(light: 0x9A6B3A, dark: 0xC99A6B)   // bool/null：暖棕
     static let synPunctuation = dynamicColor(light: 0x9A938A, dark: 0x5A554F) // 标点：暖灰压暗
 
+    enum SynNSColor {
+        static let key = dynamicNSColor(light: 0x8A6D4A, dark: 0xD8C4B0)
+        static let string = dynamicNSColor(light: 0x4F7A4F, dark: 0x8FBC8F)
+        static let number = dynamicNSColor(light: 0x2563A8, dark: 0x6FB8E0)
+        static let bool = dynamicNSColor(light: 0x9A6B3A, dark: 0xC99A6B)
+        static let punctuation = dynamicNSColor(light: 0x9A938A, dark: 0x5A554F)
+        static let textPrimary = dynamicNSColor(light: 0x2A2520, dark: 0xE4E2DC)
+        static let textSecondary = dynamicNSColor(light: 0x6B645C, dark: 0x8A847C)
+    }
+
+    static func dynamicNSColor(
+        light: UInt32,
+        dark: UInt32,
+        alpha: CGFloat = 1,
+        darkAlpha: CGFloat? = nil
+    ) -> NSColor {
+        NSColor(
+            name: nil,
+            dynamicProvider: { appearance in
+                if appearance.isDarkMode {
+                    return .toolHex(dark, alpha: darkAlpha ?? alpha)
+                }
+
+                return .toolHex(light, alpha: alpha)
+            }
+        )
+    }
+
     private static func dynamicColor(
         light: UInt32,
         dark: UInt32,
         alpha: CGFloat = 1,
         darkAlpha: CGFloat? = nil
     ) -> Color {
-        Color(
-            nsColor: NSColor(
-                name: nil,
-                dynamicProvider: { appearance in
-                    if appearance.isDarkMode {
-                        return .toolHex(dark, alpha: darkAlpha ?? alpha)
-                    }
-
-                    return .toolHex(light, alpha: alpha)
-                }
-            )
-        )
+        Color(nsColor: dynamicNSColor(light: light, dark: dark, alpha: alpha, darkAlpha: darkAlpha))
     }
 }
 

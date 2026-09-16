@@ -14,6 +14,7 @@ enum JSONSyntaxHighlighter {
     static func highlight(line: String) -> AttributedString {
         var out = AttributedString(line)
         out.foregroundColor = ToolTheme.textPrimary
+        out.appKit.foregroundColor = ToolTheme.SynNSColor.textPrimary
 
         for token in JSONHighlighting.tokens(in: line) {
             guard let range = attributedRange(for: token, in: out) else {
@@ -21,6 +22,7 @@ enum JSONSyntaxHighlighter {
             }
 
             out[range].foregroundColor = color(for: token.kind)
+            out[range].appKit.foregroundColor = nsColor(for: token.kind)
         }
         return out
     }
@@ -92,6 +94,21 @@ enum JSONSyntaxHighlighter {
             return ToolTheme.synBool
         case .punctuation:
             return ToolTheme.synPunctuation
+        }
+    }
+
+    private static func nsColor(for kind: JSONHighlightToken.Kind) -> NSColor {
+        switch kind {
+        case .key:
+            return ToolTheme.SynNSColor.key
+        case .string:
+            return ToolTheme.SynNSColor.string
+        case .number:
+            return ToolTheme.SynNSColor.number
+        case .literal:
+            return ToolTheme.SynNSColor.bool
+        case .punctuation:
+            return ToolTheme.SynNSColor.punctuation
         }
     }
 }
