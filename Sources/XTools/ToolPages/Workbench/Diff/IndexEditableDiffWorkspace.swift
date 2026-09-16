@@ -151,12 +151,12 @@ struct IndexEditableDiffWorkspace: View {
 private enum IndexDiffEditorMetrics {
     static let rulerWidth: CGFloat = 44
     static let textInset = NSSize(width: rulerWidth + 13, height: 14)
-    static let paneGap: CGFloat = 1
+    static let paneGap: CGFloat = 8
     static let dividerThickness: CGFloat = paneGap
     static let stageInset: CGFloat = 0
-    static let frameCornerRadius: CGFloat = ToolMetrics.CornerRadius.field
-    static let frameBorderWidth: CGFloat = 0.5
-    static let paneCornerRadius: CGFloat = 0
+    static let frameCornerRadius: CGFloat = 0
+    static let frameBorderWidth: CGFloat = 0
+    static let paneCornerRadius: CGFloat = ToolMetrics.CornerRadius.field
     static let trailingReadingGuard: CGFloat = 16
     static let placeholderTrailing: CGFloat = trailingReadingGuard
     static let placeholderTopInset: CGFloat = textInset.height + 1
@@ -863,8 +863,8 @@ private final class IndexEditableDiffScrollHostView: NSView {
 
     override func updateLayer() {
         layer?.cornerRadius = IndexDiffEditorMetrics.frameCornerRadius
-        layer?.backgroundColor = IndexDiffNSPalette.editorBackground(for: effectiveAppearance).cgColor
-        layer?.borderColor = NSColor(ToolTheme.border).cgColor
+        layer?.backgroundColor = NSColor.clear.cgColor
+        layer?.borderColor = NSColor.clear.cgColor
         layer?.borderWidth = IndexDiffEditorMetrics.frameBorderWidth
     }
 
@@ -917,7 +917,7 @@ private final class IndexEditableDiffSplitView: NSSplitView {
     }
 
     override func drawDivider(in rect: NSRect) {
-        NSColor(ToolTheme.border).setFill()
+        NSColor.clear.setFill()
         NSBezierPath(rect: rect).fill()
     }
 
@@ -979,8 +979,8 @@ private final class IndexDiffEditorPaneView: NSView {
     override func updateLayer() {
         layer?.cornerRadius = IndexDiffEditorMetrics.paneCornerRadius
         layer?.backgroundColor = IndexDiffNSPalette.editorBackground(for: effectiveAppearance).cgColor
-        layer?.borderColor = NSColor.clear.cgColor
-        layer?.borderWidth = 0
+        layer?.borderColor = NSColor(ToolTheme.border).cgColor
+        layer?.borderWidth = 0.5
     }
 
     override func viewDidChangeEffectiveAppearance() {
