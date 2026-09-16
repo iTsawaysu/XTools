@@ -303,7 +303,7 @@ struct IndexTextConversionProcessingSurface: View {
     let text: String
 
     var body: some View {
-        IndexProgressLabel(message: text)
+        IndexProgressLabel(message: text, layout: .centered)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
         .overlay {

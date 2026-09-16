@@ -302,7 +302,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     private var outputPane: some View {
         if let outputProcessingText {
             IndexTextConversionProcessingSurface(text: outputProcessingText)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .accessibilityLabel(outputTitle)
         } else {
             switch outputPresentation {
