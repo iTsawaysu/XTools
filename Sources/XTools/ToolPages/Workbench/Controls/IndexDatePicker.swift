@@ -87,8 +87,10 @@ struct IndexCalendarView: View {
         Self.yearMonthFormatter.string(from: navigation.displayedMonth)
     }
 
+    private static let weekdaySymbols: [String] = ["日", "一", "二", "三", "四", "五", "六"]
+
     private var weekdaySymbols: [String] {
-        ["日", "一", "二", "三", "四", "五", "六"]
+        Self.weekdaySymbols
     }
 
     private var orderedDirection: ToolMotion.OrderedDirection {

@@ -56,7 +56,7 @@ public enum JSONFormatting {
     public static func adjustIndentation(_ json: String, to spaces: Int) -> String {
         let targetSpaces = max(0, spaces)
 
-        let lines = json.components(separatedBy: "\n")
+        let lines = json.split(separator: "\n", omittingEmptySubsequences: false)
         let sourceIndentWidth = lines
             .map { $0.prefix(while: { $0 == " " }).count }
             .filter { $0 > 0 }

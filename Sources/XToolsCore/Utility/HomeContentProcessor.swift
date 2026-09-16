@@ -144,12 +144,13 @@ public enum HomeContentProcessor {
         return true
     }
 
+    private static let base64Alphabet = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
+    )
+
     private static func isShortUTF8Base64(_ text: String) -> Bool {
         guard text.count >= 8, text.count.isMultiple(of: 4) else { return false }
-        let alphabet = CharacterSet(
-            charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="
-        )
-        guard text.unicodeScalars.allSatisfy(alphabet.contains),
+        guard text.unicodeScalars.allSatisfy(base64Alphabet.contains),
               let decoded = try? Base64Conversion.decode(text) else {
             return false
         }
@@ -166,13 +167,21 @@ public enum HomeContentProcessor {
     }
 
     private static func containsPercentEscape(_ text: String) -> Bool {
-        let bytes = Array(text.utf8)
-        guard bytes.count >= 3 else { return false }
+        let utf8 = text.utf8
+        guard let limit = utf8.index(utf8.endIndex, offsetBy: -2, limitedBy: utf8.startIndex) else {
+            return false
+        }
 
-        for index in 0..<(bytes.count - 2) where bytes[index] == UInt8(ascii: "%") {
-            if isHexDigit(bytes[index + 1]), isHexDigit(bytes[index + 2]) {
-                return true
+        var index = utf8.startIndex
+        while index < limit {
+            if utf8[index] == UInt8(ascii: "%") {
+                let first = utf8.index(after: index)
+                let second = utf8.index(after: first)
+                if isHexDigit(utf8[first]), isHexDigit(utf8[second]) {
+                    return true
+                }
             }
+            utf8.formIndex(after: &index)
         }
         return false
     }

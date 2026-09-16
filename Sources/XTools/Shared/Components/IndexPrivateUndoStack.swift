@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 
 /// ADR-0022: one editable surface → one private `UndoManager` that dies with it.

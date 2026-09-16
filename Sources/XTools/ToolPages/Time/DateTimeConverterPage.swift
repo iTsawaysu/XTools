@@ -197,6 +197,28 @@ private struct IndexDateTimeWorkspaceContent: View {
 
 }
 
+@MainActor
+private enum DateTimeFormatters {
+    static let iso8601 = ISO8601DateFormatter()
+
+    static let localMedium: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .medium
+        return formatter
+    }()
+
+    static let utcRFC822: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss 'GMT'"
+        return formatter
+    }()
+}
+
+@MainActor
 private func dateTimeResultRows(for date: Date) -> [(String, String, Color?)] {
     guard let secondsText = TimestampInterpreter.wholeSecondText(for: date),
           let millisecondsText = TimestampInterpreter.millisecondText(for: date) else {
@@ -206,6 +228,7 @@ private func dateTimeResultRows(for date: Date) -> [(String, String, Color?)] {
     return dateTimeResultRows(for: date, secondsText: secondsText, millisecondsText: millisecondsText)
 }
 
+@MainActor
 private func dateTimeResultRows(
     for date: Date,
     secondsText: String,
@@ -216,25 +239,19 @@ private func dateTimeResultRows(
     return [
         ("Unix 秒", secondsText, nil),
         ("Unix 毫秒", millisecondsText, nil),
-        ("ISO 8601", ISO8601DateFormatter().string(from: date), nil),
+        ("ISO 8601", DateTimeFormatters.iso8601.string(from: date), nil),
         ("人类时间（本地）", localHuman, nil),
         ("本地时间", dateTimeLocalDisplayText(for: date), nil),
         ("UTC", dateTimeUTCDisplayText(for: date), nil)
     ]
 }
 
+@MainActor
 private func dateTimeLocalDisplayText(for date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "zh_CN")
-    formatter.dateStyle = .medium
-    formatter.timeStyle = .medium
-    return formatter.string(from: date)
+    DateTimeFormatters.localMedium.string(from: date)
 }
 
+@MainActor
 private func dateTimeUTCDisplayText(for date: Date) -> String {
-    let formatter = DateFormatter()
-    formatter.locale = Locale(identifier: "en_US_POSIX")
-    formatter.timeZone = TimeZone(secondsFromGMT: 0)
-    formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss 'GMT'"
-    return formatter.string(from: date)
+    DateTimeFormatters.utcRFC822.string(from: date)
 }

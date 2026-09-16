@@ -47,16 +47,6 @@ extension View {
     ) -> some View {
         modifier(IndexSurfaceModifier(shape: shape, fill: fill, border: border, borderWidth: borderWidth))
     }
-
-    /// Strokes a rounded rectangle matching the surface shape — the overlay
-    /// half of `.indexSurface` for views that manage their own background.
-    func indexSurfaceBorder(
-        _ shape: IndexSurfaceShape = .field,
-        border: Color = ToolTheme.border,
-        borderWidth: CGFloat = 0.5
-    ) -> some View {
-        modifier(IndexSurfaceBorderModifier(shape: shape, border: border, borderWidth: borderWidth))
-    }
 }
 
 private struct IndexSurfaceModifier: ViewModifier {
@@ -97,23 +87,6 @@ private struct IndexSurfaceElevation: ViewModifier {
             content.toolShadow(ToolTheme.Shadow.panel)
         default:
             content
-        }
-    }
-}
-
-private struct IndexSurfaceBorderModifier: ViewModifier {
-    let shape: IndexSurfaceShape
-    let border: Color
-    let borderWidth: CGFloat
-
-    func body(content: Content) -> some View {
-        if case .pill = shape {
-            content.overlay { Capsule(style: .continuous).strokeBorder(border, lineWidth: borderWidth) }
-        } else {
-            content.overlay {
-                RoundedRectangle(cornerRadius: shape.radius, style: .continuous)
-                    .strokeBorder(border, lineWidth: borderWidth)
-            }
         }
     }
 }

@@ -527,10 +527,6 @@ private struct IndexJWTWorkspaceContent: View {
         ]
     }
 
-    private func toggleLocalCheckDisclosure() {
-        localCheckDisclosureState.userToggle()
-    }
-
     /// Bridges the guarded disclosure state into an `IndexDisclosure` binding.
     private var localCheckExpansionBinding: Binding<Bool> {
         Binding(

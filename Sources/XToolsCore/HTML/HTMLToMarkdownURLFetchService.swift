@@ -196,6 +196,13 @@ public struct HTMLToMarkdownURLFetchService: Sendable {
             || prefix.hasPrefix("<p")
     }
 
+    private static let charsetRegex: NSRegularExpression = {
+        let pattern = #"(?i)charset\s*=\s*[\"']?\s*([A-Za-z0-9._:-]+)"#
+        return try! NSRegularExpression(pattern: pattern)
+    }()
+
+    private static let quoteCharacterSet = CharacterSet(charactersIn: "\"'")
+
     private static func htmlDeclaredCharset(in data: Data) -> String? {
         guard let prefix = String(
             data: data.prefix(16 * 1024),
@@ -204,13 +211,11 @@ public struct HTMLToMarkdownURLFetchService: Sendable {
             return nil
         }
 
-        let pattern = #"(?i)charset\s*=\s*[\"']?\s*([A-Za-z0-9._:-]+)"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(
-                in: prefix,
-                range: NSRange(prefix.startIndex..., in: prefix)
-              ),
-              let range = Range(match.range(at: 1), in: prefix) else {
+        guard let match = charsetRegex.firstMatch(
+            in: prefix,
+            range: NSRange(prefix.startIndex..., in: prefix)
+        ),
+        let range = Range(match.range(at: 1), in: prefix) else {
             return nil
         }
         return String(prefix[range])
@@ -226,10 +231,9 @@ public struct HTMLToMarkdownURLFetchService: Sendable {
                 $0.trimmingCharacters(in: .whitespacesAndNewlines)
             }
             if pieces.count == 2, pieces[0].lowercased() == "charset" {
-                return pieces[1].trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+                return pieces[1].trimmingCharacters(in: quoteCharacterSet)
             }
         }
-
         return nil
     }
 }

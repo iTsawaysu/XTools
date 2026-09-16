@@ -35,15 +35,15 @@ struct TextArtifactContractTests {
         let script = try Self.readSource("build.sh")
         let readme = try Self.readSource("README.md")
 
-        #expect(readme.contains("## 安装")) // keep source-build instructions discoverable from installation
-        #expect(readme.contains("从源码构建")) // distinguish source builds from release downloads
+        #expect(readme.contains("## Quick Start")) // keep source-build instructions discoverable from installation
+        #expect(readme.contains("Build from Source")) // distinguish source builds from release downloads
         #expect(readme.contains("macOS 13+")) // document the supported runtime baseline
         #expect(readme.contains("Xcode 16+")) // document the required build toolchain
         #expect(readme.contains("git clone https://github.com/iTsawaysu/XTools.git")) // provide the repository bootstrap command
-        #expect(readme.contains("./build.sh           # 增量构建 + 打包 + 打开 App")) // document the daily development entrypoint
-        #expect(readme.contains("./build.sh release   # Release 构建")) // document the release packaging entrypoint
-        #expect(readme.contains("swift test           # 运行完整测试")) // document the full test entrypoint beside build commands
-        #expect(readme.contains("提交前请运行 `swift test`")) // contributors must run the same public test entrypoint
+        #expect(readme.contains("./build.sh           # Incremental debug build & open app")) // document the daily development entrypoint
+        #expect(readme.contains("./build.sh release   # Production release build")) // document the release packaging entrypoint
+        #expect(readme.contains("swift test           # Run automated test suite")) // document the full test entrypoint beside build commands
+        #expect(readme.contains("Run `swift test` before submitting")) // contributors must run the same public test entrypoint
         #expect(script.contains("TRASH_DIR=\"${TRASH_DIR:-${TMPDIR:-/tmp}/XTools-build-archive}\"")) // use a portable default while allowing overrides
 
         #expect(script.contains("BUILD_DIR=\"$PROJECT_DIR/.build\"")) // build.sh shares the cache warmed by swift build/test

@@ -58,20 +58,3 @@ struct IndexProgressSpinner: View {
             .controlSize(.small)
     }
 }
-
-extension View {
-    /// Replaces the receiver with a centered processing state — for card and
-    /// preview bodies whose content is being generated.
-    func indexProgressOverlay(_ message: String, active: Bool) -> some View {
-        overlay {
-            if active {
-                IndexProgressLabel(message: message, layout: .centered)
-                    .frame(maxHeight: .infinity)
-                    .background(ToolTheme.panelBackground.opacity(0.72), in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))
-                    .transition(ToolMotion.Transition.modeContent)
-            }
-        }
-        .toolAnimation(ToolMotion.Preset.panelReveal, value: active)
-        .accessibilityHidden(active)
-    }
-}

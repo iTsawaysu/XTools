@@ -29,6 +29,19 @@ public enum MathExpressionEvaluator {
     private static let maximumSignificantDigits = 15
     private static let posixLocale = Locale(identifier: "en_US_POSIX")
 
+    private static let decimalFormatterLock = NSLock()
+    private static let decimalFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.locale = posixLocale
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = false
+        formatter.usesSignificantDigits = true
+        formatter.minimumSignificantDigits = 1
+        formatter.maximumSignificantDigits = maximumSignificantDigits
+        formatter.maximumFractionDigits = 340
+        return formatter
+    }()
+
     private static func format(_ value: Double) -> String {
         if value == 0 {
             return "0"
@@ -48,15 +61,9 @@ public enum MathExpressionEvaluator {
             return String(Int64(value))
         }
 
-        let formatter = NumberFormatter()
-        formatter.locale = posixLocale
-        formatter.numberStyle = .decimal
-        formatter.usesGroupingSeparator = false
-        formatter.usesSignificantDigits = true
-        formatter.minimumSignificantDigits = 1
-        formatter.maximumSignificantDigits = maximumSignificantDigits
-        formatter.maximumFractionDigits = 340
-        return formatter.string(from: NSNumber(value: value)) ?? String(value)
+        decimalFormatterLock.lock()
+        defer { decimalFormatterLock.unlock() }
+        return decimalFormatter.string(from: NSNumber(value: value)) ?? String(value)
     }
 
     public static func evaluateLiveInput(_ expression: String) -> LiveEvaluation {

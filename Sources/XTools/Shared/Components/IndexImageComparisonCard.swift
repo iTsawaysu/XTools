@@ -2,8 +2,6 @@ import AppKit
 import SwiftUI
 
 public struct IndexImageComparisonCard<Footer: View>: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     public let title: String
     public var badgeText: String? = nil
     public var badgeTone: IndexBadgeTone = .neutral

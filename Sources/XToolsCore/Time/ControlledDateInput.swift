@@ -255,21 +255,19 @@ public struct ControlledDateInput: Equatable, Sendable {
     }
 
     public static func lastDay(year: Int, month: Int) -> Int {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-
-        var components = DateComponents()
-        components.calendar = calendar
-        components.timeZone = calendar.timeZone
-        components.year = clamp(year, to: 1...9999)
-        components.month = clamp(month, to: 1...12)
-        components.day = 1
-
-        guard let date = calendar.date(from: components),
-              let range = calendar.range(of: .day, in: .month, for: date) else {
+        let clampedMonth = clamp(month, to: 1...12)
+        switch clampedMonth {
+        case 1, 3, 5, 7, 8, 10, 12:
+            return 31
+        case 4, 6, 9, 11:
+            return 30
+        case 2:
+            let clampedYear = clamp(year, to: 1...9999)
+            let isLeap = (clampedYear % 4 == 0 && clampedYear % 100 != 0) || (clampedYear % 400 == 0)
+            return isLeap ? 29 : 28
+        default:
             return 31
         }
-        return range.count
     }
 
     private static func components(from date: Date, timeZone: TimeZone) -> DateOnlyComponents {

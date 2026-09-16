@@ -166,13 +166,18 @@ private struct IndexCrontabWorkspaceContent: View {
         var calendar = Calendar.current
         calendar.timeZone = timeZone
 
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
+        let formatter = Self.nextRunsDateFormatter
         formatter.timeZone = timeZone
-        formatter.dateFormat = "yyyy-MM-dd HH:mm (EEE)"
 
         let runs = CronScheduler.nextRuns(workspace.expression, count: 5, after: Date(), calendar: calendar)
         workspace.nextRuns = runs.map(formatter.string(from:))
         workspace.previewTimeZoneIdentifier = timeZoneIdentifier
     }
+
+    private static let nextRunsDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm (EEE)"
+        return formatter
+    }()
 }

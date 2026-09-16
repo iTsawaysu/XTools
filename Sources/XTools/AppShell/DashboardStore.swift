@@ -148,11 +148,6 @@ final class DashboardStore: ObservableObject {
         recentTools.filter { knownToolIDs.contains($0.toolID) }
     }
 
-    func recentToolAggregates(knownToolIDs: Set<ToolID>? = nil) -> [DashboardRecentTool] {
-        guard let knownToolIDs else { return recentTools }
-        return recentTools(knownToolIDs: knownToolIDs)
-    }
-
     var totalLaunches: Int { preferences.activity.reduce(0) { $0 + $1.count } }
     var activeDays: Int { activityHistoryDays.count }
     var lastActivityAt: Date? { preferences.activity.map(\.timestamp).max() }
@@ -189,10 +184,6 @@ final class DashboardStore: ObservableObject {
         }
         return counts.map { DashboardCategorySummary(categoryID: $0.key, launchCount: $0.value.launches, activeToolCount: $0.value.tools.count) }
             .sorted { $0.launchCount == $1.launchCount ? $0.categoryID.rawValue < $1.categoryID.rawValue : $0.launchCount > $1.launchCount }
-    }
-
-    func categoryStats(categoryFor: (ToolID) -> ToolCategoryID?) -> [DashboardCategorySummary] {
-        categorySummaries(categoryFor: categoryFor)
     }
 
     func recordLaunch(toolID: ToolID, at date: Date? = nil) {
@@ -233,11 +224,6 @@ final class DashboardStore: ObservableObject {
 
     func resetActivity() {
         preferences.activity = []
-        persist()
-    }
-
-    func resetAll() {
-        preferences = DashboardPreferences()
         persist()
     }
 

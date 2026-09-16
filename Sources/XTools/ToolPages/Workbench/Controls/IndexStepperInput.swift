@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// Joined `− value +` quantity stepper (prototype v3 parameter rows).
@@ -65,7 +64,6 @@ struct IndexStepperInput: View {
         let action: () -> Void
 
         @State private var isHovering = false
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
         private var background: Color {
             if isDisabled { return Color.clear }

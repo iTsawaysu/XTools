@@ -1,10 +1,8 @@
 import XToolsCore
 import Foundation
 
-typealias IndexResultPresencePhase = ResultPresencePhase
 typealias IndexResultPresenceMotionPolicy = ResultPresenceMotionPolicy
 typealias IndexResultPresenceFirstAppearancePolicy = ResultPresenceFirstAppearancePolicy
-typealias IndexResultPresenceAction = ResultPresenceAction
 typealias IndexResultPresenceCompletion = ResultPresenceCompletion
 typealias IndexResultPresenceState = ResultPresenceState
 

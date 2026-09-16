@@ -30,6 +30,8 @@ Download the latest DMG from [GitHub Releases](https://github.com/iTsawaysu/XToo
 
 ### 2. Build from Source
 
+Requires macOS 13+ and Xcode 16+.
+
 ```bash
 git clone https://github.com/iTsawaysu/XTools.git
 cd XTools

@@ -31,6 +31,43 @@ public enum UserAgentParser {
         }
     }
 
+    private static func makeRegex(_ pattern: String) -> NSRegularExpression {
+        // Safe: static regex patterns are compile-time constants.
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
+            fatalError("Invalid regex pattern: \(pattern)")
+        }
+        return regex
+    }
+
+    private static let edgeRegexes = [
+        makeRegex("Edg/([0-9.]+)"),
+        makeRegex("EdgiOS/([0-9.]+)"),
+        makeRegex("EdgA/([0-9.]+)")
+    ]
+    private static let operaRegexes = [
+        makeRegex("OPR/([0-9.]+)"),
+        makeRegex("OPiOS/([0-9.]+)"),
+        makeRegex("Version/([0-9.]+)"),
+        makeRegex("Opera/([0-9.]+)")
+    ]
+    private static let firefoxRegexes = [
+        makeRegex("Firefox/([0-9.]+)"),
+        makeRegex("FxiOS/([0-9.]+)")
+    ]
+    private static let chromeRegexes = [
+        makeRegex("Chrome/([0-9.]+)"),
+        makeRegex("CriOS/([0-9.]+)"),
+        makeRegex("Chromium/([0-9.]+)")
+    ]
+    private static let safariRegex = makeRegex("Version/([0-9.]+)")
+    private static let windowsRegex = makeRegex("Windows NT ([0-9.]+)")
+    private static let iosRegexes = [
+        makeRegex("(?:CPU(?: iPhone)? OS|CPU OS) ([0-9_]+)"),
+        makeRegex("OS ([0-9_]+) like Mac OS X")
+    ]
+    private static let androidRegex = makeRegex("Android ([0-9.]+)")
+    private static let macOSRegex = makeRegex("Mac OS X ([0-9_]+)")
+
     public static func parse(_ userAgent: String) -> Result? {
         let trimmed = userAgent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
@@ -42,28 +79,19 @@ public enum UserAgentParser {
         let browserVersion: String
         if ua.contains("edg/") || ua.contains("edgios/") || ua.contains("edga/") {
             browser = "Microsoft Edge"
-            browserVersion = firstVersion(
-                in: trimmed,
-                patterns: ["Edg/([0-9.]+)", "EdgiOS/([0-9.]+)", "EdgA/([0-9.]+)"]
-            )
+            browserVersion = firstVersion(in: trimmed, regexes: edgeRegexes)
         } else if ua.contains("opr/") || ua.contains("opera/") || ua.contains("opios/") {
             browser = "Opera"
-            browserVersion = firstVersion(
-                in: trimmed,
-                patterns: ["OPR/([0-9.]+)", "OPiOS/([0-9.]+)", "Version/([0-9.]+)", "Opera/([0-9.]+)"]
-            )
+            browserVersion = firstVersion(in: trimmed, regexes: operaRegexes)
         } else if ua.contains("firefox/") || ua.contains("fxios/") {
             browser = "Mozilla Firefox"
-            browserVersion = firstVersion(in: trimmed, patterns: ["Firefox/([0-9.]+)", "FxiOS/([0-9.]+)"])
+            browserVersion = firstVersion(in: trimmed, regexes: firefoxRegexes)
         } else if ua.contains("chrome/") || ua.contains("crios/") || ua.contains("chromium/") {
             browser = "Google Chrome"
-            browserVersion = firstVersion(
-                in: trimmed,
-                patterns: ["Chrome/([0-9.]+)", "CriOS/([0-9.]+)", "Chromium/([0-9.]+)"]
-            )
+            browserVersion = firstVersion(in: trimmed, regexes: chromeRegexes)
         } else if ua.contains("safari/") && !ua.contains("chrome") {
             browser = "Apple Safari"
-            browserVersion = extractVersion(from: trimmed, pattern: "Version/([0-9.]+)")
+            browserVersion = extractVersion(from: trimmed, regex: safariRegex)
         } else {
             browser = "(未知)"
             browserVersion = "(未知)"
@@ -82,21 +110,18 @@ public enum UserAgentParser {
             } else if ua.contains("windows nt 6.1") {
                 osVersion = "7"
             } else {
-                osVersion = extractVersion(from: trimmed, pattern: "Windows NT ([0-9.]+)")
+                osVersion = extractVersion(from: trimmed, regex: windowsRegex)
             }
         } else if ua.contains("iphone") || ua.contains("ipad") {
             os = "iOS"
-            osVersion = firstVersion(
-                in: trimmed,
-                patterns: ["(?:CPU(?: iPhone)? OS|CPU OS) ([0-9_]+)", "OS ([0-9_]+) like Mac OS X"]
-            )
-            .replacingOccurrences(of: "_", with: ".")
+            osVersion = firstVersion(in: trimmed, regexes: iosRegexes)
+                .replacingOccurrences(of: "_", with: ".")
         } else if ua.contains("android") {
             os = "Android"
-            osVersion = extractVersion(from: trimmed, pattern: "Android ([0-9.]+)")
+            osVersion = extractVersion(from: trimmed, regex: androidRegex)
         } else if ua.contains("mac os x") {
             os = "macOS"
-            osVersion = extractVersion(from: trimmed, pattern: "Mac OS X ([0-9_]+)").replacingOccurrences(of: "_", with: ".")
+            osVersion = extractVersion(from: trimmed, regex: macOSRegex).replacingOccurrences(of: "_", with: ".")
         } else if ua.contains("linux") {
             os = "Linux"
             osVersion = "(未知)"
@@ -134,9 +159,9 @@ public enum UserAgentParser {
         return nil
     }
 
-    private static func firstVersion(in text: String, patterns: [String]) -> String {
-        for pattern in patterns {
-            let version = extractVersion(from: text, pattern: pattern)
+    private static func firstVersion(in text: String, regexes: [NSRegularExpression]) -> String {
+        for regex in regexes {
+            let version = extractVersion(from: text, regex: regex)
             if version != "(未知)" {
                 return version
             }
@@ -144,11 +169,7 @@ public enum UserAgentParser {
         return "(未知)"
     }
 
-    private static func extractVersion(from text: String, pattern: String) -> String {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
-            return "(未知)"
-        }
-
+    private static func extractVersion(from text: String, regex: NSRegularExpression) -> String {
         let range = NSRange(text.startIndex..., in: text)
         if let match = regex.firstMatch(in: text, range: range),
            let versionRange = Range(match.range(at: 1), in: text) {

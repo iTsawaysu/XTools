@@ -60,6 +60,11 @@ public enum SmartPasteDetector {
         return nil
     }
 
+    private static let hexDigits = CharacterSet(charactersIn: "0123456789abcdef")
+    private static let cssColorAllowed = CharacterSet(charactersIn: "0123456789.,% ")
+    private static let hexDigitsWithUpper = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
+    private static let base64Alphabet = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
+
     /// `#RGB`, `#RGBA`, `#RRGGBB`, `#RRGGBBAA`, `rgb(...)`, `rgba(...)`,
     /// `hsl(...)`, `hsla(...)`. Deliberately excludes bare names like `red`.
     private static func isCSSColor(_ text: String) -> Bool {
@@ -69,7 +74,6 @@ public enum SmartPasteDetector {
 
         if lowercased.hasPrefix("#") {
             let digits = lowercased.dropFirst()
-            let hexDigits = CharacterSet(charactersIn: "0123456789abcdef")
             guard [3, 4, 6, 8].contains(digits.count) else { return false }
             return digits.unicodeScalars.allSatisfy(hexDigits.contains)
         }
@@ -82,8 +86,7 @@ public enum SmartPasteDetector {
 
         let body = lowercased.dropFirst(function.count).dropLast()
         guard !body.isEmpty else { return false }
-        let allowed = CharacterSet(charactersIn: "0123456789.,% ")
-        return body.unicodeScalars.allSatisfy(allowed.contains)
+        return body.unicodeScalars.allSatisfy(cssColorAllowed.contains)
     }
 
     /// Nine/ten digits are seconds, twelve/thirteen are milliseconds; the value
@@ -210,8 +213,7 @@ public enum SmartPasteDetector {
         while let scalar = iterator.next() {
             guard scalar == "%" else { continue }
             guard let first = iterator.next(), let second = iterator.next() else { return false }
-            let digits = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
-            guard digits.contains(first), digits.contains(second) else { return false }
+            guard hexDigitsWithUpper.contains(first), hexDigitsWithUpper.contains(second) else { return false }
             escapeCount += 1
         }
 
@@ -226,8 +228,7 @@ public enum SmartPasteDetector {
     private static func isBase64(_ text: String) -> Bool {
         guard text.count >= 16 else { return false }
 
-        let alphabet = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
-        guard text.unicodeScalars.allSatisfy(alphabet.contains) else { return false }
+        guard text.unicodeScalars.allSatisfy(base64Alphabet.contains) else { return false }
         guard text.count % 4 == 0 else { return false }
 
         let paddingIndex = text.firstIndex(of: "=")

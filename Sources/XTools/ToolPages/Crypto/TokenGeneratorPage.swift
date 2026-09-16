@@ -105,7 +105,6 @@ struct IndexTokenPage: View {
 /// values reach 512 characters, so rows wrap instead of truncating.
 private struct IndexTokenWorkspaceContent: View {
     @ObservedObject var workspace: TokenGeneratorToolWorkspaceModel
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var motionGeneration = 0
 
     var body: some View {

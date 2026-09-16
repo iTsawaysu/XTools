@@ -99,7 +99,7 @@ extension SQLFormatter {
     }
 
     mutating func appendInlineOpeningParenthesis() {
-        let needsSpace = ["IN", "EXISTS", "VALUES"].contains(lastWordNormalized ?? "")
+        let needsSpace = Self.inlineParenPrefixWords.contains(lastWordNormalized ?? "")
 
         if lastWordNormalized == "OVER" {
             appendRaw(" (")
@@ -125,7 +125,7 @@ extension SQLFormatter {
     }
 
     mutating func appendOperator(_ value: String) {
-        if ["::", "->", "->>", "#>", "#>>"].contains(value) {
+        if Self.unspacedOperators.contains(value) {
             trimTrailingSpace()
             appendRaw(value)
             return
@@ -225,6 +225,9 @@ extension SQLFormatter {
         }
         return value
     }
+
+    static let inlineParenPrefixWords: Set<String> = ["IN", "EXISTS", "VALUES"]
+    static let unspacedOperators: Set<String> = ["::", "->", "->>", "#>", "#>>"]
 
     static let singleWordKeywords: Set<String> = [
         "SELECT", "WITH", "FROM", "WHERE", "GROUP", "BY", "HAVING", "ORDER", "LIMIT",

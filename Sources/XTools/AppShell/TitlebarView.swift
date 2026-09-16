@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// Native window toolbar content. The scene owns the toolbar chrome; this

@@ -32,7 +32,19 @@ public enum DigestEncoding {
 }
 
 private extension Array where Element == UInt8 {
+    private static let hexDigits: [UInt8] = Array("0123456789abcdef".utf8)
+
     func toHexStringLowercased() -> String {
-        map { String(format: "%02x", $0) }.joined()
+        guard !isEmpty else { return "" }
+        return String(unsafeUninitializedCapacity: count * 2) { buffer in
+            var ptr = buffer.baseAddress!
+            for byte in self {
+                ptr.pointee = Self.hexDigits[Int(byte >> 4)]
+                ptr += 1
+                ptr.pointee = Self.hexDigits[Int(byte & 0x0F)]
+                ptr += 1
+            }
+            return count * 2
+        }
     }
 }

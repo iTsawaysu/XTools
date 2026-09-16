@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// Prototype v3 (Clay 收敛 + 轻量过渡) structured formatter workbench.
