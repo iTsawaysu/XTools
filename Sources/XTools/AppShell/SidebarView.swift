@@ -346,6 +346,7 @@ struct SidebarGroupHeader: View {
     let isFavorites: Bool
     let section: ToolNavigationSection
     let isExpanded: Bool
+    var isActiveSection: Bool = false
     let isSearchActive: Bool
     let reduceMotion: Bool
     let action: () -> Void
@@ -353,13 +354,20 @@ struct SidebarGroupHeader: View {
     @StateObject private var hoverState = SidebarHoverState()
 
     private var foreground: Color {
-        if isFavorites {
-            return hoverState.isHovered || isExpanded ? ToolTheme.accentHover : ToolTheme.accent
+        if isActiveSection {
+            return ToolTheme.textPrimary
         }
         if hoverState.isHovered || isExpanded {
             return ToolTheme.textSecondary
         }
         return ToolTheme.textTertiary
+    }
+
+    private var iconForeground: Color {
+        if isFavorites {
+            return isActiveSection || hoverState.isHovered ? ToolTheme.accent : ToolTheme.accent.opacity(0.85)
+        }
+        return foreground
     }
 
     var body: some View {
@@ -374,11 +382,12 @@ struct SidebarGroupHeader: View {
                 Image(systemName: systemImage)
                     .symbolRenderingMode(.monochrome)
                     .font(.system(size: ToolMetrics.IconSize.medium, weight: .medium))
-                    .foregroundStyle(isFavorites ? ToolTheme.accent : foreground)
+                    .foregroundStyle(iconForeground)
                     .frame(width: SidebarMetrics.iconSize, height: SidebarMetrics.iconSize)
 
                 Text(title)
                     .font(ToolTypography.groupHeader)
+                    .fontWeight(isActiveSection ? .medium : .regular)
                     .tracking(0.2)
                     .foregroundStyle(foreground)
                     .lineLimit(1)
@@ -391,7 +400,7 @@ struct SidebarGroupHeader: View {
                     Circle()
                         .fill(ToolTheme.categoryGradient(categoryID))
                         .frame(width: 7, height: 7)
-                        .opacity(isExpanded ? 0.95 : 0.55)
+                        .opacity(isActiveSection ? 1.0 : (isExpanded ? 0.95 : 0.55))
                         .accessibilityHidden(true)
                 }
             }
@@ -428,9 +437,6 @@ struct SidebarGroupHeader: View {
     }
 
     private var backgroundFill: Color {
-        if isFavorites && (isExpanded || hoverState.isHovered) {
-            return ToolTheme.accentSoft
-        }
         if hoverState.isHovered {
             return ToolTheme.hoverFill
         }

@@ -21,6 +21,7 @@ final class SidebarNavigationListCoordinator {
         /// SwiftUI content instead of re-rendering on every click.
         let isRowSelected: Bool
         let isRowInActiveSection: Bool
+        let isSectionActive: Bool
         let isSearchActive: Bool
         let interaction: SidebarNavigationTrackInteraction
         let colorScheme: ColorScheme
@@ -382,6 +383,10 @@ final class SidebarNavigationListCoordinator {
                 entry: entry,
                 selectedSection: configuration.selectedSection
             ),
+            isSectionActive: Self.isSectionActive(
+                entry: entry,
+                selectedSection: configuration.selectedSection
+            ),
             isSearchActive: configuration.isSearchActive,
             interaction: track.interaction,
             colorScheme: configuration.colorScheme,
@@ -438,6 +443,18 @@ final class SidebarNavigationListCoordinator {
         case .item(_, let section):
             return section == selectedSection
         case .header, .spacing:
+            return false
+        }
+    }
+
+    private static func isSectionActive(
+        entry: SidebarNavigationEntry,
+        selectedSection: ToolNavigationSection?
+    ) -> Bool {
+        switch entry.content {
+        case .header(let group, _):
+            return group.section == selectedSection
+        case .item, .spacing:
             return false
         }
     }

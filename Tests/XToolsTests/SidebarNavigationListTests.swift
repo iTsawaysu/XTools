@@ -672,10 +672,48 @@ struct SidebarNavigationListTests {
         #expect(track.hostedContentView.frame.height == SidebarMetrics.expandedRowHeight)
     }
 
+    @Test @MainActor func activeSectionChangeReconcilesHeaderAndToolSelectionState() throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = coordinator.makeScrollView()
+        let entries = Self.entries(groups: [
+            Self.group(section: .favorites, items: [Self.favoriteAlpha]),
+            Self.group(section: .category(.development), items: [Self.beta]),
+        ])
+
+        let configDev = Self.configuration(
+            entries: entries,
+            selectedToolID: .beta,
+            selectedSection: .category(.development)
+        )
+        coordinator.update(scrollView: scrollView, configuration: configDev)
+
+        let devHeaderTrack = try #require(
+            coordinator.documentView.subviews.first { ($0 as? SidebarNavigationTrackView)?.trackID == "header.category.development" }
+                as? SidebarNavigationTrackView
+        )
+        let favHeaderTrack = try #require(
+            coordinator.documentView.subviews.first { ($0 as? SidebarNavigationTrackView)?.trackID == "header.favorites" }
+                as? SidebarNavigationTrackView
+        )
+        #expect(devHeaderTrack.trackID == "header.category.development")
+        #expect(favHeaderTrack.trackID == "header.favorites")
+
+        let configFav = Self.configuration(
+            entries: entries,
+            selectedToolID: .alpha,
+            selectedSection: .favorites
+        )
+        coordinator.update(scrollView: scrollView, configuration: configFav)
+
+        #expect(coordinator.activeTrackIDs.contains("header.favorites"))
+        #expect(coordinator.activeTrackIDs.contains("header.category.development"))
+    }
+
     private static func configuration(
         entries: [SidebarNavigationEntry],
         favoriteOrder: [ToolID] = [],
         selectedToolID: ToolID? = nil,
+        selectedSection: ToolNavigationSection? = nil,
         isSearchActive: Bool = false,
         reduceMotion: Bool = true,
         onSelectTool: @escaping (ToolID) -> Void = { _ in }
@@ -683,7 +721,7 @@ struct SidebarNavigationListTests {
         SidebarNavigationListConfiguration(
             entries: entries,
             selectedToolID: selectedToolID,
-            selectedSection: nil,
+            selectedSection: selectedSection,
             favoriteOrder: favoriteOrder,
             isSearchActive: isSearchActive,
             reduceMotion: reduceMotion,

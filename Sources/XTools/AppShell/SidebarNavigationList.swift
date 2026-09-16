@@ -64,6 +64,7 @@ struct SidebarNavigationTrackRoot: View {
                 isFavorites: group.section == .favorites,
                 section: group.section,
                 isExpanded: isExpanded,
+                isActiveSection: selectedSection == group.section,
                 isSearchActive: isSearchActive,
                 reduceMotion: reduceMotion,
                 action: { onToggleSection(group.section) }
