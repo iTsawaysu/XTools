@@ -51,7 +51,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 leadingControl: {
                     IndexOptionLabel("URL")
                     urlInput
-                        .frame(minWidth: 140, idealWidth: 210, maxWidth: 280)
+                        .frame(minWidth: 150, idealWidth: 260, maxWidth: 380)
                     fetchButton
                 }
             )
@@ -63,9 +63,25 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
             placeholder: "https://example.com",
             text: $session.urlText,
             height: 26,
+            trailingInset: session.urlText.isEmpty ? 11 : 28,
             onSubmit: session.fetchURL
         )
         .disabled(session.isURLProcessing)
+        .overlay(alignment: .trailing) {
+            if !session.urlText.isEmpty && !session.isURLProcessing {
+                Button {
+                    session.urlText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(ToolTheme.textTertiary)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 8)
+                .help("清空 URL")
+                .accessibilityLabel("清空 URL")
+            }
+        }
     }
 
     private var fetchButton: some View {
