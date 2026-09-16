@@ -26,6 +26,8 @@ private struct IndexTextDiffWorkspaceContent: View {
             workspaceSemantic: .editableDiffWorkspace
         ) {
             IndexEditableDiffWorkspace(
+                inputTitle: "原始文本",
+                outputTitle: "对比文本",
                 leftPlaceholder: "原始文本…",
                 rightPlaceholder: "对比文本…",
                 left: $workspace.left,

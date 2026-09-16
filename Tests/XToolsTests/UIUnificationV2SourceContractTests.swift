@@ -174,7 +174,17 @@ struct UIUnificationV2SourceContractTests {
         contains(workbench, "HomeContentAction.allCases", "Workbench must derive its action menu from the approved Core action set")
         contains(workbench, "WorkbenchSecondaryButton(title: \"粘贴\"", "Clipboard input must have one explicit paste control")
         contains(workbench, "private func paste()", "Clipboard reading must stay owned by the explicit paste action")
+        contains(workbench, "hint: session.isProcessing ? nil : \"⌘↩\"", "Workbench primary action must show keyboard shortcut hint")
         doesNotContain(session, "NSPasteboard", "Home session must not import or monitor clipboard content")
+    }
+
+    @Test func keycapLabelsUseDedicatedLegibleTypography() throws {
+        let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
+        let typography = try readSource("Sources/XTools/Shared/ToolTypography.swift")
+
+        contains(typography, "static let keycap = Font.system(size: 11, weight: .medium)", "Keycap typography must use 11pt medium proportional font")
+        contains(controls, ".font(ToolTypography.keycap)", "Keyboard hint label must use legible keycap font")
+        contains(controls, ".tracking(", "Keyboard hint label must include letter spacing for clear glyph separation")
     }
 
     // MARK: - Helpers

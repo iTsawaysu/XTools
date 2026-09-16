@@ -306,12 +306,13 @@ struct IndexKeyboardHintLabel: View {
 
     var body: some View {
         Text(hint)
-            .font(ToolTypography.tagMicro)
-            .foregroundStyle(ToolTheme.onAccent.opacity(0.85))
+            .font(ToolTypography.keycap)
+            .tracking(0.6)
+            .foregroundStyle(ToolTheme.onAccent.opacity(0.95))
             .padding(.horizontal, 5)
-            .padding(.vertical, 2)
+            .padding(.vertical, 1.5)
             .background(
-                ToolTheme.onAccent.opacity(0.16),
+                ToolTheme.onAccent.opacity(0.20),
                 in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
             )
             .accessibilityHidden(true)

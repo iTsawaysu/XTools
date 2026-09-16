@@ -56,9 +56,6 @@ struct DashboardView: View {
             .padding(.bottom, 30)
         }
         .background(ToolTheme.Workbench.canvas)
-        .transaction { transaction in
-            transaction.animation = nil
-        }
     }
 
     private var pageHeader: some View {

@@ -15,18 +15,31 @@ struct HomeContentWorkbench: View {
             if hasInput {
                 divider
                 processingRow
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: -ToolMotion.Distance.micro)),
+                        removal: .opacity
+                    ))
             }
 
             if let failure = session.failure {
                 divider
                 diagnostic(failure)
+                    .transition(ToolMotion.Transition.diagnostic)
             }
 
             if let result = session.result {
                 divider
                 resultSection(result)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: ToolMotion.Distance.small)),
+                        removal: .opacity
+                    ))
             }
         }
+        .toolAnimation(ToolMotion.Preset.settle, value: hasInput)
+        .toolAnimation(ToolMotion.Preset.diagnostic, value: session.failure)
+        .toolAnimation(ToolMotion.Preset.resultPresenceAppearance, value: session.result != nil)
+        .toolAnimation(ToolMotion.Preset.accordion, value: session.isOutputCollapsed)
         .background(
             ToolTheme.Workbench.surface,
             in: RoundedRectangle(cornerRadius: ToolMetrics.Workbench.groupCorner, style: .continuous)
@@ -87,6 +100,7 @@ struct HomeContentWorkbench: View {
 
             WorkbenchPrimaryButton(
                 title: session.isProcessing ? "处理中…" : "处理",
+                hint: session.isProcessing ? nil : "⌘↩",
                 isEnabled: session.canRun,
                 action: session.run
             )
@@ -342,31 +356,61 @@ private struct WorkbenchSecondaryButton: View {
 
 private struct WorkbenchPrimaryButton: View {
     let title: String
+    var hint: String? = nil
     let isEnabled: Bool
     let action: () -> Void
 
     @FocusState private var isFocused: Bool
+    @State private var isHovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var helpText: String {
+        if let hint {
+            return "\(title)（\(hint)）"
+        }
+        return title
+    }
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(ToolTypography.Workbench.caption.weight(.semibold))
-                .foregroundStyle(ToolTheme.Workbench.onAction)
-                .padding(.horizontal, 14)
-                .frame(height: 30)
-                .background(
-                    ToolTheme.Workbench.action,
-                    in: RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous)
-                )
-                .contentShape(
-                    RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous)
-                )
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(ToolTypography.Workbench.caption.weight(.semibold))
+                    .foregroundStyle(ToolTheme.Workbench.onAction)
+
+                if let hint {
+                    IndexKeyboardHintLabel(hint: hint)
+                }
+            }
+            .padding(.leading, 12)
+            .padding(.trailing, hint == nil ? 12 : 8)
+            .frame(height: 30)
+            .background(
+                isHovering && isEnabled ? ToolTheme.accentHover : ToolTheme.Workbench.action,
+                in: RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous)
+            )
+            .contentShape(
+                RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous)
+            )
         }
-        .buttonStyle(IndexBareButtonStyle())
+        .buttonStyle(WorkbenchPrimaryButtonStyle(isEnabled: isEnabled))
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : 0.38)
         .focused($isFocused)
         .indexFocusRing(active: isFocused, cornerRadius: ToolMetrics.Workbench.compactCorner)
-        .accessibilityLabel(title)
+        .onHover { isHovering = $0 }
+        .help(helpText)
+        .accessibilityLabel(helpText)
+    }
+}
+
+private struct WorkbenchPrimaryButtonStyle: ButtonStyle {
+    let isEnabled: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(!reduceMotion && isEnabled && configuration.isPressed ? ToolMotion.Scale.pressed : 1.0)
+            .toolAnimation(ToolMotion.Preset.controlFeedback, value: configuration.isPressed)
     }
 }

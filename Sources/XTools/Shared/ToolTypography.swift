@@ -60,8 +60,10 @@ enum ToolTypography {
     static let micro = Font.system(size: 10, weight: .medium)
     /// Field-label weight for labels attached to inputs and value rows.
     static let fieldLabel = Font.system(size: 11, weight: .medium)
-    /// Tiny monospaced tag (terminal tags, keyboard hints, micro badges).
+    /// Tiny monospaced tag (terminal tags, micro badges).
     static let tagMicro = Font.system(size: 9.5, weight: .semibold, design: .monospaced)
+    /// Keycap label for keyboard shortcuts (⌘↩, ⌘K) ensuring crisp glyph rendering.
+    static let keycap = Font.system(size: 11, weight: .medium)
 
     // MARK: - Monospaced Values (semibold mono for codes & numeric badges)
 
