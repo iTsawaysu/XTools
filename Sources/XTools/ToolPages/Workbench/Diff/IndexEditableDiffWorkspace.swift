@@ -18,12 +18,35 @@ struct IndexEditableDiffWorkspace: View {
     var onClear: (() -> Void)? = nil
     var clearDisabled = false
 
+    private var isIdentical: Bool {
+        guard error == nil,
+              !left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !right.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+        return rows.isEmpty || rows.allSatisfy { $0.kind == .unchanged }
+    }
+
+    private var diffCount: Int {
+        guard error == nil,
+              (!left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !right.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) else {
+            return 0
+        }
+        return rows.filter { $0.kind != .unchanged }.count
+    }
+
     private var diagnosticText: String? {
         if let error, !error.isEmpty {
             return error
         }
         if let warning, !warning.isEmpty {
             return warning
+        }
+        if isIdentical {
+            return syntax == .json ? "两段 JSON 完全一致" : "两段文本完全一致"
+        }
+        if diffCount > 0 {
+            return "共 \(diffCount) 处差异"
         }
         return nil
     }
@@ -32,7 +55,13 @@ struct IndexEditableDiffWorkspace: View {
         if let error, !error.isEmpty {
             return .error
         }
-        return .warning
+        if let warning, !warning.isEmpty {
+            return .warning
+        }
+        if isIdentical {
+            return .success
+        }
+        return .info
     }
 
     private var showsErrorState: Bool {
@@ -135,12 +164,12 @@ struct IndexEditableDiffWorkspace: View {
                     .font(.system(size: ToolMetrics.IconSize.small, weight: .semibold))
                 Text(diagnosticText)
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(.tail)
             }
             .font(ToolTypography.caption)
             .foregroundStyle(diagnosticTone.tint)
-            .frame(maxWidth: 200, alignment: .leading)
-            .layoutPriority(-1)
+            .frame(maxWidth: 320, alignment: .leading)
+            .layoutPriority(1)
             .help(diagnosticText)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(diagnosticTone.accessibilityPrefix)：\(diagnosticText)")
@@ -728,6 +757,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         }
 
         private func applyJSONSyntax(_ line: String, lineRange: NSRange, layoutManager: NSLayoutManager) {
+            guard line.utf16.count <= 10_000 else { return }
             for token in JSONHighlighting.tokens(in: line) {
                 guard let range = nsRange(for: token, in: line, lineRange: lineRange) else {
                     continue

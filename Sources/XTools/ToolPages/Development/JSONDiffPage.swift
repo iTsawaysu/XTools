@@ -72,7 +72,7 @@ final class DiffToolWorkspaceModel: ObservableObject {
 struct IndexJSONDiffPage: View {
     private static let key = ToolWorkspaceKey<DiffToolWorkspaceModel>(toolID: "json-diff") { _ in
         DiffToolWorkspaceModel(
-            kind: .json(labels: .init(left: "Original JSON", right: "Compared JSON"))
+            kind: .json(labels: .init(left: "原始 JSON", right: "对比 JSON"))
         )
     }
 

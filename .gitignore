@@ -4,36 +4,85 @@ DerivedData/
 *.hmap
 *.ipa
 *.dSYM*
+*.xcresult
+*.xccovreport
+*.xccovarchive
+*.xctest
+*.playground/
 
-# Swift 包管理器
+# Swift 包管理器 (SPM)
 .build/
 .swiftpm-build/
 .swiftpm-test/
 .swiftpm/
 *.swiftpm
+.Package.test.resolved
 
-# 构建输出
+# 构建与打包输出
 dist/
 
-# 用户配置
+# Xcode 用户配置与个人工作区偏好
 xcuserdata/
 *.xcuserstate
 *.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
 Timeline.xctimeline
 
-# macOS 系统文件
-.DS_Store
-.AppleDouble
-._*
+# 主流编辑器与 IDE 配置 (VS Code, JetBrains, Sublime, Vim)
+.vscode/
+*.code-workspace
+.idea/
+*.iml
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
 
-# AI 工具本地配置、规范与 Vibe Coding 痕迹
+# macOS 系统文件与外置卷缓存
+.DS_Store
+.DS_Store?
+.AppleDouble
+.AppleDesktop
+._*
+.Spotlight-V100
+.Trashes
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# 环境变量、私钥与敏感文件
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+*.cer
+
+# 日志与临时调试 / 演练产物
+*.log
+scratch/
+.scratch/
+tmp/
+temp/
+
+# AI 辅助工具本地配置、上下文与 Vibe Coding 痕迹
 .claude/
+CLAUDE.md
 .codex/
 .agents/
-.scratch/
 .workbuddy/
 .trellis/
 .mimosa/
+.cursor/
+.cursorrules
+.windsurf/
+.cline/
+.roo/
+.gemini/
+.antigravity/
 AGENTS.md
 CONTEXT.md
 

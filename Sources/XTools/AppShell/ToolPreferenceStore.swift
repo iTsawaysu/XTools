@@ -405,7 +405,7 @@ enum TextDevelopmentToolPreferenceKeys {
     static let jsonIndent = ToolPreferenceKey<String>.string(
         "tools.jsonFormatter.indent.v1",
         default: "4",
-        allowedValues: ["2", "4"]
+        allowedValues: ["2", "4", "compact"]
     )
     static let sqlKeywordCase = ToolPreferenceKey<SQLFormatting.KeywordCase>.rawRepresentable(
         "tools.sqlFormatter.keywordCase.v1",

@@ -7,6 +7,21 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
         JSONFormatterToolWorkspaceModel(preferences: preferences)
     }
 
+    enum FormatMode: String, CaseIterable, Sendable {
+        case two = "2"
+        case four = "4"
+        case compact = "compact"
+
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .two: return "2 空格"
+            case .four: return "4 空格"
+            case .compact: return "压缩"
+            }
+        }
+    }
+
     enum IndentOption: Int, CaseIterable, Sendable {
         case two = 2
         case four = 4
@@ -15,10 +30,23 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
         var label: String { "\(rawValue) 空格" }
     }
 
-    @Published var input = ""
-    @Published var indentOption: IndentOption {
-        didSet { preferences.set(indentOption.id, for: TextDevelopmentToolPreferenceKeys.jsonIndent) }
+    var indentOption: IndentOption {
+        get {
+            switch formatMode {
+            case .two: return .two
+            case .four, .compact: return .four
+            }
+        }
+        set {
+            formatMode = newValue == .two ? .two : .four
+        }
     }
+
+    @Published var input = ""
+    @Published var formatMode: FormatMode {
+        didSet { preferences.set(formatMode.id, for: TextDevelopmentToolPreferenceKeys.jsonIndent) }
+    }
+    @Published var sortKeys: Bool = false
 
     let execution = IndexFormatExecutionSession()
     private let preferences: ToolPreferenceStore
@@ -32,7 +60,8 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
 
     init(preferences: ToolPreferenceStore) {
         self.preferences = preferences
-        indentOption = IndentOption(rawValue: Int(preferences.value(for: TextDevelopmentToolPreferenceKeys.jsonIndent)) ?? 4) ?? .four
+        let saved = preferences.value(for: TextDevelopmentToolPreferenceKeys.jsonIndent)
+        formatMode = FormatMode(rawValue: saved) ?? .four
     }
 
     func clear() {
@@ -73,7 +102,8 @@ private struct IndexJSONFormatterWorkspaceContent: View {
 
     private struct Snapshot: Sendable {
         let input: String
-        let indentWidth: Int
+        let mode: JSONFormatterToolWorkspaceModel.FormatMode
+        let sortKeys: Bool
     }
 
     @ObservedObject var workspace: JSONFormatterToolWorkspaceModel
@@ -97,11 +127,14 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                 onFormat: format,
                 onClear: workspace.clear,
                 leadingControl: {
-                    IndexSegmentedControl(
-                        items: JSONFormatterToolWorkspaceModel.IndentOption.allCases.map { ($0.id, $0.label) },
-                        selection: indentSelection,
-                        density: .compact
-                    )
+                    HStack(spacing: 8) {
+                        IndexSegmentedControl(
+                            items: JSONFormatterToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
+                            selection: formatModeSelection,
+                            density: .compact
+                        )
+                        IndexOptionSwitch(title: "Key 排序", isOn: $workspace.sortKeys)
+                    }
                 }
             )
         }
@@ -110,13 +143,22 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                 format()
             }
         }
+        .onChange(of: workspace.sortKeys) { _ in
+            if !execution.binding.output.isEmpty {
+                format()
+            }
+        }
     }
 
-    private var indentSelection: Binding<String> {
+    private var formatModeSelection: Binding<String> {
         Binding(
-            get: { workspace.indentOption.id },
+            get: { workspace.formatMode.id },
             set: { value in
-                workspace.indentOption = value == JSONFormatterToolWorkspaceModel.IndentOption.four.id ? .four : .two
+                guard let newMode = JSONFormatterToolWorkspaceModel.FormatMode(rawValue: value) else { return }
+                workspace.formatMode = newMode
+                if !execution.binding.output.isEmpty {
+                    format()
+                }
             }
         )
     }
@@ -137,15 +179,30 @@ private struct IndexJSONFormatterWorkspaceContent: View {
         formatAttempt += 1
         let snapshot = Snapshot(
             input: workspace.input,
-            indentWidth: workspace.indentOption.rawValue
+            mode: workspace.formatMode,
+            sortKeys: workspace.sortKeys
         )
         execution.schedule(snapshot: snapshot, delay: .zero) { snapshot in
             FormatRunner.run(snapshot.input) { value -> JSONFormatting.FormattingResult in
-                try JSONFormatting.formatResult(
-                    value,
-                    sortKeys: false,
-                    indentWidth: snapshot.indentWidth
-                )
+                switch snapshot.mode {
+                case .two:
+                    return try JSONFormatting.formatResult(
+                        value,
+                        sortKeys: snapshot.sortKeys,
+                        indentWidth: 2
+                    )
+                case .four:
+                    return try JSONFormatting.formatResult(
+                        value,
+                        sortKeys: snapshot.sortKeys,
+                        indentWidth: 4
+                    )
+                case .compact:
+                    return try JSONFormatting.minifyResult(
+                        value,
+                        sortKeys: snapshot.sortKeys
+                    )
+                }
             }
             .binding(text: { $0.text }, warning: { $0.warning })
         }

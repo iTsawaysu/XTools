@@ -558,7 +558,7 @@ struct UIInfrastructureSourceTests {
         contains(jsonFormatter, "outputLineNumbers: true", "JSON must keep the line-number gutters on both panes")
         doesNotContain(jsonFormatter, "Toggle(\"键排序\"", "JSON formatter must not fall back to a native Toggle")
         doesNotContain(jsonFormatter, "Picker(\"缩进\"", "JSON formatter must not fall back to a native Picker")
-        doesNotContain(jsonFormatter, "IndexOptionSwitch(", "The prototype toolbar retired the key-sort switch")
+        contains(jsonFormatter, "IndexOptionSwitch(", "JSON formatter provides the key-sort switch")
         doesNotContain(jsonFormatter, ".animation(", "Optional-control reveal must not bind page-level animations")
 
         contains(base64File, "Text(\"选择或拖入文件\")", "Base64 file page may advertise drag and drop only because it implements the workflow")
