@@ -1338,6 +1338,11 @@ final class IndexEditorLineNumberGutterView: NSView {
 }
 
 @MainActor
+protocol IndexAsymmetricTextContainerSurface {
+    var leadingTextContainerInset: CGFloat { get }
+}
+
+@MainActor
 enum IndexTextKitGeometry {
     static let trailingWrapGuard: CGFloat = 16
 
@@ -1348,7 +1353,12 @@ enum IndexTextKitGeometry {
     ) -> CGFloat {
         let safeVisibleWidth = max(1, visibleWidth.isFinite ? visibleWidth : textView.bounds.width)
         let linePadding = (textView.textContainer?.lineFragmentPadding ?? 0) * 2
-        let horizontalInset = textView.textContainerInset.width * 2
+        let horizontalInset: CGFloat
+        if let asymmetric = textView as? IndexAsymmetricTextContainerSurface {
+            horizontalInset = asymmetric.leadingTextContainerInset
+        } else {
+            horizontalInset = textView.textContainerInset.width * 2
+        }
         return max(1, floor(safeVisibleWidth - horizontalInset - linePadding - trailingReadingGuard))
     }
 

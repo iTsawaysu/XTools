@@ -29,6 +29,35 @@ struct EditableDiffSourceContractTests {
         #expect(textView.frame.width == 200, "The document view should still fill the clip width while the text container wraps inside it")
     }
 
+    @Test @MainActor func textKitGeometrySupportsAsymmetricLeadingInsetSurfaces() {
+        final class AsymmetricTestTextView: NSTextView, IndexAsymmetricTextContainerSurface {
+            var leadingTextContainerInset: CGFloat { 34 }
+        }
+
+        let textView = AsymmetricTestTextView(frame: NSRect(x: 0, y: 0, width: 350, height: 200))
+        textView.textContainerInset = NSSize(width: 34, height: 14)
+        textView.textContainer?.lineFragmentPadding = 0
+
+        let wrappingWidth = IndexTextKitGeometry.wrappingContainerWidth(
+            for: textView,
+            visibleWidth: 350,
+            trailingReadingGuard: 16
+        )
+
+        #expect(wrappingWidth == 300, "Asymmetric surfaces must subtract leading inset once and trailing reading guard once, eliminating the 34pt dead zone")
+
+        IndexTextKitGeometry.synchronizeTextGeometry(
+            for: textView,
+            visibleWidth: 350,
+            minimumHeight: 200,
+            trailingReadingGuard: 16
+        )
+
+        #expect(textView.textContainer?.containerSize.width == 300)
+        let rightMargin = textView.bounds.width - (textView.textContainerOrigin.x + (textView.textContainer?.containerSize.width ?? 0))
+        #expect(rightMargin == 16, "Right margin should be exactly the 16pt trailing reading guard without any 50pt dead zone")
+    }
+
     @Test @MainActor func leadingLockedClipViewRejectsHiddenHorizontalScrolling() {
         let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 120, height: 80))
         scrollView.contentView = IndexLeadingLockedClipView(frame: scrollView.bounds)

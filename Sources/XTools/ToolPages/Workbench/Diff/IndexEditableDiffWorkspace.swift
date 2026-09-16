@@ -80,7 +80,7 @@ private enum IndexDiffEditorMetrics {
     static let frameBorderWidth: CGFloat = 0
     static let paneCornerRadius: CGFloat = 7
     static let trailingReadingGuard: CGFloat = 16
-    static let placeholderTrailing: CGFloat = trailingReadingGuard + textInset.width
+    static let placeholderTrailing: CGFloat = trailingReadingGuard
     static let placeholderTopInset: CGFloat = textInset.height + 1
     static let lineNumberLeadingPadding: CGFloat = 3
     static let lineNumberTrailingPadding: CGFloat = 3
@@ -911,7 +911,11 @@ private final class IndexDiffEditorPaneView: NSView {
     }
 }
 
-private final class IndexDiffTextView: NSTextView {
+private final class IndexDiffTextView: NSTextView, IndexAsymmetricTextContainerSurface {
+    var leadingTextContainerInset: CGFloat {
+        IndexDiffEditorMetrics.textInset.width
+    }
+
     private let caretWidth: CGFloat = 2
 
     var lineDecorations: [Int: DiffLineDecoration] = [:] {
