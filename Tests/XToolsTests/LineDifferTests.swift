@@ -268,6 +268,56 @@ struct LineDifferTests {
         ).errorDescription == "对比内容过大，无法计算。")
     }
 
+    @Test func safeAlignedDiffAcceleratesWithPrefixSuffixTrimming() throws {
+        let prefix = (1...1500).map { "prefix line \($0)" }.joined(separator: "\n")
+        let suffix = (1502...3000).map { "suffix line \($0)" }.joined(separator: "\n")
+        let left = "\(prefix)\nleft middle line\n\(suffix)"
+        let right = "\(prefix)\nright middle line\n\(suffix)"
+
+        // Total lines are 3000x3000 = 9M cells <= 12M budget.
+        // With prefix/suffix trimming, the diff middle is 1x1 = 4 cells, running in milliseconds.
+        let rows = try LineDiffer.safeAlignedDiff(
+            left: left,
+            right: right
+        )
+        #expect(rows.count == 3000)
+        #expect(rows.contains { $0.kind == .changed && $0.left?.text == "left middle line" })
+    }
+
+    @Test func safeAlignedDiffRespectsIgnoreWhitespaceOption() throws {
+        let left = "  hello   world  \nline2"
+        let right = "hello world\nline2"
+
+        let defaultRows = try LineDiffer.safeAlignedDiff(left: left, right: right)
+        #expect(defaultRows.count == 2)
+        #expect(defaultRows[0].kind == .changed)
+
+        let ignoredRows = try LineDiffer.safeAlignedDiff(
+            left: left,
+            right: right,
+            options: TextDiffOptions(ignoreWhitespace: true)
+        )
+        #expect(ignoredRows.count == 2)
+        #expect(ignoredRows.allSatisfy { !$0.kind.isDifference })
+    }
+
+    @Test func safeAlignedDiffRespectsIgnoreCaseOption() throws {
+        let left = "Hello World\nLine 2"
+        let right = "hello world\nLine 2"
+
+        let defaultRows = try LineDiffer.safeAlignedDiff(left: left, right: right)
+        #expect(defaultRows.count == 2)
+        #expect(defaultRows[0].kind == .changed)
+
+        let ignoredRows = try LineDiffer.safeAlignedDiff(
+            left: left,
+            right: right,
+            options: TextDiffOptions(ignoreCase: true)
+        )
+        #expect(ignoredRows.count == 2)
+        #expect(ignoredRows.allSatisfy { !$0.kind.isDifference })
+    }
+
     @Test func safeAlignedDiffPropagatesCancellationWithoutRows() {
         #expect(throws: CancellationError.self) {
             _ = try LineDiffer.safeAlignedDiff(

@@ -1180,7 +1180,13 @@
     "快捷工具": {
       "extractionState": "manual"
     },
+    "忽略大小写": {
+      "extractionState": "manual"
+    },
     "忽略大小写 (i)": {
+      "extractionState": "manual"
+    },
+    "忽略空白": {
       "extractionState": "manual"
     },
     "忽略这个建议": {

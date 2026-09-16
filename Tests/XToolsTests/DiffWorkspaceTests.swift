@@ -33,6 +33,44 @@ struct DiffWorkspaceTests {
         #expect(workspace.execution.binding == DiffExecutionBinding())
     }
 
+    @Test func optionsTriggerReschedulingAndReflectInRequest() async throws {
+        let probe = DiffWorkspaceOperationProbe()
+        let workspace = DiffToolWorkspaceModel(
+            kind: .text,
+            debounce: .zero,
+            operation: { request in
+                probe.recordStart(request)
+                return DiffExecutionBinding()
+            }
+        )
+
+        workspace.left = "abc"
+        workspace.right = "ABC"
+        try await Self.waitUntil { probe.startedCount >= 1 }
+
+        workspace.ignoreCase = true
+        try await Self.waitUntil {
+            if case .text(let options) = probe.lastRequest?.kind {
+                return options.ignoreCase && !options.ignoreWhitespace
+            }
+            return false
+        }
+
+        workspace.ignoreWhitespace = true
+        try await Self.waitUntil {
+            if case .text(let options) = probe.lastRequest?.kind {
+                return options.ignoreCase && options.ignoreWhitespace
+            }
+            return false
+        }
+
+        workspace.clear()
+        #expect(workspace.left.isEmpty)
+        #expect(workspace.right.isEmpty)
+        #expect(workspace.ignoreCase == true)
+        #expect(workspace.ignoreWhitespace == true)
+    }
+
     private static func waitUntil(
         timeout: Duration = .seconds(20),
         _ condition: @escaping @MainActor () -> Bool
@@ -53,6 +91,7 @@ private final class DiffWorkspaceOperationProbe: @unchecked Sendable {
     private let lock = NSLock()
     private var storedStartedCount = 0
     private var storedCancellationCount = 0
+    private var storedLastRequest: DiffExecutionRequest?
 
     var startedCount: Int {
         lock.withLock { storedStartedCount }
@@ -62,9 +101,14 @@ private final class DiffWorkspaceOperationProbe: @unchecked Sendable {
         lock.withLock { storedCancellationCount }
     }
 
-    func recordStart(_: DiffExecutionRequest) {
+    var lastRequest: DiffExecutionRequest? {
+        lock.withLock { storedLastRequest }
+    }
+
+    func recordStart(_ request: DiffExecutionRequest) {
         lock.withLock {
             storedStartedCount += 1
+            storedLastRequest = request
         }
     }
 

@@ -71,6 +71,16 @@ struct DiffCancellationChecker: Sendable {
     }
 }
 
+public struct TextDiffOptions: Equatable, Sendable {
+    public var ignoreWhitespace: Bool
+    public var ignoreCase: Bool
+
+    public init(ignoreWhitespace: Bool = false, ignoreCase: Bool = false) {
+        self.ignoreWhitespace = ignoreWhitespace
+        self.ignoreCase = ignoreCase
+    }
+}
+
 public enum LineDiffer {
     static func withoutCancellation<T>(
         _ operation: (DiffCancellationChecker) throws -> T
@@ -85,6 +95,7 @@ public enum LineDiffer {
     public static func safeAlignedDiff(
         left: String,
         right: String,
+        options: TextDiffOptions = TextDiffOptions(),
         budget: LineDiffBudget = .standard,
         shouldCancel: @escaping @Sendable () -> Bool = { Task.isCancelled }
     ) throws -> [DiffAlignedRow] {
@@ -104,6 +115,8 @@ public enum LineDiffer {
             from: displayDiff(
                 leftLines: leftLines,
                 rightLines: rightLines,
+                options: options,
+                budget: budget,
                 cancellation: cancellation
             ),
             cancellation: cancellation
@@ -111,11 +124,17 @@ public enum LineDiffer {
     }
 
     /// Test-only unbounded display rows. Prefer `safeAlignedDiff` in production.
-    static func displayDiff(left: String, right: String) -> [DiffDisplayLine] {
+    static func displayDiff(
+        left: String,
+        right: String,
+        options: TextDiffOptions = TextDiffOptions()
+    ) -> [DiffDisplayLine] {
         withoutCancellation {
             try displayDiff(
                 leftLines: displayLines(from: left),
                 rightLines: displayLines(from: right),
+                options: options,
+                budget: LineDiffBudget(maximumLCSCells: .max),
                 cancellation: $0
             )
         }
@@ -124,61 +143,138 @@ public enum LineDiffer {
     private static func displayDiff(
         leftLines: [String],
         rightLines: [String],
+        options: TextDiffOptions,
+        budget: LineDiffBudget,
         cancellation: DiffCancellationChecker
     ) throws -> [DiffDisplayLine] {
         guard !leftLines.isEmpty || !rightLines.isEmpty else {
             return []
         }
 
-        let lcs = try lcsLengths(
-            leftLines: leftLines,
-            rightLines: rightLines,
-            cancellation: cancellation
-        )
-        var oldLineNumber = 1
-        var newLineNumber = 1
-        var leftIndex = 0
-        var rightIndex = 0
-        var result: [DiffDisplayLine] = []
+        var prefixCount = 0
+        while prefixCount < leftLines.count && prefixCount < rightLines.count
+            && areLinesEqual(leftLines[prefixCount], rightLines[prefixCount], options: options) {
+            prefixCount += 1
+        }
 
-        while leftIndex < leftLines.count || rightIndex < rightLines.count {
-            try cancellation.check()
-            if leftIndex < leftLines.count,
-               rightIndex < rightLines.count,
-               leftLines[leftIndex] == rightLines[rightIndex] {
-                result.append(DiffDisplayLine(
-                    kind: .unchanged,
-                    oldLineNumber: oldLineNumber,
-                    newLineNumber: newLineNumber,
-                    text: leftLines[leftIndex],
-                    indent: 0
-                ))
-                leftIndex += 1
-                rightIndex += 1
-                oldLineNumber += 1
-                newLineNumber += 1
-            } else if leftIndex < leftLines.count,
-                      (rightIndex == rightLines.count || lcs[leftIndex + 1][rightIndex] >= lcs[leftIndex][rightIndex + 1]) {
+        var suffixCount = 0
+        while suffixCount < (leftLines.count - prefixCount) && suffixCount < (rightLines.count - prefixCount)
+            && areLinesEqual(
+                leftLines[leftLines.count - 1 - suffixCount],
+                rightLines[rightLines.count - 1 - suffixCount],
+                options: options
+            ) {
+            suffixCount += 1
+        }
+
+        var result: [DiffDisplayLine] = []
+        result.reserveCapacity(max(leftLines.count, rightLines.count))
+
+        for i in 0..<prefixCount {
+            result.append(DiffDisplayLine(
+                kind: .unchanged,
+                oldLineNumber: i + 1,
+                newLineNumber: i + 1,
+                text: leftLines[i],
+                indent: 0
+            ))
+        }
+
+        let middleLeftCount = leftLines.count - prefixCount - suffixCount
+        let middleRightCount = rightLines.count - prefixCount - suffixCount
+
+        if middleLeftCount > 0 && middleRightCount == 0 {
+            for i in 0..<middleLeftCount {
+                try cancellation.check()
                 result.append(DiffDisplayLine(
                     kind: .removed,
-                    oldLineNumber: oldLineNumber,
+                    oldLineNumber: prefixCount + i + 1,
                     newLineNumber: nil,
-                    text: leftLines[leftIndex],
+                    text: leftLines[prefixCount + i],
                     indent: 0
                 ))
-                leftIndex += 1
-                oldLineNumber += 1
-            } else if rightIndex < rightLines.count {
+            }
+        } else if middleLeftCount == 0 && middleRightCount > 0 {
+            for j in 0..<middleRightCount {
+                try cancellation.check()
                 result.append(DiffDisplayLine(
                     kind: .added,
                     oldLineNumber: nil,
-                    newLineNumber: newLineNumber,
-                    text: rightLines[rightIndex],
+                    newLineNumber: prefixCount + j + 1,
+                    text: rightLines[prefixCount + j],
                     indent: 0
                 ))
-                rightIndex += 1
-                newLineNumber += 1
             }
+        } else if middleLeftCount > 0 && middleRightCount > 0 {
+            try budget.validate(leftLineCount: middleLeftCount, rightLineCount: middleRightCount)
+            try cancellation.check()
+
+            let trimmedLeft = Array(leftLines[prefixCount..<(leftLines.count - suffixCount)])
+            let trimmedRight = Array(rightLines[prefixCount..<(rightLines.count - suffixCount)])
+
+            let lcs = try lcsLengths(
+                leftLines: trimmedLeft,
+                rightLines: trimmedRight,
+                options: options,
+                cancellation: cancellation
+            )
+
+            var oldLineNumber = prefixCount + 1
+            var newLineNumber = prefixCount + 1
+            var leftIndex = 0
+            var rightIndex = 0
+
+            while leftIndex < trimmedLeft.count || rightIndex < trimmedRight.count {
+                try cancellation.check()
+                if leftIndex < trimmedLeft.count,
+                   rightIndex < trimmedRight.count,
+                   areLinesEqual(trimmedLeft[leftIndex], trimmedRight[rightIndex], options: options) {
+                    result.append(DiffDisplayLine(
+                        kind: .unchanged,
+                        oldLineNumber: oldLineNumber,
+                        newLineNumber: newLineNumber,
+                        text: trimmedLeft[leftIndex],
+                        indent: 0
+                    ))
+                    leftIndex += 1
+                    rightIndex += 1
+                    oldLineNumber += 1
+                    newLineNumber += 1
+                } else if leftIndex < trimmedLeft.count,
+                          (rightIndex == trimmedRight.count || lcs[leftIndex + 1, rightIndex] >= lcs[leftIndex, rightIndex + 1]) {
+                    result.append(DiffDisplayLine(
+                        kind: .removed,
+                        oldLineNumber: oldLineNumber,
+                        newLineNumber: nil,
+                        text: trimmedLeft[leftIndex],
+                        indent: 0
+                    ))
+                    leftIndex += 1
+                    oldLineNumber += 1
+                } else if rightIndex < trimmedRight.count {
+                    result.append(DiffDisplayLine(
+                        kind: .added,
+                        oldLineNumber: nil,
+                        newLineNumber: newLineNumber,
+                        text: trimmedRight[rightIndex],
+                        indent: 0
+                    ))
+                    rightIndex += 1
+                    newLineNumber += 1
+                }
+            }
+        }
+
+        for k in 0..<suffixCount {
+            let leftIdx = leftLines.count - suffixCount + k
+            let rightIdx = rightLines.count - suffixCount + k
+            result.append(DiffDisplayLine(
+                kind: .unchanged,
+                oldLineNumber: leftIdx + 1,
+                newLineNumber: rightIdx + 1,
+                text: leftLines[leftIdx],
+                indent: 0
+            ))
         }
 
         return result
@@ -187,36 +283,59 @@ public enum LineDiffer {
     private static func lcsLengths(
         leftLines: [String],
         rightLines: [String],
+        options: TextDiffOptions,
         cancellation: DiffCancellationChecker
-    ) throws -> [[Int]] {
+    ) throws -> FlatLCSMatrix {
         try cancellation.check()
-        var table = Array(
-            repeating: Array(repeating: 0, count: rightLines.count + 1),
-            count: leftLines.count + 1
-        )
+        let rows = leftLines.count
+        let cols = rightLines.count
+        var table = FlatLCSMatrix(rows: rows, cols: cols)
 
-        guard !leftLines.isEmpty && !rightLines.isEmpty else {
+        guard rows > 0 && cols > 0 else {
             return table
         }
 
-        for leftIndex in stride(from: leftLines.count - 1, through: 0, by: -1) {
+        for leftIndex in stride(from: rows - 1, through: 0, by: -1) {
             try cancellation.check()
-            for rightIndex in stride(from: rightLines.count - 1, through: 0, by: -1) {
+            let leftLine = leftLines[leftIndex]
+            for rightIndex in stride(from: cols - 1, through: 0, by: -1) {
                 if rightIndex.isMultiple(of: 256) {
                     try cancellation.check()
                 }
-                if leftLines[leftIndex] == rightLines[rightIndex] {
-                    table[leftIndex][rightIndex] = table[leftIndex + 1][rightIndex + 1] + 1
+                if areLinesEqual(leftLine, rightLines[rightIndex], options: options) {
+                    table[leftIndex, rightIndex] = table[leftIndex + 1, rightIndex + 1] + 1
                 } else {
-                    table[leftIndex][rightIndex] = max(
-                        table[leftIndex + 1][rightIndex],
-                        table[leftIndex][rightIndex + 1]
+                    table[leftIndex, rightIndex] = max(
+                        table[leftIndex + 1, rightIndex],
+                        table[leftIndex, rightIndex + 1]
                     )
                 }
             }
         }
 
         return table
+    }
+
+    private static func areLinesEqual(_ a: String, _ b: String, options: TextDiffOptions) -> Bool {
+        if !options.ignoreWhitespace && !options.ignoreCase {
+            return a == b
+        }
+        var s1 = a
+        var s2 = b
+        if options.ignoreWhitespace {
+            s1 = normalizeWhitespace(s1)
+            s2 = normalizeWhitespace(s2)
+        }
+        if options.ignoreCase {
+            return s1.caseInsensitiveCompare(s2) == .orderedSame
+        } else {
+            return s1 == s2
+        }
+    }
+
+    private static func normalizeWhitespace(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
     }
 
     private static func displayLines(from text: String) -> [String] {
@@ -227,5 +346,27 @@ public enum LineDiffer {
             .replacingOccurrences(of: "\r", with: "\n")
             .split(separator: "\n", omittingEmptySubsequences: false)
             .map(String.init)
+    }
+}
+
+private struct FlatLCSMatrix {
+    let rows: Int
+    let cols: Int
+    private var storage: [Int]
+
+    init(rows: Int, cols: Int) {
+        self.rows = rows
+        self.cols = cols
+        self.storage = Array(repeating: 0, count: (rows + 1) * (cols + 1))
+    }
+
+    @inline(__always)
+    subscript(row: Int, col: Int) -> Int {
+        get {
+            storage[row * (cols + 1) + col]
+        }
+        set {
+            storage[row * (cols + 1) + col] = newValue
+        }
     }
 }
