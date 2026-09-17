@@ -99,7 +99,7 @@ private struct IndexEmojiWorkspaceContent: View {
             density: .compact
         )
         .accessibilityLabel("Emoji 肤色")
-        .help("选择支持肤色变体的 Emoji 默认肤色")
+        .help("选择默认肤色")
     }
 
     var body: some View {

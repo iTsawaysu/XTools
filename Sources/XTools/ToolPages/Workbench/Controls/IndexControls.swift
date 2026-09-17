@@ -789,7 +789,7 @@ private struct IndexEmbeddedSwitchLabel: View {
             Circle()
                 .fill(Color.white)
                 .frame(width: thumbSize, height: thumbSize)
-                .shadow(color: Color.black.opacity(isOn ? 0.22 : 0.15), radius: 1.5, x: 0, y: 0.8)
+                .toolShadow(ToolTheme.Shadow.panel)
                 .overlay {
                     Circle()
                         .strokeBorder(Color.black.opacity(0.08), lineWidth: 0.5)

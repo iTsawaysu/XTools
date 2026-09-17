@@ -157,7 +157,7 @@ private struct IndexJWTWorkspaceContent: View {
                 }
                 .buttonStyle(IndexSmallButtonStyle())
                 .disabled(session.generatedToken.isEmpty)
-                .help("将当前 JWT 和 Secret 送入解析模式进行本地检查")
+                .help("送入解析模式")
 
                 IndexCopyButton(text: session.generatedToken)
             }
@@ -352,7 +352,7 @@ private struct IndexJWTWorkspaceContent: View {
             }
             .buttonStyle(IndexSmallButtonStyle())
             .disabled(session.parsedHeader.isEmpty || session.parsedPayload.isEmpty)
-            .help("将解析后的 Header、Payload 和当前 Secret 送入生成模式")
+            .help("送入生成模式")
         } content: {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 12) {

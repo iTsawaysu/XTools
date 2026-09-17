@@ -121,9 +121,6 @@
     "Header 将显示在这里": {
       "extractionState": "manual"
     },
-    "JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。": {
-      "extractionState": "manual"
-    },
     "JSON 对比": {
       "extractionState": "manual"
     },
@@ -322,6 +319,9 @@
     "亚洲": {
       "extractionState": "manual"
     },
+    "交换左右 (⌥⌘X)": {
+      "extractionState": "manual"
+    },
     "亮度": {
       "extractionState": "manual"
     },
@@ -338,6 +338,9 @@
       "extractionState": "manual"
     },
     "仅当其他系统提供的是 Base64 密钥时使用；签名或本地检查前会先解码为原始字节。": {
+      "extractionState": "manual"
+    },
+    "仅提取文章正文": {
       "extractionState": "manual"
     },
     "今": {
@@ -488,6 +491,9 @@
       "extractionState": "manual"
     },
     "关键字": {
+      "extractionState": "manual"
+    },
+    "关键字大小写 (UPPER / lower)": {
       "extractionState": "manual"
     },
     "关闭": {
@@ -676,6 +682,9 @@
     "原始文本…": {
       "extractionState": "manual"
     },
+    "去除转义字符": {
+      "extractionState": "manual"
+    },
     "取消收藏": {
       "extractionState": "manual"
     },
@@ -785,15 +794,6 @@
       "extractionState": "manual"
     },
     "在八进制与 rwx（含特殊权限位）之间双向换算。": {
-      "extractionState": "manual"
-    },
-    "在其他用户执行位位置显示 t 或 T": {
-      "extractionState": "manual"
-    },
-    "在所属组执行位位置显示 s 或 S": {
-      "extractionState": "manual"
-    },
-    "在所有者执行位位置显示 s 或 S": {
       "extractionState": "manual"
     },
     "在此粘贴 JSON…": {
@@ -982,22 +982,10 @@
     "导入编码文本文件": {
       "extractionState": "manual"
     },
-    "将当前 JWT 和 Secret 送入解析模式进行本地检查": {
-      "extractionState": "manual"
-    },
-    "将当前请求头送入解析模式": {
-      "extractionState": "manual"
-    },
     "将彩色图片转为灰度图。": {
       "extractionState": "manual"
     },
     "将文件编码为 Base64 / Data URL，或从 Base64 解码回文件。": {
-      "extractionState": "manual"
-    },
-    "将解析出的用户名和密码送入生成模式": {
-      "extractionState": "manual"
-    },
-    "将解析后的 Header、Payload 和当前 Secret 送入生成模式": {
       "extractionState": "manual"
     },
     "小": {
@@ -1186,6 +1174,9 @@
     "忽略大小写 (i)": {
       "extractionState": "manual"
     },
+    "忽略数组顺序": {
+      "extractionState": "manual"
+    },
     "忽略空白": {
       "extractionState": "manual"
     },
@@ -1279,9 +1270,6 @@
     "按下按键查看事件；按 Escape 停止监听，点击此区域恢复监听。": {
       "extractionState": "manual"
     },
-    "按包含首尾日期的方式计算天数": {
-      "extractionState": "manual"
-    },
     "按图片宽度比例设置水印大小": {
       "extractionState": "manual"
     },
@@ -1310,6 +1298,9 @@
       "extractionState": "manual"
     },
     "控制 sticky 特殊权限位": {
+      "extractionState": "manual"
+    },
+    "提取结果为空。页面可能由客户端 JS 动态渲染，或无有效文本内容。": {
       "extractionState": "manual"
     },
     "搜索 Emoji 或符号（如 right / 右 / 播放）…": {
@@ -1726,6 +1717,9 @@
     "格式化、压缩和验证 JSON，支持自定义选项。": {
       "extractionState": "manual"
     },
+    "格式化与压缩 SQL，支持关键字大小写和缩进选项。": {
+      "extractionState": "manual"
+    },
     "格式化结果": {
       "extractionState": "manual"
     },
@@ -1817,9 +1811,6 @@
       "extractionState": "manual"
     },
     "正在解码输入": {
-      "extractionState": "manual"
-    },
-    "正在计算摘要": {
       "extractionState": "manual"
     },
     "正在计算摘要…": {
@@ -1966,6 +1957,12 @@
     "清空 Emoji 搜索": {
       "extractionState": "manual"
     },
+    "清空 URL 地址": {
+      "extractionState": "manual"
+    },
+    "清空 URL (Esc)": {
+      "extractionState": "manual"
+    },
     "清空对比": {
       "extractionState": "manual"
     },
@@ -2000,9 +1997,6 @@
       "extractionState": "manual"
     },
     "清除当前灰阶图片": {
-      "extractionState": "manual"
-    },
-    "清除当前转换图片": {
       "extractionState": "manual"
     },
     "清除搜索": {
@@ -2305,7 +2299,7 @@
     "获取网页": {
       "extractionState": "manual"
     },
-    "获取网页并转换为 Markdown": {
+    "获取网页 (↩)": {
       "extractionState": "manual"
     },
     "行数": {
@@ -2378,9 +2372,6 @@
       "extractionState": "manual"
     },
     "计算中": {
-      "extractionState": "manual"
-    },
-    "计算当前大文本的全部摘要": {
       "extractionState": "manual"
     },
     "计算摘要": {
@@ -2465,9 +2456,6 @@
       "extractionState": "manual"
     },
     "输入": {
-      "extractionState": "manual"
-    },
-    "输入 #RRGGBB 格式的填充颜色": {
       "extractionState": "manual"
     },
     "输入 DT-AES-GCM-v1 密文…": {
@@ -2644,9 +2632,6 @@
     "选择或粘贴时间": {
       "extractionState": "manual"
     },
-    "选择支持肤色变体的 Emoji 默认肤色": {
-      "extractionState": "manual"
-    },
     "选择文件": {
       "extractionState": "manual"
     },
@@ -2662,9 +2647,6 @@
     "选择水印位置": {
       "extractionState": "manual"
     },
-    "选择目录并保存全部五个 Favicon 部署文件": {
-      "extractionState": "manual"
-    },
     "选择要优化的图片": {
       "extractionState": "manual"
     },
@@ -2675,12 +2657,6 @@
       "extractionState": "manual"
     },
     "选择要转换的图片": {
-      "extractionState": "manual"
-    },
-    "选择转换前用于填充透明像素的颜色": {
-      "extractionState": "manual"
-    },
-    "选择转换后的图片格式": {
       "extractionState": "manual"
     },
     "选择黑色或白色水印文字": {
@@ -2717,9 +2693,6 @@
       "extractionState": "manual"
     },
     "重新生成": {
-      "extractionState": "manual"
-    },
-    "重新生成一个 1024–65535 范围内的随机端口号": {
       "extractionState": "manual"
     },
     "重新计算": {
@@ -2810,6 +2783,54 @@
       "extractionState": "manual"
     },
     "（空）": {
+      "extractionState": "manual"
+    },
+    "正在计算摘要": {
+      "extractionState": "manual"
+    },
+    "计算全部摘要": {
+      "extractionState": "manual"
+    },
+    "显示所有者 s/S": {
+      "extractionState": "manual"
+    },
+    "显示所属组 s/S": {
+      "extractionState": "manual"
+    },
+    "显示其他用户 t/T": {
+      "extractionState": "manual"
+    },
+    "重新生成端口": {
+      "extractionState": "manual"
+    },
+    "送入解析模式": {
+      "extractionState": "manual"
+    },
+    "送入生成模式": {
+      "extractionState": "manual"
+    },
+    "选择输出格式": {
+      "extractionState": "manual"
+    },
+    "设置透明填充色": {
+      "extractionState": "manual"
+    },
+    "输入十六进制颜色": {
+      "extractionState": "manual"
+    },
+    "清除转换图片": {
+      "extractionState": "manual"
+    },
+    "保存全部 Favicon": {
+      "extractionState": "manual"
+    },
+    "包含首尾日期": {
+      "extractionState": "manual"
+    },
+    "复制全部 (⇧⌘C)": {
+      "extractionState": "manual"
+    },
+    "选择默认肤色": {
       "extractionState": "manual"
     }
   },

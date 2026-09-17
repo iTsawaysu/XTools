@@ -407,6 +407,10 @@ enum TextDevelopmentToolPreferenceKeys {
         default: "4",
         allowedValues: ["2", "4", "compact"]
     )
+    static let jsonUnescape = ToolPreferenceKey<Bool>.bool(
+        "tools.jsonFormatter.unescape.v1",
+        default: false
+    )
     static let sqlKeywordCase = ToolPreferenceKey<SQLFormatting.KeywordCase>.rawRepresentable(
         "tools.sqlFormatter.keywordCase.v1",
         default: .upper
@@ -427,6 +431,7 @@ enum TextDevelopmentToolPreferenceKeys {
         [
             integerBase.rawKey,
             jsonIndent.rawKey,
+            jsonUnescape.rawKey,
             sqlKeywordCase.rawKey,
             sqlIndent.rawKey,
             emojiToneIndex.rawKey

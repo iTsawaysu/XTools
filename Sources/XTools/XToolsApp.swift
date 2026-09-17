@@ -54,6 +54,10 @@ enum AppKitUndoCommandRouter {
 @main
 struct XToolsApp: App {
     init() {
+        // Provide a snappy 400ms tooltip delay (default 1.5s is too slow).
+        // This avoids instant-hover misfire while feeling much faster.
+        UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 400])
+
         // One-shot domain migration must run before RootView / stores read
         // UserDefaults.standard under the new bundle id.
         LegacyPreferencesMigrator.migrateFromLegacyDomainIfNeeded()

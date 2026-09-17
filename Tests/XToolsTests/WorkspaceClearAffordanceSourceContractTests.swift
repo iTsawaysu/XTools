@@ -38,7 +38,7 @@ struct WorkspaceClearAffordanceSourceContractTests {
             doesNotContain(page, "IndexActionBar", "Diff clear must not add a new action row above the editors")
         }
         contains(editableDiff, "var onClear: (() -> Void)? = nil", "The shared DIFF panel must own an optional whole-workspace clear callback")
-        contains(editableDiff, "IndexClearButton(\n                    isDisabled: clearDisabled,\n                    title: \"清空对比\"", "Diff clear must be visible and name its scope in the local panel header")
+        contains(editableDiff, "IndexClearButton(\n                            isDisabled: clearDisabled,\n                            title: \"清空对比\"", "Diff clear must be visible and name its scope in the local panel header")
 
         let regexPatternPanel = sourceSlice(
             regex,

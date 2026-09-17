@@ -176,7 +176,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                 }
                 .buttonStyle(IndexSmallButtonStyle())
                 .accessibilityLabel("保存全部五个 Favicon 部署文件")
-                .help("选择目录并保存全部五个 Favicon 部署文件")
+                .help("保存全部 Favicon")
             }
         }
         .verticallyFilling()

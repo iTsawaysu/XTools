@@ -15,8 +15,8 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .two: return "2 空格"
-            case .four: return "4 空格"
+            case .two: return "2"
+            case .four: return "4"
             case .compact: return "压缩"
             }
         }
@@ -43,6 +43,9 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
     }
 
     @Published var input = ""
+    @Published var unescape: Bool = false {
+        didSet { preferences.set(unescape, for: TextDevelopmentToolPreferenceKeys.jsonUnescape) }
+    }
     @Published var formatMode: FormatMode {
         didSet { preferences.set(formatMode.id, for: TextDevelopmentToolPreferenceKeys.jsonIndent) }
     }
@@ -59,6 +62,7 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
         self.preferences = preferences
         let saved = preferences.value(for: TextDevelopmentToolPreferenceKeys.jsonIndent)
         formatMode = FormatMode(rawValue: saved) ?? .four
+        unescape = preferences.value(for: TextDevelopmentToolPreferenceKeys.jsonUnescape)
     }
 
     func clear() {
@@ -80,7 +84,7 @@ struct IndexJSONFormatterPage: View {
 
 /// Prototype v3 (Clay 收敛) body: one framed workbench whose toolbar carries
 /// STDIN/STDOUT identities, the 2/4-space indent control, the inline
-/// diagnostic, and 复制 · 清空 · 格式化(⌘↩). Formatting is explicit — button or
+/// diagnostic, and 清空 · 复制 · 格式化(⌘↩). Formatting is explicit — button or
 /// Command-Return; indent applies at the next format. A failed format tints
 /// the panel outline, rings it, and shakes once per attempt.
 private struct IndexJSONFormatterWorkspaceContent: View {
@@ -90,6 +94,7 @@ private struct IndexJSONFormatterWorkspaceContent: View {
         let input: String
         let mode: JSONFormatterToolWorkspaceModel.FormatMode
         let sortKeys: Bool
+        let unescape: Bool
     }
 
     @ObservedObject var workspace: JSONFormatterToolWorkspaceModel
@@ -120,11 +125,23 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                             density: .compact
                         )
                         IndexOptionSwitch(title: "Key 排序", style: .embeddedSwitch, isOn: $workspace.sortKeys)
+                        IndexIconButton(
+                            systemImage: "text.quote",
+                            help: "去除转义字符",
+                            isActive: workspace.unescape
+                        ) {
+                            workspace.unescape.toggle()
+                        }
                     }
                 }
             )
         }
         .onChange(of: workspace.sortKeys) { _ in
+            if !execution.binding.output.isEmpty {
+                format()
+            }
+        }
+        .onChange(of: workspace.unescape) { _ in
             if !execution.binding.output.isEmpty {
                 format()
             }
@@ -161,10 +178,30 @@ private struct IndexJSONFormatterWorkspaceContent: View {
         let snapshot = Snapshot(
             input: workspace.input,
             mode: workspace.formatMode,
-            sortKeys: workspace.sortKeys
+            sortKeys: workspace.sortKeys,
+            unescape: workspace.unescape
         )
         execution.schedule(snapshot: snapshot, delay: .zero) { snapshot in
-            FormatRunner.run(snapshot.input) { value -> JSONFormatting.FormattingResult in
+            var textToFormat = snapshot.input
+            if snapshot.unescape {
+                let trimmed = textToFormat.trimmingCharacters(in: .whitespacesAndNewlines)
+                // First try decoding as a JSON string (if it already has quotes)
+                if trimmed.hasPrefix("\"") && trimmed.hasSuffix("\""),
+                   let decoded = try? JSONDecoder().decode(String.self, from: Data(trimmed.utf8)) {
+                    textToFormat = decoded
+                } else {
+                    // Only try manual unescape if the original text is NOT valid JSON
+                    if (try? JSONSerialization.jsonObject(with: Data(textToFormat.utf8), options: [.fragmentsAllowed])) == nil {
+                        textToFormat = trimmed.replacingOccurrences(of: "\\\"", with: "\"")
+                            .replacingOccurrences(of: "\\n", with: "\n")
+                            .replacingOccurrences(of: "\\r", with: "\r")
+                            .replacingOccurrences(of: "\\t", with: "\t")
+                            .replacingOccurrences(of: "\\/", with: "/")
+                            .replacingOccurrences(of: "\\\\", with: "\\")
+                    }
+                }
+            }
+            return FormatRunner.run(textToFormat) { value -> JSONFormatting.FormattingResult in
                 switch snapshot.mode {
                 case .two:
                     return try JSONFormatting.formatResult(

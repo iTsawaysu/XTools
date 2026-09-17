@@ -290,7 +290,7 @@ private struct DateCalculatorInlineOption: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(IndexBareButtonStyle())
-        .help("按包含首尾日期的方式计算天数")
+        .help("包含首尾日期")
         .accessibilityLabel(title)
         .accessibilityValue(isOn ? "开启" : "关闭")
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: isOn)

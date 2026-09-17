@@ -145,13 +145,13 @@ private struct IndexChmodWorkspaceContent: View {
 
                     IndexFlowLayout(spacing: 14, lineSpacing: 8) {
                         IndexSwitch(title: "setuid", isOn: permissionBinding(\ChmodMode.setuid))
-                            .help("在所有者执行位位置显示 s 或 S")
+                            .help("显示所有者 s/S")
                             .accessibilityHint("控制 setuid 特殊权限位")
                         IndexSwitch(title: "setgid", isOn: permissionBinding(\ChmodMode.setgid))
-                            .help("在所属组执行位位置显示 s 或 S")
+                            .help("显示所属组 s/S")
                             .accessibilityHint("控制 setgid 特殊权限位")
                         IndexSwitch(title: "sticky", isOn: permissionBinding(\ChmodMode.sticky))
-                            .help("在其他用户执行位位置显示 t 或 T")
+                            .help("显示其他用户 t/T")
                             .accessibilityHint("控制 sticky 特殊权限位")
                     }
                 }

@@ -122,7 +122,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                         )
                         .accessibilityLabel("目标格式")
                         .accessibilityValue(targetFormat.displayName)
-                        .help("选择转换后的图片格式")
+                        .help("选择输出格式")
                         .onChange(of: targetFormat) { _ in
                             applyDefaultQualityForTarget()
                             convert()
@@ -158,7 +158,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                         )
                         .accessibilityLabel("透明区域填充颜色")
                         .accessibilityValue(transparencyFillAccessibilityValue)
-                        .help("选择转换前用于填充透明像素的颜色")
+                        .help("设置透明填充色")
                         .onChange(of: transparencyFillMode) { _ in convert() }
 
                         if transparencyFillMode == .custom {
@@ -173,14 +173,14 @@ private struct IndexImageConverterWorkspaceContent: View {
                             .frame(width: 92)
                             .accessibilityLabel("自定义透明区域填充颜色")
                             .accessibilityValue(customTransparencyFillAccessibilityValue)
-                            .help("输入 #RRGGBB 格式的填充颜色")
+                            .help("输入十六进制颜色")
                             .onChange(of: customTransparencyFillHex) { _ in convert() }
                         }
                     }
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel("透明区域填充颜色")
                     .accessibilityValue(transparencyFillAccessibilityValue)
-                    .help("JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。")
+                    .help("设置透明填充色")
                 }
 
             }
@@ -270,8 +270,8 @@ private struct IndexImageConverterWorkspaceContent: View {
                         .font(ToolTypography.buttonSmall)
                 }
                 .buttonStyle(IndexSmallButtonStyle())
-                .accessibilityLabel("清除当前转换图片")
-                .help("清除当前转换图片")
+                .accessibilityLabel("清除转换图片")
+                .help("清除转换图片")
             }
         }
     }

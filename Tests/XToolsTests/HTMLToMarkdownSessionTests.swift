@@ -9,7 +9,7 @@ struct HTMLToMarkdownSessionTests {
         let recorder = HTMLSessionStageRecorder()
         let result = Self.urlResult(title: "Article", marker: "ready")
         let session = HTMLToMarkdownSession(
-            urlOperation: { _, progress in
+            urlOperation: { _, _, progress in
                 for stage in [
                     HTMLToMarkdownURLPipelineStage.fetching,
                     .extracting,
@@ -39,7 +39,7 @@ struct HTMLToMarkdownSessionTests {
 
     @Test func newerURLRunCannotBeOverwrittenByOlderResult() async throws {
         let session = HTMLToMarkdownSession(
-            urlOperation: { urlText, progress in
+            urlOperation: { urlText, _, progress in
                 await progress(.fetching)
                 if urlText.contains("slow") {
                     try await Task.sleep(for: .milliseconds(400))
@@ -67,7 +67,7 @@ struct HTMLToMarkdownSessionTests {
 
     @Test func manualConversionRunsOffMainThreadAfterDebounce() async throws {
         let session = HTMLToMarkdownSession(
-            urlOperation: { _, _ in Self.urlResult(title: "URL", marker: "url") },
+            urlOperation: { _, _, _ in Self.urlResult(title: "URL", marker: "url") },
             manualOperation: { html in
                 HTMLToMarkdownConversionResult(
                     markdown: Thread.isMainThread ? "main" : "background:\(html)"
@@ -84,7 +84,7 @@ struct HTMLToMarkdownSessionTests {
 
     @Test func clearCancelsWorkWithoutPublishingFailure() async throws {
         let session = HTMLToMarkdownSession(
-            urlOperation: { _, progress in
+            urlOperation: { _, _, progress in
                 await progress(.fetching)
                 try await Task.sleep(for: .milliseconds(350))
                 throw HTMLReadableArticleExtractionError.readabilityMalformedResult
@@ -108,7 +108,7 @@ struct HTMLToMarkdownSessionTests {
     @Test func publishingFetchedHTMLDoesNotTriggerManualConversion() async throws {
         let counter = HTMLSessionAtomicCounter()
         let session = HTMLToMarkdownSession(
-            urlOperation: { _, progress in
+            urlOperation: { _, _, progress in
                 await progress(.fetching)
                 return Self.urlResult(title: "URL", marker: "url")
             },
@@ -131,7 +131,7 @@ struct HTMLToMarkdownSessionTests {
     @Test func typedFailuresMapToStableDiagnosticsAndCanRecover() async throws {
         let attempts = HTMLSessionAtomicCounter()
         let session = HTMLToMarkdownSession(
-            urlOperation: { _, _ in
+            urlOperation: { _, _, _ in
                 if attempts.incrementAndRead() == 1 {
                     throw HTMLToMarkdownURLFetchError.unsupportedContentType
                 }
@@ -156,7 +156,7 @@ struct HTMLToMarkdownSessionTests {
     @Test func invalidURLIsInterceptedSynchronouslyWithoutEnteringFetchingPhase() async {
         let opCounter = HTMLSessionAtomicCounter()
         let session = HTMLToMarkdownSession(
-            urlOperation: { _, _ in
+            urlOperation: { _, _, _ in
                 opCounter.increment()
                 return Self.urlResult(title: "ShouldNotRun", marker: "should_not_run")
             }
@@ -204,7 +204,7 @@ struct HTMLToMarkdownSessionTests {
         let firstOperationGate = HTMLSessionManualOperationGate()
         defer { firstOperationGate.release() }
         let session = HTMLToMarkdownSession(
-            urlOperation: { _, _ in Self.urlResult(title: "URL", marker: "url") },
+            urlOperation: { _, _, _ in Self.urlResult(title: "URL", marker: "url") },
             manualOperation: { html in
                 started.increment()
                 if html == "<p>first</p>" {

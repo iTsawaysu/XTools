@@ -25,29 +25,29 @@ public enum JSONFormatting {
         }
     }
 
-    public static func format(_ text: String, sortKeys: Bool, indentWidth: Int) throws -> String {
-        try formatResult(text, sortKeys: sortKeys, indentWidth: indentWidth).text
+    public static func format(_ text: String, sortKeys: Bool, sortArrays: Bool = false, indentWidth: Int) throws -> String {
+        try formatResult(text, sortKeys: sortKeys, sortArrays: sortArrays, indentWidth: indentWidth).text
     }
 
     public static func minify(_ text: String) throws -> String {
         try minifyResult(text).text
     }
 
-    public static func formatResult(_ text: String, sortKeys: Bool, indentWidth: Int) throws -> FormattingResult {
+    public static func formatResult(_ text: String, sortKeys: Bool, sortArrays: Bool = false, indentWidth: Int) throws -> FormattingResult {
         let document = try parseOrderedJSON(text)
         let duplicateKeys = uniqueDuplicateKeys(document.duplicateKeys)
         return FormattingResult(
-            text: render(document.value, sortKeys: sortKeys, indentWidth: max(0, indentWidth), level: 0),
+            text: render(document.value, sortKeys: sortKeys, sortArrays: sortArrays, indentWidth: max(0, indentWidth), level: 0),
             warning: duplicateKeyWarning(from: duplicateKeys),
             duplicateKeys: duplicateKeys
         )
     }
 
-    public static func minifyResult(_ text: String, sortKeys: Bool = false) throws -> FormattingResult {
+    public static func minifyResult(_ text: String, sortKeys: Bool = false, sortArrays: Bool = false) throws -> FormattingResult {
         let document = try parseOrderedJSON(text)
         let duplicateKeys = uniqueDuplicateKeys(document.duplicateKeys)
         return FormattingResult(
-            text: renderCompact(document.value, sortKeys: sortKeys),
+            text: renderCompact(document.value, sortKeys: sortKeys, sortArrays: sortArrays),
             warning: duplicateKeyWarning(from: duplicateKeys),
             duplicateKeys: duplicateKeys
         )
@@ -98,6 +98,7 @@ public enum JSONFormatting {
     private static func render(
         _ value: OrderedJSONValue,
         sortKeys: Bool,
+        sortArrays: Bool,
         indentWidth: Int,
         level: Int
     ) -> String {
@@ -109,17 +110,18 @@ public enum JSONFormatting {
             let currentIndent = String(repeating: " ", count: level * indentWidth)
             let lines = orderedPairs.enumerated().map { index, pair in
                 let comma = index == orderedPairs.count - 1 ? "" : ","
-                return "\(childIndent)\"\(escapeString(pair.key))\": \(render(pair.value, sortKeys: sortKeys, indentWidth: indentWidth, level: level + 1))\(comma)"
+                return "\(childIndent)\"\(escapeString(pair.key))\": \(render(pair.value, sortKeys: sortKeys, sortArrays: sortArrays, indentWidth: indentWidth, level: level + 1))\(comma)"
             }
             return "{\n\(lines.joined(separator: "\n"))\n\(currentIndent)}"
 
         case .array(let values):
             guard !values.isEmpty else { return "[]" }
+            let orderedValues = sortArrays ? values.sorted(by: { renderCompact($0, sortKeys: sortKeys, sortArrays: sortArrays) < renderCompact($1, sortKeys: sortKeys, sortArrays: sortArrays) }) : values
             let childIndent = String(repeating: " ", count: (level + 1) * indentWidth)
             let currentIndent = String(repeating: " ", count: level * indentWidth)
-            let lines = values.enumerated().map { index, item in
-                let comma = index == values.count - 1 ? "" : ","
-                return "\(childIndent)\(render(item, sortKeys: sortKeys, indentWidth: indentWidth, level: level + 1))\(comma)"
+            let lines = orderedValues.enumerated().map { index, item in
+                let comma = index == orderedValues.count - 1 ? "" : ","
+                return "\(childIndent)\(render(item, sortKeys: sortKeys, sortArrays: sortArrays, indentWidth: indentWidth, level: level + 1))\(comma)"
             }
             return "[\n\(lines.joined(separator: "\n"))\n\(currentIndent)]"
 
@@ -134,13 +136,14 @@ public enum JSONFormatting {
         }
     }
 
-    private static func renderCompact(_ value: OrderedJSONValue, sortKeys: Bool) -> String {
+    private static func renderCompact(_ value: OrderedJSONValue, sortKeys: Bool, sortArrays: Bool) -> String {
         switch value {
         case .object(let pairs):
             let orderedPairs = orderedObjectPairs(pairs, sortKeys: sortKeys)
-            return "{" + orderedPairs.map { "\"\(escapeString($0.key))\":\(renderCompact($0.value, sortKeys: sortKeys))" }.joined(separator: ",") + "}"
+            return "{" + orderedPairs.map { "\"\(escapeString($0.key))\":\(renderCompact($0.value, sortKeys: sortKeys, sortArrays: sortArrays))" }.joined(separator: ",") + "}"
         case .array(let values):
-            return "[" + values.map { renderCompact($0, sortKeys: sortKeys) }.joined(separator: ",") + "]"
+            let orderedValues = sortArrays ? values.sorted(by: { renderCompact($0, sortKeys: sortKeys, sortArrays: sortArrays) < renderCompact($1, sortKeys: sortKeys, sortArrays: sortArrays) }) : values
+            return "[" + orderedValues.map { renderCompact($0, sortKeys: sortKeys, sortArrays: sortArrays) }.joined(separator: ",") + "]"
         case .string(let string):
             return "\"\(escapeString(string))\""
         case .number(let number):

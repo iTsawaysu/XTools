@@ -4,6 +4,7 @@ import Foundation
 
 typealias HTMLToMarkdownURLOperation = @Sendable (
     _ urlText: String,
+    _ extractArticleOnly: Bool,
     _ progress: @escaping HTMLToMarkdownURLPipeline.ProgressHandler
 ) async throws -> HTMLToMarkdownURLResult
 
@@ -21,6 +22,14 @@ final class HTMLToMarkdownSession: ObservableObject {
             }
             if phase == .failed && inputHTML.isEmpty && markdown.isEmpty {
                 phase = .idle
+            }
+        }
+    }
+    @Published var extractArticleOnly: Bool = true {
+        didSet {
+            guard extractArticleOnly != oldValue else { return }
+            if !urlText.isEmpty && !isURLProcessing {
+                fetchURL()
             }
         }
     }
@@ -46,8 +55,8 @@ final class HTMLToMarkdownSession: ObservableObject {
             self.urlOperation = urlOperation
         } else {
             let pipeline = HTMLToMarkdownURLPipeline(extractor: extractor)
-            self.urlOperation = { urlText, progress in
-                try await pipeline.convert(urlText: urlText, progress: progress)
+            self.urlOperation = { urlText, extractArticleOnly, progress in
+                try await pipeline.convert(urlText: urlText, extractArticleOnly: extractArticleOnly, progress: progress)
             }
         }
         self.manualOperation = manualOperation
@@ -110,11 +119,14 @@ final class HTMLToMarkdownSession: ObservableObject {
         phase = .fetching
         let urlOperation = self.urlOperation
 
+        let extractArticleOnly = self.extractArticleOnly
+
         workGate.schedule(debounce: .zero) { [weak self] in
             guard let self, self.workGate.isCurrent(currentGeneration) else { return }
             do {
                 let result = try await urlOperation(
                     requestURLText,
+                    extractArticleOnly,
                     { [weak self] stage in
                         await self?.receive(stage, generation: currentGeneration)
                     }
@@ -123,6 +135,12 @@ final class HTMLToMarkdownSession: ObservableObject {
 
                 self.inputHTML = result.cleanedHTML
                 self.markdown = result.markdown
+                
+                if self.markdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    self.finishFailure("提取结果为空。页面可能由客户端 JS 动态渲染，或无有效文本内容。", generation: currentGeneration)
+                    return
+                }
+                
                 self.error = nil
                 self.warning = HTMLToMarkdownDiagnostics.conversionWarningMessage(
                     for: result.warnings

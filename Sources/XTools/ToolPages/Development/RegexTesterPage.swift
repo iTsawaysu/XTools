@@ -149,7 +149,7 @@ private struct IndexRegexWorkspaceContent: View {
                         .menuIndicator(.hidden)
                         .buttonStyle(IndexSmallButtonStyle())
                         .fixedSize(horizontal: true, vertical: false)
-                        .help("应用常用正则预设；当前为\(activePresetTitle == "预设" ? "自定义" : activePresetTitle)")
+                        .help("应用预设；当前：\(activePresetTitle == "预设" ? "自定义" : activePresetTitle)")
                         .accessibilityLabel("正则预设，当前为\(activePresetTitle == "预设" ? "自定义" : activePresetTitle)")
 
                         IndexClearButton(
@@ -355,7 +355,7 @@ private struct IndexRegexWorkspaceContent: View {
         .menuIndicator(.hidden)
         .buttonStyle(IndexSmallButtonStyle())
         .fixedSize(horizontal: true, vertical: false)
-        .help("设置正则标志；当前为 \(activeFlagsLabel)")
+        .help("设置标志；当前：\(activeFlagsLabel)")
         .accessibilityLabel("正则标志，当前为 \(activeFlagsLabel)")
     }
 

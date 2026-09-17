@@ -94,7 +94,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
                 }
                 .buttonStyle(IndexSmallButtonStyle())
                 .disabled(session.output.isEmpty)
-                .help("将当前请求头送入解析模式")
+                .help("送入解析模式")
 
                 IndexCopyButton(text: session.output)
             }
@@ -158,7 +158,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
             }
             .buttonStyle(IndexSmallButtonStyle())
             .disabled(session.parsedCredentials == nil)
-            .help("将解析出的用户名和密码送入生成模式")
+            .help("送入生成模式")
         }
     }
 

@@ -290,6 +290,8 @@ struct TextDevelopmentWorkspaceRetentionTests {
         let expectedKeys = Set([
             "tools.integerBase.inputBase.v1",
             "tools.jsonFormatter.indent.v1",
+            "tools.jsonFormatter.unescape.v1",
+            "tools.sqlFormatter.indent.v2",
             "tools.sqlFormatter.keywordCase.v1",
             "tools.emoji.toneIndex.v1"
         ])

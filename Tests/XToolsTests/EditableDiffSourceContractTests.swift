@@ -126,7 +126,7 @@ struct EditableDiffSourceContractTests {
         contains(execution, "DiffExecution.project", "Diff session must delegate request→binding projection to Core")
         contains(projection, "LineDiffer.safeAlignedDiff", "Diff execution must use the budgeted text diff path")
         contains(projection, "JSONStructuralDiff.cancellableAlignedDiff", "Diff execution must use the cancellable JSON diff path")
-        contains(projection, "JSONStructuralDiff.displayTextForDiff(request.left)", "JSON execution must preserve Core canonical left display")
+        contains(projection, "JSONStructuralDiff.displayTextForDiff(request.left", "JSON execution must preserve Core canonical left display")
         contains(projection, "JSONDiffValidation.comparisonWarning(", "JSON execution must preserve Core duplicate-key warning mapping")
         doesNotContain(textDiff, "IndexDebouncer", "Text diff must not own a page-local debounce")
         doesNotContain(jsonDiff, "IndexDebouncer", "JSON diff must not own a page-local debounce")

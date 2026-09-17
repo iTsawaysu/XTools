@@ -56,7 +56,7 @@ private struct IndexPortWorkspaceContent: View {
                         .font(ToolTypography.buttonSmall)
                 }
                 .buttonStyle(IndexSmallButtonStyle())
-                .help("重新生成一个 1024–65535 范围内的随机端口号")
+                .help("重新生成端口")
             }
         }
     }

@@ -177,7 +177,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
                         left = right
                         right = temp
                     } label: {
-                        Image(systemName: "arrow.left.and.right")
+                        Image(systemName: "arrow.left.arrow.right")
                             .font(ToolTypography.buttonSmall)
                     }
                     .buttonStyle(IndexSmallButtonStyle(framed: true))

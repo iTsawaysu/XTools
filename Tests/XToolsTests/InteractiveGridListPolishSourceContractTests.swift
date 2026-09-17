@@ -48,7 +48,7 @@ struct InteractiveGridListPolishSourceContractTests {
         contains(controls, "enum Density", "The shared segmented control must expose an explicit density contract")
         contains(controls, "case compact", "The shared segmented control must provide a compact variant")
         contains(controls, "case .compact: 22", "Compact segments must leave visible vertical breathing room in a 34-point panel header")
-        contains(controls, "case .compact: 9", "Compact segments must reduce horizontal dominance without changing button semantics")
+        contains(controls, "case .compact: 7", "Compact segments must reduce horizontal dominance without changing button semantics")
         doesNotContain(emoji, "private struct EmojiSkinToneSegment", "Emoji must not fork a page-local copy of the shared segment style")
     }
 

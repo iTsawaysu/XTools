@@ -15,6 +15,9 @@ final class DiffToolWorkspaceModel: ObservableObject {
     @Published var ignoreCase: Bool = false {
         didSet { optionDidChange() }
     }
+    @Published var ignoreArrayOrder: Bool = false {
+        didSet { optionDidChange() }
+    }
 
     let execution: DiffExecutionSession
     let kind: DiffExecutionKind
@@ -78,8 +81,8 @@ final class DiffToolWorkspaceModel: ObservableObject {
                 ignoreWhitespace: ignoreWhitespace,
                 ignoreCase: ignoreCase
             ))
-        case .json:
-            effectiveKind = kind
+        case .json(let labels, _):
+            effectiveKind = .json(labels: labels, options: JSONDiffOptions(ignoreArrayOrder: ignoreArrayOrder))
         }
         let request = DiffExecutionRequest(kind: effectiveKind, left: left, right: right)
         execution.schedule(
@@ -131,7 +134,10 @@ private struct IndexJSONDiffWorkspaceContent: View {
                 error: execution.binding.error,
                 warning: execution.binding.warning,
                 onClear: workspace.clear,
-                clearDisabled: !workspace.hasAnyContent
+                clearDisabled: !workspace.hasAnyContent,
+                leadingControl: {
+                    IndexOptionSwitch(title: "忽略数组顺序", style: .embeddedSwitch, isOn: $workspace.ignoreArrayOrder)
+                }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }

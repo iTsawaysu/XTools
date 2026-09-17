@@ -72,6 +72,22 @@ struct JSONStructuralDiffTests {
         #expect(rows.contains { $0.kind.isDifference })
     }
 
+    @Test func arrayOrderChangesProduceNoRowsWhenIgnoreArrayOrderIsTrue() throws {
+        let left = #"{"ids":[1,2,3,4],"tags":["json","sql","xml"]}"#
+        let right = #"{"ids":[4,3,2,1],"tags":["sql","json","xml"]}"#
+        let decision = try JSONStructuralDiff.cancellableAlignedDiff(
+            left: left,
+            right: right,
+            labels: labels,
+            options: JSONDiffOptions(ignoreArrayOrder: true)
+        )
+        guard case .comparable(let rows) = decision else {
+            Issue.record("Expected comparable decision")
+            return
+        }
+        #expect(rows.isEmpty)
+    }
+
     @Test func typeDifferencesStillProduceRows() throws {
         let rows = try comparableRows(
             left: #"{"count":1,"enabled":true,"empty":null,"id":"001"}"#,

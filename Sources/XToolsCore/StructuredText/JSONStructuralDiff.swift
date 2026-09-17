@@ -1,5 +1,13 @@
 import Foundation
 
+public struct JSONDiffOptions: Equatable, Sendable {
+    public let ignoreArrayOrder: Bool
+
+    public init(ignoreArrayOrder: Bool = false) {
+        self.ignoreArrayOrder = ignoreArrayOrder
+    }
+}
+
 public enum JSONStructuralDiff {
     public enum Decision: Equatable, Sendable {
         case empty
@@ -12,6 +20,7 @@ public enum JSONStructuralDiff {
         left: String,
         right: String,
         labels: JSONDiffValidation.SideLabels,
+        options: JSONDiffOptions = JSONDiffOptions(),
         budget: LineDiffBudget = .standard,
         shouldCancel: @escaping @Sendable () -> Bool = { Task.isCancelled }
     ) throws -> Decision {
@@ -25,14 +34,14 @@ public enum JSONStructuralDiff {
             return .invalid(message)
         case .comparable:
             try cancellation.check()
-            if areStructurallyEquivalent(left: left, right: right) {
+            if areStructurallyEquivalent(left: left, right: right, options: options) {
                 return .comparable([])
             }
 
             try cancellation.check()
-            let leftDisplayText = displayTextForDiff(left) ?? left
+            let leftDisplayText = displayTextForDiff(left, options: options) ?? left
             try cancellation.check()
-            let rightDisplayText = displayTextForDiff(right) ?? right
+            let rightDisplayText = displayTextForDiff(right, options: options) ?? right
             try cancellation.check()
 
             do {
@@ -52,7 +61,7 @@ public enum JSONStructuralDiff {
         }
     }
 
-    private static func areStructurallyEquivalent(left: String, right: String) -> Bool {
+    private static func areStructurallyEquivalent(left: String, right: String, options: JSONDiffOptions) -> Bool {
         let leftTrimmed = left.trimmingCharacters(in: .whitespacesAndNewlines)
         let rightTrimmed = right.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -61,22 +70,22 @@ public enum JSONStructuralDiff {
         }
 
         do {
-            return try canonicalJSON(leftTrimmed) == canonicalJSON(rightTrimmed)
+            return try canonicalJSON(leftTrimmed, options: options) == canonicalJSON(rightTrimmed, options: options)
         } catch {
             return false
         }
     }
 
-    private static func canonicalJSON(_ text: String) throws -> String {
-        try JSONFormatting.format(text, sortKeys: true, indentWidth: 2)
+    private static func canonicalJSON(_ text: String, options: JSONDiffOptions) throws -> String {
+        try JSONFormatting.format(text, sortKeys: true, sortArrays: options.ignoreArrayOrder, indentWidth: 2)
     }
 
-    public static func displayTextForDiff(_ text: String) -> String? {
+    public static func displayTextForDiff(_ text: String, options: JSONDiffOptions = JSONDiffOptions()) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return nil
         }
 
-        return try? canonicalJSON(trimmed)
+        return try? canonicalJSON(trimmed, options: options)
     }
 }

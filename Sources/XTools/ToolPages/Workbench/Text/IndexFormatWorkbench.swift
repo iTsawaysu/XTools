@@ -230,10 +230,10 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                 Spacer(minLength: 0)
 
                 HStack(spacing: 6) {
+                    IndexClearButton(isDisabled: clearDisabled, showsIcon: false, framed: true, action: onClear)
                     IndexCopyButton(text: output, title: "复制", showsIcon: false, framed: true)
                         .keyboardShortcut("c", modifiers: [.command, .shift])
-                        .help("复制全部输出（⇧⌘C）")
-                    IndexClearButton(isDisabled: clearDisabled, showsIcon: false, framed: true, action: onClear)
+                        .help("复制全部 (⇧⌘C)")
                     if showsOutputSave {
                         IndexSaveTextButton(text: output, fileName: outputFileName, showsIcon: false, framed: true)
                     }

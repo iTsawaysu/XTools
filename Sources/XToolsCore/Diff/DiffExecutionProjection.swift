@@ -2,7 +2,7 @@ import Foundation
 
 public enum DiffExecutionKind: Equatable, Sendable {
     case text(options: TextDiffOptions = TextDiffOptions())
-    case json(labels: JSONDiffValidation.SideLabels)
+    case json(labels: JSONDiffValidation.SideLabels, options: JSONDiffOptions = JSONDiffOptions())
 
     public static var text: DiffExecutionKind {
         .text()
@@ -63,11 +63,12 @@ public enum DiffExecution {
                 )
             }
 
-        case .json(let labels):
+        case .json(let labels, let options):
             let decision = try JSONStructuralDiff.cancellableAlignedDiff(
                 left: request.left,
                 right: request.right,
-                labels: labels
+                labels: labels,
+                options: options
             )
             try Task.checkCancellation()
 
@@ -77,9 +78,9 @@ public enum DiffExecution {
             case .invalid(let message), .tooLarge(let message):
                 return DiffExecutionBinding(error: message)
             case .comparable(let rows):
-                let leftDisplayText = JSONStructuralDiff.displayTextForDiff(request.left)
+                let leftDisplayText = JSONStructuralDiff.displayTextForDiff(request.left, options: options)
                 try Task.checkCancellation()
-                let rightDisplayText = JSONStructuralDiff.displayTextForDiff(request.right)
+                let rightDisplayText = JSONStructuralDiff.displayTextForDiff(request.right, options: options)
                 try Task.checkCancellation()
                 let warning = JSONDiffValidation.comparisonWarning(
                     left: request.left,

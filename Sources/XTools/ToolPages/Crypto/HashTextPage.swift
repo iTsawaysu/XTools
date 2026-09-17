@@ -103,7 +103,7 @@ private struct IndexHashTextWorkspaceContent: View {
         }
         .buttonStyle(IndexSmallButtonStyle())
         .disabled(workspace.isComputing)
-        .help(workspace.isComputing ? "正在计算摘要" : "计算当前大文本的全部摘要")
+        .help(workspace.isComputing ? "正在计算摘要" : "计算全部摘要")
     }
 
     @ViewBuilder

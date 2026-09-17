@@ -23,7 +23,7 @@ struct IndexHTMLToMarkdownPage: View {
 /// Prototype v3 body: the URL fetch rides the workbench toolbar's leading
 /// control slot, conversion keeps its session-owned auto-run while typing,
 /// and Markdown output keeps the native large-text surface with in-pane
-/// processing state; the toolbar ends 复制 · 清空 · 保存 (no format action).
+/// processing state; the toolbar ends 清空 · 复制 · 保存 (no format action).
 private struct IndexHTMLToMarkdownWorkspaceContent: View {
     @ObservedObject var session: HTMLToMarkdownSession
 
@@ -50,10 +50,16 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 showsOutputSave: true,
                 outputFileName: "markdown-output.md",
                 leadingControl: {
-                    IndexOptionLabel("URL")
                     urlInput
-                        .frame(minWidth: 150, idealWidth: 260, maxWidth: 380)
+                        .frame(minWidth: 110, idealWidth: 170, maxWidth: 210)
                     fetchButton
+                    IndexIconButton(
+                        systemImage: "doc.plaintext",
+                        help: "仅提取文章正文",
+                        isActive: session.extractArticleOnly
+                    ) {
+                        session.extractArticleOnly.toggle()
+                    }
                 }
             )
         }
@@ -74,13 +80,13 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                     session.urlText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
+                        .font(ToolTypography.caption)
                         .foregroundStyle(ToolTheme.textTertiary)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(IndexBareButtonStyle())
                 .padding(.trailing, 8)
-                .help("清空 URL")
-                .accessibilityLabel("清空 URL")
+                .help("清空 URL (Esc)")
+                .accessibilityLabel("清空 URL 地址")
             }
         }
     }
@@ -99,7 +105,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
         .buttonStyle(IndexSmallButtonStyle(done: false, framed: true))
         .disabled(fetchDisabled)
         .accessibilityLabel(session.isURLProcessing ? "正在解析网页" : "获取网页")
-        .help("获取网页并转换为 Markdown")
+        .help("获取网页 (↩)")
     }
 
     private var inputBinding: Binding<String> {
