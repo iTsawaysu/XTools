@@ -130,6 +130,10 @@ public struct HTMLToMarkdownURLFetchService: Sendable {
         return HTMLToMarkdownFetchedDocument(html: html, responseURL: httpResponse.url ?? url)
     }
 
+    public static func isValidURL(_ urlText: String) -> Bool {
+        (try? normalizedURL(from: urlText)) != nil
+    }
+
     public static func normalizedURL(from urlText: String) throws -> URL {
         let trimmed = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -152,11 +156,98 @@ public struct HTMLToMarkdownURLFetchService: Sendable {
             throw HTMLToMarkdownURLFetchError.invalidURL
         }
 
+        if let port = components.port, !(1...65535).contains(port) {
+            throw HTMLToMarkdownURLFetchError.invalidURL
+        }
+
         if URLFetchHostPolicy.evaluate(host: host) == .deny {
             throw HTMLToMarkdownURLFetchError.privateNetworkDisallowed
         }
 
+        guard isValidHost(host) else {
+            throw HTMLToMarkdownURLFetchError.invalidURL
+        }
+
         return url
+    }
+
+    public static func isValidHost(_ rawHost: String) -> Bool {
+        let host = rawHost.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !host.isEmpty else { return false }
+
+        let unbracketed: String = {
+            if host.hasPrefix("["), host.hasSuffix("]"), host.count >= 2 {
+                return String(host.dropFirst().dropLast())
+            }
+            return host
+        }()
+
+        if unbracketed.contains(":") {
+            return isValidIPv6(unbracketed)
+        }
+
+        if isValidIPv4(unbracketed) {
+            return true
+        }
+
+        // Single integers or dot-separated numbers that are not valid 4-octet IPv4 (e.g. "123", "123.456")
+        // cannot be valid domain names since domain TLDs cannot be numeric.
+        if unbracketed.allSatisfy({ $0.isNumber || $0 == "." }) {
+            return false
+        }
+
+        return isValidDomainName(unbracketed)
+    }
+
+    private static func isValidIPv4(_ host: String) -> Bool {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return false }
+        for part in parts {
+            guard let val = UInt8(part), String(val) == part else {
+                return false
+            }
+        }
+        return true
+    }
+
+    private static func isValidIPv6(_ host: String) -> Bool {
+        var sin6 = sockaddr_in6()
+        return host.withCString { cstr in
+            inet_pton(AF_INET6, cstr, &sin6.sin6_addr) == 1
+        }
+    }
+
+    private static func isValidDomainName(_ host: String) -> Bool {
+        guard host.count <= 253 else { return false }
+
+        let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard labels.count >= 2 else { return false }
+
+        for label in labels {
+            guard !label.isEmpty, label.count <= 63 else { return false }
+            guard label.first != "-", label.last != "-" else { return false }
+            guard label.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }) else {
+                return false
+            }
+        }
+
+        guard let tld = labels.last else { return false }
+        guard tld.count >= 2 else { return false }
+
+        if tld.hasPrefix("xn--") {
+            let punycodeSuffix = tld.dropFirst(4)
+            guard !punycodeSuffix.isEmpty,
+                  punycodeSuffix.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "-" }),
+                  punycodeSuffix.last != "-" else {
+                return false
+            }
+        } else {
+            guard tld.allSatisfy({ $0.isLetter }) else {
+                return false
+            }
+        }
+
+        return true
     }
 
     private static func decodeText(_ data: Data, response: HTTPURLResponse) -> String? {

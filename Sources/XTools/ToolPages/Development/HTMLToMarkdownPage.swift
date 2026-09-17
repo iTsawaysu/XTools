@@ -41,6 +41,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 inputPlaceholder: "<h1>标题</h1>\n<p>段落</p>",
                 diagnostic: session.error ?? session.warning,
                 diagnosticTone: session.error == nil ? .warning : .error,
+                formatAttempt: session.formatAttempt,
                 outputLineNumbers: false,
                 clearDisabled: !session.canClear,
                 onClear: session.clear,

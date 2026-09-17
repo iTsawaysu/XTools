@@ -13,12 +13,23 @@ typealias HTMLToMarkdownManualOperation = @Sendable (
 
 @MainActor
 final class HTMLToMarkdownSession: ObservableObject {
-    @Published var urlText = ""
+    @Published var urlText = "" {
+        didSet {
+            guard urlText != oldValue else { return }
+            if error != nil {
+                error = nil
+            }
+            if phase == .failed && inputHTML.isEmpty && markdown.isEmpty {
+                phase = .idle
+            }
+        }
+    }
     @Published private(set) var inputHTML = ""
     @Published private(set) var markdown = ""
     @Published private(set) var error: String?
     @Published private(set) var warning: String?
     @Published private(set) var phase: HTMLToMarkdownSessionPhase = .idle
+    @Published private(set) var formatAttempt = 0
 
     private let urlOperation: HTMLToMarkdownURLOperation
     private let manualOperation: HTMLToMarkdownManualOperation
@@ -68,6 +79,27 @@ final class HTMLToMarkdownSession: ObservableObject {
             error = HTMLToMarkdownDiagnostics.urlFetchErrorMessage(for: .emptyURL)
             warning = nil
             phase = .failed
+            formatAttempt += 1
+            return
+        }
+
+        do {
+            _ = try HTMLToMarkdownURLFetchService.normalizedURL(from: requestURLText)
+        } catch let fetchError as HTMLToMarkdownURLFetchError {
+            _ = workGate.invalidate()
+            markdown = ""
+            self.error = HTMLToMarkdownDiagnostics.urlFetchErrorMessage(for: fetchError)
+            warning = nil
+            phase = .failed
+            formatAttempt += 1
+            return
+        } catch {
+            _ = workGate.invalidate()
+            markdown = ""
+            self.error = HTMLToMarkdownDiagnostics.urlFetchErrorMessage(for: .invalidURL)
+            warning = nil
+            phase = .failed
+            formatAttempt += 1
             return
         }
 
@@ -199,6 +231,7 @@ final class HTMLToMarkdownSession: ObservableObject {
         error = message
         warning = nil
         phase = .failed
+        formatAttempt += 1
     }
 
     nonisolated private static func defaultManualOperation(

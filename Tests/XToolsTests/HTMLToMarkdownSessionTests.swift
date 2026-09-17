@@ -153,6 +153,50 @@ struct HTMLToMarkdownSessionTests {
         #expect(session.error == nil)
     }
 
+    @Test func invalidURLIsInterceptedSynchronouslyWithoutEnteringFetchingPhase() async {
+        let opCounter = HTMLSessionAtomicCounter()
+        let session = HTMLToMarkdownSession(
+            urlOperation: { _, _ in
+                opCounter.increment()
+                return Self.urlResult(title: "ShouldNotRun", marker: "should_not_run")
+            }
+        )
+        session.urlText = "123"
+
+        session.fetchURL()
+
+        #expect(session.phase == .failed)
+        #expect(session.isURLProcessing == false)
+        #expect(session.error == "URL 格式无效；仅支持 http 或 https 地址。")
+        #expect(session.formatAttempt == 1)
+        #expect(session.markdown.isEmpty)
+        #expect(opCounter.value == 0)
+    }
+
+    @Test func editingURLTextClearsPreviousValidationError() {
+        let session = HTMLToMarkdownSession()
+        session.urlText = "123"
+        session.fetchURL()
+
+        #expect(session.error != nil)
+        #expect(session.phase == .failed)
+
+        session.urlText = "1234"
+        #expect(session.error == nil)
+        #expect(session.phase == .idle)
+    }
+
+    @Test func privateNetworkURLIsInterceptedWithDedicatedDiagnostic() {
+        let session = HTMLToMarkdownSession()
+        session.urlText = "http://localhost:3000"
+        session.fetchURL()
+
+        #expect(session.phase == .failed)
+        #expect(session.isURLProcessing == false)
+        #expect(session.error == "不允许访问本地或私有网络地址。")
+        #expect(session.formatAttempt == 1)
+    }
+
     @Test func rapidManualEditsDoNotPublishCancelledConversion() async throws {
         let started = HTMLSessionAtomicCounter()
         let finished = HTMLSessionAtomicCounter()

@@ -313,6 +313,55 @@ struct HTMLToMarkdownURLFetchServiceTests {
         }
     }
 
+    @Test func rejectsInvalidURLsAndRandomInput() {
+        let invalidInputs = [
+            "123",
+            "99999",
+            "abc",
+            "123.456",
+            "-example.com",
+            "example-.com",
+            "foo..bar.com",
+            ".example.com",
+            "example.com.",
+            "http://",
+            "https://",
+            "ftp://example.com",
+            "javascript:alert(1)",
+            "example.c", // single letter TLD
+            "http://127.0.0.1",
+            "http://localhost",
+            "http://192.168.1.1"
+        ]
+
+        for input in invalidInputs {
+            #expect(!HTMLToMarkdownURLFetchService.isValidURL(input), "Expected \(input) to be invalid")
+            #expect(throws: (any Error).self) {
+                _ = try HTMLToMarkdownURLFetchService.normalizedURL(from: input)
+            }
+        }
+    }
+
+    @Test func allowsValidDomainsAndPublicIPs() throws {
+        let validInputs = [
+            "example.com",
+            "https://example.com",
+            "http://example.com",
+            "sub.domain.example.com",
+            "https://sub.domain.example.com/path?q=1#ref",
+            "8.8.8.8",
+            "https://8.8.8.8/index.html",
+            "github.com/trending"
+        ]
+
+        for input in validInputs {
+            #expect(HTMLToMarkdownURLFetchService.isValidURL(input), "Expected \(input) to be valid")
+            #expect(throws: Never.self) {
+                _ = try HTMLToMarkdownURLFetchService.normalizedURL(from: input)
+            }
+        }
+    }
+
     @Test func fetchesAndDecodesHTMLWithCharset() async throws {
         let url = try #require(URL(string: "https://example.com/page"))
         let response = try #require(HTTPURLResponse(
