@@ -42,12 +42,67 @@ struct EditableDiffInteractionTests {
             syntax: .json
         )
 
+        // Fresh JSON computation: canonical text and decorations appear
+        // immediately on both sides — including the active right editor —
+        // without requiring the user to click away.
         #expect(leftTextView.string == leftDisplay)
+        #expect(rightTextView.string == rightDisplay)
+        #expect(hasTemporaryBackground(in: leftTextView))
+        #expect(hasTemporaryBackground(in: rightTextView))
+    }
+
+    @Test func endingRightEditingFallbackStillReconciles() throws {
+        let leftSource = #"{"name":"Ada","active":true}"#
+        let rightSource = #"{"name":"Grace","active":false,"port":5432}"#
+        let leftDisplay = try #require(JSONStructuralDiff.displayTextForDiff(leftSource))
+        let rightDisplay = try #require(JSONStructuralDiff.displayTextForDiff(rightSource))
+        let rows = try comparableRows(left: leftSource, right: rightSource)
+        let leftValue = MutableStringValue(leftSource)
+        let rightValue = MutableStringValue(rightSource)
+        let coordinator = IndexEditableDiffMergeView.Coordinator(
+            left: binding(to: leftValue),
+            right: binding(to: rightValue)
+        )
+        let leftEditor = coordinator.makeEditor(side: .left, placeholder: "JSON A")
+        let rightEditor = coordinator.makeEditor(side: .right, placeholder: "JSON B")
+        let leftTextView = try #require(textView(in: leftEditor))
+        let rightTextView = try #require(textView(in: rightEditor))
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 560),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        let contentView = try #require(window.contentView)
+        contentView.addSubview(leftEditor)
+        contentView.addSubview(rightEditor)
+        leftTextView.string = leftSource
+        rightTextView.string = rightSource
+        #expect(window.makeFirstResponder(rightTextView))
+
+        // First call establishes the latest display text.
+        coordinator.update(
+            left: leftDisplay,
+            right: rightDisplay,
+            rows: rows,
+            syntax: .json
+        )
+
+        // Simulate the user editing the right side, reverting to raw source.
+        rightTextView.string = rightSource
+
+        // Second update with SAME display text is NOT fresh, so the active
+        // editor keeps the user's raw draft.
+        coordinator.update(
+            left: leftDisplay,
+            right: rightDisplay,
+            rows: rows,
+            syntax: .json
+        )
         #expect(rightTextView.string == rightSource)
-        #expect(!hasTemporaryBackground(in: rightTextView))
 
+        // textDidEndEditing fallback still reconciles the active editor.
         coordinator.textDidEndEditing(Notification(name: NSText.didEndEditingNotification, object: rightTextView))
-
         #expect(rightTextView.string == rightDisplay)
         #expect(hasTemporaryBackground(in: leftTextView))
         #expect(hasTemporaryBackground(in: rightTextView))

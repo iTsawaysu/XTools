@@ -529,12 +529,23 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         }
 
         func update(left: String, right: String, rows: [DiffAlignedRow], syntax: IndexDiffSyntax) {
+            // Detect whether the display text has genuinely changed (a fresh
+            // computation result arrived from the debounce pipeline). For JSON
+            // mode the active editor is normally blocked from programmatic
+            // updates to protect user keystrokes from stale SwiftUI re-renders.
+            // When a fresh result arrives, we allow the override so that the
+            // canonical text and diff decorations appear immediately — the user
+            // no longer needs to click away to trigger `textDidEndEditing`.
+            let freshLeftDisplay = left != latestLeftDisplayText
+            let freshRightDisplay = right != latestRightDisplayText
+            let jsonFresh = syntax == .json
+
             currentRows = rows
             currentSyntax = syntax
             latestLeftDisplayText = left
             latestRightDisplayText = right
-            setText(left, source: self.left.wrappedValue, in: leftTextView)
-            setText(right, source: self.right.wrappedValue, in: rightTextView)
+            setText(left, source: self.left.wrappedValue, in: leftTextView, allowActiveEditorOverride: jsonFresh && freshLeftDisplay)
+            setText(right, source: self.right.wrappedValue, in: rightTextView, allowActiveEditorOverride: jsonFresh && freshRightDisplay)
             refreshEditorLayout()
             applyDecorations()
             refreshPlaceholders()
@@ -635,10 +646,17 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             textView.setStringWithoutUndoRegistration(text)
 
             let textLength = (text as NSString).length
-            let validRanges = selectedRanges.filter { $0.rangeValue.upperBound <= textLength }
-            textView.selectedRanges = validRanges.isEmpty
-                ? [NSValue(range: NSRange(location: textLength, length: 0))]
-                : validRanges
+            if text != source {
+                // Canonical replacement (e.g. JSON formatting/sorting): the
+                // text structure has changed so old cursor offsets are
+                // meaningless — dock to the end.
+                textView.selectedRanges = [NSValue(range: NSRange(location: textLength, length: 0))]
+            } else {
+                let validRanges = selectedRanges.filter { $0.rangeValue.upperBound <= textLength }
+                textView.selectedRanges = validRanges.isEmpty
+                    ? [NSValue(range: NSRange(location: textLength, length: 0))]
+                    : validRanges
+            }
             refreshPlaceholders()
             refreshEditorLayout()
         }
