@@ -113,13 +113,13 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                 onFormat: format,
                 onClear: workspace.clear,
                 leadingControl: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 6) {
                         IndexSegmentedControl(
                             items: JSONFormatterToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
                             selection: formatModeSelection,
                             density: .compact
                         )
-                        IndexOptionSwitch(title: "Key 排序", isOn: $workspace.sortKeys)
+                        IndexOptionSwitch(title: "Key 排序", style: .embeddedSwitch, isOn: $workspace.sortKeys)
                     }
                 }
             )

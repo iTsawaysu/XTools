@@ -315,12 +315,6 @@ private struct OrderedJSONParser {
     }
 
     private mutating func parseValue(context: JSONParseContext, currentKey: String? = nil) throws -> OrderedJSONValue {
-        depth += 1
-        defer { depth -= 1 }
-        guard depth <= Self.maxDepth else {
-            throw error(.exceededMaxDepth)
-        }
-
         skipWhitespace()
         guard let char = peek() else {
             throw error(.unexpectedEnd)
@@ -328,8 +322,18 @@ private struct OrderedJSONParser {
 
         switch char {
         case "{":
+            depth += 1
+            defer { depth -= 1 }
+            guard depth <= Self.maxDepth else {
+                throw error(.exceededMaxDepth)
+            }
             return try parseObject(currentKey: currentKey)
         case "[":
+            depth += 1
+            defer { depth -= 1 }
+            guard depth <= Self.maxDepth else {
+                throw error(.exceededMaxDepth)
+            }
             return try parseArray(currentKey: currentKey)
         case "\"":
             return .string(try parseString())

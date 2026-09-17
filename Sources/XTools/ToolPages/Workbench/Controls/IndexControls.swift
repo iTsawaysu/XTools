@@ -49,7 +49,7 @@ struct IndexButtonStyle: ButtonStyle {
                 .font(ToolTypography.bodyMedium)
                 .labelStyle(.titleAndIcon)
                 .foregroundStyle(primary ? ToolTheme.onAccent : ToolTheme.textPrimary)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, 12)
                 .frame(height: 32)
                 .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
                 .overlay {
@@ -483,7 +483,7 @@ struct IndexSegmentedControl: View {
         fileprivate var itemHorizontalPadding: CGFloat {
             switch self {
             case .regular: 13
-            case .compact: 9
+            case .compact: 7
             }
         }
     }
@@ -503,7 +503,7 @@ struct IndexSegmentedControl: View {
     }
 
     var body: some View {
-        IndexFlowLayout(spacing: 2, lineSpacing: 2) {
+        HStack(spacing: 2) {
             ForEach(items, id: \.0) { item in
                 Item(label: item.1, isSelected: selection == item.0, density: density) {
                     selection = item.0
@@ -516,6 +516,7 @@ struct IndexSegmentedControl: View {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
                 .strokeBorder(ToolTheme.border, lineWidth: 1)
         }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     /// A single segment. Holds its own hover state so unselected segments give
@@ -669,15 +670,29 @@ struct IndexOptionDivider: View {
 }
 
 struct IndexOptionSwitch: View {
+    enum Style: Sendable {
+        case switchToggle
+        case embeddedSwitch
+        case button
+    }
+
     let title: String
     var help: String?
+    var style: Style = .switchToggle
     @Binding var isOn: Bool
+
+    init(title: String, help: String? = nil, style: Style = .switchToggle, isOn: Binding<Bool>) {
+        self.title = title
+        self.help = help
+        self.style = style
+        self._isOn = isOn
+    }
 
     var body: some View {
         Toggle(isOn: $isOn) {
             Text(title)
         }
-        .toggleStyle(IndexOptionSwitchToggleStyle())
+        .toggleStyle(IndexOptionSwitchToggleStyle(style: style))
         .help(help ?? title)
         .accessibilityValue(isOn ? "已开启" : "已关闭")
         .fixedSize(horizontal: true, vertical: false)
@@ -685,33 +700,165 @@ struct IndexOptionSwitch: View {
 }
 
 private struct IndexOptionSwitchToggleStyle: ToggleStyle {
+    var style: IndexOptionSwitch.Style = .switchToggle
+
     func makeBody(configuration: Configuration) -> some View {
         Button {
             configuration.isOn.toggle()
         } label: {
-            HStack(spacing: 8) {
-                IndexSwitchTrack(
-                    isOn: configuration.isOn,
-                    offBackground: ToolTheme.panelBackground,
-                    offBorder: ToolTheme.strongBorder,
-                    offThumb: ToolTheme.textSecondary
-                )
+            switch style {
+            case .switchToggle:
+                HStack(spacing: 6) {
+                    IndexSwitchTrack(
+                        isOn: configuration.isOn,
+                        offBackground: ToolTheme.panelBackground,
+                        offBorder: ToolTheme.strongBorder,
+                        offThumb: ToolTheme.textSecondary
+                    )
 
-                configuration.label
-                    .font(ToolTypography.bodyMedium)
-                    .foregroundStyle(ToolTheme.textPrimary)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+                    configuration.label
+                        .font(ToolTypography.bodyMedium)
+                        .foregroundStyle(ToolTheme.textPrimary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .padding(.horizontal, 4)
+                .frame(height: 28)
+                .background(
+                    configuration.isOn ? ToolTheme.selectionFill : Color.clear,
+                    in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
+
+            case .embeddedSwitch:
+                IndexEmbeddedSwitchLabel(configuration: configuration)
+
+            case .button:
+                IndexOptionButtonLabel(configuration: configuration)
             }
-            .padding(.horizontal, 6)
-            .frame(height: 28)
-            .background(
-                configuration.isOn ? ToolTheme.selectionFill : Color.clear,
-                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct IndexEmbeddedSwitchLabel: View {
+    let configuration: ToggleStyle.Configuration
+    @State private var isHovering = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    private let thumbSize: CGFloat = 20
+    private let trackPadding: CGFloat = 3
+    private let textSpacing: CGFloat = 6
+    private let textOuterPadding: CGFloat = 9
+
+    private var isOn: Bool { configuration.isOn }
+    private var hovering: Bool { isHovering && isEnabled }
+
+    private var trackBackground: Color {
+        if !isEnabled { return ToolTheme.editorBackground }
+        if isOn {
+            return hovering ? ToolTheme.accentHover : ToolTheme.accent
+        }
+        return hovering ? ToolTheme.hoverFill : ToolTheme.utilityBackground
+    }
+
+    private var trackBorder: Color {
+        if !isEnabled { return ToolTheme.border }
+        if isOn {
+            return hovering ? ToolTheme.accentHover : ToolTheme.accent
+        }
+        return hovering ? ToolTheme.strongBorder : ToolTheme.strongBorder.opacity(0.85)
+    }
+
+    private var textForeground: Color {
+        if !isEnabled { return ToolTheme.textTertiary }
+        if isOn { return ToolTheme.onAccent }
+        return hovering ? ToolTheme.textPrimary : ToolTheme.textSecondary
+    }
+
+    var body: some View {
+        ZStack(alignment: isOn ? .trailing : .leading) {
+            configuration.label
+                .font(ToolTypography.label)
+                .foregroundStyle(textForeground)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.leading, isOn ? textOuterPadding : (trackPadding + thumbSize + textSpacing))
+                .padding(.trailing, isOn ? (trackPadding + thumbSize + textSpacing) : textOuterPadding)
+
+            Circle()
+                .fill(Color.white)
+                .frame(width: thumbSize, height: thumbSize)
+                .shadow(color: Color.black.opacity(isOn ? 0.22 : 0.15), radius: 1.5, x: 0, y: 0.8)
+                .overlay {
+                    Circle()
+                        .strokeBorder(Color.black.opacity(0.08), lineWidth: 0.5)
+                }
+                .padding(.horizontal, trackPadding)
+        }
+        .frame(height: 26)
+        .background(
+            trackBackground,
+            in: Capsule(style: .continuous)
+        )
+        .overlay {
+            Capsule(style: .continuous)
+                .strokeBorder(trackBorder, lineWidth: 1)
+        }
+        .contentShape(Capsule(style: .continuous))
+        .onHover { isHovering = $0 }
+        .toolAnimation(ToolMotion.Preset.controlFeedback, value: isOn)
+        .toolAnimation(ToolMotion.Preset.controlFeedback, value: hovering)
+    }
+}
+
+private struct IndexOptionButtonLabel: View {
+    let configuration: ToggleStyle.Configuration
+    @State private var isHovering = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    private var isOn: Bool { configuration.isOn }
+    private var hovering: Bool { isHovering && isEnabled }
+
+    private var background: Color {
+        if isOn {
+            return hovering ? ToolTheme.accentSoft.opacity(0.85) : ToolTheme.accentSoft
+        }
+        return hovering ? ToolTheme.hoverFill : ToolTheme.editorBackground
+    }
+
+    private var border: Color {
+        if isOn {
+            return ToolTheme.accentBorder
+        }
+        return hovering ? ToolTheme.strongBorder : ToolTheme.border
+    }
+
+    private var foreground: Color {
+        if !isEnabled { return ToolTheme.textTertiary }
+        if isOn { return ToolTheme.accent }
+        return hovering ? ToolTheme.textPrimary : ToolTheme.textSecondary
+    }
+
+    var body: some View {
+        configuration.label
+            .font(ToolTypography.label)
+            .foregroundStyle(foreground)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 8)
+            .frame(height: 26)
+            .background(
+                background,
+                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                    .strokeBorder(border, lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+            .onHover { isHovering = $0 }
+            .toolAnimation(ToolMotion.Preset.controlFeedback, value: [hovering, isOn])
     }
 }
 

@@ -38,9 +38,9 @@ private struct IndexTextDiffWorkspaceContent: View {
                 onClear: workspace.clear,
                 clearDisabled: !workspace.hasAnyContent,
                 leadingControl: {
-                    HStack(spacing: 8) {
-                        IndexOptionSwitch(title: "忽略空白", isOn: $workspace.ignoreWhitespace)
-                        IndexOptionSwitch(title: "忽略大小写", isOn: $workspace.ignoreCase)
+                    HStack(spacing: 6) {
+                        IndexOptionSwitch(title: "忽略空白", style: .embeddedSwitch, isOn: $workspace.ignoreWhitespace)
+                        IndexOptionSwitch(title: "忽略大小写", style: .embeddedSwitch, isOn: $workspace.ignoreCase)
                     }
                 }
             )

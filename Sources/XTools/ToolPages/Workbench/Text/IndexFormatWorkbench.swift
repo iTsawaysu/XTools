@@ -197,7 +197,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         // its own pane's leading edge (prototype: STDOUT pinned at left:50%),
         // and the actions right-align inside the output half.
         HStack(spacing: 0) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 IndexBadge("STDIN", tone: .accent, isCapsule: true)
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(10)
@@ -210,11 +210,11 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
 
                 leadingControl()
 
-                Spacer(minLength: 24)
+                Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 IndexBadge("STDOUT", tone: .accent, isCapsule: true)
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(10)
@@ -227,7 +227,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
 
                 inlineDiagnostic
 
-                Spacer(minLength: 16)
+                Spacer(minLength: 0)
 
                 HStack(spacing: 6) {
                     IndexCopyButton(text: output, title: "复制", showsIcon: false, framed: true)

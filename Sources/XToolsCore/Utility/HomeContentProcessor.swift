@@ -42,7 +42,7 @@ public enum HomeContentFailure: Error, LocalizedError, Equatable, Sendable {
 
 public enum HomeContentProcessor {
     public static let maximumCharacterCount = SmartPasteDetector.maxInspectedLength
-    public static let maximumJSONNestingDepth = 64
+    public static let maximumJSONNestingDepth = 32
 
     public static func detect(_ input: String) -> SmartPasteDetector.Kind? {
         guard input.count <= maximumCharacterCount else { return nil }

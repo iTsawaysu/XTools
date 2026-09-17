@@ -233,4 +233,44 @@ struct CodeViewerSurfaceTests {
         #expect(model.input.isEmpty, "JSON input must be completely empty on initial mount")
         #expect(model.output.isEmpty, "JSON output must be completely empty on initial mount")
     }
+
+    @MainActor
+    @Test func jsonFormatterPageFitsStandardWindowWidthWithoutOverflow() {
+        let defaults = UserDefaults(suiteName: "CodeViewerSurfaceTests.Layout.\(UUID().uuidString)")!
+        let repository = ToolWorkspaceRepository(defaults: defaults)
+        let view = IndexJSONFormatterPage().environmentObject(repository)
+        let hostingView = NSHostingView(rootView: view)
+        
+        // Window minWidth: 960, Sidebar: 220, Detail area: ~740 (test down to 680)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 680, height: 600)
+        hostingView.layoutSubtreeIfNeeded()
+        
+        func checkOverflows(_ v: NSView) {
+            #expect(v.frame.maxX <= 680, "View \(type(of: v)) frame \(v.frame) exceeds container width 680")
+            for sub in v.subviews {
+                checkOverflows(sub)
+            }
+        }
+        checkOverflows(hostingView)
+    }
+
+    @MainActor
+    @Test func textDiffPageFitsStandardWindowWidthWithoutOverflow() {
+        let defaults = UserDefaults(suiteName: "CodeViewerSurfaceTests.Layout.Diff.\(UUID().uuidString)")!
+        let repository = ToolWorkspaceRepository(defaults: defaults)
+        let view = IndexTextDiffPage().environmentObject(repository)
+        let hostingView = NSHostingView(rootView: view)
+        
+        // Window minWidth: 960, Sidebar: 220, Detail area: ~740 (test down to 680)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 680, height: 600)
+        hostingView.layoutSubtreeIfNeeded()
+        
+        func checkOverflows(_ v: NSView) {
+            #expect(v.frame.maxX <= 680, "View \(type(of: v)) frame \(v.frame) exceeds container width 680")
+            for sub in v.subviews {
+                checkOverflows(sub)
+            }
+        }
+        checkOverflows(hostingView)
+    }
 }
