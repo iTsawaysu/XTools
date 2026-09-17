@@ -51,7 +51,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 outputFileName: "markdown-output.md",
                 leadingControl: {
                     urlInput
-                        .frame(minWidth: 110, idealWidth: 170, maxWidth: 210)
+                        .frame(width: 85)
                     fetchButton
                     IndexIconButton(
                         systemImage: "doc.plaintext",
@@ -67,7 +67,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
 
     private var urlInput: some View {
         IndexTextInput(
-            placeholder: "https://example.com",
+            placeholder: "URL...",
             text: $session.urlText,
             height: 26,
             trailingInset: session.urlText.isEmpty ? 11 : 28,

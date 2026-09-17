@@ -15,8 +15,8 @@ final class SQLPrettifyToolWorkspaceModel: ObservableObject {
         var id: String { rawValue }
         var label: String {
             switch self {
-            case .two: return "2 空格"
-            case .four: return "4 空格"
+            case .two: return "2"
+            case .four: return "4"
             case .compact: return "压缩"
             }
         }
@@ -88,16 +88,16 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
                 leadingControl: {
                     HStack(spacing: 6) {
                         IndexSegmentedControl(
+                            items: SQLPrettifyToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
+                            selection: formatModeSelection,
+                            density: .compact
+                        )
+                        IndexSegmentedControl(
                             items: [("upper", "大写"), ("lower", "小写")],
                             selection: keywordCaseSelection,
                             density: .compact
                         )
                         .help("关键字大小写 (UPPER / lower)")
-                        IndexSegmentedControl(
-                            items: SQLPrettifyToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
-                            selection: formatModeSelection,
-                            density: .compact
-                        )
                     }
                 }
             )
