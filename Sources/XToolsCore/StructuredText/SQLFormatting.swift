@@ -15,15 +15,18 @@ public enum SQLFormatting {
         public var keywordCase: KeywordCase
         public var indentWidth: Int
         public var commaStyle: CommaStyle
+        public var minify: Bool
 
         public init(
             keywordCase: KeywordCase = .upper,
             indentWidth: Int = 2,
-            commaStyle: CommaStyle = .trailing
+            commaStyle: CommaStyle = .trailing,
+            minify: Bool = false
         ) {
             self.keywordCase = keywordCase
             self.indentWidth = max(2, min(8, indentWidth))
             self.commaStyle = commaStyle
+            self.minify = minify
         }
     }
 

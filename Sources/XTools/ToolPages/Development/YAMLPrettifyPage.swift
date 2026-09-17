@@ -31,11 +31,12 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
                 input: $workspace.input,
                 output: execution.binding.output,
                 inputPlaceholder: "key:   value\nlist:\n   - a\n   - b",
-                diagnostic: execution.binding.error,
+                diagnostic: execution.binding.error ?? execution.binding.warning,
+                diagnosticTone: execution.binding.error == nil ? .warning : .error,
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
                 outputColorize: outputColorizer,
-                clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil,
+                clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
                 onFormat: format,
                 onClear: workspace.clear
             )

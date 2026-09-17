@@ -43,6 +43,39 @@ struct SQLFormatter {
         }
 
         flushLine()
+
+        if options.minify {
+            var minifiedLines: [String] = []
+            var currentMinified = ""
+
+            for line in lines {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                guard !trimmed.isEmpty else { continue }
+
+                if trimmed.hasPrefix("--") {
+                    if !currentMinified.isEmpty {
+                        currentMinified += " "
+                    }
+                    currentMinified += trimmed
+                    minifiedLines.append(currentMinified)
+                    currentMinified = ""
+                } else {
+                    if !currentMinified.isEmpty {
+                        let last = currentMinified.last
+                        let first = trimmed.first
+                        if last != "(" && first != ")" && first != "," {
+                            currentMinified += " "
+                        }
+                    }
+                    currentMinified += trimmed
+                }
+            }
+            if !currentMinified.isEmpty {
+                minifiedLines.append(currentMinified)
+            }
+            return minifiedLines.joined(separator: "\n")
+        }
+
         return lines.joined(separator: "\n")
     }
 

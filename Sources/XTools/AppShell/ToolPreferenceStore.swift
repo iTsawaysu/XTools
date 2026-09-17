@@ -411,6 +411,11 @@ enum TextDevelopmentToolPreferenceKeys {
         "tools.sqlFormatter.keywordCase.v1",
         default: .upper
     )
+    static let sqlIndent = ToolPreferenceKey<String>.string(
+        "tools.sqlFormatter.indent.v2",
+        default: "2",
+        allowedValues: ["2", "4", "compact"]
+    )
     static let emojiToneIndex = ToolPreferenceKey<Int>.integer(
         "tools.emoji.toneIndex.v1",
         default: 0,
@@ -423,6 +428,7 @@ enum TextDevelopmentToolPreferenceKeys {
             integerBase.rawKey,
             jsonIndent.rawKey,
             sqlKeywordCase.rawKey,
+            sqlIndent.rawKey,
             emojiToneIndex.rawKey
         ]
     }

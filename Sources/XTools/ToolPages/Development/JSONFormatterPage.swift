@@ -152,7 +152,7 @@ private struct IndexJSONFormatterWorkspaceContent: View {
     }
 
     private func format() {
-        guard !workspace.input.isEmpty else {
+        guard !workspace.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             execution.invalidate()
             return
         }

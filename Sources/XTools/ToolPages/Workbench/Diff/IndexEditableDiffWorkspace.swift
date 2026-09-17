@@ -171,16 +171,31 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
 
                 Spacer(minLength: 0)
 
-                if let onClear {
-                    IndexClearButton(
-                    isDisabled: clearDisabled,
-                    title: "清空对比",
-                    showsIcon: false,
-                    framed: true,
-                    action: onClear
-                )
-                    .layoutPriority(2)
+                HStack(spacing: 6) {
+                    Button {
+                        let temp = left
+                        left = right
+                        right = temp
+                    } label: {
+                        Image(systemName: "arrow.left.and.right")
+                            .font(ToolTypography.buttonSmall)
+                    }
+                    .buttonStyle(IndexSmallButtonStyle(framed: true))
+                    .disabled(clearDisabled)
+                    .help("交换左右 (⌥⌘X)")
+                    .keyboardShortcut("x", modifiers: [.option, .command])
+
+                    if let onClear {
+                        IndexClearButton(
+                            isDisabled: clearDisabled,
+                            title: "清空对比",
+                            showsIcon: false,
+                            framed: true,
+                            action: onClear
+                        )
+                    }
                 }
+                .layoutPriority(2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }

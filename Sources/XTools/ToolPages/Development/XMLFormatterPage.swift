@@ -31,11 +31,12 @@ private struct IndexXMLFormatWorkspaceContent: View {
                 input: $workspace.input,
                 output: execution.binding.output,
                 inputPlaceholder: #"<root><item id="1">a</item></root>"#,
-                diagnostic: execution.binding.error,
+                diagnostic: execution.binding.error ?? execution.binding.warning,
+                diagnosticTone: execution.binding.error == nil ? .warning : .error,
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
                 outputColorize: outputColorizer,
-                clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil,
+                clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
                 onFormat: format,
                 onClear: workspace.clear
             )
@@ -50,7 +51,7 @@ private struct IndexXMLFormatWorkspaceContent: View {
     }
 
     private func format() {
-        guard !workspace.input.isEmpty else {
+        guard !workspace.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             execution.invalidate()
             return
         }

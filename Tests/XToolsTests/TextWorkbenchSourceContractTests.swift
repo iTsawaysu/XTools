@@ -467,7 +467,7 @@ struct TextWorkbenchSourceContractTests {
         contains(sql, "formatAttempt += 1", "Each SQL format attempt must advance the shake generation")
         contains(sql, "outputLineNumbers: true", "SQL formatter must keep syntax highlighting with a line-number gutter")
         contains(sql, "outputColorize: outputColorizer", "SQL formatter must keep structured output highlighting")
-        contains(sql, "IndexPage(\"SQL 格式化\", subtitle: \"格式化 SQL，支持关键字大小写和基础校验。缩进固定2空格，逗号固定行尾。\", workspaceSemantic: .structuredEditorTransform)", "SQL formatter must let the semantic resolve the compact fixed workbench page shell")
+        contains(sql, "IndexPage(\"SQL 格式化\", subtitle: \"格式化与压缩 SQL，支持关键字大小写和缩进选项。\", workspaceSemantic: .structuredEditorTransform)", "SQL formatter must let the semantic resolve the compact fixed workbench page shell")
         contains(sql, "workspaceSemantic: .structuredEditorTransform", "SQL formatter must express editor-transform behavior through the semantic seam")
         doesNotContain(sql, "expandsWithContent: true", "SQL formatter must not hand-assemble input growth for editor-transform behavior")
         doesNotContain(sql, "scrollsInternally: false", "SQL formatter must not hand-assemble output scrolling for editor-transform behavior")
