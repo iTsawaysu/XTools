@@ -64,4 +64,43 @@ struct DiffExecutionProjectionTests {
         let binding = DiffExecution.failureBinding()
         #expect(binding.error == LineDiffError.inputTooLargeMessage)
     }
+
+    @Test
+    func jsonFoldUnchangedHidesUnchangedRows() throws {
+        let labels = JSONDiffValidation.SideLabels(left: "左", right: "右")
+        let fullBinding = try DiffExecution.project(
+            DiffExecutionRequest(
+                kind: .json(labels: labels, options: JSONDiffOptions(foldUnchanged: false)),
+                left: "{\n  \"a\": 1,\n  \"b\": 2,\n  \"c\": 3,\n  \"d\": 4,\n  \"e\": 5,\n  \"f\": 6,\n  \"g\": 7\n}",
+                right: "{\n  \"a\": 1,\n  \"b\": 20,\n  \"c\": 3,\n  \"d\": 4,\n  \"e\": 5,\n  \"f\": 6,\n  \"g\": 7\n}"
+            )
+        )
+        let foldedBinding = try DiffExecution.project(
+            DiffExecutionRequest(
+                kind: .json(labels: labels, options: JSONDiffOptions(foldUnchanged: true)),
+                left: "{\n  \"a\": 1,\n  \"b\": 2,\n  \"c\": 3,\n  \"d\": 4,\n  \"e\": 5,\n  \"f\": 6,\n  \"g\": 7\n}",
+                right: "{\n  \"a\": 1,\n  \"b\": 20,\n  \"c\": 3,\n  \"d\": 4,\n  \"e\": 5,\n  \"f\": 6,\n  \"g\": 7\n}"
+            )
+        )
+        #expect(fullBinding.error == nil)
+        #expect(foldedBinding.error == nil)
+        #expect(foldedBinding.rows.count < fullBinding.rows.count)
+        #expect(foldedBinding.rows.contains(where: { $0.left?.text.contains("折叠") == true }))
+    }
+
+    @Test
+    func jsonFoldUnchangedPreservesDisplayTextWhenIdentical() throws {
+        let labels = JSONDiffValidation.SideLabels(left: "左", right: "右")
+        let binding = try DiffExecution.project(
+            DiffExecutionRequest(
+                kind: .json(labels: labels, options: JSONDiffOptions(foldUnchanged: true)),
+                left: "{\n  \"a\": 1\n}",
+                right: "{\n  \"a\": 1\n}"
+            )
+        )
+        #expect(binding.error == nil)
+        #expect(binding.leftDisplayText?.contains("\"a\": 1") == true)
+        #expect(binding.rightDisplayText?.contains("\"a\": 1") == true)
+        #expect(binding.rows.isEmpty)
+    }
 }

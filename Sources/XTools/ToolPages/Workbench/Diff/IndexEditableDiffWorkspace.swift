@@ -56,8 +56,13 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     private var isIdentical: Bool {
         guard error == nil,
               !left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !right.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !rows.isEmpty else {
+              !right.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return false
+        }
+        if syntax == .json && rows.isEmpty {
+            return true
+        }
+        guard !rows.isEmpty else {
             return false
         }
         return rows.allSatisfy { !$0.kind.isDifference }
@@ -172,19 +177,6 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
                 Spacer(minLength: 0)
 
                 HStack(spacing: 6) {
-                    Button {
-                        let temp = left
-                        left = right
-                        right = temp
-                    } label: {
-                        Image(systemName: "arrow.left.arrow.right")
-                            .font(ToolTypography.buttonSmall)
-                    }
-                    .buttonStyle(IndexSmallButtonStyle(framed: true))
-                    .disabled(clearDisabled)
-                    .help("交换左右 (⌥⌘X)")
-                    .keyboardShortcut("x", modifiers: [.option, .command])
-
                     if let onClear {
                         IndexClearButton(
                             isDisabled: clearDisabled,
@@ -408,7 +400,24 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             }
             configure(textView)
 
+            let dropHandler: (String) -> Void = { [weak self] content in
+                guard let self else { return }
+                switch side {
+                case .left:
+                    self.left.wrappedValue = content
+                    self.setText(content, source: content, in: self.leftTextView, allowActiveEditorOverride: true)
+                case .right:
+                    self.right.wrappedValue = content
+                    self.setText(content, source: content, in: self.rightTextView, allowActiveEditorOverride: true)
+                }
+                self.refreshPlaceholders()
+                self.refreshEditorLayout()
+            }
+            textView.onFileDrop = dropHandler
+            textView.registerForDraggedTypes([.fileURL, .string])
+
             let scrollView = IndexDiffEditorScrollView(frame: .zero)
+            scrollView.registerForDraggedTypes([.fileURL])
             scrollView.contentView = IndexLeadingLockedClipView(frame: .zero)
             scrollView.forwardingScrollView = outerScrollView
             scrollView.trailingReadingGuard = IndexDiffEditorMetrics.trailingReadingGuard
@@ -544,6 +553,9 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             currentSyntax = syntax
             latestLeftDisplayText = left
             latestRightDisplayText = right
+            let isFolded = rows.contains(where: { $0.kind == .structure && $0.left?.originalLineNumber == nil })
+            leftTextView?.isEditable = !isFolded
+            rightTextView?.isEditable = !isFolded
             setText(left, source: self.left.wrappedValue, in: leftTextView, allowActiveEditorOverride: jsonFresh && freshLeftDisplay)
             setText(right, source: self.right.wrappedValue, in: rightTextView, allowActiveEditorOverride: jsonFresh && freshRightDisplay)
             refreshEditorLayout()
@@ -554,6 +566,9 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard !isApplyingProgrammaticText, let textView = notification.object as? NSTextView else {
+                return
+            }
+            guard !textView.string.contains("⋯") else {
                 return
             }
 
@@ -752,6 +767,20 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             applyDecorations(to: rightTextView, lineDecorations: decorations.right, syntax: currentSyntax)
             leftLineNumberView?.lineStatuses = decorations.left.mapValues(\.status)
             rightLineNumberView?.lineStatuses = decorations.right.mapValues(\.status)
+            leftLineNumberView?.customLineNumbers = Dictionary(
+                currentRows.compactMap { row in
+                    guard let cell = row.left, let visualLine = cell.lineNumber else { return nil }
+                    return (visualLine, cell.originalLineNumber)
+                },
+                uniquingKeysWith: { first, _ in first }
+            )
+            rightLineNumberView?.customLineNumbers = Dictionary(
+                currentRows.compactMap { row in
+                    guard let cell = row.right, let visualLine = cell.lineNumber else { return nil }
+                    return (visualLine, cell.originalLineNumber)
+                },
+                uniquingKeysWith: { first, _ in first }
+            )
         }
 
         private func clearDecorations() {
@@ -761,6 +790,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             clearTemporaryDecorations(in: rightTextView)
             leftLineNumberView?.lineStatuses = [:]
             rightLineNumberView?.lineStatuses = [:]
+            leftLineNumberView?.customLineNumbers = [:]
+            rightLineNumberView?.customLineNumbers = [:]
         }
 
         private func rowsMatchVisibleText() -> Bool {
@@ -801,6 +832,14 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             for (index, range) in lineRanges.enumerated() {
                 let lineNumber = index + 1
                 let line = nsText.substring(with: range)
+                if line.contains("⋯") {
+                    layoutManager.addTemporaryAttribute(
+                        .foregroundColor,
+                        value: IndexDiffNSPalette.textTertiary,
+                        forCharacterRange: range
+                    )
+                    continue
+                }
 
                 if syntax == .json {
                     applyJSONSyntax(line, lineRange: range, layoutManager: layoutManager)
@@ -1025,9 +1064,27 @@ private final class IndexDiffEditorScrollView: NSScrollView {
     weak var forwardingScrollView: NSScrollView?
     var trailingReadingGuard = IndexDiffEditorMetrics.trailingReadingGuard
     var minimumDocumentHeight: CGFloat = 0
+    private var isSynchronizing = false
+
+    override func tile() {
+        super.tile()
+        synchronizeGeometryIfNeeded()
+    }
 
     override func layout() {
         super.layout()
+        synchronizeTextGeometry()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        synchronizeGeometryIfNeeded()
+    }
+
+    private func synchronizeGeometryIfNeeded() {
+        guard !isSynchronizing else { return }
+        isSynchronizing = true
+        defer { isSynchronizing = false }
         synchronizeTextGeometry()
     }
 
@@ -1046,6 +1103,28 @@ private final class IndexDiffEditorScrollView: NSScrollView {
             minimumHeight: max(contentSize.height, minimumDocumentHeight),
             trailingReadingGuard: trailingReadingGuard
         )
+    }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        if let tv = documentView as? IndexDiffTextView, tv.onFileDrop != nil, IndexCaretTextView.hasDroppableFile(sender) {
+            return .copy
+        }
+        return super.draggingEntered(sender)
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        if let tv = documentView as? IndexDiffTextView, tv.onFileDrop != nil, IndexCaretTextView.hasDroppableFile(sender) {
+            return .copy
+        }
+        return super.draggingUpdated(sender)
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        if let tv = documentView as? IndexDiffTextView, let onFileDrop = tv.onFileDrop, let content = IndexCaretTextView.extractDroppedContent(sender) {
+            onFileDrop(content)
+            return true
+        }
+        return super.performDragOperation(sender)
     }
 }
 
@@ -1141,6 +1220,29 @@ private final class IndexDiffTextView: NSTextView, IndexAsymmetricTextContainerS
     }
 
     var onCompositionChange: ((Bool) -> Void)?
+    var onFileDrop: ((String) -> Void)?
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        if onFileDrop != nil && IndexCaretTextView.hasDroppableFile(sender) {
+            return .copy
+        }
+        return super.draggingEntered(sender)
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        if onFileDrop != nil && IndexCaretTextView.hasDroppableFile(sender) {
+            return .copy
+        }
+        return super.draggingUpdated(sender)
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        if let onFileDrop, let content = IndexCaretTextView.extractDroppedContent(sender) {
+            onFileDrop(content)
+            return true
+        }
+        return super.performDragOperation(sender)
+    }
 
     override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
         super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
@@ -1186,6 +1288,11 @@ private final class IndexDiffLineNumberOverlayView: NSView {
     weak var scrollView: NSScrollView?
     weak var textView: NSTextView?
     var lineStatuses: [Int: DiffLineStatus] = [:] {
+        didSet {
+            needsDisplay = true
+        }
+    }
+    var customLineNumbers: [Int: Int?] = [:] {
         didSet {
             needsDisplay = true
         }
@@ -1266,12 +1373,22 @@ private final class IndexDiffLineNumberOverlayView: NSView {
                 .foregroundColor: lineNumberColor(for: status),
                 .paragraphStyle: paragraphStyle
             ]
-            let lineText = "\(lineNumber)" as NSString
+            let lineText: NSString?
+            if let custom = customLineNumbers[lineNumber] {
+                if let actual = custom {
+                    lineText = "\(actual)" as NSString
+                } else {
+                    lineText = nil
+                }
+            } else {
+                lineText = "\(lineNumber)" as NSString
+            }
+
+            guard let lineText else { continue }
             lineText.draw(
                 in: NSRect(x: labelX, y: y, width: labelWidth, height: min(height, labelHeight)),
                 withAttributes: lineAttributes
             )
-
         }
     }
 

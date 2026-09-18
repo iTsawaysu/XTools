@@ -88,6 +88,17 @@ public enum DiffExecution {
                     labels: labels
                 )
                 try Task.checkCancellation()
+
+                if options.foldUnchanged && !rows.isEmpty && rows.contains(where: { $0.kind.isDifference }) {
+                    let folded = JSONStructuralDiff.foldUnchangedRows(rows)
+                    return DiffExecutionBinding(
+                        leftDisplayText: folded.leftDisplayText,
+                        rightDisplayText: folded.rightDisplayText,
+                        rows: folded.rows,
+                        warning: warning
+                    )
+                }
+
                 return DiffExecutionBinding(
                     leftDisplayText: leftDisplayText,
                     rightDisplayText: rightDisplayText,

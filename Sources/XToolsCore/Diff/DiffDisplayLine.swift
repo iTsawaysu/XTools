@@ -85,17 +85,20 @@ public struct DiffAlignedCell: Equatable, Sendable {
     public let text: String
     public let indent: Int
     public let segments: [DiffTextSegment]
+    public let originalLineNumber: Int?
 
     public init(
         lineNumber: Int?,
         text: String,
         indent: Int,
-        segments: [DiffTextSegment]? = nil
+        segments: [DiffTextSegment]? = nil,
+        originalLineNumber: Int? = nil
     ) {
         self.lineNumber = lineNumber
         self.text = text
         self.indent = indent
         self.segments = segments ?? [DiffTextSegment(text: text, kind: .unchanged)]
+        self.originalLineNumber = originalLineNumber ?? lineNumber
     }
 }
 

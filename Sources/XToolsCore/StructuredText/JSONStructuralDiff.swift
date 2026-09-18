@@ -2,9 +2,11 @@ import Foundation
 
 public struct JSONDiffOptions: Equatable, Sendable {
     public let ignoreArrayOrder: Bool
+    public let foldUnchanged: Bool
 
-    public init(ignoreArrayOrder: Bool = false) {
+    public init(ignoreArrayOrder: Bool = false, foldUnchanged: Bool = false) {
         self.ignoreArrayOrder = ignoreArrayOrder
+        self.foldUnchanged = foldUnchanged
     }
 }
 
@@ -87,5 +89,104 @@ public enum JSONStructuralDiff {
         }
 
         return try? canonicalJSON(trimmed, options: options)
+    }
+
+    public static func foldUnchangedRows(
+        _ rows: [DiffAlignedRow],
+        contextLines: Int = 2,
+        minFoldThreshold: Int = 5
+    ) -> (rows: [DiffAlignedRow], leftDisplayText: String, rightDisplayText: String) {
+        guard rows.contains(where: { $0.kind.isDifference }) else {
+            let leftText = rows.compactMap { $0.left?.text }.joined(separator: "\n")
+            let rightText = rows.compactMap { $0.right?.text }.joined(separator: "\n")
+            return (rows, leftText, rightText)
+        }
+
+        var resultRows: [DiffAlignedRow] = []
+        var unchangedRun: [DiffAlignedRow] = []
+
+        func flushUnchangedRun(isEnd: Bool) {
+            guard !unchangedRun.isEmpty else { return }
+            let isStart = resultRows.isEmpty
+            let headCount = isStart ? 1 : contextLines
+            let tailCount = isEnd ? 1 : contextLines
+            let foldedCount = unchangedRun.count - (headCount + tailCount)
+            if unchangedRun.count >= minFoldThreshold, foldedCount >= 2 {
+                let head = Array(unchangedRun.prefix(headCount))
+                let tail = Array(unchangedRun.suffix(tailCount))
+
+                resultRows.append(contentsOf: head)
+                let placeholderText = "  ⋯ 折叠 \(foldedCount) 行未变更内容 ⋯"
+                let foldedRow = DiffAlignedRow(
+                    kind: .structure,
+                    left: DiffAlignedCell(lineNumber: nil, text: placeholderText, indent: 0, originalLineNumber: nil),
+                    right: DiffAlignedCell(lineNumber: nil, text: placeholderText, indent: 0, originalLineNumber: nil)
+                )
+                resultRows.append(foldedRow)
+                resultRows.append(contentsOf: tail)
+            } else {
+                resultRows.append(contentsOf: unchangedRun)
+            }
+            unchangedRun.removeAll()
+        }
+
+        for row in rows {
+            if !row.kind.isDifference {
+                unchangedRun.append(row)
+            } else {
+                flushUnchangedRun(isEnd: false)
+                resultRows.append(row)
+            }
+        }
+        flushUnchangedRun(isEnd: true)
+
+        var leftLine = 1
+        var rightLine = 1
+        var reindexedRows: [DiffAlignedRow] = []
+        var leftLines: [String] = []
+        var rightLines: [String] = []
+
+        for row in resultRows {
+            var newLeftCell: DiffAlignedCell? = nil
+            var newRightCell: DiffAlignedCell? = nil
+            let isPlaceholder = row.kind == .structure && (row.left?.lineNumber == nil || row.left?.originalLineNumber == nil)
+
+            if let left = row.left {
+                newLeftCell = DiffAlignedCell(
+                    lineNumber: leftLine,
+                    text: left.text,
+                    indent: left.indent,
+                    segments: left.segments,
+                    originalLineNumber: isPlaceholder ? nil : left.originalLineNumber
+                )
+                leftLines.append(left.text)
+                leftLine += 1
+            }
+
+            if let right = row.right {
+                newRightCell = DiffAlignedCell(
+                    lineNumber: rightLine,
+                    text: right.text,
+                    indent: right.indent,
+                    segments: right.segments,
+                    originalLineNumber: isPlaceholder ? nil : right.originalLineNumber
+                )
+                rightLines.append(right.text)
+                rightLine += 1
+            }
+
+            reindexedRows.append(DiffAlignedRow(
+                id: row.id,
+                kind: row.kind,
+                left: newLeftCell,
+                right: newRightCell
+            ))
+        }
+
+        return (
+            rows: reindexedRows,
+            leftDisplayText: leftLines.joined(separator: "\n"),
+            rightDisplayText: rightLines.joined(separator: "\n")
+        )
     }
 }

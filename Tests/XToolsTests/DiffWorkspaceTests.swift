@@ -71,6 +71,30 @@ struct DiffWorkspaceTests {
         #expect(workspace.ignoreWhitespace == true)
     }
 
+    @Test func jsonOptionsIncludeFoldUnchangedInRequest() async throws {
+        let probe = DiffWorkspaceOperationProbe()
+        let workspace = DiffToolWorkspaceModel(
+            kind: .json(labels: JSONDiffValidation.SideLabels(left: "L", right: "R")),
+            debounce: .zero,
+            operation: { request in
+                probe.recordStart(request)
+                return DiffExecutionBinding()
+            }
+        )
+
+        workspace.left = "{}"
+        workspace.right = "{}"
+        try await Self.waitUntil { probe.startedCount >= 1 }
+
+        workspace.foldUnchanged = true
+        try await Self.waitUntil {
+            if case .json(_, let options) = probe.lastRequest?.kind {
+                return options.foldUnchanged == true
+            }
+            return false
+        }
+    }
+
     private static func waitUntil(
         timeout: Duration = .seconds(20),
         _ condition: @escaping @MainActor () -> Bool
