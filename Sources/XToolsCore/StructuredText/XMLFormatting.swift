@@ -19,7 +19,7 @@ public enum XMLFormatting {
         }
     }
 
-    public static func format(_ input: String, indentWidth: Int = 2) throws -> String {
+    public static func format(_ input: String, indentWidth: Int = 2, minify: Bool = false) throws -> String {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return ""
@@ -32,7 +32,7 @@ public enum XMLFormatting {
                 throw FormattingError.invalidXML(syntaxDiagnostic)
             }
 
-            let document = try XMLDocument(xmlString: trimmed, options: [.nodePreserveCDATA])
+            let document = try XMLDocument(xmlString: trimmed, options: [.nodePreserveCDATA, .nodeLoadExternalEntitiesNever])
             guard let root = document.rootElement() else {
                 throw FormattingError.invalidXML(
                     FormatDiagnostic(formatName: "XML", message: "XML 文档缺少根节点")
@@ -43,7 +43,29 @@ public enum XMLFormatting {
             if hadDeclaration, let declaration = xmlDeclaration(in: trimmed) {
                 outputParts.append(declaration)
             }
-            outputParts.append(render(root, level: 0, indentWidth: max(0, indentWidth)))
+            if let doctype = doctypeDeclaration(in: trimmed) {
+                outputParts.append(doctype)
+            }
+            let topChildren = document.children ?? []
+            if topChildren.isEmpty {
+                if minify {
+                    outputParts.append(root.xmlString(options: []))
+                } else {
+                    outputParts.append(render(root, level: 0, indentWidth: max(0, indentWidth)))
+                }
+            } else {
+                for child in topChildren {
+                    if child.kind == .element {
+                        if minify {
+                            outputParts.append(child.xmlString(options: []))
+                        } else {
+                            outputParts.append(render(child, level: 0, indentWidth: max(0, indentWidth)))
+                        }
+                    } else if child.kind == .comment || child.kind == .processingInstruction {
+                        outputParts.append(child.xmlString(options: []))
+                    }
+                }
+            }
             return outputParts.joined(separator: "\n")
         } catch let formattingError as FormattingError {
             throw formattingError
@@ -58,15 +80,11 @@ public enum XMLFormatting {
         }
     }
 
-    private static func syntaxDiagnostic(for input: String) -> FormatDiagnostic? {
-        if input.localizedCaseInsensitiveContains("<!DOCTYPE") {
-            return FormatDiagnostic(
-                formatName: "XML",
-                message: "不支持 DOCTYPE 声明",
-                suggestion: "移除 DOCTYPE 或外部实体声明后再格式化；工具不会展开外部实体。"
-            )
-        }
+    public static func minify(_ input: String) throws -> String {
+        try format(input, indentWidth: 0, minify: true)
+    }
 
+    private static func syntaxDiagnostic(for input: String) -> FormatDiagnostic? {
         guard let data = input.data(using: .utf8) else {
             return FormatDiagnostic(
                 formatName: "XML",
@@ -77,6 +95,7 @@ public enum XMLFormatting {
 
         let delegate = XMLSyntaxErrorDelegate()
         let parser = XMLParser(data: data)
+        parser.shouldResolveExternalEntities = false
         parser.delegate = delegate
 
         guard !parser.parse() else {
@@ -108,7 +127,7 @@ public enum XMLFormatting {
         switch nsError.code {
         case 5:
             return "XML 文档没有正确闭合，或存在多个根节点"
-        case 26:
+        case 26, 111:
             return "引用了未定义的实体，或 & 没有正确转义"
         case 42:
             return "同一个标签上有重复属性名"
@@ -127,6 +146,83 @@ public enum XMLFormatting {
         guard input.hasPrefix("<?xml"), let end = input.range(of: "?>") else { return nil }
         return String(input[..<end.upperBound])
     }
+
+    private static func doctypeDeclaration(in input: String) -> String? {
+        var index = input.startIndex
+
+        while index < input.endIndex {
+            if input[index...].hasPrefix("<!--") {
+                if let endRange = input.range(of: "-->", range: index..<input.endIndex) {
+                    index = endRange.upperBound
+                    continue
+                } else {
+                    return nil
+                }
+            }
+
+            if input[index...].hasPrefix("<?") {
+                if let endRange = input.range(of: "?>", range: index..<input.endIndex) {
+                    index = endRange.upperBound
+                    continue
+                } else {
+                    return nil
+                }
+            }
+
+            if input[index...].range(of: "<!DOCTYPE", options: [.caseInsensitive, .anchored]) != nil {
+                let start = index
+                var inBracket = false
+                var inSingleQuote = false
+                var inDoubleQuote = false
+                var inComment = false
+                var curr = index
+
+                while curr < input.endIndex {
+                    if inComment {
+                        if input[curr...].hasPrefix("-->") {
+                            inComment = false
+                            curr = input.index(curr, offsetBy: 2)
+                        }
+                    } else if inSingleQuote {
+                        if input[curr] == "'" {
+                            inSingleQuote = false
+                        }
+                    } else if inDoubleQuote {
+                        if input[curr] == "\"" {
+                            inDoubleQuote = false
+                        }
+                    } else {
+                        if input[curr...].hasPrefix("<!--") {
+                            inComment = true
+                            curr = input.index(curr, offsetBy: 3)
+                        } else if input[curr] == "\"" {
+                            inDoubleQuote = true
+                        } else if input[curr] == "'" {
+                            inSingleQuote = true
+                        } else if input[curr] == "[" {
+                            inBracket = true
+                        } else if input[curr] == "]" {
+                            inBracket = false
+                        } else if input[curr] == ">" && !inBracket {
+                            return String(input[start...curr])
+                        }
+                    }
+                    curr = input.index(after: curr)
+                }
+                return nil
+            }
+
+            if input[index] == "<" && !input[index...].hasPrefix("<!") && !input[index...].hasPrefix("<?") {
+                break
+            }
+
+            index = input.index(after: index)
+        }
+
+        return nil
+    }
+
+
 
     private static func render(_ node: XMLNode, level: Int, indentWidth: Int) -> String {
         let indent = String(repeating: " ", count: level * indentWidth)

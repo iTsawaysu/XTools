@@ -1,13 +1,54 @@
 import XToolsCore
 import SwiftUI
 
-struct IndexXMLFormatPage: View {
-    private static let key = ToolWorkspaceKey<IndexTextTransformWorkspaceModel>(toolID: "xml-formatter") { _ in
-        IndexTextTransformWorkspaceModel()
+@MainActor
+final class XMLFormatterToolWorkspaceModel: ObservableObject {
+    static let key = ToolWorkspaceKey<XMLFormatterToolWorkspaceModel>(toolID: "xml-formatter") { preferences in
+        XMLFormatterToolWorkspaceModel(preferences: preferences)
     }
 
+    enum FormatMode: String, CaseIterable, Sendable {
+        case two = "2"
+        case four = "4"
+        case compact = "compact"
+
+        var id: String { rawValue }
+        var label: String {
+            switch self {
+            case .two: return "2"
+            case .four: return "4"
+            case .compact: return "压缩"
+            }
+        }
+    }
+
+    @Published var input = ""
+    @Published var formatMode: FormatMode {
+        didSet { preferences.set(formatMode.id, for: TextDevelopmentToolPreferenceKeys.xmlIndent) }
+    }
+
+    let execution = IndexFormatExecutionSession()
+    private let preferences: ToolPreferenceStore
+
+    var output: String { execution.binding.output }
+    var error: String? { execution.binding.error }
+    var warning: String? { execution.binding.warning }
+
+    init(preferences: ToolPreferenceStore) {
+        self.preferences = preferences
+        let saved = preferences.value(for: TextDevelopmentToolPreferenceKeys.xmlIndent)
+        formatMode = FormatMode(rawValue: saved) ?? .two
+    }
+
+    func clear() {
+        execution.invalidate()
+        input = ""
+    }
+}
+
+struct IndexXMLFormatPage: View {
     var body: some View {
-        ToolWorkspaceHost(key: Self.key) { workspace, _ in
+        ToolWorkspaceHost(key: XMLFormatterToolWorkspaceModel.key) { workspace, _ in
             IndexXMLFormatWorkspaceContent(
                 workspace: workspace,
                 execution: workspace.execution
@@ -19,13 +60,13 @@ struct IndexXMLFormatPage: View {
 private struct IndexXMLFormatWorkspaceContent: View {
     private static let maxHighlightedOutputCharacters = 200_000
 
-    @ObservedObject var workspace: IndexTextTransformWorkspaceModel
+    @ObservedObject var workspace: XMLFormatterToolWorkspaceModel
     @ObservedObject var execution: IndexFormatExecutionSession
     @State private var formatAttempt = 0
 
     var body: some View {
-        IndexPage("XML 格式化", subtitle: "格式化 XML，自动缩进。", workspaceSemantic: .structuredEditorTransform) {
-            IndexFormatWorkbench<EmptyView>(
+        IndexPage("XML 格式化", subtitle: "格式化与压缩 XML，支持 2/4 空格缩进与 Minify。", workspaceSemantic: .structuredEditorTransform) {
+            IndexFormatWorkbench(
                 inputTitle: "输入",
                 outputTitle: "输出",
                 input: $workspace.input,
@@ -38,9 +79,29 @@ private struct IndexXMLFormatWorkspaceContent: View {
                 outputColorize: outputColorizer,
                 clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
                 onFormat: format,
-                onClear: workspace.clear
+                onClear: workspace.clear,
+                leadingControl: {
+                    IndexSegmentedControl(
+                        items: XMLFormatterToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
+                        selection: formatModeSelection,
+                        density: .compact
+                    )
+                }
             )
         }
+    }
+
+    private var formatModeSelection: Binding<String> {
+        Binding(
+            get: { workspace.formatMode.id },
+            set: { value in
+                guard let newMode = XMLFormatterToolWorkspaceModel.FormatMode(rawValue: value) else { return }
+                workspace.formatMode = newMode
+                if !execution.binding.output.isEmpty {
+                    format()
+                }
+            }
+        )
     }
 
     private var outputColorizer: ((String) -> AttributedString)? {
@@ -57,9 +118,14 @@ private struct IndexXMLFormatWorkspaceContent: View {
         }
 
         formatAttempt += 1
-        execution.schedule(snapshot: workspace.input, delay: .zero) { input in
-            FormatRunner.run(input, produce: { try XMLFormatting.format($0) })
-                .binding(text: { $0 })
+        let indentWidth = workspace.formatMode == .four ? 4 : 2
+        let minify = workspace.formatMode == .compact
+        let snapshot = (input: workspace.input, indentWidth: indentWidth, minify: minify)
+        execution.schedule(snapshot: snapshot, delay: .zero) { snapshot in
+            FormatRunner.run(snapshot.input) {
+                try XMLFormatting.format($0, indentWidth: snapshot.indentWidth, minify: snapshot.minify)
+            }
+            .binding(text: { $0 })
         }
     }
 }
