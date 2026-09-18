@@ -5,11 +5,18 @@ public enum JSONFormatting {
         public let text: String
         public let warning: String?
         public let duplicateKeys: [String]
+        public let exactTextIdentity: JSONExactTextIdentity
 
-        public init(text: String, warning: String? = nil, duplicateKeys: [String] = []) {
+        public init(
+            text: String,
+            warning: String? = nil,
+            duplicateKeys: [String] = [],
+            exactTextIdentity: JSONExactTextIdentity? = nil
+        ) {
             self.text = text
             self.warning = warning
             self.duplicateKeys = duplicateKeys
+            self.exactTextIdentity = exactTextIdentity ?? JSONExactTextIdentity(text)
         }
     }
 
@@ -40,22 +47,48 @@ public enum JSONFormatting {
     }
 
     public static func formatResult(_ text: String, sortKeys: Bool, sortArrays: Bool = false, indentWidth: Int) throws -> FormattingResult {
-        let document = try parseOrderedJSON(text)
+        try formatResult(
+            text,
+            sortKeys: sortKeys,
+            sortArrays: sortArrays,
+            indentWidth: indentWidth,
+            parserDidStart: nil
+        )
+    }
+
+    static func formatResult(
+        _ text: String,
+        sortKeys: Bool,
+        sortArrays: Bool = false,
+        indentWidth: Int,
+        parserDidStart: (@Sendable () -> Void)?
+    ) throws -> FormattingResult {
+        let document = try parseOrderedJSON(text, parserDidStart: parserDidStart)
         let duplicateKeys = uniqueDuplicateKeys(document.duplicateKeys)
+        let rendered = render(
+            document.value,
+            sortKeys: sortKeys,
+            sortArrays: sortArrays,
+            indentWidth: max(0, indentWidth),
+            level: 0
+        )
         return FormattingResult(
-            text: render(document.value, sortKeys: sortKeys, sortArrays: sortArrays, indentWidth: max(0, indentWidth), level: 0),
+            text: rendered,
             warning: duplicateKeyWarning(from: duplicateKeys),
-            duplicateKeys: duplicateKeys
+            duplicateKeys: duplicateKeys,
+            exactTextIdentity: JSONExactTextIdentity(rendered)
         )
     }
 
     public static func minifyResult(_ text: String, sortKeys: Bool = false, sortArrays: Bool = false) throws -> FormattingResult {
-        let document = try parseOrderedJSON(text)
+        let document = try parseOrderedJSON(text, parserDidStart: nil)
         let duplicateKeys = uniqueDuplicateKeys(document.duplicateKeys)
+        let rendered = renderCompact(document.value, sortKeys: sortKeys, sortArrays: sortArrays)
         return FormattingResult(
-            text: renderCompact(document.value, sortKeys: sortKeys, sortArrays: sortArrays),
+            text: rendered,
             warning: duplicateKeyWarning(from: duplicateKeys),
-            duplicateKeys: duplicateKeys
+            duplicateKeys: duplicateKeys,
+            exactTextIdentity: JSONExactTextIdentity(rendered)
         )
     }
 
@@ -108,7 +141,11 @@ public enum JSONFormatting {
         return string
     }
 
-    private static func parseOrderedJSON(_ text: String) throws -> OrderedJSONDocument {
+    private static func parseOrderedJSON(
+        _ text: String,
+        parserDidStart: (@Sendable () -> Void)?
+    ) throws -> OrderedJSONDocument {
+        parserDidStart?()
         var parser = OrderedJSONParser(text)
         return try parser.parse()
     }
@@ -122,10 +159,9 @@ public enum JSONFormatting {
     }
 
     private static func uniqueDuplicateKeys(_ keys: [String]) -> [String] {
-        keys.reduce(into: [String]()) { result, key in
-            if !result.contains(key) {
-                result.append(key)
-            }
+        var identities = Set<JSONExactTextIdentity>()
+        return keys.filter { key in
+            identities.insert(JSONExactTextIdentity(key)).inserted
         }
     }
 
@@ -150,7 +186,11 @@ public enum JSONFormatting {
 
         case .array(let values):
             guard !values.isEmpty else { return "[]" }
-            let orderedValues = sortArrays ? values.sorted(by: { renderCompact($0, sortKeys: sortKeys, sortArrays: sortArrays) < renderCompact($1, sortKeys: sortKeys, sortArrays: sortArrays) }) : values
+            let orderedValues = orderedArrayValues(
+                values,
+                sortKeys: sortKeys,
+                sortArrays: sortArrays
+            )
             let childIndent = String(repeating: " ", count: (level + 1) * indentWidth)
             let currentIndent = String(repeating: " ", count: level * indentWidth)
             let lines = orderedValues.enumerated().map { index, item in
@@ -176,8 +216,13 @@ public enum JSONFormatting {
             let orderedPairs = orderedObjectPairs(pairs, sortKeys: sortKeys)
             return "{" + orderedPairs.map { "\"\(escapeString($0.key))\":\(renderCompact($0.value, sortKeys: sortKeys, sortArrays: sortArrays))" }.joined(separator: ",") + "}"
         case .array(let values):
-            let orderedValues = sortArrays ? values.sorted(by: { renderCompact($0, sortKeys: sortKeys, sortArrays: sortArrays) < renderCompact($1, sortKeys: sortKeys, sortArrays: sortArrays) }) : values
-            return "[" + orderedValues.map { renderCompact($0, sortKeys: sortKeys, sortArrays: sortArrays) }.joined(separator: ",") + "]"
+            guard sortArrays, values.count > 1 else {
+                return "[" + values.map {
+                    renderCompact($0, sortKeys: sortKeys, sortArrays: sortArrays)
+                }.joined(separator: ",") + "]"
+            }
+            let orderedEntries = orderedArrayEntries(values, sortKeys: sortKeys, sortArrays: sortArrays)
+            return "[" + orderedEntries.map(\.compactText).joined(separator: ",") + "]"
         case .string(let string):
             return "\"\(escapeString(string))\""
         case .number(let number):
@@ -198,13 +243,53 @@ public enum JSONFormatting {
         }
 
         return pairs.enumerated()
+            .map { offset, pair in
+                (offset: offset, pair: pair, identity: JSONExactTextIdentity(pair.key))
+            }
             .sorted { left, right in
-                if left.element.key == right.element.key {
+                if left.identity == right.identity {
                     return left.offset < right.offset
                 }
-                return left.element.key < right.element.key
+                return left.identity < right.identity
             }
-            .map(\.element)
+            .map(\.pair)
+    }
+
+    private static func orderedArrayValues(
+        _ values: [OrderedJSONValue],
+        sortKeys: Bool,
+        sortArrays: Bool
+    ) -> [OrderedJSONValue] {
+        guard sortArrays, values.count > 1 else {
+            return values
+        }
+
+        return orderedArrayEntries(values, sortKeys: sortKeys, sortArrays: sortArrays)
+            .map(\.value)
+    }
+
+    private static func orderedArrayEntries(
+        _ values: [OrderedJSONValue],
+        sortKeys: Bool,
+        sortArrays: Bool
+    ) -> [(value: OrderedJSONValue, compactText: String)] {
+        return values.enumerated()
+            .map { offset, value in
+                let compact = renderCompact(value, sortKeys: sortKeys, sortArrays: sortArrays)
+                return (
+                    offset: offset,
+                    value: value,
+                    compactText: compact,
+                    identity: JSONExactTextIdentity(compact)
+                )
+            }
+            .sorted { left, right in
+                if left.identity == right.identity {
+                    return left.offset < right.offset
+                }
+                return left.identity < right.identity
+            }
+            .map { (value: $0.value, compactText: $0.compactText) }
     }
 
     private static func escapeString(_ value: String) -> String {
@@ -425,7 +510,7 @@ private struct OrderedJSONParser {
         defer { openContainers.removeLast() }
 
         var pairs: [(key: String, value: OrderedJSONValue)] = []
-        var seenKeys = Set<String>()
+        var seenKeys = Set<JSONExactTextIdentity>()
         if consumeIfPresent("}") {
             return .object(pairs)
         }
@@ -439,10 +524,9 @@ private struct OrderedJSONParser {
                 throw error(objectMemberStartIssue(for: next, afterComma: false))
             }
             let key = try parseString()
-            if seenKeys.contains(key) {
+            let keyIdentity = JSONExactTextIdentity(key)
+            if !seenKeys.insert(keyIdentity).inserted {
                 duplicateKeys.append(key)
-            } else {
-                seenKeys.insert(key)
             }
             skipWhitespace()
             guard consumeIfPresent(":") else {

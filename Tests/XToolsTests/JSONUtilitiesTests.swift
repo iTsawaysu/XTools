@@ -440,6 +440,105 @@ struct JSONFormattingTests {
         )
     }
 
+    @Test func canonicalEquivalentButScalarDistinctKeysAreNotDuplicates() throws {
+        let input = #"{"é":1,"e\u0301":2}"#
+
+        let formatted = try JSONFormatting.formatResult(input, sortKeys: false, indentWidth: 2)
+        let minified = try JSONFormatting.minifyResult(input)
+
+        #expect(formatted.warning == nil)
+        #expect(formatted.duplicateKeys.isEmpty)
+        #expect(Array(formatted.text.utf8) == Array(
+            """
+            {
+              "é": 1,
+              "é": 2
+            }
+            """.utf8
+        ))
+        #expect(minified.warning == nil)
+        #expect(minified.duplicateKeys.isEmpty)
+        #expect(Array(minified.text.utf8) == Array(#"{"é":1,"é":2}"#.utf8))
+    }
+
+    @Test func decodedEquivalentEscapesRemainDuplicateKeys() throws {
+        let ascii = try JSONFormatting.formatResult(#"{"a":1,"\u0061":2}"#, sortKeys: false, indentWidth: 2)
+        let emoji = try JSONFormatting.minifyResult(#"{"😀":1,"\ud83d\ude00":2}"#)
+
+        #expect(ascii.warning == "JSON 含重复 key。")
+        #expect(ascii.duplicateKeys == ["a"])
+        #expect(ascii.text.contains(#""a": 1"#))
+        #expect(ascii.text.contains(#""a": 2"#))
+        #expect(emoji.warning == "JSON 含重复 key。")
+        #expect(emoji.duplicateKeys == ["😀"])
+        #expect(emoji.text == #"{"😀":1,"😀":2}"#)
+    }
+
+    @Test func duplicateKeyResultsKeepCanonicallyEquivalentIdentitiesSeparate() throws {
+        let result = try JSONFormatting.minifyResult(#"{"é":0,"\u00e9":1,"e\u0301":0,"e\u0301":1}"#)
+
+        #expect(result.warning == "JSON 含重复 key。")
+        #expect(result.duplicateKeys.count == 2)
+        #expect(Array(result.duplicateKeys[0].utf8) == [0xC3, 0xA9])
+        #expect(Array(result.duplicateKeys[1].utf8) == [0x65, 0xCC, 0x81])
+    }
+
+    @Test func exactIdentitySortingIsDeterministicAndStable() throws {
+        let input = #"{"é":1,"e\u0301":2,"\u0061":3,"a":4,"n":9007199254740993,"f":1.2300,"x":1e999}"#
+
+        let first = try JSONFormatting.minifyResult(input, sortKeys: true)
+        let second = try JSONFormatting.minifyResult(input, sortKeys: true)
+
+        #expect(Array(first.text.utf8) == Array(second.text.utf8))
+        #expect(Array(first.text.utf8) == Array(#"{"a":3,"a":4,"é":2,"f":1.2300,"n":9007199254740993,"x":1e999,"é":1}"#.utf8))
+        #expect(first.duplicateKeys == ["a"])
+    }
+
+    @Test func arraySortingUsesExactIdentityInPrettyAndCompactRenderers() throws {
+        let input = #"["é","e\u0301"]"#
+        let reversed = #"["e\u0301","é"]"#
+
+        let prettyInput = try JSONFormatting.formatResult(
+            input,
+            sortKeys: true,
+            sortArrays: true,
+            indentWidth: 2
+        )
+        let prettyReversed = try JSONFormatting.formatResult(
+            reversed,
+            sortKeys: true,
+            sortArrays: true,
+            indentWidth: 2
+        )
+        let compactInput = try JSONFormatting.minifyResult(
+            input,
+            sortKeys: true,
+            sortArrays: true
+        )
+        let compactReversed = try JSONFormatting.minifyResult(
+            reversed,
+            sortKeys: true,
+            sortArrays: true
+        )
+
+        #expect(prettyInput.exactTextIdentity == prettyReversed.exactTextIdentity)
+        #expect(compactInput.exactTextIdentity == compactReversed.exactTextIdentity)
+        #expect(Array(compactInput.text.utf8) == Array(#"["é","é"]"#.utf8))
+    }
+
+    @Test func manyDistinctDuplicateKeysPreserveFirstDuplicateOrder() throws {
+        let count = 3_000
+        let members = (0..<count).flatMap { index in
+            [#""k\#(index)":0"#, #""k\#(index)":1"#]
+        }
+        let result = try JSONFormatting.minifyResult("{" + members.joined(separator: ",") + "}")
+
+        #expect(result.duplicateKeys.count == count)
+        #expect(result.duplicateKeys.first == "k0")
+        #expect(result.duplicateKeys.last == "k2999")
+        #expect(result.text.hasPrefix(#"{"k0":0,"k0":1,"k1":0,"k1":1"#))
+    }
+
     @Test func minifyPreservesDuplicateObjectMembersInsteadOfLastWins() throws {
         let result = try JSONFormatting.minifyResult(#"{"a":1,"a":2,"b":3}"#)
 
