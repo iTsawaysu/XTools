@@ -53,6 +53,7 @@ public enum DockerRunToDockerComposeService {
         }
 
         var service = ComposeService()
+        var pendingNetworkAttachment = NetworkAttachment(name: "")
         let notTranslatable: [String] = []
         var notImplemented: [String] = []
         var unknownFlags: [String] = []
@@ -137,16 +138,28 @@ public enum DockerRunToDockerComposeService {
                 if value == "host" {
                     service.networkMode = "host"
                 } else {
-                    service.networks.append(value)
+                    let parsed = parseNetworkAttachment(value)
+                    notImplemented.append(contentsOf: parsed.unsupported.map { "--network.\($0)" })
+                    guard var attachment = parsed.attachment else { continue }
+                    if !pendingNetworkAttachment.aliases.isEmpty {
+                        attachment.aliases = pendingNetworkAttachment.aliases + attachment.aliases
+                    }
+                    if attachment.ipv4Address == nil {
+                        attachment.ipv4Address = pendingNetworkAttachment.ipv4Address
+                    }
+                    if attachment.ipv6Address == nil {
+                        attachment.ipv6Address = pendingNetworkAttachment.ipv6Address
+                    }
+                    pendingNetworkAttachment = NetworkAttachment(name: "")
+                    service.networks.append(attachment.name)
+                    service.networkAttachments.append(attachment)
                 }
             case "--mount":
                 let mountValue = try takeValue()
-                let (volumeStr, tmpfsStr) = parseMountToVolume(mountValue)
-                if let vol = volumeStr {
-                    service.volumes.append(normalizeVolumePath(vol))
-                }
-                if let tmp = tmpfsStr {
-                    service.tmpfs.append(tmp)
+                let parsed = parseMount(mountValue)
+                notImplemented.append(contentsOf: parsed.unsupported.map { "--mount.\($0)" })
+                if let mount = parsed.mount {
+                    service.mounts.append(mount)
                 }
             case "--user":
                 service.user = try takeValue()
@@ -233,13 +246,28 @@ public enum DockerRunToDockerComposeService {
                 service.ulimits.append(try takeValue())
 
             case "--ip":
-                service.ipv4Address = try takeValue()
+                let value = try takeValue()
+                if !service.networkAttachments.isEmpty {
+                    service.networkAttachments[service.networkAttachments.count - 1].ipv4Address = value
+                } else {
+                    pendingNetworkAttachment.ipv4Address = value
+                }
             case "--ip6":
-                service.ipv6Address = try takeValue()
+                let value = try takeValue()
+                if !service.networkAttachments.isEmpty {
+                    service.networkAttachments[service.networkAttachments.count - 1].ipv6Address = value
+                } else {
+                    pendingNetworkAttachment.ipv6Address = value
+                }
             case "--mac-address":
                 service.macAddress = try takeValue()
             case "--network-alias":
-                service.networkAliases.append(try takeValue())
+                let value = try takeValue()
+                if !service.networkAttachments.isEmpty {
+                    service.networkAttachments[service.networkAttachments.count - 1].aliases.append(value)
+                } else {
+                    pendingNetworkAttachment.aliases.append(value)
+                }
 
             case "--pid":
                 service.pid = try takeValue()
@@ -263,6 +291,9 @@ public enum DockerRunToDockerComposeService {
             case "--health-start-period":
                 service.healthcheckDisabled = false
                 service.healthStartPeriod = try takeValue()
+            case "--health-start-interval":
+                service.healthcheckDisabled = false
+                service.healthStartInterval = try takeValue()
             case "--no-healthcheck":
                 let value = inlineValue ?? "true"
                 let disabled = (value != "false")
@@ -327,6 +358,16 @@ public enum DockerRunToDockerComposeService {
 
         guard imageFound, !service.image.isEmpty else {
             throw DockerRunToDockerComposeError.missingImage
+        }
+
+        if pendingNetworkAttachment.ipv4Address != nil {
+            notImplemented.append("--ip")
+        }
+        if pendingNetworkAttachment.ipv6Address != nil {
+            notImplemented.append("--ip6")
+        }
+        if !pendingNetworkAttachment.aliases.isEmpty {
+            notImplemented.append("--network-alias")
         }
 
         let yaml = renderYAML(service: service)

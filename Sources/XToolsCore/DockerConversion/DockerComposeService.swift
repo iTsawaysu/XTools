@@ -1,6 +1,28 @@
 import Foundation
 
 extension DockerRunToDockerComposeService {
+    struct NetworkAttachment {
+        var name: String
+        var aliases: [String] = []
+        var ipv4Address: String?
+        var ipv6Address: String?
+    }
+
+    struct ComposeMount {
+        enum Kind: String {
+            case bind
+            case volume
+            case tmpfs
+        }
+
+        var kind: Kind
+        var source: String?
+        var target: String
+        var readOnly = false
+        var size: String?
+        var mode: String?
+    }
+
     struct ComposeService {
         var name: String = "app"
         var image = ""
@@ -12,6 +34,7 @@ extension DockerRunToDockerComposeService {
         var ports: [String] = []
         var volumes: [String] = []
         var networks: [String] = []
+        var networkAttachments: [NetworkAttachment] = []
         var restart: String?
         var workingDir: String?
         var user: String?
@@ -22,6 +45,7 @@ extension DockerRunToDockerComposeService {
         var labels: [String] = []
         var expose: [String] = []
         var tmpfs: [String] = []
+        var mounts: [ComposeMount] = []
 
         // Security & Capabilities
         var capAdd: [String] = []
@@ -58,10 +82,7 @@ extension DockerRunToDockerComposeService {
 
         // Network config
         var networkMode: String?
-        var ipv4Address: String?
-        var ipv6Address: String?
         var macAddress: String?
-        var networkAliases: [String] = []
         var dnsOpt: [String] = []
         var dnsSearch: [String] = []
         var links: [String] = []
@@ -77,6 +98,7 @@ extension DockerRunToDockerComposeService {
         var healthTimeout: String?
         var healthRetries: String?
         var healthStartPeriod: String?
+        var healthStartInterval: String?
         var healthcheckDisabled: Bool?
 
         // Logging

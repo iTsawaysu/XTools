@@ -50,9 +50,28 @@ extension DockerRunToDockerComposeService {
             lines.append(contentsOf: service.expose.map { "      - \(yamlScalar($0))" })
         }
 
-        if !service.volumes.isEmpty {
+        if !service.volumes.isEmpty || !service.mounts.isEmpty {
             lines.append("    volumes:")
             lines.append(contentsOf: service.volumes.map { "      - \(yamlScalar($0))" })
+            for mount in service.mounts {
+                lines.append("      - type: \(mount.kind.rawValue)")
+                if let source = mount.source {
+                    lines.append("        source: \(yamlScalar(normalizeVolumePath(source)))")
+                }
+                lines.append("        target: \(yamlScalar(mount.target))")
+                if mount.readOnly {
+                    lines.append("        read_only: true")
+                }
+                if mount.kind == .tmpfs, mount.size != nil || mount.mode != nil {
+                    lines.append("        tmpfs:")
+                    if let size = mount.size {
+                        lines.append("          size: \(yamlScalar(size))")
+                    }
+                    if let mode = mount.mode {
+                        lines.append("          mode: \(yamlScalar(mode))")
+                    }
+                }
+            }
         }
 
         if !service.tmpfs.isEmpty {
@@ -63,19 +82,20 @@ extension DockerRunToDockerComposeService {
         if let networkMode = service.networkMode {
             lines.append("    network_mode: \(yamlScalar(networkMode))")
         } else if !service.networks.isEmpty {
-            if service.ipv4Address != nil || service.ipv6Address != nil || !service.networkAliases.isEmpty {
+            let attachments = service.networkAttachments
+            if attachments.contains(where: { $0.ipv4Address != nil || $0.ipv6Address != nil || !$0.aliases.isEmpty }) {
                 lines.append("    networks:")
-                for network in service.networks {
-                    lines.append("      \(network):")
-                    if let ipv4 = service.ipv4Address {
+                for network in attachments {
+                    lines.append("      \(network.name):")
+                    if let ipv4 = network.ipv4Address {
                         lines.append("        ipv4_address: \(yamlScalar(ipv4))")
                     }
-                    if let ipv6 = service.ipv6Address {
+                    if let ipv6 = network.ipv6Address {
                         lines.append("        ipv6_address: \(yamlScalar(ipv6))")
                     }
-                    if !service.networkAliases.isEmpty {
+                    if !network.aliases.isEmpty {
                         lines.append("        aliases:")
-                        lines.append(contentsOf: service.networkAliases.map { "          - \(yamlScalar($0))" })
+                        lines.append(contentsOf: network.aliases.map { "          - \(yamlScalar($0))" })
                     }
                 }
             } else {
@@ -261,7 +281,12 @@ extension DockerRunToDockerComposeService {
 
         appendRuntimeSections(for: service, to: &lines)
 
-        let namedVolumes = extractNamedVolumes(from: service.volumes)
+        var namedVolumes = extractNamedVolumes(from: service.volumes)
+        for mount in service.mounts where mount.kind == .volume {
+            if let source = mount.source, !source.isEmpty {
+                namedVolumes.insert(source)
+            }
+        }
         if !namedVolumes.isEmpty {
             lines.append("")
             lines.append("volumes:")

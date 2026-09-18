@@ -70,7 +70,7 @@ struct TestMarkdownDockerCoverageTests {
             }
         case "DOCKER-11":
             let result = try convert(testCase)
-            for fragment in ["127.0.0.1:8080:80", "53:53/udp", "./site:/usr/share/nginx/html:ro", "cache-data:/cache", "tmpfs:", "/run:size=64m", "volumes:", "cache-data:"] {
+            for fragment in ["127.0.0.1:8080:80", "53:53/udp", "type: bind", "source: ./site", "target: /usr/share/nginx/html", "read_only: true", "type: volume", "source: cache-data", "target: /cache", "tmpfs:", "/run:size=64m", "volumes:", "cache-data:"] {
                 #expect(result.yaml.contains(fragment))
             }
         case "DOCKER-12":

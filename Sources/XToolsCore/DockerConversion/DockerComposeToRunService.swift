@@ -50,10 +50,10 @@ public enum DockerComposeToRunDiagnostics {
 /// its YAML round-trips exactly; common hand-written variants (map-form
 /// environment, long-form ports/volumes, deploy.resources limits) are also
 /// accepted. Fields without a `docker run` equivalent (build, depends_on,
-/// network addresses/aliases, …) produce warnings instead of failing.
+/// network details without a Docker CLI representation produce warnings instead of failing.
 public enum DockerComposeToRunService {
     public static func convert(_ yamlText: String) throws -> DockerComposeToRunResult {
-        let document: Any
+        let document: Any?
         do {
             document = try Yams.load(yaml: yamlText)
         } catch {
@@ -133,8 +133,12 @@ public enum DockerComposeToRunService {
         if let containerName = scalarString(service["container_name"]) {
             flag(containerName, "--name")
         }
-        if let platform = scalarString(service["platform"]) {
-            flag(platform, "--platform")
+        if service["platform"] != nil {
+            if let platform = scalarString(service["platform"]) {
+                flag(platform, "--platform")
+            } else {
+                skipped.append("platform(结构无法映射)")
+            }
         }
         if let hostname = scalarString(service["hostname"]) {
             flag(hostname, "-h")
@@ -142,44 +146,37 @@ public enum DockerComposeToRunService {
         if let domainname = scalarString(service["domainname"]) {
             flag(domainname, "--domainname")
         }
-        if let entrypoint = stringList(service["entrypoint"]), !entrypoint.isEmpty {
-            flag(entrypoint.joined(separator: " "), "--entrypoint")
+        let entrypointSpecified = service["entrypoint"] != nil
+        let entrypoint = strictStringList(service["entrypoint"], path: "entrypoint", skipped: &skipped) ?? []
+        if entrypointSpecified, entrypoint.isEmpty {
+            flag("", "--entrypoint")
+        } else if let executable = entrypoint.first {
+            flag(executable, "--entrypoint")
         }
+        let command = strictStringList(service["command"], path: "command", skipped: &skipped) ?? []
         if let user = scalarString(service["user"]) {
             flag(user, "-u")
         }
         if let workingDir = scalarString(service["working_dir"]) {
             flag(workingDir, "-w")
         }
-        if let restart = scalarString(service["restart"]) {
-            var value = restart
-            if restart == "on-failure",
-               let attempts = deployRestartMaxAttempts(service) {
-                value = "on-failure:\(attempts)"
+        if service["restart"] != nil {
+            if let restart = scalarString(service["restart"]) {
+                var value = restart
+                if restart == "on-failure",
+                   let attempts = deployRestartMaxAttempts(service) {
+                    value = "on-failure:\(attempts)"
+                }
+                flag(value, "--restart")
+            } else {
+                skipped.append("restart(结构无法映射)")
             }
-            flag(value, "--restart")
         }
+        skipped.append(contentsOf: restartPolicyUnmappedPaths(service))
         if let networkMode = scalarString(service["network_mode"]) {
             flag(networkMode, "--network")
-        } else if let networks = service["networks"] as? [String: Any], !networks.isEmpty {
-            // Map-form networks may carry addresses/aliases that a single
-            // docker run command cannot express.
-            for (_, config) in networks.sorted(by: { $0.key < $1.key }) {
-                if let detail = config as? [String: Any] {
-                    if detail["ipv4_address"] != nil || detail["ipv6_address"] != nil {
-                        skipped.append("networks.ipv4/ipv6_address")
-                    }
-                    if let aliases = detail["aliases"], aliases != nil {
-                        skipped.append("networks.aliases")
-                    }
-                }
-            }
-            flag(networks.keys.sorted().joined(separator: ","), "--network")
-        } else if let networks = service["networks"] as? [Any], !networks.isEmpty {
-            let names = networks.compactMap(scalarString)
-            if !names.isEmpty {
-                flag(names.joined(separator: ","), "--network")
-            }
+        } else {
+            appendNetworkArguments(service["networks"], into: &args, skipped: &skipped)
         }
         if let macAddress = scalarString(service["mac_address"]) {
             flag(macAddress, "--mac-address")
@@ -188,12 +185,8 @@ public enum DockerComposeToRunService {
         for envFile in stringList(service["env_file"]) ?? [] {
             flag(envFile, "--env-file")
         }
-        for pair in environmentPairs(service["environment"]) {
-            if pair.contains("=") {
-                flag(pair, "-e")
-            } else {
-                flag(pair, "-e")
-            }
+        for pair in environmentPairs(service["environment"], skipped: &skipped) {
+            flag(pair, "-e")
         }
         for port in portArguments(service["ports"], skipped: &skipped) {
             flag(port, "-p")
@@ -201,9 +194,7 @@ public enum DockerComposeToRunService {
         for exposed in stringList(service["expose"]) ?? [] {
             flag(exposed, "--expose")
         }
-        for volume in volumeArguments(service["volumes"], skipped: &skipped) {
-            flag(volume, "-v")
-        }
+        appendVolumeArguments(service["volumes"], into: &args, skipped: &skipped)
         for tmpfs in stringList(service["tmpfs"]) ?? [] {
             flag(tmpfs, "--tmpfs")
         }
@@ -256,16 +247,36 @@ public enum DockerComposeToRunService {
 
         // Resource limits: deploy.resources is the modern spelling; the flat
         // legacy keys are accepted as aliases.
-        if let limits = deployResourceLimits(service) {
-            if let cpus = limits.cpus {
+        let resources = deployResources(service)
+        if let resources {
+            if let cpus = resources.limits.cpus {
                 flag(cpus, "--cpus")
             }
-            if let memory = limits.memory {
+            if let memory = resources.limits.memory {
                 flag(memory, "-m")
             }
-            if let pids = limits.pids {
+            if let pids = resources.limits.pids {
                 flag(pids, "--pids-limit")
             }
+            skipped.append(contentsOf: resources.unmappedPaths)
+        }
+        let deployMemoryReservation = resources?.reservationMemory
+        var memoryReservation = deployMemoryReservation
+        if service["mem_reservation"] != nil {
+            if let flatMemoryReservation = scalarString(service["mem_reservation"]) {
+                if let deployMemoryReservation,
+                   !memoryValuesEquivalent(flatMemoryReservation, deployMemoryReservation) {
+                    skipped.append("mem_reservation/deploy.resources.reservations.memory(值冲突)")
+                    memoryReservation = nil
+                } else {
+                    memoryReservation = flatMemoryReservation
+                }
+            } else {
+                skipped.append("mem_reservation(结构无法映射)")
+            }
+        }
+        if let memoryReservation {
+            flag(memoryReservation, "--memory-reservation")
         }
         if let cpus = scalarString(service["cpus"]) {
             flag(cpus, "--cpus")
@@ -312,7 +323,7 @@ public enum DockerComposeToRunService {
             flag(ipc, "--ipc")
         }
 
-        appendHealthcheckArguments(service["healthcheck"], into: &args)
+        appendHealthcheckArguments(service["healthcheck"], into: &args, skipped: &skipped)
         appendLoggingArguments(service["logging"], into: &args)
         if let gpus = gpuReservationArgument(service) {
             flag(gpus, "--gpus")
@@ -339,6 +350,9 @@ public enum DockerComposeToRunService {
             args.append("--oom-kill-disable")
         }
 
+        if service["deploy"] != nil, !(service["deploy"] is [String: Any]) {
+            skipped.append("deploy(结构无法映射)")
+        }
         skipped.append(contentsOf: service.keys.filter { !handledKeys.contains($0) }.sorted())
         if let deploy = service["deploy"] as? [String: Any] {
             let deployHandled = deployHandledKeys(deploy)
@@ -356,7 +370,10 @@ public enum DockerComposeToRunService {
         }
 
         var tokens = ["docker", "run", "-d"] + args + [shellToken(image)]
-        if let command = stringList(service["command"]), !command.isEmpty {
+        if entrypoint.count > 1 {
+            tokens += entrypoint.dropFirst().map(shellToken)
+        }
+        if !command.isEmpty {
             tokens += command.map(shellToken)
         }
         return tokens.joined(separator: " ")
@@ -369,7 +386,7 @@ public enum DockerComposeToRunService {
         "environment", "env_file", "ports", "expose", "volumes", "tmpfs",
         "network_mode", "networks", "mac_address", "dns", "dns_opt", "dns_search",
         "extra_hosts", "links", "labels", "cap_add", "cap_drop", "security_opt",
-        "privileged", "userns_mode", "group_add", "cpus", "mem_limit", "memory",
+        "privileged", "userns_mode", "group_add", "cpus", "mem_limit", "memory", "mem_reservation",
         "cpu_shares", "cpu_period", "cpu_quota", "cpuset", "cpuset_cpus",
         "memswap_limit", "mem_swappiness", "oom_score_adj", "shm_size",
         "pids_limit", "blkio_config", "sysctls", "ulimits", "pid", "uts", "ipc",
@@ -391,6 +408,39 @@ public enum DockerComposeToRunService {
         }
     }
 
+    private static func memoryValuesEquivalent(_ lhs: String, _ rhs: String) -> Bool {
+        if lhs == rhs { return true }
+        guard let leftBytes = memoryBytes(lhs), let rightBytes = memoryBytes(rhs) else {
+            return false
+        }
+        return leftBytes == rightBytes
+    }
+
+    private static func memoryBytes(_ value: String) -> Decimal? {
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty else { return nil }
+        let numberEnd = normalized.firstIndex { $0.isLetter } ?? normalized.endIndex
+        let numberText = String(normalized[..<numberEnd])
+        let unit = String(normalized[numberEnd...])
+        guard !numberText.isEmpty,
+              normalized[numberEnd...].allSatisfy(\.isLetter),
+              let number = Decimal(string: numberText, locale: Locale(identifier: "en_US_POSIX")),
+              number >= 0 else {
+            return nil
+        }
+        let exponents: [String: Int] = [
+            "": 0, "b": 0,
+            "k": 1, "kb": 1,
+            "m": 2, "mb": 2,
+            "g": 3, "gb": 3,
+            "t": 4, "tb": 4,
+            "p": 5, "pb": 5
+        ]
+        guard let exponent = exponents[unit] else { return nil }
+        let multiplier = (0..<exponent).reduce(Decimal(1)) { result, _ in result * 1024 }
+        return number * multiplier
+    }
+
     private static func stringList(_ value: Any?) -> [String]? {
         switch value {
         case let array as [Any]:
@@ -403,32 +453,72 @@ public enum DockerComposeToRunService {
         }
     }
 
-    private static func environmentPairs(_ value: Any?) -> [String] {
-        if let list = stringList(value) {
-            return list
+    private static func strictStringList(
+        _ value: Any?,
+        path: String,
+        skipped: inout [String]
+    ) -> [String]? {
+        guard value != nil else { return nil }
+        if let string = value as? String { return [string] }
+        guard let array = value as? [Any] else {
+            skipped.append("\(path)(结构无法映射)")
+            return nil
+        }
+        let items = array.compactMap(scalarString)
+        guard items.count == array.count else {
+            skipped.append("\(path)(结构无法映射)")
+            return nil
+        }
+        return items
+    }
+
+    private static func environmentPairs(_ value: Any?, skipped: inout [String]) -> [String] {
+        if let array = value as? [Any] {
+            var pairs: [String] = []
+            for (index, raw) in array.enumerated() {
+                if let pair = scalarString(raw) {
+                    pairs.append(pair)
+                } else {
+                    skipped.append("environment[\(index)](结构无法映射)")
+                }
+            }
+            return pairs
         }
         if let map = value as? [String: Any] {
-            return map.sorted { $0.key < $1.key }.map { key, raw in
+            return map.sorted { $0.key < $1.key }.compactMap { key, raw in
+                if raw is NSNull {
+                    return key
+                }
                 if let value = scalarString(raw) {
                     return "\(key)=\(value)"
                 }
-                return key
+                skipped.append("environment.\(key)(结构无法映射)")
+                return nil
             }
+        }
+        if value != nil {
+            skipped.append("environment(结构无法映射)")
         }
         return []
     }
 
     private static func labelPairs(_ value: Any?) -> [String] {
-        environmentPairs(value)
+        if let list = stringList(value) {
+            return list
+        }
+        guard let map = value as? [String: Any] else { return [] }
+        return map.sorted { $0.key < $1.key }.map { key, raw in
+            scalarString(raw).map { "\(key)=\($0)" } ?? key
+        }
     }
 
     private static func keyValueList(_ value: Any?) -> [String] {
-        environmentPairs(value)
+        labelPairs(value)
     }
 
     private static func portArguments(_ value: Any?, skipped: inout [String]) -> [String] {
         guard let list = value as? [Any] else {
-            if value is [String: Any] {
+            if value != nil {
                 skipped.append("ports(结构无法映射)")
             }
             return []
@@ -439,46 +529,216 @@ public enum DockerComposeToRunService {
                 result.append(short)
                 continue
             }
-            guard let long = item as? [String: Any] else { continue }
-            let target = scalarString(long["target"])
-            let published = scalarString(long["published"])
-            let protocolName = scalarString(long["protocol"])
-            if let mode = scalarString(long["mode"]), mode != "host" {
-                skipped.append("ports.mode=\(mode)")
+            guard let long = item as? [String: Any] else {
+                skipped.append("ports(结构无法映射)")
+                continue
             }
-            guard let target else { continue }
-            if let published {
-                result.append("\(published):\(target)\(protocolName.map { "/\($0)" } ?? "")")
+            guard let target = scalarString(long["target"]) else {
+                skipped.append("ports.target(结构无法映射)")
+                continue
+            }
+            let published: String?
+            if long["published"] == nil {
+                published = nil
+            } else if let value = scalarString(long["published"]) {
+                published = value
             } else {
-                result.append(target)
+                skipped.append("ports.published(结构无法映射)")
+                continue
+            }
+            let protocolName: String?
+            if long["protocol"] == nil {
+                protocolName = nil
+            } else if let value = scalarString(long["protocol"]) {
+                protocolName = value
+            } else {
+                skipped.append("ports.protocol(结构无法映射)")
+                continue
+            }
+            if let mode = scalarString(long["mode"]), mode != "host" {
+                skipped.append("ports.mode")
+                continue
+            } else if long["mode"] != nil, scalarString(long["mode"]) == nil {
+                skipped.append("ports.mode(结构无法映射)")
+                continue
+            }
+            let hostIP: String?
+            if long["host_ip"] == nil {
+                hostIP = nil
+            } else if let value = scalarString(long["host_ip"]) {
+                hostIP = value
+            } else {
+                skipped.append("ports.host_ip(结构无法映射)")
+                continue
+            }
+            let unsupported = long.keys.filter {
+                !["target", "published", "protocol", "host_ip", "mode"].contains($0)
+            }
+            skipped.append(contentsOf: unsupported.sorted().map { "ports.\($0)" })
+            let suffix = protocolName.map { "/\($0)" } ?? ""
+            if let published {
+                result.append("\(hostIP.map { "\($0):" } ?? "")\(published):\(target)\(suffix)")
+            } else if let hostIP {
+                result.append("\(hostIP)::\(target)\(suffix)")
+            } else {
+                result.append("\(target)\(suffix)")
             }
         }
         return result
     }
 
-    private static func volumeArguments(_ value: Any?, skipped: inout [String]) -> [String] {
-        guard let list = value as? [Any] else { return [] }
-        var result: [String] = []
+    private static func appendNetworkArguments(_ value: Any?, into args: inout [String], skipped: inout [String]) {
+        if let networks = value as? [String: Any] {
+            for (name, rawConfig) in networks.sorted(by: { $0.key < $1.key }) {
+                if rawConfig is NSNull {
+                    args.append("--network")
+                    args.append(shellToken(name))
+                    continue
+                }
+                guard let config = rawConfig as? [String: Any] else {
+                    skipped.append("networks.\(name)(结构无法映射)")
+                    continue
+                }
+                var components = ["name=\(name)"]
+                if let aliases = strictStringList(
+                    config["aliases"],
+                    path: "networks.\(name).aliases",
+                    skipped: &skipped
+                ) {
+                    components += aliases.map { "alias=\($0)" }
+                }
+                if config["ipv4_address"] != nil {
+                    if let ipv4 = scalarString(config["ipv4_address"]) {
+                        components.append("ip=\(ipv4)")
+                    } else {
+                        skipped.append("networks.\(name).ipv4_address(结构无法映射)")
+                    }
+                }
+                if config["ipv6_address"] != nil {
+                    if let ipv6 = scalarString(config["ipv6_address"]) {
+                        components.append("ip6=\(ipv6)")
+                    } else {
+                        skipped.append("networks.\(name).ipv6_address(结构无法映射)")
+                    }
+                }
+                let unsupported = config.keys
+                    .filter { !["aliases", "ipv4_address", "ipv6_address"].contains($0) }
+                    .sorted()
+                skipped.append(contentsOf: unsupported.map { "networks.\(name).\($0)" })
+                args.append("--network")
+                args.append(shellToken(components.joined(separator: ",")))
+            }
+            return
+        }
+        if let networks = value as? [Any] {
+            for item in networks {
+                guard let name = scalarString(item) else {
+                    skipped.append("networks(结构无法映射)")
+                    continue
+                }
+                args.append("--network")
+                args.append(shellToken(name))
+            }
+        }
+    }
+
+    private static func appendVolumeArguments(_ value: Any?, into args: inout [String], skipped: inout [String]) {
+        guard let list = value as? [Any] else { return }
         for item in list {
             if let short = scalarString(item) {
-                result.append(short)
+                args.append("-v")
+                args.append(shellToken(short))
                 continue
             }
-            guard let long = item as? [String: Any] else { continue }
-            let type = scalarString(long["type"]) ?? "volume"
-            guard let target = scalarString(long["target"]) else { continue }
+            guard let long = item as? [String: Any] else {
+                skipped.append("volumes(结构无法映射)")
+                continue
+            }
+            let type: String
+            if long["type"] == nil {
+                type = "volume"
+            } else if let declaredType = scalarString(long["type"]) {
+                type = declaredType
+            } else {
+                skipped.append("volumes.type(结构无法映射)")
+                continue
+            }
+            guard let target = scalarString(long["target"]) else {
+                skipped.append("volumes.\(mountPathType(type)).target")
+                continue
+            }
             if type == "tmpfs" {
-                result.append(target)
+                var mount = "type=tmpfs,target=\(target)"
+                var unsupportedPaths: [String] = []
+                if let tmpfs = long["tmpfs"] as? [String: Any] {
+                    if tmpfs["size"] != nil {
+                        if let size = scalarString(tmpfs["size"]) {
+                            mount += ",tmpfs-size=\(size)"
+                        } else {
+                            unsupportedPaths.append("volumes.tmpfs.tmpfs.size(结构无法映射)")
+                        }
+                    }
+                    if tmpfs["mode"] != nil {
+                        if let mode = scalarString(tmpfs["mode"]) {
+                            mount += ",tmpfs-mode=\(mode)"
+                        } else {
+                            unsupportedPaths.append("volumes.tmpfs.tmpfs.mode(结构无法映射)")
+                        }
+                    }
+                    let unsupported = tmpfs.keys.filter { !["size", "mode"].contains($0) }.sorted()
+                    unsupportedPaths.append(contentsOf: unsupported.map { "volumes.tmpfs.tmpfs.\($0)" })
+                } else if long["tmpfs"] != nil {
+                    unsupportedPaths.append("volumes.tmpfs.tmpfs(结构无法映射)")
+                }
+                let unsupported = long.keys.filter { !["type", "target", "tmpfs"].contains($0) }.sorted()
+                unsupportedPaths.append(contentsOf: unsupported.map { "volumes.tmpfs.\($0)" })
+                guard unsupportedPaths.isEmpty else {
+                    skipped.append(contentsOf: unsupportedPaths)
+                    continue
+                }
+                args.append("--mount")
+                args.append(shellToken(mount))
+                continue
+            }
+            guard type == "bind" || type == "volume" else {
+                skipped.append("volumes.\(mountPathType(type))")
+                continue
+            }
+            let optionKey = type
+            var unsupportedPaths: [String] = []
+            if let options = long[optionKey] as? [String: Any] {
+                let unsupported = options.keys.sorted()
+                unsupportedPaths += unsupported.map { "volumes.\(type).\(optionKey).\($0)" }
+            } else if long[optionKey] != nil {
+                unsupportedPaths.append("volumes.\(type).\(optionKey)(结构无法映射)")
+            }
+            let allowed = Set(["type", "source", "target", "read_only", optionKey])
+            let unsupported = long.keys.filter { !allowed.contains($0) }.sorted()
+            unsupportedPaths += unsupported.map { "volumes.\(type).\($0)" }
+            guard unsupportedPaths.isEmpty else {
+                skipped.append(contentsOf: unsupportedPaths)
                 continue
             }
             guard let source = scalarString(long["source"]) else {
-                skipped.append("volumes(匿名卷 \(target))")
+                skipped.append("volumes.\(type).source")
+                continue
+            }
+            guard long["read_only"] == nil || long["read_only"] is Bool else {
+                skipped.append("volumes.\(type).read_only(结构无法映射)")
                 continue
             }
             let readOnly = long["read_only"] as? Bool == true
-            result.append("\(source):\(target)\(readOnly ? ":ro" : "")")
+            var mount = "type=\(type),source=\(source),target=\(target)"
+            if readOnly {
+                mount += ",readonly"
+            }
+            args.append("--mount")
+            args.append(shellToken(mount))
         }
-        return result
+    }
+
+    private static func mountPathType(_ type: String) -> String {
+        ["bind", "volume", "tmpfs", "image", "cluster", "npipe"].contains(type) ? type : "type"
     }
 
     private static func ulimitArguments(_ value: Any?) -> [String] {
@@ -499,18 +759,49 @@ public enum DockerComposeToRunService {
         }
     }
 
-    private static func deployResourceLimits(_ service: [String: Any])
-        -> (cpus: String?, memory: String?, pids: String?)?
+    private static func deployResources(_ service: [String: Any])
+        -> (limits: (cpus: String?, memory: String?, pids: String?), reservationMemory: String?, unmappedPaths: [String])?
     {
-        guard let deploy = service["deploy"] as? [String: Any],
-              let resources = deploy["resources"] as? [String: Any],
-              let limits = resources["limits"] as? [String: Any] else {
+        guard let deploy = service["deploy"] as? [String: Any] else {
             return nil
         }
+        guard let resources = deploy["resources"] as? [String: Any] else {
+            if deploy["resources"] != nil {
+                return ((nil, nil, nil), nil, ["deploy.resources(结构无法映射)"])
+            }
+            return nil
+        }
+        let limits = resources["limits"] as? [String: Any] ?? [:]
+        let reservations = resources["reservations"] as? [String: Any] ?? [:]
+        var unmappedPaths = resources.keys
+            .filter { !["limits", "reservations"].contains($0) }
+            .map { "deploy.resources.\($0)" }
+        if resources["limits"] != nil, !(resources["limits"] is [String: Any]) {
+            unmappedPaths.append("deploy.resources.limits(结构无法映射)")
+        }
+        if resources["reservations"] != nil, !(resources["reservations"] is [String: Any]) {
+            unmappedPaths.append("deploy.resources.reservations(结构无法映射)")
+        }
+        unmappedPaths += limits.keys
+            .filter { !["cpus", "memory", "pids"].contains($0) }
+            .map { "deploy.resources.limits.\($0)" }
+        unmappedPaths += reservations.keys
+            .filter { !["memory", "devices"].contains($0) }
+            .map { "deploy.resources.reservations.\($0)" }
+        for key in ["cpus", "memory", "pids"] where limits[key] != nil && scalarString(limits[key]) == nil {
+            unmappedPaths.append("deploy.resources.limits.\(key)(结构无法映射)")
+        }
+        if reservations["memory"] != nil, scalarString(reservations["memory"]) == nil {
+            unmappedPaths.append("deploy.resources.reservations.memory(结构无法映射)")
+        }
         return (
-            scalarString(limits["cpus"]),
-            scalarString(limits["memory"]),
-            scalarString(limits["pids"])
+            (
+                scalarString(limits["cpus"]),
+                scalarString(limits["memory"]),
+                scalarString(limits["pids"])
+            ),
+            scalarString(reservations["memory"]),
+            unmappedPaths.sorted()
         )
     }
 
@@ -531,6 +822,40 @@ public enum DockerComposeToRunService {
             return nil
         }
         return scalarString(policy["max_attempts"])
+    }
+
+    private static func restartPolicyUnmappedPaths(_ service: [String: Any]) -> [String] {
+        guard let deploy = service["deploy"] as? [String: Any],
+              let rawPolicy = deploy["restart_policy"] else {
+            return []
+        }
+        guard let policy = rawPolicy as? [String: Any] else {
+            return ["deploy.restart_policy(结构无法映射)"]
+        }
+        guard let restart = scalarString(service["restart"]) else {
+            return ["deploy.restart_policy"]
+        }
+
+        var paths = policy.keys
+            .filter { !["condition", "max_attempts"].contains($0) }
+            .map { "deploy.restart_policy.\($0)" }
+        if policy["condition"] != nil {
+            if let condition = scalarString(policy["condition"]) {
+                if condition != restart {
+                    paths.append("deploy.restart_policy.condition")
+                }
+            } else {
+                paths.append("deploy.restart_policy.condition(结构无法映射)")
+            }
+        }
+        if policy["max_attempts"] != nil {
+            if restart != "on-failure" {
+                paths.append("deploy.restart_policy.max_attempts")
+            } else if scalarString(policy["max_attempts"]) == nil {
+                paths.append("deploy.restart_policy.max_attempts(结构无法映射)")
+            }
+        }
+        return paths.sorted()
     }
 
     private static func gpuReservationArgument(_ service: [String: Any]) -> String? {
@@ -571,45 +896,65 @@ public enum DockerComposeToRunService {
         }
     }
 
-    private static func appendHealthcheckArguments(_ value: Any?, into args: inout [String]) {
-        guard let healthcheck = value as? [String: Any] else { return }
+    private static func appendHealthcheckArguments(
+        _ value: Any?,
+        into args: inout [String],
+        skipped: inout [String]
+    ) {
+        guard let healthcheck = value as? [String: Any] else {
+            if value != nil { skipped.append("healthcheck(结构无法映射)") }
+            return
+        }
         if healthcheck["disable"] as? Bool == true || healthcheck["disabled"] as? Bool == true {
             args.append("--no-healthcheck")
             return
         }
-        if let test = healthcheck["test"] as? [Any],
-           let joined = testSummary(fromList: test) {
-            args.append("--health-cmd")
-            args.append(shellToken(joined))
+        if let test = healthcheck["test"] {
+            if let command = test as? String {
+                args.append("--health-cmd")
+                args.append(shellToken(command))
+            } else if let list = test as? [Any], let kind = list.first as? String {
+                switch kind {
+                case "CMD-SHELL":
+                    let parts = list.dropFirst().compactMap(scalarString)
+                    if list.count == 2, parts.count == 1 {
+                        args.append("--health-cmd")
+                        args.append(shellToken(parts[0]))
+                    } else {
+                        skipped.append("healthcheck.test(结构无法映射)")
+                        return
+                    }
+                case "NONE" where list.count == 1:
+                    args.append("--no-healthcheck")
+                    return
+                case "CMD":
+                    skipped.append("healthcheck.test(exec-form 无法等价映射)")
+                    return
+                default:
+                    skipped.append("healthcheck.test(结构无法映射)")
+                    return
+                }
+            } else {
+                skipped.append("healthcheck.test(结构无法映射)")
+            }
         }
-        if let interval = scalarString(healthcheck["interval"]) {
-            args.append("--health-interval")
-            args.append(shellToken(interval))
+        let scalarOptions = [
+            ("interval", "--health-interval"),
+            ("timeout", "--health-timeout"),
+            ("retries", "--health-retries"),
+            ("start_period", "--health-start-period"),
+            ("start_interval", "--health-start-interval")
+        ]
+        for (key, option) in scalarOptions where healthcheck[key] != nil {
+            if let scalar = scalarString(healthcheck[key]) {
+                args.append(option)
+                args.append(shellToken(scalar))
+            } else {
+                skipped.append("healthcheck.\(key)(结构无法映射)")
+            }
         }
-        if let timeout = scalarString(healthcheck["timeout"]) {
-            args.append("--health-timeout")
-            args.append(shellToken(timeout))
-        }
-        if let retries = scalarString(healthcheck["retries"]) {
-            args.append("--health-retries")
-            args.append(shellToken(retries))
-        }
-        if let startPeriod = scalarString(healthcheck["start_period"]) {
-            args.append("--health-start-period")
-            args.append(shellToken(startPeriod))
-        }
-    }
-
-    private static func testSummary(fromList list: [Any]) -> String? {
-        let parts = list.compactMap(scalarString)
-        guard !parts.isEmpty else { return nil }
-        if parts.first == "CMD-SHELL" {
-            return parts.dropFirst().joined(separator: " ")
-        }
-        if parts.first == "CMD" || parts.first == "NONE" {
-            return parts.dropFirst().joined(separator: " ")
-        }
-        return parts.joined(separator: " ")
+        let known = Set(["disable", "disabled", "test", "interval", "timeout", "retries", "start_period", "start_interval"])
+        skipped.append(contentsOf: healthcheck.keys.filter { !known.contains($0) }.sorted().map { "healthcheck.\($0)" })
     }
 
     private static func appendLoggingArguments(_ value: Any?, into args: inout [String]) {

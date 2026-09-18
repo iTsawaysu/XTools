@@ -55,6 +55,7 @@ extension DockerRunToDockerComposeService {
             || service.healthTimeout != nil
             || service.healthRetries != nil
             || service.healthStartPeriod != nil
+            || service.healthStartInterval != nil
 
         // Healthcheck
         if service.healthcheckDisabled == true {
@@ -77,6 +78,9 @@ extension DockerRunToDockerComposeService {
             }
             if let startPeriod = service.healthStartPeriod {
                 lines.append("      start_period: \(yamlScalar(startPeriod))")
+            }
+            if let startInterval = service.healthStartInterval {
+                lines.append("      start_interval: \(yamlScalar(startInterval))")
             }
         }
 

@@ -165,12 +165,14 @@ extension DockerRunToDockerComposeService {
         return normalized
     }
 
-    static func parseMountToVolume(_ mountString: String) -> (volume: String?, tmpfs: String?) {
-        var mountType = ""
-        var source = ""
-        var target = ""
-        var tmpfsSize = ""
+    static func parseMount(_ mountString: String) -> (mount: ComposeMount?, unsupported: [String]) {
+        var mountType: ComposeMount.Kind?
+        var source: String?
+        var target: String?
+        var tmpfsSize: String?
+        var tmpfsMode: String?
         var isReadonly = false
+        var unsupported: [String] = []
 
         let parts = mountString.split(separator: ",")
         for part in parts {
@@ -181,45 +183,117 @@ extension DockerRunToDockerComposeService {
                 continue
             }
             if trimmed.hasPrefix("readonly=") {
-                isReadonly = !trimmed.hasSuffix("false")
+                let value = String(trimmed.dropFirst("readonly=".count))
+                if value == "true" {
+                    isReadonly = true
+                } else if value != "false" {
+                    unsupported.append("readonly")
+                }
                 continue
             }
 
             let keyValue = trimmed.split(separator: "=", maxSplits: 1)
-            guard keyValue.count == 2 else { continue }
+            guard keyValue.count == 2 else {
+                unsupported.append("option")
+                continue
+            }
 
             let key = String(keyValue[0]).trimmingCharacters(in: .whitespaces)
             let value = String(keyValue[1]).trimmingCharacters(in: .whitespaces)
 
             switch key {
             case "type":
-                mountType = value
+                mountType = ComposeMount.Kind(rawValue: value)
+                if mountType == nil {
+                    unsupported.append("type")
+                }
             case "source", "src":
                 source = value
             case "target", "dst", "destination":
                 target = value
             case "tmpfs-size":
                 tmpfsSize = value
+            case "tmpfs-mode":
+                tmpfsMode = value
             default:
-                break
+                unsupported.append(key)
             }
         }
 
-        if mountType == "tmpfs" {
-            if !tmpfsSize.isEmpty {
-                return (nil, "\(target):size=\(tmpfsSize)")
+        guard let mountType else {
+            if !unsupported.contains("type") { unsupported.append("type") }
+            return (nil, unsupported)
+        }
+        guard let target, !target.isEmpty else {
+            unsupported.append("target")
+            return (nil, unsupported)
+        }
+        if mountType != .tmpfs, source?.isEmpty != false {
+            unsupported.append("source")
+        }
+        if mountType != .tmpfs, tmpfsSize != nil || tmpfsMode != nil {
+            unsupported.append("tmpfs")
+        }
+        if mountType == .tmpfs, source != nil {
+            unsupported.append("source")
+        }
+        guard unsupported.isEmpty else { return (nil, unsupported) }
+        return (
+            ComposeMount(
+                kind: mountType,
+                source: source,
+                target: target,
+                readOnly: isReadonly,
+                size: tmpfsSize,
+                mode: tmpfsMode
+            ),
+            []
+        )
+    }
+
+    static func parseNetworkAttachment(_ value: String) -> (attachment: NetworkAttachment?, unsupported: [String]) {
+        guard value.contains("=") else {
+            return value.isEmpty ? (nil, ["name"]) : (NetworkAttachment(name: value), [])
+        }
+
+        var name: String?
+        var aliases: [String] = []
+        var ipv4Address: String?
+        var ipv6Address: String?
+        var unsupported: [String] = []
+        for item in value.split(separator: ",") {
+            let pair = item.split(separator: "=", maxSplits: 1).map(String.init)
+            guard pair.count == 2, !pair[1].isEmpty else {
+                unsupported.append("option")
+                continue
             }
-            return (nil, target)
+            switch pair[0] {
+            case "name":
+                name = pair[1]
+            case "alias":
+                aliases.append(pair[1])
+            case "ip":
+                ipv4Address = pair[1]
+            case "ip6":
+                ipv6Address = pair[1]
+            default:
+                unsupported.append(pair[0])
+            }
         }
 
-        if !source.isEmpty && !target.isEmpty {
-            let volumeString = isReadonly ? "\(source):\(target):ro" : "\(source):\(target)"
-            return (volumeString, nil)
-        } else if !target.isEmpty {
-            return (target, nil)
+        guard let name, !name.isEmpty else {
+            unsupported.append("name")
+            return (nil, unsupported)
         }
-
-        return (mountString, nil)
+        return (
+            NetworkAttachment(
+                name: name,
+                aliases: aliases,
+                ipv4Address: ipv4Address,
+                ipv6Address: ipv6Address
+            ),
+            unsupported
+        )
     }
 
     static func normalizePort(_ port: String) -> String {

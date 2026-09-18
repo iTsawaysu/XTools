@@ -1,5 +1,5 @@
-import XToolsCore
 import Testing
+@testable import XToolsCore
 
 struct DockerRunToDockerComposeServiceTests {
     @Test func simpleContainerConversion() throws {
@@ -284,6 +284,83 @@ struct DockerRunToDockerComposeServiceTests {
         )
 
         #expect(result.yaml.contains(#"- "WIN=C:\\Temp\\new""#))
+    }
+
+    @Test func tokenizerPreservesShellSpecificBackslashSemantics() throws {
+        let singleQuoted = try DockerRunToDockerComposeService.tokenize(
+            #"docker run -e 'WIN=C:\temp' alpine"#
+        )
+        #expect(singleQuoted == ["docker", "run", "-e", #"WIN=C:\temp"#, "alpine"])
+
+        let doubleQuoted = try DockerRunToDockerComposeService.tokenize(
+            #"docker run -e "WIN=C:\q" alpine sh -c "echo C:\q \"quoted\" \\ done""#
+        )
+        #expect(doubleQuoted == [
+            "docker", "run", "-e", #"WIN=C:\q"#, "alpine", "sh", "-c", #"echo C:\q "quoted" \ done"#
+        ])
+
+        let result = try DockerRunToDockerComposeService.convert(
+            #"docker run -e 'WIN=C:\temp' alpine sh -c "echo C:\q \"quoted\" \\ done""#
+        )
+        #expect(result.yaml.contains(#"- "WIN=C:\\temp""#))
+        #expect(result.yaml.contains(#"- "echo C:\\q \"quoted\" \\ done""#))
+    }
+
+    @Test func tokenizerPreservesEmptyQuotedArguments() throws {
+        let tokens = try DockerRunToDockerComposeService.tokenize(
+            #"docker run -e EMPTY="" alpine printf '%s' """#
+        )
+        #expect(tokens == ["docker", "run", "-e", "EMPTY=", "alpine", "printf", "%s", ""])
+
+        let result = try DockerRunToDockerComposeService.convert(
+            #"docker run -e EMPTY="" alpine printf '%s' """#
+        )
+        #expect(result.yaml.contains("- EMPTY="))
+        #expect(result.yaml.contains("      - \"\""))
+    }
+
+    @Test func malformedExtendedNetworkAndMountOptionsWarnWithoutLeakingValues() throws {
+        let network = try DockerRunToDockerComposeService.convert(
+            "docker run --network alias=private-network-alias nginx"
+        )
+        #expect(!network.yaml.contains("private-network-alias"))
+        #expect(network.notImplemented.contains("--network.name"))
+
+        let mount = try DockerRunToDockerComposeService.convert(
+            "docker run --mount type=bind,source=/host,target=/data,bind-propagation=private-mode nginx"
+        )
+        #expect(!mount.yaml.contains("/host:/data"))
+        #expect(!mount.yaml.contains("private-mode"))
+        #expect(mount.notImplemented.contains("--mount.bind-propagation"))
+    }
+
+    @Test func extendedNetworkAttachmentsRemainIndependentInCompose() throws {
+        let result = try DockerRunToDockerComposeService.convert(
+            "docker run --network name=front,alias=web,alias=api,ip=172.20.0.5,ip6=2001:db8::5 --network back nginx"
+        )
+
+        #expect(result.yaml.contains("      front:"))
+        #expect(result.yaml.contains("        ipv4_address: 172.20.0.5"))
+        #expect(result.yaml.contains("        ipv6_address: \"2001:db8::5\""))
+        #expect(result.yaml.contains("          - web"))
+        #expect(result.yaml.contains("          - api"))
+        #expect(result.yaml.contains("      back:"))
+    }
+
+    @Test func networkModifiersBeforeOrAfterNetworkAttachToTheMatchingNetwork() throws {
+        let before = try DockerRunToDockerComposeService.convert(
+            "docker run --ip 172.20.0.5 --ip6 2001:db8::5 --network-alias web --network front --network back nginx"
+        )
+        #expect(before.yaml.contains("      front:"))
+        #expect(before.yaml.contains("        ipv4_address: 172.20.0.5"))
+        #expect(before.yaml.contains("        ipv6_address: \"2001:db8::5\""))
+        #expect(before.yaml.contains("          - web"))
+        #expect(!before.yaml.contains("      back:\n        ipv4_address"))
+
+        let after = try DockerRunToDockerComposeService.convert(
+            "docker run --network front --ip 172.20.0.5 --ip6 2001:db8::5 --network-alias web --network back nginx"
+        )
+        #expect(after.yaml == before.yaml)
     }
 
     @Test func yamlScalarsQuoteAndEscapeEmbeddedControlCharacters() throws {
