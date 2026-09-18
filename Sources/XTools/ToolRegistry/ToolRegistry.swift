@@ -366,10 +366,10 @@ extension ToolRegistry {
             },
             RegisteredTool(
                 id: "docker-run-to-docker-compose-converter",
-                title: "Docker Run → Compose",
+                title: "Docker Run ↔ Compose",
                 categoryID: .development,
                 systemImage: "shippingbox",
-                keywords: ["docker", "compose", "convert", "container", "容器"]
+                keywords: ["docker", "compose", "convert", "run", "容器", "双向转换"]
             ) {
                 IndexDockerPage()
             },

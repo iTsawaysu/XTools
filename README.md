@@ -55,7 +55,7 @@ swift test           # Run automated test suite
 | :--- | :--- |
 | **Converters (8)** | Base64 File, Base64 String, URL Encoder/Decoder, ASCII & Binary, Unicode Converter, Base Converter, Roman Numerals, Case Converter |
 | **Crypto & Generators (6)** | Hash Text (MD5, SHA-1/256/512), AES Text Encryption, String Obfuscator, Token Generator, UUID Generator, Password Generator |
-| **Development (12)** | JSON Formatter, SQL Prettifier, XML Formatter, YAML Formatter, JSON Diff, Text Diff, Regex Tester, Docker Run → Compose, HTML → Markdown, Crontab Generator, Random Port, Chmod Calculator |
+| **Development (12)** | JSON Formatter, SQL Prettifier, XML Formatter, YAML Formatter, JSON Diff, Text Diff, Regex Tester, Docker Run ↔ Compose, HTML → Markdown, Crontab Generator, Random Port, Chmod Calculator |
 | **Web (5)** | JWT Parser & Signer, Basic Auth Generator, HTTP Status Codes, User-Agent Parser, Keycode Inspector |
 | **Image & Color (6)** | Image Format Converter (PNG, JPEG, WebP), Smart Compressor, Watermark, Grayscale Generator, Favicon Suite Generator, Color Converter (HEX, RGB, HSL) |
 | **Time & Date (4)** | Unix Timestamp Converter (s/ms), Timezone Viewer, Date Calculator, Chronometer & Stopwatch |

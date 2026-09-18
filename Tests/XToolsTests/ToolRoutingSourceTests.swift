@@ -63,7 +63,7 @@ struct ToolRoutingSourceTests {
             "JSON 对比",
             "文本对比",
             "正则测试",
-            "Docker Run → Compose",
+            "Docker Run ↔ Compose",
             "HTML → Markdown",
             "Crontab 生成",
             "随机端口",
