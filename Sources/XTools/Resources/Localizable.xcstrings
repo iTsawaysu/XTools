@@ -1,6 +1,27 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "选择转换前用于填充透明像素的颜色": {
+      "extractionState": "manual"
+    },
+    "JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。": {
+      "extractionState": "manual"
+    },
+    "去除转义": {
+      "extractionState": "manual"
+    },
+    "转义为字符串": {
+      "extractionState": "manual"
+    },
+    "折叠未变更行": {
+      "extractionState": "manual"
+    },
+    "格式化与压缩 XML，支持 2/4 空格缩进与 Minify。": {
+      "extractionState": "manual"
+    },
+    "规整 YAML 空白与键值间距，支持缩进与 Key 排序。": {
+      "extractionState": "manual"
+    },
     " · 截断": {
       "extractionState": "manual"
     },

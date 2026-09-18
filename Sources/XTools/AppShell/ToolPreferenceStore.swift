@@ -411,12 +411,30 @@ enum TextDevelopmentToolPreferenceKeys {
         "tools.jsonFormatter.unescape.v1",
         default: false
     )
+    static let jsonEscape = ToolPreferenceKey<Bool>.bool(
+        "tools.jsonFormatter.escape.v1",
+        default: false
+    )
     static let sqlKeywordCase = ToolPreferenceKey<SQLFormatting.KeywordCase>.rawRepresentable(
         "tools.sqlFormatter.keywordCase.v1",
         default: .upper
     )
     static let sqlIndent = ToolPreferenceKey<String>.string(
         "tools.sqlFormatter.indent.v2",
+        default: "2",
+        allowedValues: ["2", "4", "compact"]
+    )
+    static let yamlIndent = ToolPreferenceKey<String>.string(
+        "tools.yamlFormatter.indent.v1",
+        default: "2",
+        allowedValues: ["2", "4"]
+    )
+    static let yamlSortKeys = ToolPreferenceKey<Bool>.bool(
+        "tools.yamlFormatter.sortKeys.v1",
+        default: false
+    )
+    static let xmlIndent = ToolPreferenceKey<String>.string(
+        "tools.xmlFormatter.indent.v1",
         default: "2",
         allowedValues: ["2", "4", "compact"]
     )

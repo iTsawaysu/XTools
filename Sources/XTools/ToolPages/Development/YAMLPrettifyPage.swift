@@ -1,13 +1,38 @@
 import XToolsCore
 import SwiftUI
 
-struct IndexYAMLPrettifyPage: View {
-    private static let key = ToolWorkspaceKey<IndexTextTransformWorkspaceModel>(toolID: "yaml-prettify") { _ in
-        IndexTextTransformWorkspaceModel()
+@MainActor
+final class YAMLPrettifyToolWorkspaceModel: ObservableObject {
+    static let key = ToolWorkspaceKey<YAMLPrettifyToolWorkspaceModel>(toolID: "yaml-prettify") { preferences in
+        YAMLPrettifyToolWorkspaceModel(preferences: preferences)
     }
 
+    @Published var input = ""
+    @Published var sortKeys: Bool = false {
+        didSet { preferences.set(sortKeys, for: TextDevelopmentToolPreferenceKeys.yamlSortKeys) }
+    }
+
+    let execution = IndexFormatExecutionSession()
+    private let preferences: ToolPreferenceStore
+
+    var output: String { execution.binding.output }
+    var error: String? { execution.binding.error }
+    var warning: String? { execution.binding.warning }
+
+    init(preferences: ToolPreferenceStore) {
+        self.preferences = preferences
+        sortKeys = preferences.value(for: TextDevelopmentToolPreferenceKeys.yamlSortKeys)
+    }
+
+    func clear() {
+        execution.invalidate()
+        input = ""
+    }
+}
+
+struct IndexYAMLPrettifyPage: View {
     var body: some View {
-        ToolWorkspaceHost(key: Self.key) { workspace, _ in
+        ToolWorkspaceHost(key: YAMLPrettifyToolWorkspaceModel.key) { workspace, _ in
             IndexYAMLPrettifyWorkspaceContent(
                 workspace: workspace,
                 execution: workspace.execution
@@ -19,13 +44,13 @@ struct IndexYAMLPrettifyPage: View {
 private struct IndexYAMLPrettifyWorkspaceContent: View {
     private static let maxHighlightedOutputCharacters = 200_000
 
-    @ObservedObject var workspace: IndexTextTransformWorkspaceModel
+    @ObservedObject var workspace: YAMLPrettifyToolWorkspaceModel
     @ObservedObject var execution: IndexFormatExecutionSession
     @State private var formatAttempt = 0
 
     var body: some View {
-        IndexPage("YAML 格式化", subtitle: "规整 YAML 空白与键值间距。", workspaceSemantic: .structuredEditorTransform) {
-            IndexFormatWorkbench<EmptyView>(
+        IndexPage("YAML 格式化", subtitle: "规整 YAML 空白与键值间距，支持 Key 排序。", workspaceSemantic: .structuredEditorTransform) {
+            IndexFormatWorkbench(
                 inputTitle: "输入",
                 outputTitle: "输出",
                 input: $workspace.input,
@@ -38,8 +63,16 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
                 outputColorize: outputColorizer,
                 clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
                 onFormat: format,
-                onClear: workspace.clear
+                onClear: workspace.clear,
+                leadingControl: {
+                    IndexOptionSwitch(title: "Key 排序", style: .embeddedSwitch, isOn: $workspace.sortKeys)
+                }
             )
+        }
+        .onChange(of: workspace.sortKeys) { _ in
+            if !workspace.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                format()
+            }
         }
     }
 
@@ -57,9 +90,16 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
         }
 
         formatAttempt += 1
-        execution.schedule(snapshot: workspace.input, delay: .zero) { input in
-            FormatRunner.run(input, produce: YAMLPrettifier.formatValidated)
-                .binding(text: { $0 })
+        let options = YAMLPrettifier.Options(
+            indent: 2,
+            sortKeys: workspace.sortKeys
+        )
+        let snapshot = (input: workspace.input, options: options)
+        execution.schedule(snapshot: snapshot, delay: .zero) { snapshot in
+            FormatRunner.run(snapshot.input) {
+                try YAMLPrettifier.formatValidated($0, options: snapshot.options)
+            }
+            .binding(text: { $0 })
         }
     }
 }

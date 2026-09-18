@@ -40,9 +40,41 @@ public enum YAMLPrettifier {
         }
     }
 
+    public struct Options: Equatable, Sendable {
+        public var indent: Int
+        public var sortKeys: Bool
+
+        public init(indent: Int = 2, sortKeys: Bool = false) {
+            self.indent = indent
+            self.sortKeys = sortKeys
+        }
+    }
+
     public static func formatValidated(_ input: String) throws -> String {
         try validate(input)
         return format(input)
+    }
+
+    public static func formatValidated(_ input: String, options: Options) throws -> String {
+        try validate(input)
+        return try format(input, options: options)
+    }
+
+    public static func format(_ input: String, options: Options) throws -> String {
+        guard !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return ""
+        }
+
+        if !options.sortKeys && input.contains("#") {
+            return format(input)
+        }
+
+        let nodes = Array(try compose_all(yaml: input))
+        var dumped = try serialize(nodes: nodes, indent: options.indent, sortKeys: options.sortKeys)
+        while dumped.hasSuffix("\n") {
+            dumped.removeLast()
+        }
+        return dumped
     }
 
     public static func format(_ input: String) -> String {

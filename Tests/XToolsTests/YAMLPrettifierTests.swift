@@ -125,6 +125,38 @@ struct YAMLPrettifierTests {
         )
     }
 
+    @Test func formatsWithCustomIndentWidth() throws {
+        let input = """
+        services:
+          web:
+            image: nginx
+        """
+        let output = try YAMLPrettifier.formatValidated(input, options: .init(indent: 4, sortKeys: false))
+        #expect(output.contains("    web:\n        image: nginx"))
+    }
+
+    @Test func formatsWithTwoSpaceIndentWidth() throws {
+        let input = """
+        services:
+            web:
+                image: nginx
+        """
+        let output = try YAMLPrettifier.formatValidated(input, options: .init(indent: 2, sortKeys: false))
+        #expect(output.contains("  web:\n    image: nginx"))
+    }
+
+    @Test func formatsWithSortedKeys() throws {
+        let input = """
+        zebra: 1
+        apple: 2
+        banana: 3
+        """
+        let output = try YAMLPrettifier.formatValidated(input, options: .init(indent: 2, sortKeys: true))
+        let lines = output.components(separatedBy: "\n")
+        #expect(lines.first?.hasPrefix("apple") == true)
+        #expect(lines.last?.hasPrefix("zebra") == true)
+    }
+
     @Test func rejectsInvalidYAML() throws {
         #expect(throws: YAMLPrettifier.ValidationError.self) {
             _ = try YAMLPrettifier.formatValidated("services:\n  web: [nginx")
@@ -199,6 +231,18 @@ struct YAMLPrettifierTests {
             }
             expectChineseOneSentence(diagnostic)
         }
+    }
+
+    @Test func preservesCommentsWhenFormattingWithoutSorting() throws {
+        let input = """
+        # Server configuration
+        server:
+          # Port to listen on
+          port: 8080
+        """
+        let output = try YAMLPrettifier.formatValidated(input, options: .init(indent: 2, sortKeys: false))
+        #expect(output.contains("# Server configuration"))
+        #expect(output.contains("# Port to listen on"))
     }
 
     private func expectChineseOneSentence(_ diagnostic: FormatDiagnostic) {
