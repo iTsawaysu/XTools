@@ -166,6 +166,9 @@ extension SQLFormatter {
 
     var needsSpaceBeforeWord: Bool {
         guard let last = current.last else { return false }
+        if current.hasSuffix("::") {
+            return false
+        }
         return last != " " && last != "(" && last != "." && last != "\n"
     }
 

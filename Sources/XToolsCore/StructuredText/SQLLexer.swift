@@ -52,15 +52,21 @@ struct SQLLexer {
                         suggestion: "请先改用普通单引号字符串，或在 PostgreSQL 客户端/专用 SQL 格式化器中处理；本工具不会拆开 $$...$$ 或 $tag$...$tag$ 后伪成功。"
                     )
                 )
+            } else if startsPositionalParameter() {
+                tokens.append(SQLPositionedToken(token: .word(readPositionalParameter()), offset: startOffset))
+            } else if startsNamedParameter() {
+                tokens.append(SQLPositionedToken(token: .word(readNamedParameter()), offset: startOffset))
             } else if character == "[" {
                 tokens.append(SQLPositionedToken(token: .stringLiteral(try readBracketIdentifier()), offset: startOffset))
             } else if character == "-", peek(offset: 1) == "-" {
                 tokens.append(SQLPositionedToken(token: .comment(readLineComment()), offset: startOffset))
             } else if character == "/", peek(offset: 1) == "*" {
                 tokens.append(SQLPositionedToken(token: .comment(try readBlockComment()), offset: startOffset))
+            } else if startsPrefixedQuotedLiteral() {
+                tokens.append(SQLPositionedToken(token: .stringLiteral(try readPrefixedQuotedLiteral()), offset: startOffset))
             } else if character.isLetter || character == "_" || startsAtPrefixedWord() {
                 tokens.append(SQLPositionedToken(token: .word(readWord()), offset: startOffset))
-            } else if character.isNumber {
+            } else if isASCIIDigit(character) {
                 tokens.append(SQLPositionedToken(token: .number(readNumber()), offset: startOffset))
             } else {
                 tokens.append(SQLPositionedToken(token: .symbol(readSymbol()), offset: startOffset))
@@ -101,6 +107,23 @@ struct SQLLexer {
     private func startsAtPrefixedWord() -> Bool {
         guard peek() == "@", let next = peek(offset: 1) else { return false }
         return next.isLetter || next.isNumber || next == "_" || next == "@"
+    }
+
+    private func startsPositionalParameter() -> Bool {
+        guard peek() == "$", let next = peek(offset: 1) else { return false }
+        return isASCIIDigit(next)
+    }
+
+    private func startsNamedParameter() -> Bool {
+        guard peek() == ":", let next = peek(offset: 1) else { return false }
+        return isASCIIIdentifierStart(next)
+    }
+
+    private func startsPrefixedQuotedLiteral() -> Bool {
+        guard let prefix = peek(), peek(offset: 1) == "'" else { return false }
+        return prefix == "b" || prefix == "B"
+            || prefix == "n" || prefix == "N"
+            || prefix == "x" || prefix == "X"
     }
 
     private func peek(offset: Int = 0) -> Character? {
@@ -146,6 +169,12 @@ struct SQLLexer {
         )
     }
 
+    private mutating func readPrefixedQuotedLiteral() throws -> String {
+        let prefix = String(peek() ?? " ")
+        advance()
+        return prefix + (try readQuoted(until: "'"))
+    }
+
     private mutating func readBracketIdentifier() throws -> String {
         let startOffset = index
         var value = "["
@@ -156,6 +185,11 @@ struct SQLLexer {
             advance()
 
             if character == "]" {
+                if peek() == "]" {
+                    value.append("]")
+                    advance()
+                    continue
+                }
                 return value
             }
         }
@@ -212,13 +246,96 @@ struct SQLLexer {
         return value
     }
 
-    private mutating func readNumber() -> String {
-        var value = ""
-        while let character = peek(), character.isNumber || character == "." {
+    private mutating func readPositionalParameter() -> String {
+        var value = "$"
+        advance()
+        while let character = peek(), isASCIIDigit(character) {
             value.append(character)
             advance()
         }
         return value
+    }
+
+    private mutating func readNamedParameter() -> String {
+        var value = ":"
+        advance()
+        while let character = peek(), isASCIIIdentifierContinuation(character) {
+            value.append(character)
+            advance()
+        }
+        return value
+    }
+
+    private mutating func readNumber() -> String {
+        var value = ""
+
+        if peek() == "0",
+           let marker = peek(offset: 1), marker == "x" || marker == "X",
+           let firstDigit = peek(offset: 2), isASCIIHexDigit(firstDigit) {
+            value.append("0")
+            value.append(marker)
+            advance(2)
+            while let character = peek(), isASCIIHexDigit(character) {
+                value.append(character)
+                advance()
+            }
+            return value
+        }
+
+        while let character = peek(), isASCIIDigit(character) || character == "." {
+            value.append(character)
+            advance()
+        }
+
+        if let exponent = peek(), exponent == "e" || exponent == "E",
+           hasValidExponent(at: index) {
+            value.append(exponent)
+            advance()
+            if let sign = peek(), sign == "+" || sign == "-" {
+                value.append(sign)
+                advance()
+            }
+            while let character = peek(), isASCIIDigit(character) {
+                value.append(character)
+                advance()
+            }
+        }
+
+        return value
+    }
+
+    private func hasValidExponent(at exponentIndex: Int) -> Bool {
+        var cursor = exponentIndex + 1
+        if let sign = character(at: cursor), sign == "+" || sign == "-" {
+            cursor += 1
+        }
+        guard let digit = character(at: cursor) else { return false }
+        return isASCIIDigit(digit)
+    }
+
+    private func character(at position: Int) -> Character? {
+        guard characters.indices.contains(position) else { return nil }
+        return characters[position]
+    }
+
+    private func isASCIIDigit(_ character: Character) -> Bool {
+        ("0"..."9").contains(character)
+    }
+
+    private func isASCIIHexDigit(_ character: Character) -> Bool {
+        isASCIIDigit(character)
+            || ("a"..."f").contains(character)
+            || ("A"..."F").contains(character)
+    }
+
+    private func isASCIIIdentifierStart(_ character: Character) -> Bool {
+        ("a"..."z").contains(character)
+            || ("A"..."Z").contains(character)
+            || character == "_"
+    }
+
+    private func isASCIIIdentifierContinuation(_ character: Character) -> Bool {
+        isASCIIIdentifierStart(character) || isASCIIDigit(character)
     }
 
     private mutating func readSymbol() -> String {

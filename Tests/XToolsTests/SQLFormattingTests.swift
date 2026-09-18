@@ -356,6 +356,64 @@ struct SQLFormattingTests {
         #expect(!output.contains("payload @ >"))
     }
 
+    @Test func preservesCommonAtomicTokensInFormatAndCompactModes() throws {
+        let samples = [
+            (sql: "select 1e-3 as value;", token: "1e-3"),
+            (sql: "select $1 as value;", token: "$1"),
+            (sql: "select :name as value;", token: ":name"),
+            (sql: "select [a]]b] from t;", token: "[a]]b]")
+        ]
+
+        for sample in samples {
+            for minify in [false, true] {
+                let options = SQLFormatting.Options(minify: minify)
+                let output = try SQLFormatting.format(sample.sql, options: options)
+                let reformatted = try SQLFormatting.format(output, options: options)
+
+                #expect(output.contains(sample.token), "Expected atomic token \(sample.token) in \(output)")
+                #expect(reformatted.contains(sample.token), "Expected re-tokenized atomic token \(sample.token) in \(reformatted)")
+            }
+        }
+    }
+
+    @Test func preservesSupportedNeighboringDialectTokensAtomically() throws {
+        let samples = [
+            (sql: "select @name as value;", token: "@name"),
+            (sql: "select ? as value;", token: "?"),
+            (sql: "select B'1001' as value;", token: "B'1001'"),
+            (sql: "select X'1FF' as value;", token: "X'1FF'"),
+            (sql: "select N'text' as value;", token: "N'text'"),
+            (sql: "select 0xFF as value;", token: "0xFF")
+        ]
+
+        for sample in samples {
+            for minify in [false, true] {
+                let output = try SQLFormatting.format(
+                    sample.sql,
+                    options: SQLFormatting.Options(minify: minify)
+                )
+                let reformatted = try SQLFormatting.format(
+                    output,
+                    options: SQLFormatting.Options(minify: minify)
+                )
+
+                #expect(output.contains(sample.token), "Expected atomic token \(sample.token) in \(output)")
+                #expect(reformatted.contains(sample.token), "Expected re-tokenized atomic token \(sample.token) in \(reformatted)")
+            }
+        }
+    }
+
+    @Test func preservesCastAndJSONOperatorBoundariesBesidePlaceholders() throws {
+        let output = try SQLFormatting.format(
+            #"select :name::text, payload->>'tool', payload @> '{"ok":true}', payload ? 'ok' from audit_logs;"#
+        )
+
+        #expect(output.contains(":name::text"))
+        #expect(output.contains("payload ->> 'tool'"))
+        #expect(output.contains("payload @>"))
+        #expect(output.contains("payload ? 'ok'"))
+    }
+
     @Test func verifyWindowFunctionClosingParen() throws {
         let input = """
         SELECT COUNT(o.order_id) OVER(PARTITION BY c.category_id) AS cat_count FROM orders o
