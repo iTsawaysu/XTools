@@ -18,9 +18,9 @@
 
 Developers constantly run into small, recurring tasks: formatting JSON, converting timestamps, decoding Base64, testing regexes, generating UUIDs, or inspecting HTTP status codes.
 
-Opening browser tabs is tedious and leaks sensitive data (tokens, configs, keys) to third-party servers. Cross-platform Electron utilities eat gigabytes of RAM and take seconds to boot.
+Opening browser tabs for routine transformations is tedious and can expose sensitive data (tokens, configs, keys) to third-party services. XTools keeps those transformations on the Mac and uses native macOS controls instead of a browser-based shell.
 
-XTools packs 46 essential developer utilities into a single native macOS application. It runs completely offline, opens in milliseconds, and stays out of your way until you summon it via `Cmd + K`.
+XTools packs 46 developer utilities into a single native macOS application. Most tools work entirely offline. Network access is limited to actions you initiate from HTML → Markdown: fetching an HTTP(S) URL that passes the host safety policy or explicitly allowing remote images in the current preview. Use `Cmd + K` in the app to open any tool quickly.
 
 ## Quick Start
 
@@ -35,19 +35,22 @@ Requires macOS 13+ and Xcode 16+.
 ```bash
 git clone https://github.com/iTsawaysu/XTools.git
 cd XTools
-./build.sh           # Incremental debug build & open app
-./build.sh release   # Production release build
-swift test           # Run automated test suite
+./build.sh           # Incremental debug build, package, and open the app
+./build.sh build     # Incremental debug build and package without opening
+./build.sh release   # Incremental release build and package without opening
+swift test           # Run the complete automated test suite
 ```
+
+Packaged builds are written to `build/XTools.app`.
 
 ## Features
 
-- **Swift 6 Native**: Built purely with SwiftUI and AppKit. Uses tens of megabytes of memory with near-instant cold launch and smooth animations.
-- **100% Local-First**: Cryptography, hashing, regex evaluation, and image processing execute entirely on-device. Zero telemetry, zero cloud tracking.
-- **Keyboard-First**: Press `Cmd + K` anywhere for fuzzy search across all tools. Use `Cmd + 1` through `Cmd + 7` to switch categories, and `Cmd + Return` to run actions.
-- **Linear Design System**: Disciplined dark surface ladder anchored on warm Clay, subtle hairlines instead of heavy shadows, and monospaced typography reserved for data.
+- **Swift 6 Native**: Built with SwiftUI and AppKit, with core algorithms separated into the `XToolsCore` package.
+- **Local-First**: Cryptography, hashing, formatting, diffing, regex evaluation, and image processing execute on-device. XTools includes no telemetry or cloud tracking. HTML URL fetching and remote preview images require an explicit user action; the host policy blocks local or private address literals and known metadata hosts.
+- **Keyboard-First**: Press `Cmd + K` in the app for fuzzy search across all tools. Use `Cmd + 1` through `Cmd + 7` to switch categories, and `Cmd + Return` to run primary actions.
+- **Clay Design System**: Shared workbench components provide consistent panels, controls, diagnostics, keyboard focus, and accessibility behavior.
 - **46 Built-in Utilities**: Curated essentials across conversions, cryptography, developer tools, Web debugging, image handling, time math, and system inspectors.
-- **Decoupled Engine**: Core algorithmic logic lives in `XToolsCore`, backed by over 1,700 unit tests.
+- **Automated Coverage**: Core logic and UI contracts are backed by over 1,900 automated tests.
 
 ## Tool Catalog
 
