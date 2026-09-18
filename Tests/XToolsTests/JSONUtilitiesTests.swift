@@ -492,6 +492,28 @@ struct JSONFormattingTests {
         #expect(result.text == #"{"a":2,"m":3,"z":1}"#)
     }
 
+    @Test func escapesJSONStringProperly() throws {
+        let minified = #"{"name":"XTools","tags":["a","b"]}"#
+        let escaped = JSONFormatting.escapeJSON(minified)
+        #expect(escaped == #""{\"name\":\"XTools\",\"tags\":[\"a\",\"b\"]\}""# || escaped.contains(#"\"name\""#))
+        #expect(escaped.hasPrefix("\"") && escaped.hasSuffix("\""))
+
+        let unescaped = JSONFormatting.unescapeJSON(escaped)
+        #expect(unescaped == minified)
+    }
+
+    @Test func unescapesManualEscapedStringWithoutQuotes() throws {
+        let rawEscaped = #"{\"name\":\"XTools\"}"#
+        let unescaped = JSONFormatting.unescapeJSON(rawEscaped)
+        #expect(unescaped == #"{"name":"XTools"}"#)
+    }
+
+    @Test func unescapesUnicodeEscapedCharacters() throws {
+        let rawEscaped = #"{\"title\":\"\u4e2d\u6587\",\"symbol\":\"\u2705\"}"#
+        let unescaped = JSONFormatting.unescapeJSON(rawEscaped)
+        #expect(unescaped == #"{"title":"中文","symbol":"✅"}"#)
+    }
+
     private func invalidJSONDiagnostic(for input: String) throws -> FormatDiagnostic {
         let error = #expect(throws: (any Error).self) {
             _ = try JSONFormatting.format(input, sortKeys: false, indentWidth: 2)

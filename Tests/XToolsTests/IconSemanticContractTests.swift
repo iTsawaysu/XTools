@@ -82,6 +82,7 @@ struct IconSemanticContractTests {
         "photo",
         "photo.on.rectangle.angled",
         "play.fill",
+        "quote.opening",
         "rectangle.and.text.magnifyingglass",
         "server.rack",
         "shippingbox",

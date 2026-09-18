@@ -5,6 +5,12 @@ public enum JSONFormatting {
         public let text: String
         public let warning: String?
         public let duplicateKeys: [String]
+
+        public init(text: String, warning: String? = nil, duplicateKeys: [String] = []) {
+            self.text = text
+            self.warning = warning
+            self.duplicateKeys = duplicateKeys
+        }
     }
 
     public enum FormattingError: Error, LocalizedError, Equatable {
@@ -72,6 +78,34 @@ public enum JSONFormatting {
             let newIndent = String(repeating: " ", count: indentLevel * targetSpaces)
             return newIndent + line.drop(while: { $0 == " " })
         }.joined(separator: "\n")
+    }
+
+    public static func escapeJSON(_ string: String) -> String {
+        "\"\(escapeString(string))\""
+    }
+
+    public static func unescapeJSON(_ string: String) -> String {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("\"") && trimmed.hasSuffix("\""),
+           let data = trimmed.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(String.self, from: data) {
+            return decoded
+        }
+        let wrapped = "\"\(trimmed)\""
+        if let data = wrapped.data(using: .utf8),
+           let decoded = try? JSONDecoder().decode(String.self, from: data) {
+            return decoded
+        }
+        if (try? JSONSerialization.jsonObject(with: Data(string.utf8), options: [.fragmentsAllowed])) == nil {
+            return trimmed
+                .replacingOccurrences(of: "\\\"", with: "\"")
+                .replacingOccurrences(of: "\\n", with: "\n")
+                .replacingOccurrences(of: "\\r", with: "\r")
+                .replacingOccurrences(of: "\\t", with: "\t")
+                .replacingOccurrences(of: "\\/", with: "/")
+                .replacingOccurrences(of: "\\\\", with: "\\")
+        }
+        return string
     }
 
     private static func parseOrderedJSON(_ text: String) throws -> OrderedJSONDocument {

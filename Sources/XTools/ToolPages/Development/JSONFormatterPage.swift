@@ -43,8 +43,17 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
     }
 
     @Published var input = ""
+    @Published var escape: Bool = false {
+        didSet {
+            if escape && unescape { unescape = false }
+            preferences.set(escape, for: TextDevelopmentToolPreferenceKeys.jsonEscape)
+        }
+    }
     @Published var unescape: Bool = false {
-        didSet { preferences.set(unescape, for: TextDevelopmentToolPreferenceKeys.jsonUnescape) }
+        didSet {
+            if unescape && escape { escape = false }
+            preferences.set(unescape, for: TextDevelopmentToolPreferenceKeys.jsonUnescape)
+        }
     }
     @Published var formatMode: FormatMode {
         didSet { preferences.set(formatMode.id, for: TextDevelopmentToolPreferenceKeys.jsonIndent) }
@@ -63,6 +72,7 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
         let saved = preferences.value(for: TextDevelopmentToolPreferenceKeys.jsonIndent)
         formatMode = FormatMode(rawValue: saved) ?? .four
         unescape = preferences.value(for: TextDevelopmentToolPreferenceKeys.jsonUnescape)
+        escape = preferences.value(for: TextDevelopmentToolPreferenceKeys.jsonEscape)
     }
 
     func clear() {
@@ -95,6 +105,7 @@ private struct IndexJSONFormatterWorkspaceContent: View {
         let mode: JSONFormatterToolWorkspaceModel.FormatMode
         let sortKeys: Bool
         let unescape: Bool
+        let escape: Bool
     }
 
     @ObservedObject var workspace: JSONFormatterToolWorkspaceModel
@@ -127,10 +138,17 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                         IndexOptionSwitch(title: "Key 排序", style: .embeddedSwitch, isOn: $workspace.sortKeys)
                         IndexIconButton(
                             systemImage: "text.quote",
-                            help: "去除转义字符",
+                            help: "去除转义",
                             isActive: workspace.unescape
                         ) {
                             workspace.unescape.toggle()
+                        }
+                        IndexIconButton(
+                            systemImage: "quote.opening",
+                            help: "转义为字符串",
+                            isActive: workspace.escape
+                        ) {
+                            workspace.escape.toggle()
                         }
                     }
                 }
@@ -142,6 +160,11 @@ private struct IndexJSONFormatterWorkspaceContent: View {
             }
         }
         .onChange(of: workspace.unescape) { _ in
+            if !execution.binding.output.isEmpty {
+                format()
+            }
+        }
+        .onChange(of: workspace.escape) { _ in
             if !execution.binding.output.isEmpty {
                 format()
             }
@@ -179,48 +202,45 @@ private struct IndexJSONFormatterWorkspaceContent: View {
             input: workspace.input,
             mode: workspace.formatMode,
             sortKeys: workspace.sortKeys,
-            unescape: workspace.unescape
+            unescape: workspace.unescape,
+            escape: workspace.escape
         )
         execution.schedule(snapshot: snapshot, delay: .zero) { snapshot in
             var textToFormat = snapshot.input
             if snapshot.unescape {
-                let trimmed = textToFormat.trimmingCharacters(in: .whitespacesAndNewlines)
-                // First try decoding as a JSON string (if it already has quotes)
-                if trimmed.hasPrefix("\"") && trimmed.hasSuffix("\""),
-                   let decoded = try? JSONDecoder().decode(String.self, from: Data(trimmed.utf8)) {
-                    textToFormat = decoded
-                } else {
-                    // Only try manual unescape if the original text is NOT valid JSON
-                    if (try? JSONSerialization.jsonObject(with: Data(textToFormat.utf8), options: [.fragmentsAllowed])) == nil {
-                        textToFormat = trimmed.replacingOccurrences(of: "\\\"", with: "\"")
-                            .replacingOccurrences(of: "\\n", with: "\n")
-                            .replacingOccurrences(of: "\\r", with: "\r")
-                            .replacingOccurrences(of: "\\t", with: "\t")
-                            .replacingOccurrences(of: "\\/", with: "/")
-                            .replacingOccurrences(of: "\\\\", with: "\\")
-                    }
-                }
+                textToFormat = JSONFormatting.unescapeJSON(textToFormat)
             }
             return FormatRunner.run(textToFormat) { value -> JSONFormatting.FormattingResult in
+                let formattedResult: JSONFormatting.FormattingResult
                 switch snapshot.mode {
                 case .two:
-                    return try JSONFormatting.formatResult(
+                    formattedResult = try JSONFormatting.formatResult(
                         value,
                         sortKeys: snapshot.sortKeys,
                         indentWidth: 2
                     )
                 case .four:
-                    return try JSONFormatting.formatResult(
+                    formattedResult = try JSONFormatting.formatResult(
                         value,
                         sortKeys: snapshot.sortKeys,
                         indentWidth: 4
                     )
                 case .compact:
-                    return try JSONFormatting.minifyResult(
+                    formattedResult = try JSONFormatting.minifyResult(
                         value,
                         sortKeys: snapshot.sortKeys
                     )
                 }
+
+                if snapshot.escape {
+                    let escaped = JSONFormatting.escapeJSON(formattedResult.text)
+                    return JSONFormatting.FormattingResult(
+                        text: escaped,
+                        warning: formattedResult.warning,
+                        duplicateKeys: formattedResult.duplicateKeys
+                    )
+                }
+                return formattedResult
             }
             .binding(text: { $0.text }, warning: { $0.warning })
         }
