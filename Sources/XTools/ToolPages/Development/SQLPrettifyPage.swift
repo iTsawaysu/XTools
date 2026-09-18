@@ -22,12 +22,25 @@ final class SQLPrettifyToolWorkspaceModel: ObservableObject {
         }
     }
 
-    @Published var input = ""
+    @Published var input = "" {
+        didSet {
+            guard input != oldValue else { return }
+            execution.sourceDidChange()
+        }
+    }
     @Published var keywordCase: SQLFormatting.KeywordCase {
-        didSet { preferences.set(keywordCase, for: TextDevelopmentToolPreferenceKeys.sqlKeywordCase) }
+        didSet {
+            guard keywordCase != oldValue else { return }
+            execution.sourceDidChange()
+            preferences.set(keywordCase, for: TextDevelopmentToolPreferenceKeys.sqlKeywordCase)
+        }
     }
     @Published var formatMode: FormatMode {
-        didSet { preferences.set(formatMode.id, for: TextDevelopmentToolPreferenceKeys.sqlIndent) }
+        didSet {
+            guard formatMode != oldValue else { return }
+            execution.sourceDidChange()
+            preferences.set(formatMode.id, for: TextDevelopmentToolPreferenceKeys.sqlIndent)
+        }
     }
 
     let execution = IndexFormatExecutionSession()
@@ -80,6 +93,8 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
                 // SQL output is line-oriented; keep the gutter aligned with syntax colors.
                 outputLineNumbers: true,
                 outputSyntax: .sql,
+                isRunning: execution.isRunning,
+                isOutputFresh: execution.isOutputFresh,
                 clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
                 onFormat: format,
                 onClear: workspace.clear,

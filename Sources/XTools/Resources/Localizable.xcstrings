@@ -1702,6 +1702,9 @@
     "未选择" : {
       "extractionState" : "manual"
     },
+    "未变更内容已折叠，编辑器当前为只读；展开折叠区域后可继续编辑。" : {
+      "extractionState" : "manual"
+    },
     "本地尽力识别浏览器、操作系统与设备类型，仅供调试，不用于能力判断或安全决策。" : {
       "extractionState" : "manual"
     },
@@ -1883,6 +1886,9 @@
       "extractionState" : "manual"
     },
     "正在读取图片…" : {
+      "extractionState" : "manual"
+    },
+    "正在格式化…" : {
       "extractionState" : "manual"
     },
     "正在转换…" : {
@@ -2539,6 +2545,12 @@
     "输入" : {
       "extractionState" : "manual"
     },
+    "输入已更改，请重新格式化。" : {
+      "extractionState" : "manual"
+    },
+    "输入已更改，请重新转换。" : {
+      "extractionState" : "manual"
+    },
     "输入 DT-AES-GCM-v1 密文…" : {
       "extractionState" : "manual"
     },
@@ -2552,6 +2564,9 @@
       "extractionState" : "manual"
     },
     "输入 HTML" : {
+      "extractionState" : "manual"
+    },
+    "HTML 转换失败，请检查输入后重试。" : {
       "extractionState" : "manual"
     },
     "输入 JWT 后可检查签名与时间声明" : {
@@ -2864,6 +2879,33 @@
       "extractionState" : "manual"
     },
     "颜色预览" : {
+      "extractionState" : "manual"
+    },
+    "加载当前 Markdown 结果中的远程图片" : {
+      "extractionState" : "manual"
+    },
+    "加载远程图片" : {
+      "extractionState" : "manual"
+    },
+    "图片地址未获准加载" : {
+      "extractionState" : "manual"
+    },
+    "图片地址未获准加载。" : {
+      "extractionState" : "manual"
+    },
+    "正在对比…" : {
+      "extractionState" : "manual"
+    },
+    "正在更新对比结果…" : {
+      "extractionState" : "manual"
+    },
+    "远程图片默认不会加载。" : {
+      "extractionState" : "manual"
+    },
+    "远程图片未加载" : {
+      "extractionState" : "manual"
+    },
+    "远程图片未加载。" : {
       "extractionState" : "manual"
     },
     "饱和度" : {

@@ -446,7 +446,9 @@ struct IndexClearButton: View {
 struct IndexIconButton: View {
     let systemImage: String
     let help: String
-    var isActive = false
+    /// `nil` models a momentary action. Passing a Boolean opts the control
+    /// into toggle semantics for both styling and assistive technologies.
+    var isActive: Bool? = nil
     var activeTint: Color = ToolTheme.accent
     var tint: Color = ToolTheme.textSecondary
     let action: () -> Void
@@ -457,12 +459,28 @@ struct IndexIconButton: View {
                 .toolMotionIconSwap(id: systemImage)
         }
         .buttonStyle(IndexIconActionButtonStyle(
-            isActive: isActive,
+            isActive: isActive ?? false,
             activeTint: activeTint,
             tint: tint
         ))
         .help(help)
         .accessibilityLabel(help)
+        .modifier(IndexIconButtonActiveAccessibility(isActive: isActive))
+    }
+}
+
+private struct IndexIconButtonActiveAccessibility: ViewModifier {
+    let isActive: Bool?
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let isActive {
+            content
+                .accessibilityAddTraits(isActive ? .isSelected : [])
+                .accessibilityValue(isActive ? "已开启" : "已关闭")
+        } else {
+            content
+        }
     }
 }
 
@@ -547,6 +565,7 @@ struct IndexSegmentedControl: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
             .onHover { isHovering = $0 }
             .toolAnimation(ToolMotion.Preset.controlFeedback, value: isHovering)
             .toolAnimation(ToolMotion.Preset.tabs, value: isSelected)

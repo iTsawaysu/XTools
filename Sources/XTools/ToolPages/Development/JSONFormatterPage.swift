@@ -42,23 +42,41 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
         }
     }
 
-    @Published var input = ""
+    @Published var input = "" {
+        didSet {
+            guard input != oldValue else { return }
+            execution.sourceDidChange()
+        }
+    }
     @Published var escape: Bool = false {
         didSet {
+            guard escape != oldValue else { return }
+            execution.sourceDidChange()
             if escape && unescape { unescape = false }
             preferences.set(escape, for: TextDevelopmentToolPreferenceKeys.jsonEscape)
         }
     }
     @Published var unescape: Bool = false {
         didSet {
+            guard unescape != oldValue else { return }
+            execution.sourceDidChange()
             if unescape && escape { escape = false }
             preferences.set(unescape, for: TextDevelopmentToolPreferenceKeys.jsonUnescape)
         }
     }
     @Published var formatMode: FormatMode {
-        didSet { preferences.set(formatMode.id, for: TextDevelopmentToolPreferenceKeys.jsonIndent) }
+        didSet {
+            guard formatMode != oldValue else { return }
+            execution.sourceDidChange()
+            preferences.set(formatMode.id, for: TextDevelopmentToolPreferenceKeys.jsonIndent)
+        }
     }
-    @Published var sortKeys: Bool = false
+    @Published var sortKeys: Bool = false {
+        didSet {
+            guard sortKeys != oldValue else { return }
+            execution.sourceDidChange()
+        }
+    }
 
     let execution = IndexFormatExecutionSession()
     private let preferences: ToolPreferenceStore
@@ -123,6 +141,8 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
                 outputSyntax: .json,
+                isRunning: execution.isRunning,
+                isOutputFresh: execution.isOutputFresh,
                 clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
                 onFormat: format,
                 onClear: workspace.clear,

@@ -22,10 +22,16 @@ final class DockerConversionToolWorkspaceModel: ObservableObject {
         }
     }
 
-    @Published var input = ""
+    @Published var input = "" {
+        didSet {
+            guard input != oldValue else { return }
+            execution.sourceDidChange()
+        }
+    }
     @Published var direction: Direction {
         didSet {
             guard direction != oldValue else { return }
+            execution.sourceDidChange()
             preferences.set(direction.rawValue, for: TextDevelopmentToolPreferenceKeys.dockerConversionDirection)
         }
     }
@@ -80,6 +86,8 @@ private struct IndexDockerWorkspaceContent: View {
                 outputLineNumbers: true,
                 outputSyntax: workspace.direction == .runToCompose ? .yaml : nil,
                 actionTitle: "转换",
+                isRunning: execution.isRunning,
+                isOutputFresh: execution.isOutputFresh,
                 clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
                 onFormat: convert,
                 onClear: workspace.clear,

@@ -22,9 +22,18 @@ final class XMLFormatterToolWorkspaceModel: ObservableObject {
         }
     }
 
-    @Published var input = ""
+    @Published var input = "" {
+        didSet {
+            guard input != oldValue else { return }
+            execution.sourceDidChange()
+        }
+    }
     @Published var formatMode: FormatMode {
-        didSet { preferences.set(formatMode.id, for: TextDevelopmentToolPreferenceKeys.xmlIndent) }
+        didSet {
+            guard formatMode != oldValue else { return }
+            execution.sourceDidChange()
+            preferences.set(formatMode.id, for: TextDevelopmentToolPreferenceKeys.xmlIndent)
+        }
     }
 
     let execution = IndexFormatExecutionSession()
@@ -75,6 +84,8 @@ private struct IndexXMLFormatWorkspaceContent: View {
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
                 outputSyntax: .xml,
+                isRunning: execution.isRunning,
+                isOutputFresh: execution.isOutputFresh,
                 clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
                 onFormat: format,
                 onClear: workspace.clear,

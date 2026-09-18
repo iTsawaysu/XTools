@@ -27,6 +27,8 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     var actionTitle = "格式化"
     var actionHint = "⌘↩"
     var autoFocus = true
+    var isRunning = false
+    var isOutputFresh = true
     var clearDisabled = false
     /// Pages that convert while the user types (HTML → Markdown) pass nil and
     /// the primary format action disappears; the toolbar then ends at 清空.
@@ -59,6 +61,8 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         actionTitle: String = "格式化",
         actionHint: String = "⌘↩",
         autoFocus: Bool = true,
+        isRunning: Bool = false,
+        isOutputFresh: Bool = true,
         clearDisabled: Bool = false,
         onFormat: (() -> Void)? = nil,
         onClear: @escaping () -> Void,
@@ -84,6 +88,8 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             actionTitle: actionTitle,
             actionHint: actionHint,
             autoFocus: autoFocus,
+            isRunning: isRunning,
+            isOutputFresh: isOutputFresh,
             clearDisabled: clearDisabled,
             onFormat: onFormat,
             onClear: onClear,
@@ -112,6 +118,8 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         actionTitle: String = "格式化",
         actionHint: String = "⌘↩",
         autoFocus: Bool = true,
+        isRunning: Bool = false,
+        isOutputFresh: Bool = true,
         clearDisabled: Bool = false,
         onFormat: (() -> Void)? = nil,
         onClear: @escaping () -> Void,
@@ -138,6 +146,8 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             actionTitle: actionTitle,
             actionHint: actionHint,
             autoFocus: autoFocus,
+            isRunning: isRunning,
+            isOutputFresh: isOutputFresh,
             clearDisabled: clearDisabled,
             onFormat: onFormat,
             onClear: onClear,
@@ -166,6 +176,8 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         actionTitle: String,
         actionHint: String,
         autoFocus: Bool,
+        isRunning: Bool,
+        isOutputFresh: Bool,
         clearDisabled: Bool,
         onFormat: (() -> Void)?,
         onClear: @escaping () -> Void,
@@ -191,6 +203,8 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         self.actionTitle = actionTitle
         self.actionHint = actionHint
         self.autoFocus = autoFocus
+        self.isRunning = isRunning
+        self.isOutputFresh = isOutputFresh
         self.clearDisabled = clearDisabled
         self.onFormat = onFormat
         self.onClear = onClear
@@ -204,7 +218,19 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     }
 
     private var showsErrorState: Bool {
-        diagnostic != nil && diagnosticTone == .error
+        !isRunning && isOutputFresh && diagnostic != nil && diagnosticTone == .error
+    }
+
+    private var hasStaleResult: Bool {
+        !isOutputFresh && (!output.isEmpty || diagnostic != nil)
+    }
+
+    private var runningStatusText: String {
+        actionTitle == "转换" ? "正在转换…" : "正在格式化…"
+    }
+
+    private var staleStatusText: String {
+        actionTitle == "转换" ? "输入已更改，请重新转换。" : "输入已更改，请重新格式化。"
     }
 
     /// Maximum width of the inline toolbar diagnostic; it compresses before
@@ -293,10 +319,12 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                 HStack(spacing: 6) {
                     IndexClearButton(isDisabled: clearDisabled, showsIcon: false, framed: true, action: onClear)
                     IndexCopyButton(text: output, title: "复制", showsIcon: false, framed: true)
+                        .disabled(!isOutputFresh)
                         .keyboardShortcut("c", modifiers: [.command, .shift])
                         .help("复制全部 (⇧⌘C)")
                     if showsOutputSave {
                         IndexSaveTextButton(text: output, fileName: outputFileName, showsIcon: false, framed: true)
+                            .disabled(!isOutputFresh)
                     }
                     formatButton
                 }
@@ -316,23 +344,52 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
 
     @ViewBuilder
     private var inlineDiagnostic: some View {
-        if let diagnostic {
+        if isRunning {
+            inlineDiagnosticContent(
+                message: runningStatusText,
+                tone: .info,
+                showsSpinner: true
+            )
+        } else if hasStaleResult {
+            inlineDiagnosticContent(
+                message: staleStatusText,
+                tone: .info,
+                showsSpinner: false
+            )
+        } else if let diagnostic {
+            inlineDiagnosticContent(
+                message: diagnostic,
+                tone: diagnosticTone,
+                showsSpinner: false
+            )
+        }
+    }
+
+    private func inlineDiagnosticContent(
+        message: String,
+        tone: ToolFeedbackTone,
+        showsSpinner: Bool
+    ) -> some View {
             HStack(spacing: 4) {
-                Image(systemName: diagnosticTone.systemImage)
-                    .font(.system(size: ToolMetrics.IconSize.small, weight: .semibold))
-                Text(diagnostic)
+                if showsSpinner {
+                    IndexProgressSpinner()
+                        .accessibilityHidden(true)
+                } else {
+                    Image(systemName: tone.systemImage)
+                        .font(.system(size: ToolMetrics.IconSize.small, weight: .semibold))
+                }
+                Text(message)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
             .font(ToolTypography.caption)
-            .foregroundStyle(diagnosticTone.tint)
+            .foregroundStyle(tone.tint)
             .frame(maxWidth: diagnosticSlotWidth, alignment: .leading)
             .layoutPriority(1)
-            .help(diagnostic)
+            .help(message)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(diagnosticTone.accessibilityPrefix)：\(diagnostic)")
+            .accessibilityLabel("\(tone.accessibilityPrefix)：\(message)")
             .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
-        }
     }
 
     @ViewBuilder
@@ -340,6 +397,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         if let onFormat {
             IndexPrimaryActionButton(title: actionTitle, hint: actionHint, help: "\(actionTitle)（⌘↩）", action: onFormat)
                 .keyboardShortcut(.return, modifiers: .command)
+                .disabled(isRunning || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 
@@ -397,21 +455,21 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                     fillsHeight: true,
                     embedsFlat: false
                 )
-                .accessibilityLabel(outputTitle)
+                .accessibilityLabel(hasStaleResult ? "\(outputTitle)，结果已过期" : outputTitle)
             case .nativeReadOnlyText:
                 IndexReadOnlyTextSurface(
                     text: output,
                     placeholder: outputPlaceholder,
                     fillsHeight: true
                 )
-                .accessibilityLabel(outputTitle)
+                .accessibilityLabel(hasStaleResult ? "\(outputTitle)，结果已过期" : outputTitle)
             case .markdownPreview:
                 IndexMarkdownPreviewSurface(
                     text: output,
                     placeholder: outputPlaceholder,
-                    fillsHeight: true
+                    fillsHeight: true,
+                    accessibilityTitle: outputTitle
                 )
-                .accessibilityLabel(outputTitle)
             }
         }
     }
@@ -434,6 +492,8 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
         actionTitle: String = "格式化",
         actionHint: String = "⌘↩",
         autoFocus: Bool = true,
+        isRunning: Bool = false,
+        isOutputFresh: Bool = true,
         clearDisabled: Bool = false,
         onFormat: (() -> Void)? = nil,
         onClear: @escaping () -> Void,
@@ -458,6 +518,8 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
             actionTitle: actionTitle,
             actionHint: actionHint,
             autoFocus: autoFocus,
+            isRunning: isRunning,
+            isOutputFresh: isOutputFresh,
             clearDisabled: clearDisabled,
             onFormat: onFormat,
             onClear: onClear,
@@ -486,6 +548,8 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
         actionTitle: String = "格式化",
         actionHint: String = "⌘↩",
         autoFocus: Bool = true,
+        isRunning: Bool = false,
+        isOutputFresh: Bool = true,
         clearDisabled: Bool = false,
         onFormat: (() -> Void)? = nil,
         onClear: @escaping () -> Void,
@@ -511,6 +575,8 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
             actionTitle: actionTitle,
             actionHint: actionHint,
             autoFocus: autoFocus,
+            isRunning: isRunning,
+            isOutputFresh: isOutputFresh,
             clearDisabled: clearDisabled,
             onFormat: onFormat,
             onClear: onClear,

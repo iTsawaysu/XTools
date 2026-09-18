@@ -7,9 +7,18 @@ final class YAMLPrettifyToolWorkspaceModel: ObservableObject {
         YAMLPrettifyToolWorkspaceModel(preferences: preferences)
     }
 
-    @Published var input = ""
+    @Published var input = "" {
+        didSet {
+            guard input != oldValue else { return }
+            execution.sourceDidChange()
+        }
+    }
     @Published var sortKeys: Bool = false {
-        didSet { preferences.set(sortKeys, for: TextDevelopmentToolPreferenceKeys.yamlSortKeys) }
+        didSet {
+            guard sortKeys != oldValue else { return }
+            execution.sourceDidChange()
+            preferences.set(sortKeys, for: TextDevelopmentToolPreferenceKeys.yamlSortKeys)
+        }
     }
 
     let execution = IndexFormatExecutionSession()
@@ -59,6 +68,8 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
                 outputSyntax: .yaml,
+                isRunning: execution.isRunning,
+                isOutputFresh: execution.isOutputFresh,
                 clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
                 onFormat: format,
                 onClear: workspace.clear,

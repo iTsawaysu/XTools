@@ -5,6 +5,58 @@ import Testing
 
 @MainActor
 struct IndexFormatExecutionSessionTests {
+    @Test func emptySessionIsFreshAndNeverReportsAStaleResult() {
+        let session = IndexFormatExecutionSession()
+
+        #expect(!session.hasResult)
+        #expect(session.isOutputFresh)
+        #expect(!session.hasStaleResult)
+
+        session.sourceDidChange()
+        #expect(session.isOutputFresh)
+        #expect(!session.hasStaleResult)
+    }
+
+    @Test func freshnessTracksRunningCompletionAndSourceChanges() async throws {
+        let session = IndexFormatExecutionSession(binding: FormatBinding(output: "previous"))
+        #expect(session.isOutputFresh)
+
+        session.schedule(snapshot: "next", delay: .milliseconds(20)) { snapshot in
+            FormatBinding(output: snapshot)
+        }
+        #expect(session.isRunning)
+        #expect(!session.isOutputFresh)
+        #expect(session.binding.output == "previous")
+
+        try await Self.waitUntil { session.binding.output == "next" && !session.isRunning }
+        #expect(session.isOutputFresh)
+
+        session.sourceDidChange()
+        #expect(!session.isRunning)
+        #expect(!session.isOutputFresh)
+        #expect(session.hasStaleResult)
+        #expect(session.binding.output == "next", "Source edits retain the last result as an explicitly stale reference")
+    }
+
+    @Test func sourceChangeRejectsLateCompletionWithoutDiscardingLastResult() async throws {
+        let probe = FormatOperationProbe(delays: ["slow": 0.14])
+        let session = IndexFormatExecutionSession(binding: FormatBinding(output: "previous"))
+
+        session.schedule(snapshot: "slow", delay: .zero) { snapshot in
+            probe.begin(snapshot)
+            defer { probe.finish() }
+            return FormatBinding(output: snapshot)
+        }
+        try await Self.waitUntil { probe.startedInputs == ["slow"] }
+
+        session.sourceDidChange()
+        try await Task.sleep(for: .milliseconds(400))
+
+        #expect(session.binding.output == "previous")
+        #expect(!session.isRunning)
+        #expect(!session.isOutputFresh)
+    }
+
     @Test func operationRunsOffMainActorAndPublishesItsBinding() async throws {
         let session = IndexFormatExecutionSession()
 

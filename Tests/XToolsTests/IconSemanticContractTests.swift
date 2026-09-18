@@ -4,6 +4,19 @@ import Foundation
 import Testing
 
 struct IconSemanticContractTests {
+    @Test func sharedToggleIconExposesSelectedTraitAndOnOffValue() throws {
+        let source = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
+        let iconButton = sourceSlice(
+            source,
+            from: "struct IndexIconButton: View",
+            to: "// MARK: - IndexSegmentedControl"
+        )
+
+        contains(iconButton, "var isActive: Bool? = nil", "Momentary icon actions must remain distinct from Boolean toggle controls")
+        contains(iconButton, ".accessibilityAddTraits(isActive ? .isSelected : [])", "Active icon toggles must expose VoiceOver selection")
+        contains(iconButton, ".accessibilityValue(isActive ? \"已开启\" : \"已关闭\")", "Icon toggles must expose an explicit on/off value")
+    }
+
     // Audited against SFSafeSymbols cb2e670a213ff42ae08528ee2c401bfb1d799675.
     // Every entry is available before or with SF Symbols 4.0 (macOS 13).
     private let reviewedMacOS13Symbols: Set<String> = [
