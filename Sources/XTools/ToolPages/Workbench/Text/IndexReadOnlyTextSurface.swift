@@ -35,6 +35,36 @@ struct IndexReadOnlyTextSurface: View {
     }
 }
 
+private final class IndexReadOnlyTextScrollView: NSScrollView {
+    private var isSynchronizing = false
+
+    override func tile() {
+        super.tile()
+        synchronizeDocumentGeometry()
+    }
+
+    override func layout() {
+        super.layout()
+        synchronizeDocumentGeometry()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        synchronizeDocumentGeometry()
+    }
+
+    private func synchronizeDocumentGeometry() {
+        guard !isSynchronizing else { return }
+        isSynchronizing = true
+        defer { isSynchronizing = false }
+        guard let textView = documentView as? NSTextView else { return }
+        let viewportWidth = contentSize.width
+        if viewportWidth > 0 && abs(textView.frame.width - viewportWidth) > 0.5 {
+            textView.setFrameSize(NSSize(width: viewportWidth, height: textView.frame.height))
+        }
+    }
+}
+
 private struct IndexReadOnlyTextView: NSViewRepresentable {
     let text: String
 
@@ -46,7 +76,7 @@ private struct IndexReadOnlyTextView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSScrollView {
         let textView = Self.makeTextView()
-        let scrollView = NSScrollView(frame: .zero)
+        let scrollView = IndexReadOnlyTextScrollView(frame: .zero)
         scrollView.contentView = IndexLeadingLockedClipView(frame: .zero)
         scrollView.documentView = textView
         scrollView.drawsBackground = false

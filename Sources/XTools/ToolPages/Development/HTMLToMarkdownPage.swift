@@ -51,8 +51,10 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 outputFileName: "markdown-output.md",
                 leadingControl: {
                     urlInput
-                        .frame(width: 85)
+                        .frame(minWidth: 90, idealWidth: 180, maxWidth: 360)
+                        .layoutPriority(1)
                     fetchButton
+                        .fixedSize(horizontal: true, vertical: false)
                     IndexIconButton(
                         systemImage: "doc.plaintext",
                         help: "仅提取文章正文",
@@ -60,6 +62,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                     ) {
                         session.extractArticleOnly.toggle()
                     }
+                    .fixedSize(horizontal: true, vertical: false)
                 }
             )
         }

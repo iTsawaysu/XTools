@@ -158,7 +158,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                         )
                         .accessibilityLabel("透明区域填充颜色")
                         .accessibilityValue(transparencyFillAccessibilityValue)
-                        .help("设置透明填充色")
+                        .help("选择转换前用于填充透明像素的颜色")
                         .onChange(of: transparencyFillMode) { _ in convert() }
 
                         if transparencyFillMode == .custom {
@@ -180,7 +180,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel("透明区域填充颜色")
                     .accessibilityValue(transparencyFillAccessibilityValue)
-                    .help("设置透明填充色")
+                    .help("JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。")
                 }
 
             }

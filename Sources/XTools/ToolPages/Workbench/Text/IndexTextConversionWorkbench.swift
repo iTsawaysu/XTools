@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 enum IndexTextConversionOutputPresentation: Equatable, Sendable {
     case standard
     case nativeReadOnlyText
+    case markdownPreview
 }
 
 @MainActor
@@ -199,6 +200,12 @@ struct IndexTextConversionWorkbench: View {
                 )
             case .nativeReadOnlyText:
                 IndexReadOnlyTextSurface(
+                    text: output,
+                    placeholder: IndexEmptyStateCopy.outputWillShowHere,
+                    fillsHeight: true
+                )
+            case .markdownPreview:
+                IndexMarkdownPreviewSurface(
                     text: output,
                     placeholder: IndexEmptyStateCopy.outputWillShowHere,
                     fillsHeight: true

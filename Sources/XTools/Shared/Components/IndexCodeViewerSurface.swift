@@ -88,6 +88,52 @@ struct IndexCodeViewerSurface: View {
     }
 }
 
+private final class IndexCodeViewerTextViewInternal: NSTextView, IndexAsymmetricTextContainerSurface {
+    var leadingTextContainerInset: CGFloat {
+        textContainerInset.width
+    }
+}
+
+private final class IndexCodeViewerScrollView: NSScrollView {
+    weak var lineNumberGutter: IndexEditorLineNumberGutterView?
+    private var isSynchronizing = false
+
+    override func tile() {
+        super.tile()
+        synchronizeGeometryIfNeeded()
+    }
+
+    override func layout() {
+        super.layout()
+        synchronizeGeometryIfNeeded()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        synchronizeGeometryIfNeeded()
+    }
+
+    private func synchronizeGeometryIfNeeded() {
+        guard !isSynchronizing else { return }
+        isSynchronizing = true
+        defer { isSynchronizing = false }
+        synchronizeTextGeometry()
+        if let gutter = lineNumberGutter, abs(gutter.frame.height - bounds.height) > 0.5 {
+            gutter.frame = NSRect(x: 0, y: 0, width: IndexEditorLineNumberGutter.width, height: bounds.height)
+        }
+        lineNumberGutter?.setNeedsDisplay(lineNumberGutter?.bounds ?? .zero)
+    }
+
+    func synchronizeTextGeometry() {
+        guard let textView = documentView as? NSTextView else { return }
+        IndexTextKitGeometry.synchronizeTextGeometry(
+            for: textView,
+            visibleWidth: contentSize.width,
+            minimumHeight: contentSize.height
+        )
+    }
+}
+
 private struct IndexCodeViewerTextView: NSViewRepresentable {
     let text: String
     var lineNumbers: Bool
@@ -100,8 +146,8 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let textView = NSTextView(frame: .zero)
-        let scrollView = NSScrollView(frame: .zero)
+        let textView = IndexCodeViewerTextViewInternal(frame: .zero)
+        let scrollView = IndexCodeViewerScrollView(frame: .zero)
         scrollView.contentView = IndexLeadingLockedClipView(frame: .zero)
         scrollView.documentView = textView
         scrollView.drawsBackground = false
@@ -129,16 +175,19 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
             let gutter = IndexEditorLineNumberGutterView(scrollView: scrollView, textView: textView)
             gutter.autoresizingMask = [.height]
             scrollView.addSubview(gutter)
+            scrollView.lineNumberGutter = gutter
             context.coordinator.lineNumberGutter = gutter
         }
 
         applyContent(to: textView)
+        scrollView.synchronizeTextGeometry()
         context.coordinator.lastText = text
         return scrollView
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        guard let textView = scrollView.documentView as? NSTextView else { return }
+        guard let customScrollView = scrollView as? IndexCodeViewerScrollView,
+              let textView = customScrollView.documentView as? IndexCodeViewerTextViewInternal else { return }
         configure(textView)
 
         if context.coordinator.lastText != text {
@@ -150,7 +199,10 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
             if !validRanges.isEmpty {
                 textView.selectedRanges = validRanges
             }
+            customScrollView.synchronizeTextGeometry()
             context.coordinator.lineNumberGutter?.refresh()
+        } else {
+            customScrollView.synchronizeTextGeometry()
         }
     }
 
@@ -176,13 +228,6 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
             textContainer.widthTracksTextView = false
             textContainer.lineFragmentPadding = 0
             textContainer.lineBreakMode = lineBreakMode
-            textContainer.containerSize = NSSize(
-                width: IndexTextKitGeometry.wrappingContainerWidth(
-                    for: textView,
-                    visibleWidth: textView.bounds.width
-                ),
-                height: .greatestFiniteMagnitude
-            )
         }
     }
 

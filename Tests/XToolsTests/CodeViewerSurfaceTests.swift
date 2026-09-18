@@ -142,7 +142,7 @@ struct CodeViewerSurfaceTests {
         order by employee_id desc
         """
 
-        let formatted = try SQLFormatting.format(complexSQL, options: .init(keywordCase: .upper, indentWidth: 2, commaStyle: .trailing))
+        let formatted = try SQLFormatting.format(complexSQL, options: .init(keywordCase: .upper, indentWidth: 2))
         #expect(!formatted.isEmpty)
         #expect(formatted.contains("WITH"))
         #expect(formatted.contains("SELECT"))
@@ -272,5 +272,85 @@ struct CodeViewerSurfaceTests {
             }
         }
         checkOverflows(hostingView)
+    }
+
+    @MainActor
+    @Test func codeViewerSurfaceDynamicallyAdaptsTextContainerWidthOnFrameChange() {
+        let view = IndexCodeViewerSurface(
+            text: "<root><item>Very long line of formatted xml text that needs to wrap properly</item></root>",
+            lineNumbers: true,
+            fillsHeight: true
+        )
+        let hostingView = NSHostingView(rootView: view)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 350, height: 400)
+        hostingView.layoutSubtreeIfNeeded()
+
+        guard let textView = Self.findDescendant(of: hostingView, type: NSTextView.self),
+              let textContainer = textView.textContainer else {
+            Issue.record("Expected NSTextView inside IndexCodeViewerSurface")
+            return
+        }
+
+        let initialContainerWidth = textContainer.containerSize.width
+        #expect(initialContainerWidth > 200 && initialContainerWidth < 350, "Initial container width should fit 350pt view")
+
+        // Resize hosting view to wider container
+        hostingView.frame = NSRect(x: 0, y: 0, width: 900, height: 400)
+        hostingView.layoutSubtreeIfNeeded()
+
+        let expandedContainerWidth = textContainer.containerSize.width
+        #expect(expandedContainerWidth > 750, "Container width must expand past 750pt when resized to 900pt, not stuck at 300-400pt: was \(expandedContainerWidth)")
+
+        // Shrink hosting view to narrower container
+        hostingView.frame = NSRect(x: 0, y: 0, width: 250, height: 400)
+        hostingView.layoutSubtreeIfNeeded()
+
+        let shrunkContainerWidth = textContainer.containerSize.width
+        #expect(shrunkContainerWidth < 200, "Container width must shrink below 200pt when resized to 250pt: was \(shrunkContainerWidth)")
+    }
+
+    @MainActor
+    @Test func xmlFormatPagePanesExpandResponsivelyWithoutFixedDeadZones() {
+        let defaults = UserDefaults(suiteName: "CodeViewerSurfaceTests.XMLResponsive.\(UUID().uuidString)")!
+        let repository = ToolWorkspaceRepository(defaults: defaults)
+        let view = IndexXMLFormatPage().environmentObject(repository)
+        let hostingView = NSHostingView(rootView: view)
+
+        hostingView.frame = NSRect(x: 0, y: 0, width: 700, height: 500)
+        hostingView.layoutSubtreeIfNeeded()
+
+        let textViews = Self.findAllDescendants(of: hostingView, type: NSTextView.self)
+        #expect(textViews.count >= 2, "Expected input and output NSTextViews in XML format page")
+
+        // Resize to widescreen
+        hostingView.frame = NSRect(x: 0, y: 0, width: 1400, height: 700)
+        hostingView.layoutSubtreeIfNeeded()
+
+        for tv in textViews {
+            if let container = tv.textContainer {
+                #expect(container.containerSize.width > 500, "Each split pane container width should exceed 500pt on 1400pt wide window, got \(container.containerSize.width)")
+            }
+        }
+    }
+
+    @MainActor
+    private static func findDescendant<T: NSView>(of view: NSView, type: T.Type) -> T? {
+        if let match = view as? T { return match }
+        for subview in view.subviews {
+            if let match = findDescendant(of: subview, type: type) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    @MainActor
+    private static func findAllDescendants<T: NSView>(of view: NSView, type: T.Type) -> [T] {
+        var results: [T] = []
+        if let match = view as? T { results.append(match) }
+        for subview in view.subviews {
+            results.append(contentsOf: findAllDescendants(of: subview, type: type))
+        }
+        return results
     }
 }

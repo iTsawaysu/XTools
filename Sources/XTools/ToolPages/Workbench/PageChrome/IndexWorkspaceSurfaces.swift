@@ -17,6 +17,7 @@ struct IndexWorkspaceTextArea: View {
     /// surface) with an optional AppKit line-number gutter.
     var embedsFlat = false
     var lineNumbers = false
+    var onFileDrop: ((String) -> Void)? = nil
     var workspaceSemantic: IndexWorkspaceSemantic = .unmigratedPageDefault
 
     private var resolution: IndexWorkspaceResolution {
@@ -42,7 +43,8 @@ struct IndexWorkspaceTextArea: View {
             temporaryHighlights: temporaryHighlights,
             inputPolicy: inputPolicy,
             embedsFlat: embedsFlat,
-            lineNumbers: lineNumbers
+            lineNumbers: lineNumbers,
+            onFileDrop: onFileDrop
         )
     }
 }

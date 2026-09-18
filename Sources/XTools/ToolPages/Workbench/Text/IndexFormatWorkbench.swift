@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Prototype v3 (Clay 收敛 + 轻量过渡) structured formatter workbench.
 ///
@@ -38,12 +39,11 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     var showsOutputSave = false
     var outputFileName = "output.txt"
     @ViewBuilder var leadingControl: () -> LeadingControl
+    var outputControl: (() -> AnyView)? = nil
     var workspaceSemantic: IndexWorkspaceSemantic = .structuredEditorTransform
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// Designated memberwise-shape init (defining any init suppresses the
-    /// implicit memberwise initializer).
     init(
         inputTitle: String,
         outputTitle: String,
@@ -69,56 +69,6 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         @ViewBuilder leadingControl: @escaping () -> LeadingControl,
         workspaceSemantic: IndexWorkspaceSemantic = .structuredEditorTransform
     ) {
-        self.inputTitle = inputTitle
-        self.outputTitle = outputTitle
-        self._input = input
-        self.output = output
-        self.inputPlaceholder = inputPlaceholder
-        self.diagnostic = diagnostic
-        self.diagnosticTone = diagnosticTone
-        self.formatAttempt = formatAttempt
-        self.outputLineNumbers = outputLineNumbers
-        self.outputColorize = outputColorize
-        self.outputPlaceholder = outputPlaceholder
-        self.actionTitle = actionTitle
-        self.actionHint = actionHint
-        self.autoFocus = autoFocus
-        self.clearDisabled = clearDisabled
-        self.onFormat = onFormat
-        self.onClear = onClear
-        self.outputPresentation = outputPresentation
-        self.outputProcessingText = outputProcessingText
-        self.showsOutputSave = showsOutputSave
-        self.outputFileName = outputFileName
-        self.leadingControl = leadingControl
-        self.workspaceSemantic = workspaceSemantic
-    }
-
-    /// Convenience for workbenches without a leading control slot.
-    init(
-        inputTitle: String,
-        outputTitle: String,
-        input: Binding<String>,
-        output: String,
-        inputPlaceholder: String = "",
-        diagnostic: String? = nil,
-        diagnosticTone: ToolFeedbackTone = .error,
-        formatAttempt: Int = 0,
-        outputLineNumbers: Bool = true,
-        outputColorize: ((String) -> AttributedString)? = nil,
-        outputPlaceholder: String = IndexEmptyStateCopy.outputWillShowHere,
-        actionTitle: String = "格式化",
-        actionHint: String = "⌘↩",
-        autoFocus: Bool = true,
-        clearDisabled: Bool = false,
-        onFormat: (() -> Void)? = nil,
-        onClear: @escaping () -> Void,
-        outputPresentation: IndexTextConversionOutputPresentation = .standard,
-        outputProcessingText: String? = nil,
-        showsOutputSave: Bool = false,
-        outputFileName: String = "output.txt",
-        workspaceSemantic: IndexWorkspaceSemantic = .structuredEditorTransform
-    ) where LeadingControl == EmptyView {
         self.init(
             inputTitle: inputTitle,
             outputTitle: outputTitle,
@@ -141,9 +91,116 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             outputProcessingText: outputProcessingText,
             showsOutputSave: showsOutputSave,
             outputFileName: outputFileName,
-            leadingControl: { EmptyView() },
+            leadingControl: leadingControl,
+            outputControlWrapper: nil,
             workspaceSemantic: workspaceSemantic
         )
+    }
+
+    init<Output: View>(
+        inputTitle: String,
+        outputTitle: String,
+        input: Binding<String>,
+        output: String,
+        inputPlaceholder: String = "",
+        diagnostic: String? = nil,
+        diagnosticTone: ToolFeedbackTone = .error,
+        formatAttempt: Int = 0,
+        outputLineNumbers: Bool = true,
+        outputColorize: ((String) -> AttributedString)? = nil,
+        outputPlaceholder: String = IndexEmptyStateCopy.outputWillShowHere,
+        actionTitle: String = "格式化",
+        actionHint: String = "⌘↩",
+        autoFocus: Bool = true,
+        clearDisabled: Bool = false,
+        onFormat: (() -> Void)? = nil,
+        onClear: @escaping () -> Void,
+        outputPresentation: IndexTextConversionOutputPresentation = .standard,
+        outputProcessingText: String? = nil,
+        showsOutputSave: Bool = false,
+        outputFileName: String = "output.txt",
+        @ViewBuilder leadingControl: @escaping () -> LeadingControl,
+        @ViewBuilder outputControl: @escaping () -> Output,
+        workspaceSemantic: IndexWorkspaceSemantic = .structuredEditorTransform
+    ) {
+        self.init(
+            inputTitle: inputTitle,
+            outputTitle: outputTitle,
+            input: input,
+            output: output,
+            inputPlaceholder: inputPlaceholder,
+            diagnostic: diagnostic,
+            diagnosticTone: diagnosticTone,
+            formatAttempt: formatAttempt,
+            outputLineNumbers: outputLineNumbers,
+            outputColorize: outputColorize,
+            outputPlaceholder: outputPlaceholder,
+            actionTitle: actionTitle,
+            actionHint: actionHint,
+            autoFocus: autoFocus,
+            clearDisabled: clearDisabled,
+            onFormat: onFormat,
+            onClear: onClear,
+            outputPresentation: outputPresentation,
+            outputProcessingText: outputProcessingText,
+            showsOutputSave: showsOutputSave,
+            outputFileName: outputFileName,
+            leadingControl: leadingControl,
+            outputControlWrapper: { AnyView(outputControl()) },
+            workspaceSemantic: workspaceSemantic
+        )
+    }
+
+    private init(
+        inputTitle: String,
+        outputTitle: String,
+        input: Binding<String>,
+        output: String,
+        inputPlaceholder: String,
+        diagnostic: String?,
+        diagnosticTone: ToolFeedbackTone,
+        formatAttempt: Int,
+        outputLineNumbers: Bool,
+        outputColorize: ((String) -> AttributedString)?,
+        outputPlaceholder: String,
+        actionTitle: String,
+        actionHint: String,
+        autoFocus: Bool,
+        clearDisabled: Bool,
+        onFormat: (() -> Void)?,
+        onClear: @escaping () -> Void,
+        outputPresentation: IndexTextConversionOutputPresentation,
+        outputProcessingText: String?,
+        showsOutputSave: Bool,
+        outputFileName: String,
+        @ViewBuilder leadingControl: @escaping () -> LeadingControl,
+        outputControlWrapper: (() -> AnyView)?,
+        workspaceSemantic: IndexWorkspaceSemantic
+    ) {
+        self.inputTitle = inputTitle
+        self.outputTitle = outputTitle
+        self._input = input
+        self.output = output
+        self.inputPlaceholder = inputPlaceholder
+        self.diagnostic = diagnostic
+        self.diagnosticTone = diagnosticTone
+        self.formatAttempt = formatAttempt
+        self.outputLineNumbers = outputLineNumbers
+        self.outputColorize = outputColorize
+        self.outputPlaceholder = outputPlaceholder
+        self.actionTitle = actionTitle
+        self.actionHint = actionHint
+        self.autoFocus = autoFocus
+        self.clearDisabled = clearDisabled
+        self.onFormat = onFormat
+        self.onClear = onClear
+        self.outputPresentation = outputPresentation
+        self.outputProcessingText = outputProcessingText
+        self.showsOutputSave = showsOutputSave
+        self.outputFileName = outputFileName
+        self.leadingControl = leadingControl
+        self.outputControl = outputControlWrapper
+        self.workspaceSemantic = workspaceSemantic
     }
 
     private var showsErrorState: Bool {
@@ -225,6 +282,10 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(9)
 
+                if let outputControl {
+                    outputControl()
+                }
+
                 inlineDiagnostic
 
                 Spacer(minLength: 0)
@@ -292,8 +353,29 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             autoFocus: autoFocus,
             embedsFlat: false,
             lineNumbers: true,
+            onFileDrop: { content in
+                input = content
+                onFormat?()
+            },
             workspaceSemantic: workspaceSemantic
         )
+        .onDrop(of: [.fileURL, .text], isTargeted: nil) { providers in
+            guard let provider = providers.first else { return false }
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                    guard let url else { return }
+                    if let data = try? Data(contentsOf: url),
+                       let content = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .utf16) {
+                        Task { @MainActor in
+                            input = content
+                            onFormat?()
+                        }
+                    }
+                }
+                return true
+            }
+            return false
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .accessibilityLabel(inputTitle)
     }
@@ -323,7 +405,173 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                     fillsHeight: true
                 )
                 .accessibilityLabel(outputTitle)
+            case .markdownPreview:
+                IndexMarkdownPreviewSurface(
+                    text: output,
+                    placeholder: outputPlaceholder,
+                    fillsHeight: true
+                )
+                .accessibilityLabel(outputTitle)
             }
+        }
+    }
+}
+
+extension IndexFormatWorkbench where LeadingControl == EmptyView {
+    /// Convenience for workbenches without leading or output control slots.
+    init(
+        inputTitle: String,
+        outputTitle: String,
+        input: Binding<String>,
+        output: String,
+        inputPlaceholder: String = "",
+        diagnostic: String? = nil,
+        diagnosticTone: ToolFeedbackTone = .error,
+        formatAttempt: Int = 0,
+        outputLineNumbers: Bool = true,
+        outputColorize: ((String) -> AttributedString)? = nil,
+        outputPlaceholder: String = IndexEmptyStateCopy.outputWillShowHere,
+        actionTitle: String = "格式化",
+        actionHint: String = "⌘↩",
+        autoFocus: Bool = true,
+        clearDisabled: Bool = false,
+        onFormat: (() -> Void)? = nil,
+        onClear: @escaping () -> Void,
+        outputPresentation: IndexTextConversionOutputPresentation = .standard,
+        outputProcessingText: String? = nil,
+        showsOutputSave: Bool = false,
+        outputFileName: String = "output.txt",
+        workspaceSemantic: IndexWorkspaceSemantic = .structuredEditorTransform
+    ) {
+        self.init(
+            inputTitle: inputTitle,
+            outputTitle: outputTitle,
+            input: input,
+            output: output,
+            inputPlaceholder: inputPlaceholder,
+            diagnostic: diagnostic,
+            diagnosticTone: diagnosticTone,
+            formatAttempt: formatAttempt,
+            outputLineNumbers: outputLineNumbers,
+            outputColorize: outputColorize,
+            outputPlaceholder: outputPlaceholder,
+            actionTitle: actionTitle,
+            actionHint: actionHint,
+            autoFocus: autoFocus,
+            clearDisabled: clearDisabled,
+            onFormat: onFormat,
+            onClear: onClear,
+            outputPresentation: outputPresentation,
+            outputProcessingText: outputProcessingText,
+            showsOutputSave: showsOutputSave,
+            outputFileName: outputFileName,
+            leadingControl: { EmptyView() },
+            workspaceSemantic: workspaceSemantic
+        )
+    }
+
+    /// Convenience for workbenches with an output control slot but without leading control slots.
+    init<Output: View>(
+        inputTitle: String,
+        outputTitle: String,
+        input: Binding<String>,
+        output: String,
+        inputPlaceholder: String = "",
+        diagnostic: String? = nil,
+        diagnosticTone: ToolFeedbackTone = .error,
+        formatAttempt: Int = 0,
+        outputLineNumbers: Bool = true,
+        outputColorize: ((String) -> AttributedString)? = nil,
+        outputPlaceholder: String = IndexEmptyStateCopy.outputWillShowHere,
+        actionTitle: String = "格式化",
+        actionHint: String = "⌘↩",
+        autoFocus: Bool = true,
+        clearDisabled: Bool = false,
+        onFormat: (() -> Void)? = nil,
+        onClear: @escaping () -> Void,
+        outputPresentation: IndexTextConversionOutputPresentation = .standard,
+        outputProcessingText: String? = nil,
+        showsOutputSave: Bool = false,
+        outputFileName: String = "output.txt",
+        @ViewBuilder outputControl: @escaping () -> Output,
+        workspaceSemantic: IndexWorkspaceSemantic = .structuredEditorTransform
+    ) {
+        self.init(
+            inputTitle: inputTitle,
+            outputTitle: outputTitle,
+            input: input,
+            output: output,
+            inputPlaceholder: inputPlaceholder,
+            diagnostic: diagnostic,
+            diagnosticTone: diagnosticTone,
+            formatAttempt: formatAttempt,
+            outputLineNumbers: outputLineNumbers,
+            outputColorize: outputColorize,
+            outputPlaceholder: outputPlaceholder,
+            actionTitle: actionTitle,
+            actionHint: actionHint,
+            autoFocus: autoFocus,
+            clearDisabled: clearDisabled,
+            onFormat: onFormat,
+            onClear: onClear,
+            outputPresentation: outputPresentation,
+            outputProcessingText: outputProcessingText,
+            showsOutputSave: showsOutputSave,
+            outputFileName: outputFileName,
+            leadingControl: { EmptyView() },
+            outputControl: outputControl,
+            workspaceSemantic: workspaceSemantic
+        )
+    }
+}
+
+struct IndexMarkdownPreviewSurface: View {
+    let text: String
+    var placeholder: String = IndexEmptyStateCopy.outputWillShowHere
+    var fillsHeight = false
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 12) {
+                    if let attributed = try? AttributedString(
+                        markdown: text,
+                        options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
+                    ) {
+                        Text(attributed)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                    } else {
+                        Text(text)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .opacity(text.isEmpty ? 0 : 1)
+            .accessibilityHidden(text.isEmpty)
+
+            if text.isEmpty {
+                Text(placeholder)
+                    .font(ToolTypography.body)
+                    .foregroundStyle(ToolTheme.textTertiary)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .accessibilityLabel(placeholder)
+            }
+        }
+        .frame(
+            maxWidth: .infinity,
+            minHeight: fillsHeight ? 60 : 220,
+            maxHeight: fillsHeight ? .infinity : nil,
+            alignment: .topLeading
+        )
+        .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                .strokeBorder(ToolTheme.border, lineWidth: 0.5)
         }
     }
 }

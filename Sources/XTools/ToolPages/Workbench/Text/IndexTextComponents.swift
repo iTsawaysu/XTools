@@ -41,6 +41,68 @@ final class IndexCaretTextView: NSTextView, IndexAsymmetricTextContainerSurface 
         widened.size.width += caretWidth
         super.setNeedsDisplay(widened, avoidAdditionalLayout: flag)
     }
+
+    var onFileDrop: ((String) -> Void)?
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        if onFileDrop != nil && Self.hasDroppableFile(sender) {
+            return .copy
+        }
+        return super.draggingEntered(sender)
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        if onFileDrop != nil && Self.hasDroppableFile(sender) {
+            return .copy
+        }
+        return super.draggingUpdated(sender)
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        if let onFileDrop, let content = Self.extractDroppedContent(sender) {
+            onFileDrop(content)
+            return true
+        }
+        return super.performDragOperation(sender)
+    }
+
+    static func hasDroppableFile(_ sender: any NSDraggingInfo) -> Bool {
+        guard let types = sender.draggingPasteboard.types else { return false }
+        return types.contains(.fileURL)
+            || types.contains(NSPasteboard.PasteboardType("public.file-url"))
+            || types.contains(NSPasteboard.PasteboardType("NSFilenamesPboardType"))
+    }
+
+    static func extractDroppedContent(_ sender: any NSDraggingInfo) -> String? {
+        var targetURL: URL?
+        if let fileURLs = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
+           let first = fileURLs.first {
+            targetURL = first
+        } else if let filenames = sender.draggingPasteboard.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String],
+                  let first = filenames.first {
+            targetURL = URL(fileURLWithPath: first)
+        }
+
+        guard let url = targetURL else { return nil }
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), !isDir.boolValue else {
+            return nil
+        }
+        if let values = try? url.resourceValues(forKeys: [.fileSizeKey]),
+           let fileSize = values.fileSize, fileSize > 15_000_000 {
+            return nil
+        }
+        guard let data = try? Data(contentsOf: url) else {
+            return nil
+        }
+        if let str = String(data: data, encoding: .utf8) {
+            return str
+        }
+        if let str = String(data: data, encoding: .utf16) {
+            return str
+        }
+        return nil
+    }
 }
 
 final class IndexCaretTextFieldCell: IndexPaddedTextFieldCell {
@@ -495,6 +557,7 @@ struct IndexTextArea: View {
     /// by the measured-content path (same boundary as temporary highlights);
     /// the TextKit 2 viewport path ignores it.
     var lineNumbers = false
+    var onFileDrop: ((String) -> Void)? = nil
 
     @Environment(\.pageAvailableHeight) private var pageAvailableHeight
     @State private var isComposing = false
@@ -533,7 +596,8 @@ struct IndexTextArea: View {
                         autoFocus: autoFocus,
                         caretPlacementRequestToken: caretPlacementRequestToken,
                         inputPolicy: inputPolicy,
-                        onCompositionChange: { isComposing = $0 }
+                        onCompositionChange: { isComposing = $0 },
+                        onFileDrop: onFileDrop
                     )
                 } else {
                     IndexUndoableTextView(
@@ -547,7 +611,8 @@ struct IndexTextArea: View {
                         inputPolicy: inputPolicy,
                         embedsFlat: embedsFlat,
                         lineNumbers: lineNumbers,
-                        onCompositionChange: { isComposing = $0 }
+                        onCompositionChange: { isComposing = $0 },
+                        onFileDrop: onFileDrop
                     )
                 }
             }
@@ -606,6 +671,7 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
     var caretPlacementRequestToken: Int? = nil
     var inputPolicy: IndexTextAreaInputPolicy? = nil
     var onCompositionChange: ((Bool) -> Void)? = nil
+    var onFileDrop: ((String) -> Void)? = nil
 
     static func makeTextView() -> IndexCaretTextView {
         let textView = IndexCaretTextView(usingTextLayoutManager: true)
@@ -620,6 +686,7 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let textView = Self.makeTextView()
         textView.onCompositionChange = onCompositionChange
+        textView.onFileDrop = onFileDrop
 
         let scrollView = IndexTextKit2ViewportScrollView(frame: .zero)
         scrollView.contentView = IndexLeadingLockedClipView(frame: .zero)
@@ -659,6 +726,7 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
         context.coordinator.inputPolicy = inputPolicy
         configure(textView)
         (textView as? IndexCaretTextView)?.onCompositionChange = onCompositionChange
+        (textView as? IndexCaretTextView)?.onFileDrop = onFileDrop
 
         // Do not rewrite marked text during Chinese IME composition. The
         if textView.string != text && !textView.hasMarkedText() {
@@ -816,8 +884,27 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
 }
 
 private final class IndexTextKit2ViewportScrollView: NSScrollView {
+    private var isSynchronizing = false
+
+    override func tile() {
+        super.tile()
+        synchronizeGeometryIfNeeded()
+    }
+
     override func layout() {
         super.layout()
+        synchronizeGeometryIfNeeded()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        synchronizeGeometryIfNeeded()
+    }
+
+    private func synchronizeGeometryIfNeeded() {
+        guard !isSynchronizing else { return }
+        isSynchronizing = true
+        defer { isSynchronizing = false }
         guard let textView = documentView as? NSTextView else { return }
 
         let viewportSize = contentSize
@@ -848,6 +935,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
     var embedsFlat = false
     var lineNumbers = false
     var onCompositionChange: ((Bool) -> Void)? = nil
+    var onFileDrop: ((String) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -861,6 +949,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let textView = IndexCaretTextView(frame: .zero)
         textView.onCompositionChange = onCompositionChange
+        textView.onFileDrop = onFileDrop
         let scrollView = IndexTextAreaScrollView(frame: .zero)
         scrollView.contentView = IndexLeadingLockedClipView(frame: .zero)
         scrollView.growsWithContent = growsWithContent
@@ -908,6 +997,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
             scrollView.synchronizeTextGeometry()
         }
         (textView as? IndexCaretTextView)?.onCompositionChange = onCompositionChange
+        (textView as? IndexCaretTextView)?.onFileDrop = onFileDrop
         scrollView.hasVerticalScroller = !growsWithContent
         scrollView.autohidesScrollers = !growsWithContent
         scrollView.verticalScrollElasticity = growsWithContent ? .none : .automatic
@@ -940,6 +1030,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
         let gutter = IndexEditorLineNumberGutterView(scrollView: scrollView, textView: textView)
         gutter.autoresizingMask = [.height]
         scrollView.addSubview(gutter)
+        (scrollView as? IndexTextAreaScrollView)?.lineNumberGutter = gutter
         coordinator.lineNumberGutter = gutter
     }
 
@@ -970,13 +1061,6 @@ struct IndexUndoableTextView: NSViewRepresentable {
             textContainer.widthTracksTextView = false
             textContainer.lineFragmentPadding = 0
             textContainer.lineBreakMode = lineBreakMode
-            textContainer.containerSize = NSSize(
-                width: IndexTextKitGeometry.wrappingContainerWidth(
-                    for: textView,
-                    visibleWidth: textView.bounds.width
-                ),
-                height: .greatestFiniteMagnitude
-            )
         }
     }
 
@@ -1389,14 +1473,18 @@ enum IndexTextKitGeometry {
 
         if let textContainer = textView.textContainer {
             textContainer.widthTracksTextView = false
-            textContainer.containerSize = NSSize(
-                width: wrappingContainerWidth(
-                    for: textView,
-                    visibleWidth: width,
-                    trailingReadingGuard: trailingReadingGuard
-                ),
-                height: CGFloat.greatestFiniteMagnitude
+            let newContainerWidth = IndexTextKitGeometry.wrappingContainerWidth(
+                for: textView,
+                visibleWidth: width,
+                trailingReadingGuard: trailingReadingGuard
             )
+            if abs(textContainer.containerSize.width - newContainerWidth) > 0.5 {
+                textContainer.containerSize = NSSize(
+                    width: newContainerWidth,
+                    height: CGFloat.greatestFiniteMagnitude
+                )
+                textView.needsDisplay = true
+            }
         }
 
         let height = max(ceil(minimumHeight), measuredTextHeight(for: textView))
@@ -1405,6 +1493,7 @@ enum IndexTextKitGeometry {
             return
         }
         textView.setFrameSize(NSSize(width: width, height: height))
+        textView.needsDisplay = true
     }
 }
 
@@ -1425,11 +1514,34 @@ final class IndexLeadingLockedClipView: NSClipView {
 }
 
 private final class IndexTextAreaScrollView: NSScrollView {
+    weak var lineNumberGutter: IndexEditorLineNumberGutterView?
     var growsWithContent = false
+    private var isSynchronizing = false
+
+    override func tile() {
+        super.tile()
+        synchronizeGeometryIfNeeded()
+    }
 
     override func layout() {
         super.layout()
+        synchronizeGeometryIfNeeded()
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        synchronizeGeometryIfNeeded()
+    }
+
+    private func synchronizeGeometryIfNeeded() {
+        guard !isSynchronizing else { return }
+        isSynchronizing = true
+        defer { isSynchronizing = false }
         synchronizeTextGeometry()
+        if let gutter = lineNumberGutter, abs(gutter.frame.height - bounds.height) > 0.5 {
+            gutter.frame = NSRect(x: 0, y: 0, width: IndexEditorLineNumberGutter.width, height: bounds.height)
+        }
+        lineNumberGutter?.setNeedsDisplay(lineNumberGutter?.bounds ?? .zero)
     }
 
     override func scrollWheel(with event: NSEvent) {
