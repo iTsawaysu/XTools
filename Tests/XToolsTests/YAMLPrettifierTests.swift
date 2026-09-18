@@ -102,6 +102,64 @@ struct YAMLPrettifierTests {
         )
     }
 
+    @Test func preservesRootAndSequenceBlockScalarContentWhenCommentsUseLineFormatter() throws {
+        let rootInput = """
+        # keep formatter on the comment-preserving path
+        >-
+          title:   keep-three-spaces
+          # scalar content
+        """
+        let rootOutput = try YAMLPrettifier.formatValidated(
+            rootInput,
+            options: .init(indent: 2, sortKeys: false)
+        )
+        #expect(rootOutput.contains("  title:   keep-three-spaces"))
+        #expect(rootOutput.contains("  # scalar content"))
+
+        let sequenceInput = [
+            "# keep this comment",
+            "items:",
+            "  - |2",
+            "    title:   keep-three-spaces  ",
+            "    literal: # value",
+            "next:   value"
+        ].joined(separator: "\n")
+        let sequenceOutput = try YAMLPrettifier.formatValidated(
+            sequenceInput,
+            options: .init(indent: 2, sortKeys: false)
+        )
+        #expect(sequenceOutput.contains("    title:   keep-three-spaces  "))
+        #expect(sequenceOutput.contains("    literal: # value"))
+        #expect(sequenceOutput.hasSuffix("next: value"))
+    }
+
+    @Test func preservesMappingSequenceMappingAndExplicitValueBlockScalars() throws {
+        let input = [
+            "# structural comment",
+            "mapping: >+2 # header comment",
+            "  first:   value",
+            "",
+            "  second:  value  ",
+            "items:",
+            "  - payload: |2",
+            "      sequence:   mapping",
+            "    next:   value",
+            "? explicit",
+            ": |-",
+            "  explicit:   value",
+            "tail:   done"
+        ].joined(separator: "\n")
+
+        let output = try YAMLPrettifier.formatValidated(
+            input,
+            options: .init(indent: 2, sortKeys: false)
+        )
+
+        #expect(output.contains("  first:   value\n\n  second:  value  "))
+        #expect(output.contains("      sequence:   mapping\n    next: value"))
+        #expect(output.contains("  explicit:   value\ntail: done"))
+    }
+
     @Test func validatesValidYAML() throws {
         let output = try YAMLPrettifier.formatValidated(
             """
@@ -155,6 +213,118 @@ struct YAMLPrettifierTests {
         let lines = output.components(separatedBy: "\n")
         #expect(lines.first?.hasPrefix("apple") == true)
         #expect(lines.last?.hasPrefix("zebra") == true)
+    }
+
+    @Test func refusesSortingWhenYAMLContainsStructuralComments() throws {
+        let samples = [
+            "# top comment\nzebra: 1\napple: 2",
+            "zebra: 1 # inline comment\napple: 2",
+            "zebra: 1\n# standalone comment\napple: 2"
+        ]
+
+        for input in samples {
+            let error = #expect(throws: (any Error).self) {
+                _ = try YAMLPrettifier.formatValidated(input, options: .init(indent: 2, sortKeys: true))
+            }
+
+            guard let error,
+                  case YAMLPrettifier.ValidationError.unsupportedCommentPreservingSort(let diagnostic) = error else {
+                Issue.record("Expected comment-preserving sort capability diagnostic")
+                continue
+            }
+            #expect(diagnostic.message == "当前无法在保留评论的同时排序 YAML Key")
+
+            let outcome = FormatRunner.run(input) {
+                try YAMLPrettifier.formatValidated($0, options: .init(indent: 2, sortKeys: true))
+            }
+            let binding = outcome.binding(text: { $0 })
+            #expect(binding.output == "")
+            #expect(binding.error == diagnostic.workspaceMessage)
+            #expect(binding.warning == nil)
+        }
+    }
+
+    @Test func sortingDoesNotMistakeHashesInsideScalarsForComments() throws {
+        let input = """
+        zebra: "value # literal"
+        url: https://example.test/#fragment
+        body: |-
+          # block scalar content
+          key: value # still scalar content
+        apple: 2
+        """
+
+        let output = try YAMLPrettifier.formatValidated(
+            input,
+            options: .init(indent: 2, sortKeys: true)
+        )
+
+        #expect(output.contains("value # literal"))
+        #expect(output.contains("https://example.test/#fragment"))
+        #expect(output.contains("# block scalar content"))
+    }
+
+    @Test func sortingTracksQuotedScalarsAcrossPhysicalLines() throws {
+        let input = """
+        zebra: "double quoted
+          # literal hash
+          tail"
+        single: 'single quoted
+          # another literal hash
+          it''s still quoted'
+        apple: 2
+        """
+
+        let output = try YAMLPrettifier.formatValidated(
+            input,
+            options: .init(indent: 2, sortKeys: true)
+        )
+
+        #expect(output.contains("# literal hash"))
+        #expect(output.contains("# another literal hash"))
+        #expect(output.components(separatedBy: "\n").first?.hasPrefix("apple:") == true)
+    }
+
+    @Test func sortingStillRejectsCommentAfterMultilineQuotedScalarCloses() throws {
+        let input = """
+        zebra: "double quoted
+          tail" # structural comment
+        apple: 2
+        """
+
+        #expect(throws: YAMLPrettifier.ValidationError.self) {
+            _ = try YAMLPrettifier.formatValidated(
+                input,
+                options: .init(indent: 2, sortKeys: true)
+            )
+        }
+    }
+
+    @Test func plainScalarQuotesDoNotHideLaterStructuralComments() throws {
+        let input = """
+        zebra: it's plain text
+        message: say "hello"
+        apple: 2 # structural comment
+        """
+
+        #expect(throws: YAMLPrettifier.ValidationError.self) {
+            _ = try YAMLPrettifier.formatValidated(
+                input,
+                options: .init(indent: 2, sortKeys: true)
+            )
+        }
+    }
+
+    @Test func blockScalarHeaderCommentCountsAsStructuralCommentForSorting() throws {
+        let input = """
+        body: |- # keep this header note
+          # scalar content is not the refusal trigger
+        apple: 2
+        """
+
+        #expect(throws: YAMLPrettifier.ValidationError.self) {
+            _ = try YAMLPrettifier.formatValidated(input, options: .init(indent: 2, sortKeys: true))
+        }
     }
 
     @Test func rejectsInvalidYAML() throws {

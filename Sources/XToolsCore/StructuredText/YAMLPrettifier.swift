@@ -4,10 +4,13 @@ import Yams
 public enum YAMLPrettifier {
     public enum ValidationError: Error, LocalizedError, Equatable, Sendable {
         case invalidSyntax(FormatDiagnostic)
+        case unsupportedCommentPreservingSort(FormatDiagnostic)
 
         public var errorDescription: String? {
             switch self {
             case .invalidSyntax(let diagnostic):
+                return diagnostic.workspaceMessage
+            case .unsupportedCommentPreservingSort(let diagnostic):
                 return diagnostic.workspaceMessage
             }
         }
@@ -15,6 +18,8 @@ public enum YAMLPrettifier {
         public var diagnostic: FormatDiagnostic {
             switch self {
             case .invalidSyntax(let diagnostic):
+                return diagnostic
+            case .unsupportedCommentPreservingSort(let diagnostic):
                 return diagnostic
             }
         }
@@ -65,6 +70,16 @@ public enum YAMLPrettifier {
             return ""
         }
 
+        if options.sortKeys, containsStructuralComment(in: input) {
+            throw ValidationError.unsupportedCommentPreservingSort(
+                FormatDiagnostic(
+                    formatName: "YAML",
+                    message: "当前无法在保留评论的同时排序 YAML Key",
+                    suggestion: "关闭 Key 排序后重试。"
+                )
+            )
+        }
+
         if !options.sortKeys && input.contains("#") {
             return format(input)
         }
@@ -85,29 +100,32 @@ public enum YAMLPrettifier {
         let lines = input.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var formattedLines: [String] = []
         var previousWasBlank = false
-        var activeBlockScalarParentIndent: Int?
+        var activeBlockScalar: BlockScalarState?
 
         for line in lines {
-            if let parentIndent = activeBlockScalarParentIndent {
-                if line.trimmingCharacters(in: .whitespaces).isEmpty || leadingIndentWidth(line) > parentIndent {
+            if var blockScalar = activeBlockScalar {
+                if blockScalar.contains(line) {
                     formattedLines.append(line)
                     previousWasBlank = false
+                    activeBlockScalar = blockScalar
                     continue
                 }
 
-                activeBlockScalarParentIndent = nil
+                activeBlockScalar = nil
             }
 
             let formattedLine = formatLine(line.replacingOccurrences(of: "\t", with: "  "))
             appendOutsideBlockLine(formattedLine, to: &formattedLines, previousWasBlank: &previousWasBlank)
 
-            if let parentIndent = blockScalarParentIndent(in: formattedLine) {
-                activeBlockScalarParentIndent = parentIndent
+            if let header = blockScalarHeader(in: formattedLine) {
+                activeBlockScalar = BlockScalarState(header: header)
             }
         }
 
-        while formattedLines.last == "" {
-            formattedLines.removeLast()
+        if activeBlockScalar == nil {
+            while formattedLines.last == "" {
+                formattedLines.removeLast()
+            }
         }
 
         return formattedLines.joined(separator: "\n")
@@ -183,25 +201,203 @@ public enum YAMLPrettifier {
         }
     }
 
-    private static func blockScalarParentIndent(in line: String) -> Int? {
-        let parentIndent = leadingIndentWidth(line)
-        let body = String(line.dropFirst(parentIndent))
+    private struct BlockScalarHeader {
+        let parentIndent: Int
+        let explicitContentIndent: Int?
+    }
 
+    private struct BlockScalarIndicator {
+        let explicitIndent: Int?
+    }
+
+    private struct BlockScalarState {
+        let parentIndent: Int
+        var contentIndent: Int?
+
+        init(header: BlockScalarHeader) {
+            parentIndent = header.parentIndent
+            contentIndent = header.explicitContentIndent.map { header.parentIndent + $0 }
+        }
+
+        mutating func contains(_ line: String) -> Bool {
+            if line.trimmingCharacters(in: .whitespaces).isEmpty {
+                return true
+            }
+
+            let indent = YAMLPrettifier.leadingIndentWidth(line)
+            if let contentIndent {
+                return indent >= contentIndent
+            }
+
+            guard indent > parentIndent else {
+                return false
+            }
+            contentIndent = indent
+            return true
+        }
+    }
+
+    private static func blockScalarHeader(in line: String) -> BlockScalarHeader? {
+        let parentIndent = leadingIndentWidth(line)
+        var candidate = line.dropFirst(min(parentIndent, line.count))[...]
+        candidate = candidate.drop { $0 == " " }
+        var mappingIndent = parentIndent
+
+        if candidate.hasPrefix("- ") {
+            candidate = candidate.dropFirst(2).drop { $0 == " " }
+            mappingIndent += 2
+        } else if candidate.hasPrefix("? ") || candidate.hasPrefix(": ") {
+            candidate = candidate.dropFirst(2).drop { $0 == " " }
+        }
+
+        if let indicator = parseBlockScalarIndicator(candidate) {
+            return BlockScalarHeader(
+                parentIndent: parentIndent,
+                explicitContentIndent: indicator.explicitIndent
+            )
+        }
+
+        let body = String(candidate)
         guard let delimiterIndex = firstMappingDelimiterIndex(in: body) else {
             return nil
         }
 
-        var valueStart = body.index(after: delimiterIndex)
-        while valueStart < body.endIndex, body[valueStart] == " " {
-            valueStart = body.index(after: valueStart)
+        let value = body[body.index(after: delimiterIndex)...].drop { $0 == " " }
+        guard let indicator = parseBlockScalarIndicator(value) else {
+            return nil
         }
+        return BlockScalarHeader(
+            parentIndent: mappingIndent,
+            explicitContentIndent: indicator.explicitIndent
+        )
+    }
 
-        guard valueStart < body.endIndex else {
+    private static func parseBlockScalarIndicator(_ candidate: Substring) -> BlockScalarIndicator? {
+        guard let marker = candidate.first, marker == "|" || marker == ">" else {
             return nil
         }
 
-        let marker = body[valueStart]
-        return marker == "|" || marker == ">" ? parentIndent : nil
+        var index = candidate.index(after: candidate.startIndex)
+        var explicitIndent: Int?
+        var sawChompingIndicator = false
+
+        while index < candidate.endIndex {
+            let character = candidate[index]
+            if character == "+" || character == "-" {
+                guard !sawChompingIndicator else { return nil }
+                sawChompingIndicator = true
+            } else if let digit = character.wholeNumberValue, (1...9).contains(digit) {
+                guard explicitIndent == nil else { return nil }
+                explicitIndent = digit
+            } else {
+                break
+            }
+            index = candidate.index(after: index)
+        }
+
+        let remainder = candidate[index...]
+        guard remainder.isEmpty || remainder.first == " " || remainder.first == "\t" else {
+            return nil
+        }
+
+        let trimmedRemainder = remainder.drop { $0 == " " || $0 == "\t" }
+        guard trimmedRemainder.isEmpty || trimmedRemainder.first == "#" else {
+            return nil
+        }
+        return BlockScalarIndicator(explicitIndent: explicitIndent)
+    }
+
+    private static func containsStructuralComment(in input: String) -> Bool {
+        let lines = input.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var activeBlockScalar: BlockScalarState?
+        var quoteState = CommentQuoteState()
+
+        for line in lines {
+            if var blockScalar = activeBlockScalar {
+                if blockScalar.contains(line) {
+                    activeBlockScalar = blockScalar
+                    continue
+                }
+                activeBlockScalar = nil
+            }
+
+            if quoteState.containsCommentToken(in: line) {
+                return true
+            }
+            if !quoteState.isInsideQuotedScalar,
+               let header = blockScalarHeader(in: line) {
+                activeBlockScalar = BlockScalarState(header: header)
+            }
+        }
+
+        return false
+    }
+
+    private struct CommentQuoteState {
+        var inSingleQuote = false
+        var inDoubleQuote = false
+
+        var isInsideQuotedScalar: Bool {
+            inSingleQuote || inDoubleQuote
+        }
+
+        mutating func containsCommentToken(in line: String) -> Bool {
+            var index = line.startIndex
+            // A backslash at the end of a double-quoted physical line escapes
+            // the line break, not the first character of the following line.
+            var escaped = false
+
+            while index < line.endIndex {
+                let character = line[index]
+                if inDoubleQuote {
+                    if escaped {
+                        escaped = false
+                    } else if character == "\\" {
+                        escaped = true
+                    } else if character == "\"" {
+                        inDoubleQuote = false
+                    }
+                } else if inSingleQuote {
+                    if character == "'" {
+                        let next = line.index(after: index)
+                        if next < line.endIndex, line[next] == "'" {
+                            index = next
+                        } else {
+                            inSingleQuote = false
+                        }
+                    }
+                } else if character == "\"", canOpenQuotedScalar(in: line, at: index) {
+                    inDoubleQuote = true
+                } else if character == "'", canOpenQuotedScalar(in: line, at: index) {
+                    inSingleQuote = true
+                } else if character == "#" {
+                    if index == line.startIndex {
+                        return true
+                    }
+                    let previous = line[line.index(before: index)]
+                    if previous == " " || previous == "\t" {
+                        return true
+                    }
+                }
+
+                index = line.index(after: index)
+            }
+
+            return false
+        }
+
+        private func canOpenQuotedScalar(in line: String, at index: String.Index) -> Bool {
+            let prefix = line[..<index]
+            guard let previousIndex = prefix.lastIndex(where: { !$0.isWhitespace }) else {
+                return true
+            }
+
+            // Quotes inside a plain scalar (for example `it's` or
+            // `say "hello"`) do not open quoted-scalar state. YAML quoted
+            // scalars begin at the start of a scalar value/key or after a
+            // flow/sequence indicator.
+            return ":,-?[{".contains(line[previousIndex])
+        }
     }
 
     private static func firstMappingDelimiterIndex(in body: String) -> String.Index? {
