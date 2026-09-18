@@ -10,7 +10,7 @@ struct XMLFormattingTests {
             """
             <root>
               <item id="1">a</item>
-              <empty></empty>
+              <empty/>
             </root>
             """
         )
@@ -57,6 +57,178 @@ struct XMLFormattingTests {
         #expect(output.contains("<p>Hello <strong>world</strong>, this is <em>mixed</em> content.</p>"))
         #expect(!output.contains("</strong>\n"))
         #expect(!output.contains("</em>\n"))
+    }
+
+    @Test func preservesWhitespaceTextNodesInsideXMLSpacePreserve() throws {
+        let input = #"<pre xml:space="preserve"><a/> <b/></pre>"#
+
+        #expect(try XMLFormatting.format(input) == "<pre xml:space=\"preserve\"><a/> <b/></pre>")
+        #expect(try XMLFormatting.minify(input) == "<pre xml:space=\"preserve\"><a/> <b/></pre>")
+    }
+
+    @Test func XMLSpacePreserveIsInheritedAndDefaultRestoresNormalFormatting() throws {
+        let input = #"<outer xml:space="preserve"> <inherited><a/> <b/></inherited><normal xml:space="default"><a/>   <b/><again xml:space="preserve"><x/> <y/></again></normal> </outer>"#
+
+        let formatted = try XMLFormatting.format(input)
+        #expect(formatted.hasPrefix("<outer xml:space=\"preserve\"> <inherited><a/> <b/></inherited>"))
+        #expect(formatted.contains("<normal xml:space=\"default\">\n"))
+        #expect(formatted.contains("<again xml:space=\"preserve\"><x/> <y/></again>"))
+        #expect(formatted.hasSuffix("</normal> </outer>"))
+
+        let minified = try XMLFormatting.minify(input)
+        #expect(minified.contains("<inherited><a/> <b/></inherited>"))
+        #expect(minified.contains("<normal xml:space=\"default\"><a/><b/><again xml:space=\"preserve\"><x/> <y/></again></normal>"))
+        #expect(minified.hasSuffix("</normal> </outer>"))
+    }
+
+    @Test func XMLSpaceDefaultInsidePreservedRootKeepsRootWhitespaceAndFormatsNestedChildren() throws {
+        let input = """
+        <root xml:space="preserve">
+          before
+          <section xml:space="default"><a/><b/></section>
+          after
+        </root>
+        """
+
+        #expect(
+            try XMLFormatting.format(input) ==
+            """
+            <root xml:space="preserve">
+              before
+              <section xml:space="default">
+                <a/>
+                <b/>
+              </section>
+              after
+            </root>
+            """
+        )
+
+        #expect(
+            try XMLFormatting.format(input, indentWidth: 4) ==
+            """
+            <root xml:space="preserve">
+              before
+              <section xml:space="default">
+                  <a/>
+                  <b/>
+              </section>
+              after
+            </root>
+            """
+        )
+    }
+
+    @Test func XMLSpaceDefaultFirstChildUsesPreservedLinePrefixAsItsLayoutBaseline() throws {
+        let input = """
+        <root xml:space="preserve">
+          <section xml:space="default"><a/><b/></section>
+        </root>
+        """
+
+        #expect(
+            try XMLFormatting.format(input) ==
+            """
+            <root xml:space="preserve">
+              <section xml:space="default">
+                <a/>
+                <b/>
+              </section>
+            </root>
+            """
+        )
+
+        #expect(
+            try XMLFormatting.format(input, indentWidth: 4) ==
+            """
+            <root xml:space="preserve">
+              <section xml:space="default">
+                  <a/>
+                  <b/>
+              </section>
+            </root>
+            """
+        )
+        #expect(
+            try XMLFormatting.minify(input) ==
+            "<root xml:space=\"preserve\">\n  <section xml:space=\"default\"><a/><b/></section>\n</root>"
+        )
+    }
+
+    @Test func XMLSpaceDefaultKeepsRawTabPrefixAndAppendsSelectedSpaces() throws {
+        let input = "<root xml:space=\"preserve\">\n\t<section xml:space=\"default\"><a/><b/></section>\n</root>"
+
+        #expect(
+            try XMLFormatting.format(input) ==
+            "<root xml:space=\"preserve\">\n\t<section xml:space=\"default\">\n\t  <a/>\n\t  <b/>\n\t</section>\n</root>"
+        )
+        #expect(
+            try XMLFormatting.format(input, indentWidth: 4) ==
+            "<root xml:space=\"preserve\">\n\t<section xml:space=\"default\">\n\t    <a/>\n\t    <b/>\n\t</section>\n</root>"
+        )
+    }
+
+    @Test func XMLSpaceDefaultOnSameLineDoesNotInventAnOuterPrefix() throws {
+        let input = #"<root xml:space="preserve"><section xml:space="default"><a/><b/></section></root>"#
+
+        #expect(
+            try XMLFormatting.format(input) ==
+            "<root xml:space=\"preserve\"><section xml:space=\"default\">\n  <a/>\n  <b/>\n</section></root>"
+        )
+    }
+
+    @Test func XMLSpaceOnlyRecognizesExactSpecificationTokens() throws {
+        let uppercase = #"<root xml:space="PRESERVE"><a/><b/></root>"#
+        let padded = #"<root xml:space=" preserve "><a/><b/></root>"#
+        let invalidOverride = #"<outer xml:space="preserve"><inner xml:space="DEFAULT"><a/> <b/></inner></outer>"#
+
+        #expect(
+            try XMLFormatting.format(uppercase) ==
+            "<root xml:space=\"PRESERVE\">\n  <a/>\n  <b/>\n</root>"
+        )
+        #expect(
+            try XMLFormatting.format(padded) ==
+            "<root xml:space=\" preserve \">\n  <a/>\n  <b/>\n</root>"
+        )
+        #expect(try XMLFormatting.format(invalidOverride) == invalidOverride)
+    }
+
+    @Test func preservesEmptyElementSpellingAndAttributeQuoteStyle() throws {
+        let input = #"<root><single value='x'/><expanded></expanded></root>"#
+
+        #expect(
+            try XMLFormatting.format(input) ==
+            "<root>\n  <single value='x'/>\n  <expanded></expanded>\n</root>"
+        )
+        #expect(
+            try XMLFormatting.minify(input) ==
+            "<root><single value='x'/><expanded></expanded></root>"
+        )
+    }
+
+    @Test func normalizesNonUTFDeclarationForUnicodeStringInput() throws {
+        let samples = [
+            (#"<?xml version="1.0" encoding="ISO-8859-1"?><root>é</root>"#, "é", #"<?xml version="1.0" encoding="UTF-8"?>"#),
+            (#"<?xml version='1.0' encoding='Shift_JIS' standalone='yes'?><root>日本語</root>"#, "日本語", #"<?xml version='1.0' encoding='UTF-8' standalone='yes'?>"#)
+        ]
+
+        for (input, text, declaration) in samples {
+            let output = try XMLFormatting.format(input)
+            #expect(output.hasPrefix(declaration))
+            #expect(output.contains(text))
+            #expect(!output.contains("Ã"))
+        }
+    }
+
+    @Test func keepsUTF8DeclarationAndDoesNotInventOne() throws {
+        let declared = #"<?xml version="1.0" encoding="utf-8" standalone="no"?><root>é</root>"#
+        let declaredOutput = try XMLFormatting.format(declared)
+        #expect(declaredOutput.hasPrefix(#"<?xml version="1.0" encoding="utf-8" standalone="no"?>"#))
+        #expect(declaredOutput.contains("é"))
+
+        let undeclaredOutput = try XMLFormatting.format("<root>日本語</root>")
+        #expect(!undeclaredOutput.hasPrefix("<?xml"))
+        #expect(undeclaredOutput == "<root>日本語</root>")
     }
 
     @Test func invalidXMLThrowsFormattingError() throws {
@@ -188,7 +360,7 @@ struct XMLFormattingTests {
 
         let minified = try XMLFormatting.minify(input)
         #expect(minified.contains("<!DOCTYPE svg PUBLIC"))
-        #expect(minified.contains("<svg width=\"100\" height=\"100\"><circle cx=\"50\" cy=\"50\" r=\"40\"></circle></svg>"))
+        #expect(minified.contains("<svg width=\"100\" height=\"100\"><circle cx=\"50\" cy=\"50\" r=\"40\"/></svg>"))
     }
 
     @Test func formatsAdobeIllustratorSVGWithEntityDeclarationsAndComments() throws {
@@ -266,6 +438,28 @@ struct XMLFormattingTests {
         #expect(output.contains("<root>"))
         #expect(output.contains("<!-- Footer comment -->"))
     }
+
+    @Test func preservesTopLevelCommentPIAndDOCTYPESourceOrderInBothModes() throws {
+        let input = """
+        <!-- before -->
+        <?before value?>
+        <!DOCTYPE root>
+        <?after value?>
+        <root/>
+        <!-- tail -->
+        <?tail value?>
+        """
+        let expected = """
+        <!-- before -->
+        <?before value?>
+        <!DOCTYPE root>
+        <?after value?>
+        <root/>
+        <!-- tail -->
+        <?tail value?>
+        """
+
+        #expect(try XMLFormatting.format(input) == expected)
+        #expect(try XMLFormatting.minify(input) == expected)
+    }
 }
-
-

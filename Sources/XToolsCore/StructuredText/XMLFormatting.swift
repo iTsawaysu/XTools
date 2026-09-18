@@ -25,45 +25,47 @@ public enum XMLFormatting {
             return ""
         }
 
-        let hadDeclaration = trimmed.hasPrefix("<?xml")
-
+        let normalizedInput = normalizeStringEncodingDeclaration(in: trimmed)
         do {
-            if let syntaxDiagnostic = syntaxDiagnostic(for: trimmed) {
+            if let syntaxDiagnostic = syntaxDiagnostic(for: normalizedInput) {
                 throw FormattingError.invalidXML(syntaxDiagnostic)
             }
 
-            let document = try XMLDocument(xmlString: trimmed, options: [.nodePreserveCDATA, .nodeLoadExternalEntitiesNever])
+            let document = try XMLDocument(
+                xmlString: normalizedInput,
+                options: [
+                    .nodePreserveCDATA,
+                    .nodePreserveWhitespace,
+                    .nodePreserveEmptyElements,
+                    .nodePreserveQuotes,
+                    .nodeLoadExternalEntitiesNever
+                ]
+            )
             guard let root = document.rootElement() else {
                 throw FormattingError.invalidXML(
                     FormatDiagnostic(formatName: "XML", message: "XML 文档缺少根节点")
                 )
             }
 
-            var outputParts: [String] = []
-            if hadDeclaration, let declaration = xmlDeclaration(in: trimmed) {
-                outputParts.append(declaration)
-            }
-            if let doctype = doctypeDeclaration(in: trimmed) {
-                outputParts.append(doctype)
-            }
+            var outputParts = topLevelPreamble(in: normalizedInput)
             let topChildren = document.children ?? []
-            if topChildren.isEmpty {
-                if minify {
-                    outputParts.append(root.xmlString(options: []))
-                } else {
-                    outputParts.append(render(root, level: 0, indentWidth: max(0, indentWidth)))
-                }
-            } else {
-                for child in topChildren {
+            if let rootIndex = topChildren.firstIndex(where: { $0.kind == .element }) {
+                for child in topChildren[rootIndex...] {
                     if child.kind == .element {
                         if minify {
-                            outputParts.append(child.xmlString(options: []))
+                            outputParts.append(render(child, level: 0, indentWidth: 0, minify: true))
                         } else {
-                            outputParts.append(render(child, level: 0, indentWidth: max(0, indentWidth)))
+                            outputParts.append(render(child, level: 0, indentWidth: max(0, indentWidth), minify: false))
                         }
                     } else if child.kind == .comment || child.kind == .processingInstruction {
                         outputParts.append(child.xmlString(options: []))
                     }
+                }
+            } else {
+                if minify {
+                    outputParts.append(render(root, level: 0, indentWidth: 0, minify: true))
+                } else {
+                    outputParts.append(render(root, level: 0, indentWidth: max(0, indentWidth), minify: false))
                 }
             }
             return outputParts.joined(separator: "\n")
@@ -142,9 +144,81 @@ public enum XMLFormatting {
         }
     }
 
-    private static func xmlDeclaration(in input: String) -> String? {
-        guard input.hasPrefix("<?xml"), let end = input.range(of: "?>") else { return nil }
-        return String(input[..<end.upperBound])
+    /// The public API receives an already-decoded Swift `String`. A legacy
+    /// byte-encoding declaration must therefore not ask Foundation to decode
+    /// the String's UTF-8 representation a second time.
+    private static func normalizeStringEncodingDeclaration(in input: String) -> String {
+        guard input.hasPrefix("<?xml"),
+              let declarationEnd = input.range(of: "?>")?.upperBound else {
+            return input
+        }
+
+        let declarationRange = input.startIndex..<declarationEnd
+        let declaration = String(input[declarationRange])
+        guard let valueRange = encodingValueRange(in: declaration) else {
+            return input
+        }
+
+        let encoding = declaration[valueRange].lowercased()
+        guard encoding != "utf-8", encoding != "utf8" else {
+            return input
+        }
+
+        var normalizedDeclaration = declaration
+        normalizedDeclaration.replaceSubrange(valueRange, with: "UTF-8")
+        var normalized = input
+        normalized.replaceSubrange(declarationRange, with: normalizedDeclaration)
+        return normalized
+    }
+
+    private static func encodingValueRange(in declaration: String) -> Range<String.Index>? {
+        var searchStart = declaration.startIndex
+
+        while searchStart < declaration.endIndex,
+              let nameRange = declaration.range(
+                of: "encoding",
+                options: .caseInsensitive,
+                range: searchStart..<declaration.endIndex
+              ) {
+            let beforeIsNameCharacter = nameRange.lowerBound > declaration.startIndex
+                && isXMLNameCharacter(declaration[declaration.index(before: nameRange.lowerBound)])
+            let afterIsNameCharacter = nameRange.upperBound < declaration.endIndex
+                && isXMLNameCharacter(declaration[nameRange.upperBound])
+            if beforeIsNameCharacter || afterIsNameCharacter {
+                searchStart = nameRange.upperBound
+                continue
+            }
+
+            var index = nameRange.upperBound
+            while index < declaration.endIndex, declaration[index].isWhitespace {
+                index = declaration.index(after: index)
+            }
+            guard index < declaration.endIndex, declaration[index] == "=" else {
+                searchStart = nameRange.upperBound
+                continue
+            }
+            index = declaration.index(after: index)
+            while index < declaration.endIndex, declaration[index].isWhitespace {
+                index = declaration.index(after: index)
+            }
+            guard index < declaration.endIndex,
+                  declaration[index] == "\"" || declaration[index] == "'" else {
+                return nil
+            }
+
+            let quote = declaration[index]
+            let valueStart = declaration.index(after: index)
+            guard let valueEnd = declaration[valueStart...].firstIndex(of: quote) else {
+                return nil
+            }
+            return valueStart..<valueEnd
+        }
+
+        return nil
+    }
+
+    private static func isXMLNameCharacter(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber || character == "_" || character == "-" || character == ":"
     }
 
     private static func doctypeDeclaration(in input: String) -> String? {
@@ -222,17 +296,116 @@ public enum XMLFormatting {
         return nil
     }
 
+    private static func topLevelPreamble(in input: String) -> [String] {
+        var parts: [String] = []
+        var index = input.startIndex
+
+        while index < input.endIndex {
+            while index < input.endIndex, input[index].isWhitespace {
+                index = input.index(after: index)
+            }
+            guard index < input.endIndex else { break }
+
+            if input[index...].hasPrefix("<!--") {
+                guard let end = input.range(of: "-->", range: index..<input.endIndex) else { break }
+                parts.append(String(input[index..<end.upperBound]))
+                index = end.upperBound
+                continue
+            }
+
+            if input[index...].hasPrefix("<?") {
+                guard let end = input.range(of: "?>", range: index..<input.endIndex) else { break }
+                parts.append(String(input[index..<end.upperBound]))
+                index = end.upperBound
+                continue
+            }
+
+            if input[index...].range(of: "<!DOCTYPE", options: [.caseInsensitive, .anchored]) != nil,
+               let doctype = doctypeDeclaration(in: String(input[index...])) {
+                parts.append(doctype)
+                index = input.index(index, offsetBy: doctype.count)
+                continue
+            }
+
+            break
+        }
+
+        return parts
+    }
 
 
-    private static func render(_ node: XMLNode, level: Int, indentWidth: Int) -> String {
-        let indent = String(repeating: " ", count: level * indentWidth)
+
+    private enum XMLSpaceMode {
+        case `default`
+        case preserve
+    }
+
+    private struct LayoutPrefix {
+        let raw: String
+
+        static func spaces(_ count: Int) -> LayoutPrefix {
+            LayoutPrefix(raw: String(repeating: " ", count: max(0, count)))
+        }
+
+        func appendingSpaces(_ count: Int) -> LayoutPrefix {
+            LayoutPrefix(raw: raw + String(repeating: " ", count: max(0, count)))
+        }
+    }
+
+    private static func render(
+        _ node: XMLNode,
+        level: Int,
+        indentWidth: Int,
+        minify: Bool,
+        inheritedSpace: XMLSpaceMode = .default,
+        includeLeadingIndent: Bool = true,
+        layoutPrefixOverride: LayoutPrefix? = nil
+    ) -> String {
+        let fallbackLayoutPrefix = layoutPrefixOverride ?? .spaces(level * indentWidth)
+        let preserveLeadingWhitespace = inheritedSpace == .preserve && !includeLeadingIndent
+        let layoutPrefix = preserveLeadingWhitespace
+            ? leadingPreservedLinePrefix(of: node) ?? fallbackLayoutPrefix
+            : fallbackLayoutPrefix
+        let layoutIndent = layoutPrefix.raw
+        let indent = includeLeadingIndent ? layoutIndent : ""
         guard node.kind == .element else {
             return indent + node.xmlString(options: [])
         }
 
+        let element = node as? XMLElement
+        let effectiveSpace = xmlSpaceMode(for: element, inherited: inheritedSpace)
         let children = node.children ?? []
         guard !children.isEmpty else {
-            return indent + node.xmlString(options: [])
+            return indent + elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)
+        }
+
+        if effectiveSpace == .preserve {
+            guard let name = node.name,
+                  let opening = openingTag(of: node, preservingLeadingWhitespace: preserveLeadingWhitespace) else {
+                return indent + node.xmlString(options: [])
+            }
+
+            var currentLayoutPrefix = layoutPrefix
+            let renderedChildren = children.map { child in
+                let renderedChild = render(
+                    child,
+                    level: level + 1,
+                    indentWidth: indentWidth,
+                    minify: minify,
+                    inheritedSpace: .preserve,
+                    includeLeadingIndent: false,
+                    layoutPrefixOverride: currentLayoutPrefix
+                )
+                currentLayoutPrefix = preservedLinePrefix(after: renderedChild) ?? currentLayoutPrefix
+                return renderedChild
+            }.joined()
+            let trailingContent = preservedTrailingContent(
+                of: node,
+                opening: opening,
+                children: children,
+                name: name
+            )
+            return "\(indent)\(opening)\(renderedChildren)\(trailingContent)</\(name)>"
         }
 
         let significantChildren = children.filter { child in
@@ -245,24 +418,125 @@ public enum XMLFormatting {
         // Pretty-printing mixed content inserts new text-node whitespace. Keep
         // that subtree compact so visible text remains byte-for-byte meaningful.
         if hasStructuredChild && hasSignificantText {
-            return indent + node.xmlString(options: [])
+            return indent + elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)
         }
 
         if !hasStructuredChild {
-            return indent + node.xmlString(options: [])
+            return indent + elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)
         }
 
-        let compact = node.xmlString(options: [])
-        guard let openingEnd = compact.firstIndex(of: ">"), let name = node.name else {
-            return indent + compact
+        guard let opening = openingTag(of: node, preservingLeadingWhitespace: preserveLeadingWhitespace),
+              let name = node.name else {
+            return indent + elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)
         }
 
-        let opening = String(compact[...openingEnd])
-        let renderedChildren = significantChildren.map {
-            render($0, level: level + 1, indentWidth: indentWidth)
-        }.joined(separator: "\n")
+        let renderedChildren = significantChildren.map { child in
+            render(
+                child,
+                level: level + 1,
+                indentWidth: indentWidth,
+                minify: minify,
+                inheritedSpace: .default,
+                includeLeadingIndent: !minify,
+                layoutPrefixOverride: layoutPrefixOverride == nil
+                    ? nil
+                    : layoutPrefix.appendingSpaces(indentWidth)
+            )
+        }.joined(separator: minify ? "" : "\n")
 
-        return "\(indent)\(opening)\n\(renderedChildren)\n\(indent)</\(name)>"
+        if minify {
+            return "\(indent)\(opening)\(renderedChildren)</\(name)>"
+        }
+
+        // A default subtree can begin within an inherited `xml:space="preserve"`
+        // text node. Its opening tag must use that preserved prefix, while its
+        // generated closing tag returns to the preserved line's layout indent.
+        return "\(indent)\(opening)\n\(renderedChildren)\n\(layoutIndent)</\(name)>"
+    }
+
+    private static func leadingPreservedLinePrefix(of node: XMLNode) -> LayoutPrefix? {
+        let raw = node.xmlString(options: [])
+        guard let elementStart = raw.firstIndex(of: "<") else { return nil }
+        return preservedLinePrefix(after: String(raw[..<elementStart]))
+    }
+
+    private static func preservedLinePrefix(after text: String) -> LayoutPrefix? {
+        guard let lineBreak = text.lastIndex(where: { $0 == "\n" || $0 == "\r" }) else {
+            return nil
+        }
+
+        let trailingText = text[text.index(after: lineBreak)...]
+        guard trailingText.allSatisfy({ $0 == " " || $0 == "\t" }) else {
+            return nil
+        }
+        return LayoutPrefix(raw: String(trailingText))
+    }
+
+    private static func xmlSpaceMode(for element: XMLElement?, inherited: XMLSpaceMode) -> XMLSpaceMode {
+        guard let value = element?.attribute(forName: "xml:space")?.stringValue else {
+            return inherited
+        }
+
+        switch value {
+        case "preserve":
+            return .preserve
+        case "default":
+            return .default
+        default:
+            return inherited
+        }
+    }
+
+    private static func openingTag(of node: XMLNode, preservingLeadingWhitespace: Bool) -> String? {
+        let compact = elementXMLString(node, preservingLeadingWhitespace: preservingLeadingWhitespace)
+        var index = compact.startIndex
+        var quote: Character?
+
+        while index < compact.endIndex {
+            let character = compact[index]
+            if let activeQuote = quote {
+                if character == activeQuote {
+                    quote = nil
+                }
+            } else if character == "\"" || character == "'" {
+                quote = character
+            } else if character == ">" {
+                return String(compact[...index])
+            }
+            index = compact.index(after: index)
+        }
+
+        return nil
+    }
+
+    private static func elementXMLString(_ node: XMLNode, preservingLeadingWhitespace: Bool) -> String {
+        let raw = node.xmlString(options: [])
+        guard !preservingLeadingWhitespace, let elementStart = raw.firstIndex(of: "<") else {
+            return raw
+        }
+        return String(raw[elementStart...])
+    }
+
+    private static func preservedTrailingContent(
+        of node: XMLNode,
+        opening: String,
+        children: [XMLNode],
+        name: String
+    ) -> String {
+        let raw = elementXMLString(node, preservingLeadingWhitespace: opening.first?.isWhitespace == true)
+        let closing = "</\(name)>"
+        guard raw.hasPrefix(opening), raw.hasSuffix(closing) else {
+            return ""
+        }
+
+        let contentStart = raw.index(raw.startIndex, offsetBy: opening.count)
+        let contentEnd = raw.index(raw.endIndex, offsetBy: -closing.count)
+        let content = raw[contentStart..<contentEnd]
+        let rawChildren = children.map { $0.xmlString(options: []) }.joined()
+        guard content.hasPrefix(rawChildren) else {
+            return ""
+        }
+        return String(content.dropFirst(rawChildren.count))
     }
 
     private static func isStructuredContent(_ kind: XMLNode.Kind) -> Bool {
