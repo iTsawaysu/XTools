@@ -33,6 +33,7 @@ private struct IndexTextDiffWorkspaceContent: View {
                 left: $workspace.left,
                 right: $workspace.right,
                 rows: execution.binding.rows,
+                resultState: execution.resultState,
                 syntax: .plain,
                 foldUnchanged: workspace.foldUnchanged,
                 error: execution.binding.error,

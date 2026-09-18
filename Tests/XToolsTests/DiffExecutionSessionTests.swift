@@ -9,27 +9,49 @@ struct DiffExecutionSessionTests {
         let session = DiffExecutionSession()
         let request = DiffExecutionRequest(kind: .text, left: "old", right: "new")
 
-        session.schedule(request: request, delay: .milliseconds(10)) { request in
+        session.schedule(request: request, delay: .milliseconds(10)) { request, _ in
             DiffExecutionBinding(
                 rows: [],
                 error: Thread.isMainThread ? "main" : "\(request.left)->\(request.right)"
             )
         }
 
+        #expect(session.resultState == .running)
+
         try await Self.waitUntil {
             session.binding.error == "old->new" && !session.isRunning
         }
+        #expect(session.resultState == .current)
+    }
+
+    @Test func completedResultBecomesStaleUntilLatestRequestFinishes() async throws {
+        let session = DiffExecutionSession()
+        session.schedule(request: .text("first"), delay: .zero) { request, _ in
+            DiffExecutionBinding(error: request.left)
+        }
+        try await Self.waitUntil { session.resultState == .current }
+
+        session.schedule(request: .text("second"), delay: .milliseconds(40)) { request, _ in
+            DiffExecutionBinding(error: request.left)
+        }
+        #expect(session.resultState == .stale)
+        #expect(session.isDisplayingStaleResult)
+        #expect(session.binding.error == "first")
+
+        try await Self.waitUntil { session.binding.error == "second" && !session.isRunning }
+        #expect(session.resultState == .current)
+        #expect(!session.isDisplayingStaleResult)
     }
 
     @Test func debounceCoalescesRapidRequestsBeforeWorkStarts() async throws {
         let probe = DiffOperationProbe()
         let session = DiffExecutionSession()
 
-        session.schedule(request: .text("first"), delay: .milliseconds(40)) { request in
+        session.schedule(request: .text("first"), delay: .milliseconds(40)) { request, _ in
             probe.recordStart(request.left)
             return DiffExecutionBinding(error: request.left)
         }
-        session.schedule(request: .text("latest"), delay: .milliseconds(40)) { request in
+        session.schedule(request: .text("latest"), delay: .milliseconds(40)) { request, _ in
             probe.recordStart(request.left)
             return DiffExecutionBinding(error: request.left)
         }
@@ -44,7 +66,7 @@ struct DiffExecutionSessionTests {
         let probe = DiffOperationProbe()
         let session = DiffExecutionSession()
 
-        session.schedule(request: .text("first"), delay: .zero) { request in
+        session.schedule(request: .text("first"), delay: .zero) { request, _ in
             probe.begin(request.left)
             defer { probe.finish() }
             while !Task.isCancelled {
@@ -55,12 +77,12 @@ struct DiffExecutionSessionTests {
         }
         try await Self.waitUntil { probe.startedInputs == ["first"] }
 
-        session.schedule(request: .text("obsolete"), delay: .milliseconds(10)) { request in
+        session.schedule(request: .text("obsolete"), delay: .milliseconds(10)) { request, _ in
             probe.begin(request.left)
             defer { probe.finish() }
             return DiffExecutionBinding(error: request.left)
         }
-        session.schedule(request: .text("latest"), delay: .milliseconds(10)) { request in
+        session.schedule(request: .text("latest"), delay: .milliseconds(10)) { request, _ in
             probe.begin(request.left)
             defer { probe.finish() }
             return DiffExecutionBinding(error: request.left)
@@ -78,9 +100,9 @@ struct DiffExecutionSessionTests {
         let probe = DiffOperationProbe()
         let session = DiffExecutionSession()
 
-        session.schedule(request: .text("slow"), delay: .zero) { request in
+        session.schedule(request: .text("slow"), delay: .zero) { request, shouldCancel in
             probe.recordStart(request.left)
-            while !Task.isCancelled {
+            while !shouldCancel() {
                 Thread.sleep(forTimeInterval: 0.002)
             }
             probe.recordCancellation(request.left)
@@ -88,7 +110,7 @@ struct DiffExecutionSessionTests {
         }
         try await Self.waitUntil { probe.startedInputs == ["slow"] }
 
-        session.schedule(request: .text("latest"), delay: .zero) { request in
+        session.schedule(request: .text("latest"), delay: .zero) { request, _ in
             DiffExecutionBinding(error: request.left)
         }
 
@@ -102,24 +124,24 @@ struct DiffExecutionSessionTests {
         let session = DiffExecutionSession()
         let probe = DiffOperationProbe(delays: ["success": 0.12, "failure": 0.12])
 
-        session.schedule(request: .text("success"), delay: .zero) { request in
+        session.schedule(request: .text("success"), delay: .zero) { request, _ in
             probe.sleepIgnoringCancellation(request.left)
             return DiffExecutionBinding(error: "stale-success")
         }
         try await Self.waitUntil { probe.startedInputs == ["success"] }
-        session.schedule(request: .text("current"), delay: .zero) { _ in
+        session.schedule(request: .text("current"), delay: .zero) { _, _ in
             DiffExecutionBinding(error: "current")
         }
         try await Self.waitUntil {
             session.binding.error == "current" && !session.isRunning
         }
 
-        session.schedule(request: .text("failure"), delay: .zero) { request in
+        session.schedule(request: .text("failure"), delay: .zero) { request, _ in
             probe.sleepIgnoringCancellation(request.left)
             throw DiffOperationProbe.Failure.expected
         }
         try await Self.waitUntil { probe.startedInputs.contains("failure") }
-        session.schedule(request: .text("new-current"), delay: .zero) { _ in
+        session.schedule(request: .text("new-current"), delay: .zero) { _, _ in
             DiffExecutionBinding(error: "new-current")
         }
         try await Self.waitUntil {
@@ -135,7 +157,7 @@ struct DiffExecutionSessionTests {
             binding: DiffExecutionBinding(error: "existing")
         )
 
-        session.schedule(request: .text("slow"), delay: .zero) { request in
+        session.schedule(request: .text("slow"), delay: .zero) { request, _ in
             probe.sleepIgnoringCancellation(request.left)
             return DiffExecutionBinding(error: "late")
         }
@@ -144,6 +166,7 @@ struct DiffExecutionSessionTests {
         session.invalidate()
         #expect(session.binding == DiffExecutionBinding())
         #expect(!session.isRunning)
+        #expect(session.resultState == .empty)
 
         try await Task.sleep(for: .milliseconds(400))
         #expect(session.binding == DiffExecutionBinding())
@@ -156,7 +179,7 @@ struct DiffExecutionSessionTests {
         var right = "before-right"
         let request = DiffExecutionRequest(kind: .text, left: left, right: right)
 
-        session.schedule(request: request, delay: .milliseconds(20)) { request in
+        session.schedule(request: request, delay: .milliseconds(20)) { request, _ in
             DiffExecutionBinding(error: "\(request.left)|\(request.right)")
         }
         left = "after-left"
@@ -172,9 +195,9 @@ struct DiffExecutionSessionTests {
         var session: DiffExecutionSession? = DiffExecutionSession()
         weak let weakSession = session
 
-        session?.schedule(request: .text("owned"), delay: .zero) { request in
+        session?.schedule(request: .text("owned"), delay: .zero) { request, shouldCancel in
             probe.recordStart(request.left)
-            while !Task.isCancelled {
+            while !shouldCancel() {
                 Thread.sleep(forTimeInterval: 0.002)
             }
             probe.recordCancellation(request.left)

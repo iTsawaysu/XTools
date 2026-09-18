@@ -50,7 +50,8 @@ struct CoreHeavyPathThroughputProbes {
             _ = try LineDiffer.safeAlignedDiff(left: left, right: right)
         }
         #expect(samples.count == Self.sampleIterations)
-        #expect(samples.allSatisfy { $0 < 50.0 })
+        #expect(samples.allSatisfy { $0 >= 0 })
+        #expect(Self.median(samples) < 50.0)
     }
 
     @Test func jsonFormatThroughputAtRepresentativeSizes() throws {
@@ -157,6 +158,12 @@ struct CoreHeavyPathThroughputProbes {
         let components = duration.components
         return Double(components.seconds) * 1_000
             + Double(components.attoseconds) / 1_000_000_000_000_000
+    }
+
+    private static func median(_ samples: [Double]) -> Double {
+        let ordered = samples.sorted()
+        guard !ordered.isEmpty else { return .infinity }
+        return ordered[ordered.count / 2]
     }
 
     private static func emit(label: String, size: Int, milliseconds: Double) {

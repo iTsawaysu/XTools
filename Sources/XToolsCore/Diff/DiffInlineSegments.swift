@@ -13,24 +13,24 @@ extension DiffAlignedRow {
         cancellation: DiffCancellationChecker
     ) throws -> (left: [DiffTextSegment], right: [DiffTextSegment]) {
         try cancellation.check()
-        guard left != right else {
+        guard JSONExactTextIdentity(left) != JSONExactTextIdentity(right) else {
             return (
                 [DiffTextSegment(text: left, kind: .unchanged)],
                 [DiffTextSegment(text: right, kind: .unchanged)]
             )
         }
 
-        let leftCharacters = Array(left)
-        let rightCharacters = Array(right)
+        let leftScalars = Array(left.unicodeScalars)
+        let rightScalars = Array(right.unicodeScalars)
 
-        guard !leftCharacters.isEmpty else {
+        guard !leftScalars.isEmpty else {
             return (
                 [],
                 [DiffTextSegment(text: right, kind: .added)]
             )
         }
 
-        guard !rightCharacters.isEmpty else {
+        guard !rightScalars.isEmpty else {
             return (
                 [DiffTextSegment(text: left, kind: .removed)],
                 []
@@ -38,17 +38,17 @@ extension DiffAlignedRow {
         }
 
         var prefixCount = 0
-        while prefixCount < leftCharacters.count,
-              prefixCount < rightCharacters.count,
-              leftCharacters[prefixCount] == rightCharacters[prefixCount] {
+        while prefixCount < leftScalars.count,
+              prefixCount < rightScalars.count,
+              leftScalars[prefixCount] == rightScalars[prefixCount] {
             try cancellation.check()
             prefixCount += 1
         }
 
         var suffixCount = 0
-        while suffixCount < leftCharacters.count - prefixCount,
-              suffixCount < rightCharacters.count - prefixCount,
-              leftCharacters[leftCharacters.count - suffixCount - 1] == rightCharacters[rightCharacters.count - suffixCount - 1] {
+        while suffixCount < leftScalars.count - prefixCount,
+              suffixCount < rightScalars.count - prefixCount,
+              leftScalars[leftScalars.count - suffixCount - 1] == rightScalars[rightScalars.count - suffixCount - 1] {
             try cancellation.check()
             suffixCount += 1
         }
@@ -57,25 +57,25 @@ extension DiffAlignedRow {
         var rightSegments: [DiffTextSegment] = []
 
         if prefixCount > 0 {
-            let prefix = String(leftCharacters[0..<prefixCount])
+            let prefix = scalarText(leftScalars[0..<prefixCount])
             append(prefix, kind: .unchanged, to: &leftSegments)
             append(prefix, kind: .unchanged, to: &rightSegments)
         }
 
-        let leftMiddleEnd = leftCharacters.count - suffixCount
-        let rightMiddleEnd = rightCharacters.count - suffixCount
+        let leftMiddleEnd = leftScalars.count - suffixCount
+        let rightMiddleEnd = rightScalars.count - suffixCount
 
         try appendInlineMiddle(
-            left: Array(leftCharacters[prefixCount..<leftMiddleEnd]),
-            right: Array(rightCharacters[prefixCount..<rightMiddleEnd]),
+            left: Array(leftScalars[prefixCount..<leftMiddleEnd]),
+            right: Array(rightScalars[prefixCount..<rightMiddleEnd]),
             leftSegments: &leftSegments,
             rightSegments: &rightSegments,
             cancellation: cancellation
         )
 
         if suffixCount > 0 {
-            let leftSuffix = String(leftCharacters[leftMiddleEnd..<leftCharacters.count])
-            let rightSuffix = String(rightCharacters[rightMiddleEnd..<rightCharacters.count])
+            let leftSuffix = scalarText(leftScalars[leftMiddleEnd..<leftScalars.count])
+            let rightSuffix = scalarText(rightScalars[rightMiddleEnd..<rightScalars.count])
             append(leftSuffix, kind: .unchanged, to: &leftSegments)
             append(rightSuffix, kind: .unchanged, to: &rightSegments)
         }
@@ -84,27 +84,27 @@ extension DiffAlignedRow {
     }
 
     static func appendInlineMiddle(
-        left: [Character],
-        right: [Character],
+        left: [Unicode.Scalar],
+        right: [Unicode.Scalar],
         leftSegments: inout [DiffTextSegment],
         rightSegments: inout [DiffTextSegment],
         cancellation: DiffCancellationChecker
     ) throws {
         try cancellation.check()
         guard !left.isEmpty else {
-            append(String(right), kind: .added, to: &rightSegments)
+            append(scalarText(right), kind: .added, to: &rightSegments)
             return
         }
 
         guard !right.isEmpty else {
-            append(String(left), kind: .removed, to: &leftSegments)
+            append(scalarText(left), kind: .removed, to: &leftSegments)
             return
         }
 
         let maxInlineDiffCells = 120_000
         guard left.count <= maxInlineDiffCells / max(1, right.count) else {
-            append(String(left), kind: .removed, to: &leftSegments)
-            append(String(right), kind: .added, to: &rightSegments)
+            append(scalarText(left), kind: .removed, to: &leftSegments)
+            append(scalarText(right), kind: .added, to: &rightSegments)
             return
         }
 
@@ -156,15 +156,15 @@ extension DiffAlignedRow {
         }
     }
 
-    static func inlineLCSLengths(left: [Character], right: [Character]) -> [[Int]] {
+    static func inlineLCSLengths<Element: Equatable>(left: [Element], right: [Element]) -> [[Int]] {
         LineDiffer.withoutCancellation {
             try inlineLCSLengths(left: left, right: right, cancellation: $0)
         }
     }
 
-    static func inlineLCSLengths(
-        left: [Character],
-        right: [Character],
+    static func inlineLCSLengths<Element: Equatable>(
+        left: [Element],
+        right: [Element],
         cancellation: DiffCancellationChecker
     ) throws -> [[Int]] {
         try cancellation.check()
@@ -191,6 +191,10 @@ extension DiffAlignedRow {
         }
 
         return table
+    }
+
+    private static func scalarText<S: Sequence>(_ scalars: S) -> String where S.Element == Unicode.Scalar {
+        String(String.UnicodeScalarView(scalars))
     }
 
     static func cleanupInlineOperations(_ operations: [InlineDiffOperation]) -> [InlineDiffOperation] {

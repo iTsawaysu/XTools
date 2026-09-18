@@ -44,18 +44,38 @@ public struct DiffExecutionBinding: Equatable, Sendable {
 }
 
 public typealias DiffExecutionOperation = @Sendable (
-    _ request: DiffExecutionRequest
+    _ request: DiffExecutionRequest,
+    _ shouldCancel: @escaping @Sendable () -> Bool
 ) throws -> DiffExecutionBinding
 
 public enum DiffExecution {
-    public static func project(_ request: DiffExecutionRequest) throws -> DiffExecutionBinding {
+    public static func project(
+        _ request: DiffExecutionRequest,
+        shouldCancel: @escaping @Sendable () -> Bool = { Task.isCancelled }
+    ) throws -> DiffExecutionBinding {
+        try project(
+            request,
+            shouldCancel: shouldCancel,
+            jsonParserDidStart: nil
+        )
+    }
+
+    static func project(
+        _ request: DiffExecutionRequest,
+        shouldCancel: @escaping @Sendable () -> Bool,
+        jsonParserDidStart: (@Sendable () -> Void)?
+    ) throws -> DiffExecutionBinding {
+        if shouldCancel() {
+            throw CancellationError()
+        }
         switch request.kind {
         case .text(let options):
             do {
                 return DiffExecutionBinding(rows: try LineDiffer.safeAlignedDiff(
                     left: request.left,
                     right: request.right,
-                    options: options
+                    options: options,
+                    shouldCancel: shouldCancel
                 ))
             } catch let error as LineDiffError {
                 return DiffExecutionBinding(
@@ -64,40 +84,31 @@ public enum DiffExecution {
             }
 
         case .json(let labels, let options):
-            let decision = try JSONStructuralDiff.cancellableAlignedDiff(
+            let prepared = try JSONStructuralDiff.cancellablePreparedDiff(
                 left: request.left,
                 right: request.right,
                 labels: labels,
-                options: options
+                options: options,
+                shouldCancel: shouldCancel,
+                parserDidStart: jsonParserDidStart
             )
-            try Task.checkCancellation()
+            if shouldCancel() { throw CancellationError() }
 
-            switch decision {
+            switch prepared.decision {
             case .empty:
                 return DiffExecutionBinding()
             case .invalid(let message), .tooLarge(let message):
                 return DiffExecutionBinding(error: message)
             case .comparable(let rows):
-                let leftDisplayText = JSONStructuralDiff.displayTextForDiff(request.left, options: options)
-                try Task.checkCancellation()
-                let rightDisplayText = JSONStructuralDiff.displayTextForDiff(request.right, options: options)
-                try Task.checkCancellation()
-                let warning = JSONDiffValidation.comparisonWarning(
-                    left: request.left,
-                    right: request.right,
-                    labels: labels
-                )
-                try Task.checkCancellation()
-
                 // Folding is a view-mode projection: the binding always
                 // carries the full canonical rows and display text, and the
                 // editable diff workspace re-projects them through
                 // DiffFoldProjection with its per-region expansion state.
                 return DiffExecutionBinding(
-                    leftDisplayText: leftDisplayText,
-                    rightDisplayText: rightDisplayText,
+                    leftDisplayText: prepared.leftDisplayText,
+                    rightDisplayText: prepared.rightDisplayText,
                     rows: rows,
-                    warning: warning
+                    warning: prepared.warning
                 )
             }
         }

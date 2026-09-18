@@ -18,6 +18,33 @@ public enum JSONStructuralDiff {
         case comparable([DiffAlignedRow])
     }
 
+    public struct PreparedResult: Equatable, Sendable {
+        public let decision: Decision
+        public let leftDisplayText: String?
+        public let rightDisplayText: String?
+        public let warning: String?
+
+        init(
+            decision: Decision,
+            leftDisplayText: String? = nil,
+            rightDisplayText: String? = nil,
+            warning: String? = nil
+        ) {
+            self.decision = decision
+            self.leftDisplayText = leftDisplayText
+            self.rightDisplayText = rightDisplayText
+            self.warning = warning
+        }
+    }
+
+    private struct PreparedSide: Equatable, Sendable {
+        let isEmpty: Bool
+        let displayText: String?
+        let exactIdentity: JSONExactTextIdentity?
+        let duplicateKeys: [String]
+        let diagnostic: FormatDiagnostic?
+    }
+
     public static func cancellableAlignedDiff(
         left: String,
         right: String,
@@ -26,55 +53,184 @@ public enum JSONStructuralDiff {
         budget: LineDiffBudget = .standard,
         shouldCancel: @escaping @Sendable () -> Bool = { Task.isCancelled }
     ) throws -> Decision {
+        try cancellablePreparedDiff(
+            left: left,
+            right: right,
+            labels: labels,
+            options: options,
+            budget: budget,
+            shouldCancel: shouldCancel
+        ).decision
+    }
+
+    public static func cancellablePreparedDiff(
+        left: String,
+        right: String,
+        labels: JSONDiffValidation.SideLabels,
+        options: JSONDiffOptions = JSONDiffOptions(),
+        budget: LineDiffBudget = .standard,
+        shouldCancel: @escaping @Sendable () -> Bool = { Task.isCancelled }
+    ) throws -> PreparedResult {
+        try cancellablePreparedDiff(
+            left: left,
+            right: right,
+            labels: labels,
+            options: options,
+            budget: budget,
+            shouldCancel: shouldCancel,
+            parserDidStart: nil
+        )
+    }
+
+    /// Internal instrumentation seam for proving that one diff request starts
+    /// the ordered parser at most once per non-empty side.
+    static func cancellablePreparedDiff(
+        left: String,
+        right: String,
+        labels: JSONDiffValidation.SideLabels,
+        options: JSONDiffOptions = JSONDiffOptions(),
+        budget: LineDiffBudget = .standard,
+        shouldCancel: @escaping @Sendable () -> Bool = { Task.isCancelled },
+        parserDidStart: (@Sendable () -> Void)?
+    ) throws -> PreparedResult {
         let cancellation = DiffCancellationChecker(shouldCancel: shouldCancel)
         try cancellation.check()
 
-        switch JSONDiffValidation.evaluate(left: left, right: right, labels: labels) {
+        do {
+            // This gate deliberately precedes trimming, parser construction,
+            // canonical rendering, and line preprocessing.
+            try budget.validateInputBytes(
+                leftByteCount: left.utf8.count,
+                rightByteCount: right.utf8.count
+            )
+        } catch let error as LineDiffError {
+            return PreparedResult(
+                decision: .tooLarge(error.errorDescription ?? LineDiffError.inputTooLargeMessage)
+            )
+        }
+        try cancellation.check()
+
+        let preparedLeft = try prepareSide(
+            left,
+            options: options,
+            cancellation: cancellation,
+            parserDidStart: parserDidStart
+        )
+        let preparedRight = try prepareSide(
+            right,
+            options: options,
+            cancellation: cancellation,
+            parserDidStart: parserDidStart
+        )
+
+        switch JSONDiffValidation.decision(
+            leftIsEmpty: preparedLeft.isEmpty,
+            rightIsEmpty: preparedRight.isEmpty,
+            leftDiagnostic: preparedLeft.diagnostic,
+            rightDiagnostic: preparedRight.diagnostic,
+            labels: labels
+        ) {
         case .empty:
-            return .empty
+            return PreparedResult(decision: .empty)
         case .invalid(let message):
-            return .invalid(message)
+            return PreparedResult(decision: .invalid(message))
         case .comparable:
             try cancellation.check()
-            if areStructurallyEquivalent(left: left, right: right, options: options) {
-                return .comparable([])
+            let warning = JSONDiffValidation.comparisonWarning(
+                leftHasDuplicateKeys: !preparedLeft.duplicateKeys.isEmpty,
+                rightHasDuplicateKeys: !preparedRight.duplicateKeys.isEmpty,
+                labels: labels
+            )
+            let commonResult = PreparedResult(
+                decision: .comparable([]),
+                leftDisplayText: preparedLeft.displayText,
+                rightDisplayText: preparedRight.displayText,
+                warning: warning
+            )
+
+            if let leftIdentity = preparedLeft.exactIdentity,
+               let rightIdentity = preparedRight.exactIdentity,
+               leftIdentity == rightIdentity {
+                return commonResult
             }
 
-            try cancellation.check()
-            let leftDisplayText = displayTextForDiff(left, options: options) ?? left
-            try cancellation.check()
-            let rightDisplayText = displayTextForDiff(right, options: options) ?? right
-            try cancellation.check()
-
             do {
-                return .comparable(try LineDiffer.safeAlignedDiff(
-                    left: leftDisplayText,
-                    right: rightDisplayText,
+                let rows = try LineDiffer.safeAlignedDiff(
+                    left: preparedLeft.displayText ?? left,
+                    right: preparedRight.displayText ?? right,
                     budget: budget,
                     shouldCancel: shouldCancel
-                ))
+                )
+                return PreparedResult(
+                    decision: .comparable(rows),
+                    leftDisplayText: preparedLeft.displayText,
+                    rightDisplayText: preparedRight.displayText,
+                    warning: warning
+                )
             } catch let error as LineDiffError {
-                return .tooLarge(error.errorDescription ?? LineDiffError.inputTooLargeMessage)
+                return PreparedResult(
+                    decision: .tooLarge(error.errorDescription ?? LineDiffError.inputTooLargeMessage)
+                )
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
-                return .tooLarge(LineDiffError.inputTooLargeMessage)
+                return PreparedResult(decision: .tooLarge(LineDiffError.inputTooLargeMessage))
             }
         }
     }
 
-    private static func areStructurallyEquivalent(left: String, right: String, options: JSONDiffOptions) -> Bool {
-        let leftTrimmed = left.trimmingCharacters(in: .whitespacesAndNewlines)
-        let rightTrimmed = right.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !leftTrimmed.isEmpty && !rightTrimmed.isEmpty else {
-            return false
+    private static func prepareSide(
+        _ text: String,
+        options: JSONDiffOptions,
+        cancellation: DiffCancellationChecker,
+        parserDidStart: (@Sendable () -> Void)?
+    ) throws -> PreparedSide {
+        try cancellation.check()
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return PreparedSide(
+                isEmpty: true,
+                displayText: nil,
+                exactIdentity: nil,
+                duplicateKeys: [],
+                diagnostic: nil
+            )
         }
 
         do {
-            return try canonicalJSON(leftTrimmed, options: options) == canonicalJSON(rightTrimmed, options: options)
+            let result = try JSONFormatting.formatResult(
+                trimmed,
+                sortKeys: true,
+                sortArrays: options.ignoreArrayOrder,
+                indentWidth: 2,
+                parserDidStart: parserDidStart
+            )
+            try cancellation.check()
+            return PreparedSide(
+                isEmpty: false,
+                displayText: result.text,
+                exactIdentity: result.exactTextIdentity,
+                duplicateKeys: result.duplicateKeys,
+                diagnostic: nil
+            )
+        } catch let error as JSONFormatting.FormattingError {
+            return PreparedSide(
+                isEmpty: false,
+                displayText: nil,
+                exactIdentity: nil,
+                duplicateKeys: [],
+                diagnostic: error.diagnostic
+            )
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
-            return false
+            return PreparedSide(
+                isEmpty: false,
+                displayText: nil,
+                exactIdentity: nil,
+                duplicateKeys: [],
+                diagnostic: FormatDiagnostic(formatName: "JSON", message: "JSON 语法错误")
+            )
         }
     }
 

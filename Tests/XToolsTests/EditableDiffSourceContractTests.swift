@@ -84,7 +84,7 @@ struct EditableDiffSourceContractTests {
         contains(source, "applyLatestDisplay(to: textView)", "End-editing reconciliation must use the same guarded programmatic text path")
         contains(source, "if textView === leftTextView", "Canonical reconciliation must distinguish the left editor")
         contains(source, "else if textView === rightTextView", "Canonical reconciliation must distinguish the right editor")
-        contains(source, "if !allowActiveEditorOverride, isActiveEditor(textView), textView.string == source", "Active editors must continue preserving user drafts while typing")
+        contains(source, "if !allowActiveEditorOverride,\n               isActiveEditor(textView),\n               JSONExactTextIdentity(textView.string) == JSONExactTextIdentity(source)", "Active editors must preserve only byte-identical user drafts while typing")
     }
 
     @Test func editableDiffWorkspaceUsesSingleOuterScrollAndWrapping() throws {
@@ -125,9 +125,9 @@ struct EditableDiffSourceContractTests {
         contains(jsonDiff, "warning: execution.binding.warning", "JSON diff warnings must route into the existing diagnostic anchor")
         contains(execution, "DiffExecution.project", "Diff session must delegate request→binding projection to Core")
         contains(projection, "LineDiffer.safeAlignedDiff", "Diff execution must use the budgeted text diff path")
-        contains(projection, "JSONStructuralDiff.cancellableAlignedDiff", "Diff execution must use the cancellable JSON diff path")
-        contains(projection, "JSONStructuralDiff.displayTextForDiff(request.left", "JSON execution must preserve Core canonical left display")
-        contains(projection, "JSONDiffValidation.comparisonWarning(", "JSON execution must preserve Core duplicate-key warning mapping")
+        contains(projection, "JSONStructuralDiff.cancellablePreparedDiff", "Diff execution must use the single-parse cancellable JSON preparation path")
+        contains(projection, "leftDisplayText: prepared.leftDisplayText", "JSON execution must reuse Core canonical left display")
+        contains(projection, "warning: prepared.warning", "JSON execution must reuse duplicate-key metadata from the prepared parse")
         doesNotContain(textDiff, "IndexDebouncer", "Text diff must not own a page-local debounce")
         doesNotContain(jsonDiff, "IndexDebouncer", "JSON diff must not own a page-local debounce")
         doesNotContain(textDiff, "private func run()", "Text diff must not run synchronous diff work from the View")
@@ -145,8 +145,9 @@ struct EditableDiffSourceContractTests {
         contains(source, "var rightDisplayText: String?", "Diff workspace must accept optional normalized display text for structured diff tools")
         contains(source, "left: leftDisplayText ?? left", "Diff workspace must render normalized left text when JSON diff provides it")
         contains(source, "right: rightDisplayText ?? right", "Diff workspace must render normalized right text when JSON diff provides it")
-        contains(source, "setText(composition.leftText, source: self.left.wrappedValue", "Diff workspace must compare display updates against the editable source binding before replacing visible text")
-        contains(source, "isActiveEditor(textView), textView.string == source", "Diff workspace must not overwrite the active editor with normalized display text during ordinary user edits")
+        contains(source, "source: self.left.wrappedValue", "Diff workspace must compare display updates against the editable source binding before replacing visible text")
+        contains(source, "let overrideFoldProjection = hasCollapsedRegion", "A read-only fold projection must override the focused editor on both sides")
+        contains(source, "isActiveEditor(textView),\n               JSONExactTextIdentity(textView.string) == JSONExactTextIdentity(source)", "Diff workspace must preserve byte-identical active drafts during ordinary user edits")
         contains(source, "textView.setStringWithoutUndoRegistration(text)", "Diff workspace programmatic replacements must establish a safe undo baseline through the shared helper")
         contains(source, "IndexBadge(\"STDIN\"", "Diff workspace must show standard workbench badges")
         doesNotContain(source, "IndexTrafficLights()", "Diff workspace shell must not keep decorative traffic lights beside an active diagnostic")
@@ -187,6 +188,18 @@ struct EditableDiffSourceContractTests {
         contains(source, "override func cursorUpdate(with event: NSEvent)", "Diff split gap must force the normal cursor when AppKit requests a cursor update")
         doesNotContain(source, "captureDividerRatio", "Diff panes must not persist a user-dragged split ratio in the reference layout")
         contains(source, "scrollSelectionIntoOuterView(textView)", "Large paste/edit operations must reveal the insertion point through the outer scroll view")
+        contains(source, "leftAccessibilityLabel: inputTitle", "The left AppKit editor must receive the page's visible input title as its VoiceOver label")
+        contains(source, "rightAccessibilityLabel: outputTitle", "The right AppKit editor must receive the page's visible output title as its VoiceOver label")
+        contains(source, "textView.setAccessibilityLabel(accessibilityLabel ?? side.defaultAccessibilityLabel)", "Every diff text editor must expose a distinct accessibility label")
+        contains(source, "textView.setAccessibilityHelp(", "Folded read-only editors must explain their state to VoiceOver")
+        contains(source, ".disabled(!canNavigateDifferences)", "Difference navigation controls must disable outside a current non-empty result")
+        contains(source, "rightTextView.window?.firstResponder === rightTextView", "Difference navigation must anchor to the focused right editor when it owns first responder")
+        contains(source, "leftTextView.window?.firstResponder === leftTextView", "Difference navigation must anchor to the focused left editor when it owns first responder")
+        contains(source, "return editorTextView(for: lastFocusedSide)", "Toolbar navigation must return to the pane that last owned editor focus")
+        contains(source, "targetTextView.window?.makeFirstResponder(targetTextView)", "Difference navigation must restore keyboard focus to the target editor")
+        contains(source, "targetTextView.scrollRangeToVisible(targetRange)", "Difference navigation must use the native editor reveal path before revealing through the shared outer scroll owner")
+        contains(source, "firstDifferenceUTF16Offset(in cell: DiffAlignedCell)", "Difference navigation must place the caret at the first changed UTF-16 character rather than only the line start")
+        contains(source, "IndexBadge(\n                            \"\\(current) / \\(navigationProgress.total)\"", "The unified toolbar must keep visible current/total feedback after navigation, even when a warning owns the diagnostic label")
         doesNotContain(source, "var onSwap:", "The shared Diff header must not expose the removed swap callback")
         doesNotContain(source, "swapDisabled", "The shared Diff header must not retain disabled state for the removed swap action")
         doesNotContain(source, "Image(systemName: \"arrow.left.arrow.right\")", "The shared Diff header must not spend primary space on side swapping")
@@ -308,6 +321,21 @@ struct EditableDiffSourceContractTests {
                 text: "stale"
             )
         )
+
+        let composed = "caf\u{00E9}"
+        let decomposed = "cafe\u{0301}"
+        let unicodeRows = [
+            DiffAlignedRow(
+                kind: .unchanged,
+                left: DiffAlignedCell(lineNumber: 1, text: composed, indent: 0),
+                right: DiffAlignedCell(lineNumber: 1, text: decomposed, indent: 0)
+            )
+        ]
+        #expect(!DiffDecorationFreshness.rowsMatchVisibleText(
+            rows: unicodeRows,
+            side: .left,
+            text: decomposed
+        ))
         #expect(DiffSourceText.sourceLines(in: "a\nb") == ["a", "b"])
     }
 

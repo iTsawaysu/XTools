@@ -241,8 +241,17 @@ struct LineDifferTests {
         })
     }
 
-    @Test func safeAlignedDiffRejectsInputsAboveMatrixBudgetBeforeDiffing() throws {
+    @Test func safeAlignedDiffBudgetsOnlyTheTrimmedMiddleMatrix() throws {
         #expect(LineDiffBudget.estimatedLCSCells(leftLineCount: 2, rightLineCount: 3) == 12)
+
+        let trimmedRows = try LineDiffer.safeAlignedDiff(
+            left: "a\nb",
+            right: "a\nb\nc",
+            budget: LineDiffBudget(maximumLCSCells: 1)
+        )
+        #expect(trimmedRows.count == 3)
+        #expect(trimmedRows.last?.right?.text == "c")
+
         #expect(throws: LineDiffError.inputTooLarge(
             leftLineCount: 2,
             rightLineCount: 3,
@@ -250,7 +259,7 @@ struct LineDifferTests {
         )) {
             _ = try LineDiffer.safeAlignedDiff(
                 left: "a\nb",
-                right: "a\nb\nc",
+                right: "x\ny\nz",
                 budget: LineDiffBudget(maximumLCSCells: 11)
             )
         }
@@ -282,6 +291,190 @@ struct LineDifferTests {
         )
         #expect(rows.count == 3000)
         #expect(rows.contains { $0.kind == .changed && $0.left?.text == "left middle line" })
+    }
+
+    @Test func fourThousandLineInputsUseOnlySparseMiddleBudget() throws {
+        let base = (1...4_000).map { "line \($0)" }
+        let identical = base.joined(separator: "\n")
+        let identicalRows = try LineDiffer.safeAlignedDiff(
+            left: identical,
+            right: identical,
+            budget: LineDiffBudget(maximumLCSCells: 1)
+        )
+        #expect(identicalRows.count == 4_000)
+        #expect(identicalRows.allSatisfy { !$0.kind.isDifference })
+
+        var changed = base
+        changed[2_000] = "changed middle"
+        let sparseRows = try LineDiffer.safeAlignedDiff(
+            left: identical,
+            right: changed.joined(separator: "\n"),
+            budget: LineDiffBudget(maximumLCSCells: 4)
+        )
+        #expect(sparseRows.count == 4_000)
+        #expect(sparseRows.filter(\.kind.isDifference).count == 1)
+        #expect(sparseRows[2_000].left?.text == "line 2001")
+        #expect(sparseRows[2_000].right?.text == "changed middle")
+    }
+
+    @Test func inputByteAndLineBudgetsRejectBeforeMatrixAllocation() {
+        #expect(throws: LineDiffError.self) {
+            _ = try LineDiffer.safeAlignedDiff(
+                left: "12345",
+                right: "12345",
+                budget: LineDiffBudget(
+                    maximumLCSCells: 100,
+                    maximumInputBytesPerSide: 4
+                )
+            )
+        }
+        #expect(throws: LineDiffError.self) {
+            _ = try LineDiffer.safeAlignedDiff(
+                left: "a\nb\nc",
+                right: "a\nb\nc",
+                budget: LineDiffBudget(
+                    maximumLCSCells: 100,
+                    maximumInputLinesPerSide: 2
+                )
+            )
+        }
+    }
+
+    @Test func inputByteBudgetRejectsBeforeLinePreprocessing() {
+        let lineProbe = DiffComparisonKeyProbe()
+        let keyProbe = DiffComparisonKeyProbe()
+
+        #expect(throws: LineDiffError.self) {
+            _ = try LineDiffer.safeAlignedDiff(
+                left: "a\nb\nc",
+                right: "a\nb\nc",
+                budget: LineDiffBudget(
+                    maximumLCSCells: 100,
+                    maximumInputBytesPerSide: 4
+                ),
+                shouldCancel: { false },
+                comparisonKeyCreated: keyProbe.record,
+                lineCreated: lineProbe.record
+            )
+        }
+
+        #expect(lineProbe.count == 0)
+        #expect(keyProbe.count == 0)
+    }
+
+    @Test func lineBudgetStopsScanningBeforeCreatingAnExtraLine() {
+        let lineProbe = DiffComparisonKeyProbe()
+
+        #expect(throws: LineDiffError.self) {
+            _ = try LineDiffer.safeAlignedDiff(
+                left: "a\nb\nc",
+                right: "a\nb\nc",
+                budget: LineDiffBudget(
+                    maximumLCSCells: 100,
+                    maximumInputLinesPerSide: 2
+                ),
+                shouldCancel: { false },
+                comparisonKeyCreated: nil,
+                lineCreated: lineProbe.record
+            )
+        }
+
+        #expect(lineProbe.count == 2)
+    }
+
+    @Test func longSingleLineHasBoundedInlineFallback() throws {
+        let left = String(repeating: "a", count: 20_000)
+        let right = String(repeating: "b", count: 20_000)
+        let rows = try LineDiffer.safeAlignedDiff(left: left, right: right)
+
+        #expect(rows.count == 1)
+        #expect(rows[0].kind == .changed)
+        #expect(rows[0].left?.segments == [DiffTextSegment(text: left, kind: .removed)])
+        #expect(rows[0].right?.segments == [DiffTextSegment(text: right, kind: .added)])
+    }
+
+    @Test func cancellationIsObservedWhileScanningLargeCommonPrefix() {
+        let text = (1...4_000).map { "line \($0)" }.joined(separator: "\n")
+        let probe = DiffCancellationProbe(cancelAfterCheck: 37)
+
+        #expect(throws: CancellationError.self) {
+            _ = try LineDiffer.safeAlignedDiff(
+                left: text,
+                right: text,
+                shouldCancel: probe.shouldCancel
+            )
+        }
+        #expect(probe.checkCount == 37)
+    }
+
+    @Test func cancellationDuringSinglePassScanPrecedesLineAndKeyAllocation() {
+        let cancellation = DiffCancellationProbe(cancelAfterCheck: 4)
+        let lineProbe = DiffComparisonKeyProbe()
+        let keyProbe = DiffComparisonKeyProbe()
+        let text = String(repeating: "abcdefgh", count: 20_000)
+
+        #expect(throws: CancellationError.self) {
+            _ = try LineDiffer.safeAlignedDiff(
+                left: text,
+                right: text,
+                shouldCancel: cancellation.shouldCancel,
+                comparisonKeyCreated: keyProbe.record,
+                lineCreated: lineProbe.record
+            )
+        }
+
+        #expect(cancellation.checkCount == 4)
+        #expect(lineProbe.count == 0)
+        #expect(keyProbe.count == 0)
+    }
+
+    @Test func comparisonKeysAreCreatedOncePerInputLine() throws {
+        let left = (1...40).map { "left   \($0)" }.joined(separator: "\n")
+        let right = (1...40).map { "RIGHT \($0)" }.joined(separator: "\n")
+        let probe = DiffComparisonKeyProbe()
+
+        _ = try LineDiffer.safeAlignedDiff(
+            left: left,
+            right: right,
+            options: TextDiffOptions(ignoreWhitespace: true, ignoreCase: true),
+            comparisonKeyCreated: probe.record
+        )
+
+        #expect(probe.count == 80)
+    }
+
+    @Test func equivalentKeysPreserveEachSidesRawTextAcrossAllAlignmentRegions() throws {
+        let left = "  PREFIX\nleft-only\n  SHARED   middle\nleft-tail\nSuffix"
+        let right = "prefix\nright-only\nshared middle\nright-tail\nsuffix"
+        let rows = try LineDiffer.safeAlignedDiff(
+            left: left,
+            right: right,
+            options: TextDiffOptions(ignoreWhitespace: true, ignoreCase: true)
+        )
+
+        #expect(rows.first?.kind == .unchanged)
+        #expect(rows.first?.left?.text == "  PREFIX")
+        #expect(rows.first?.right?.text == "prefix")
+        let shared = try #require(rows.first { $0.left?.text == "  SHARED   middle" })
+        #expect(shared.kind == .unchanged)
+        #expect(shared.right?.text == "shared middle")
+        #expect(rows.last?.left?.text == "Suffix")
+        #expect(rows.last?.right?.text == "suffix")
+    }
+
+    @Test func exactComparisonAndInlineSegmentsDistinguishCanonicalUnicodeSequences() throws {
+        let composed = "caf\u{00E9}"
+        let decomposed = "cafe\u{0301}"
+        let rows = try LineDiffer.safeAlignedDiff(left: composed, right: decomposed)
+
+        #expect(rows.count == 1)
+        #expect(rows[0].kind == .changed)
+        let leftText = try #require(rows[0].left?.text)
+        let rightText = try #require(rows[0].right?.text)
+        #expect(Array(leftText.utf8) == Array(composed.utf8))
+        #expect(Array(rightText.utf8) == Array(decomposed.utf8))
+        #expect(rows[0].left?.segments.contains { $0.kind == .removed } == true)
+        #expect(rows[0].right?.segments.contains { $0.kind == .added } == true)
     }
 
     @Test func safeAlignedDiffRespectsIgnoreWhitespaceOption() throws {
@@ -428,6 +621,17 @@ struct LineDifferTests {
         let jsonFiltered = lines.diffFiltered(preservesStructure: true)
         #expect(jsonFiltered.count == 2)
         #expect(jsonFiltered[1].kind == .structure)
+    }
+}
+
+private final class DiffComparisonKeyProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedCount = 0
+
+    var count: Int { lock.withLock { storedCount } }
+
+    func record() {
+        lock.withLock { storedCount += 1 }
     }
 }
 

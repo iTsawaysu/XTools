@@ -102,4 +102,29 @@ struct DiffFoldProjectionTests {
         #expect(reapplied.rows.contains { $0.foldRegion == nil && $0.left?.text == "line 1" },
                 "expanded region keeps its first hidden row visible")
     }
+
+    @Test func foldingAndExpansionPreserveEachSidesRawEquivalentText() throws {
+        let leftLines = (1...17).map { $0 == 9 ? "LEFT CHANGE" : "  LINE   \($0)" }
+        let rightLines = (1...17).map { $0 == 9 ? "right change" : "line \($0)" }
+        let rows = try LineDiffer.safeAlignedDiff(
+            left: leftLines.joined(separator: "\n"),
+            right: rightLines.joined(separator: "\n"),
+            options: TextDiffOptions(ignoreWhitespace: true, ignoreCase: true)
+        )
+        let regions = DiffFoldProjection.regions(in: rows)
+        #expect(regions.count == 2)
+
+        let folded = DiffFoldProjection.apply(rows: rows, expandedRegionIDs: [])
+        #expect(folded.leftText.contains("  LINE   8"))
+        #expect(folded.rightText.contains("line 8"))
+        #expect(folded.leftText.contains("LEFT CHANGE"))
+        #expect(folded.rightText.contains("right change"))
+
+        let expanded = DiffFoldProjection.apply(
+            rows: rows,
+            expandedRegionIDs: Set(regions.map(\.id))
+        )
+        #expect(expanded.leftText == leftLines.joined(separator: "\n"))
+        #expect(expanded.rightText == rightLines.joined(separator: "\n"))
+    }
 }

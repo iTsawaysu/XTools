@@ -1,4 +1,4 @@
-import XToolsCore
+@testable import XToolsCore
 import Foundation
 import Testing
 
@@ -60,6 +60,27 @@ struct DiffExecutionProjectionTests {
     }
 
     @Test
+    func jsonProjectParsesEachSideOnceWhileProducingRowsDisplayAndWarning() throws {
+        let labels = JSONDiffValidation.SideLabels(left: "左", right: "右")
+        let parserProbe = DiffProjectionParserProbe()
+        let binding = try DiffExecution.project(
+            DiffExecutionRequest(
+                kind: .json(labels: labels),
+                left: #"{"name":"first","name":"second"}"#,
+                right: #"{"name":"second"}"#
+            ),
+            shouldCancel: { false },
+            jsonParserDidStart: parserProbe.record
+        )
+
+        #expect(parserProbe.count == 2)
+        #expect(binding.leftDisplayText?.contains(#""name": "first""#) == true)
+        #expect(binding.rightDisplayText?.contains(#""name": "second""#) == true)
+        #expect(binding.warning == "左 含重复 key。")
+        #expect(binding.rows.contains { $0.kind.isDifference })
+    }
+
+    @Test
     func failureBindingUsesInputTooLargeMessage() {
         let binding = DiffExecution.failureBinding()
         #expect(binding.error == LineDiffError.inputTooLargeMessage)
@@ -108,5 +129,16 @@ struct DiffExecutionProjectionTests {
         #expect(binding.leftDisplayText?.contains("\"a\": 1") == true)
         #expect(binding.rightDisplayText?.contains("\"a\": 1") == true)
         #expect(binding.rows.isEmpty)
+    }
+}
+
+private final class DiffProjectionParserProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedCount = 0
+
+    var count: Int { lock.withLock { storedCount } }
+
+    func record() {
+        lock.withLock { storedCount += 1 }
     }
 }

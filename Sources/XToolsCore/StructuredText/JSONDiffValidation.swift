@@ -24,26 +24,13 @@ public enum JSONDiffValidation {
     public static func evaluate(left: String, right: String, labels: SideLabels) -> Decision {
         let leftTrimmed = left.trimmingCharacters(in: .whitespacesAndNewlines)
         let rightTrimmed = right.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if leftTrimmed.isEmpty && rightTrimmed.isEmpty {
-            return .empty
-        }
-
-        var badSides: [String] = []
-
-        if !leftTrimmed.isEmpty, let diagnostic = invalidJSONDiagnostic(for: leftTrimmed) {
-            badSides.append(sideErrorMessage(label: labels.left, diagnostic: diagnostic))
-        }
-
-        if !rightTrimmed.isEmpty, let diagnostic = invalidJSONDiagnostic(for: rightTrimmed) {
-            badSides.append(sideErrorMessage(label: labels.right, diagnostic: diagnostic))
-        }
-
-        if !badSides.isEmpty {
-            return .invalid(badSides.joined(separator: "\n"))
-        }
-
-        return .comparable
+        return decision(
+            leftIsEmpty: leftTrimmed.isEmpty,
+            rightIsEmpty: rightTrimmed.isEmpty,
+            leftDiagnostic: leftTrimmed.isEmpty ? nil : invalidJSONDiagnostic(for: leftTrimmed),
+            rightDiagnostic: rightTrimmed.isEmpty ? nil : invalidJSONDiagnostic(for: rightTrimmed),
+            labels: labels
+        )
     }
 
     public static func sideErrorMessage(label: String, diagnostic: FormatDiagnostic) -> String {
@@ -51,9 +38,40 @@ public enum JSONDiffValidation {
     }
 
     public static func comparisonWarning(left: String, right: String, labels: SideLabels) -> String? {
+        comparisonWarning(
+            leftHasDuplicateKeys: duplicateKeySideLabel(for: left, label: labels.left) != nil,
+            rightHasDuplicateKeys: duplicateKeySideLabel(for: right, label: labels.right) != nil,
+            labels: labels
+        )
+    }
+
+    static func decision(
+        leftIsEmpty: Bool,
+        rightIsEmpty: Bool,
+        leftDiagnostic: FormatDiagnostic?,
+        rightDiagnostic: FormatDiagnostic?,
+        labels: SideLabels
+    ) -> Decision {
+        if leftIsEmpty && rightIsEmpty {
+            return .empty
+        }
+
+        let badSides = [
+            leftDiagnostic.map { sideErrorMessage(label: labels.left, diagnostic: $0) },
+            rightDiagnostic.map { sideErrorMessage(label: labels.right, diagnostic: $0) }
+        ].compactMap(\.self)
+
+        return badSides.isEmpty ? .comparable : .invalid(badSides.joined(separator: "\n"))
+    }
+
+    static func comparisonWarning(
+        leftHasDuplicateKeys: Bool,
+        rightHasDuplicateKeys: Bool,
+        labels: SideLabels
+    ) -> String? {
         let warningSides = [
-            duplicateKeySideLabel(for: left, label: labels.left),
-            duplicateKeySideLabel(for: right, label: labels.right)
+            leftHasDuplicateKeys ? labels.left : nil,
+            rightHasDuplicateKeys ? labels.right : nil
         ].compactMap(\.self)
 
         switch warningSides.count {

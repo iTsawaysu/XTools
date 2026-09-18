@@ -25,7 +25,13 @@ public struct DiffDisplayLine: Identifiable, Equatable, Sendable {
     public let kind: Kind
     public let oldLineNumber: Int?
     public let newLineNumber: Int?
-    public let text: String
+    /// Raw text from the left and right inputs. An unchanged row may carry
+    /// different strings when the active comparison options consider their
+    /// precomputed keys equivalent.
+    public let leftText: String?
+    public let rightText: String?
+    /// Compatibility accessor for single-sided display-line consumers.
+    public var text: String { leftText ?? rightText ?? "" }
     public let indent: Int
 
     public init(
@@ -40,7 +46,26 @@ public struct DiffDisplayLine: Identifiable, Equatable, Sendable {
         self.kind = kind
         self.oldLineNumber = oldLineNumber
         self.newLineNumber = newLineNumber
-        self.text = text
+        self.leftText = oldLineNumber == nil ? nil : text
+        self.rightText = newLineNumber == nil ? nil : text
+        self.indent = indent
+    }
+
+    init(
+        id: UUID = UUID(),
+        kind: Kind,
+        oldLineNumber: Int?,
+        newLineNumber: Int?,
+        leftText: String?,
+        rightText: String?,
+        indent: Int
+    ) {
+        self.id = id
+        self.kind = kind
+        self.oldLineNumber = oldLineNumber
+        self.newLineNumber = newLineNumber
+        self.leftText = leftText
+        self.rightText = rightText
         self.indent = indent
     }
 
@@ -48,7 +73,8 @@ public struct DiffDisplayLine: Identifiable, Equatable, Sendable {
         lhs.kind == rhs.kind
             && lhs.oldLineNumber == rhs.oldLineNumber
             && lhs.newLineNumber == rhs.newLineNumber
-            && lhs.text == rhs.text
+            && lhs.leftText.map(JSONExactTextIdentity.init) == rhs.leftText.map(JSONExactTextIdentity.init)
+            && lhs.rightText.map(JSONExactTextIdentity.init) == rhs.rightText.map(JSONExactTextIdentity.init)
             && lhs.indent == rhs.indent
     }
 }
@@ -77,6 +103,11 @@ public struct DiffTextSegment: Equatable, Sendable {
     public init(text: String, kind: Kind) {
         self.text = text
         self.kind = kind
+    }
+
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.kind == rhs.kind
+            && JSONExactTextIdentity(lhs.text) == JSONExactTextIdentity(rhs.text)
     }
 }
 
@@ -111,6 +142,14 @@ public struct DiffAlignedCell: Equatable, Sendable {
         self.indent = 0
         self.segments = [DiffTextSegment(text: text, kind: .unchanged)]
         self.originalLineNumber = nil
+    }
+
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.lineNumber == rhs.lineNumber
+            && JSONExactTextIdentity(lhs.text) == JSONExactTextIdentity(rhs.text)
+            && lhs.indent == rhs.indent
+            && lhs.segments == rhs.segments
+            && lhs.originalLineNumber == rhs.originalLineNumber
     }
 }
 

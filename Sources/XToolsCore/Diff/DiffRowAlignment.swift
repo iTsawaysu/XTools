@@ -3,8 +3,12 @@ import Foundation
 extension DiffAlignedRow {
     static func row(from line: DiffDisplayLine) -> DiffAlignedRow {
         let kind = alignedKind(from: line.kind)
-        let left = line.oldLineNumber.map { DiffAlignedCell(lineNumber: $0, text: line.text, indent: line.indent) } ?? cellIfStructure(line, side: .left)
-        let right = line.newLineNumber.map { DiffAlignedCell(lineNumber: $0, text: line.text, indent: line.indent) } ?? cellIfStructure(line, side: .right)
+        let left = line.oldLineNumber.map {
+            DiffAlignedCell(lineNumber: $0, text: line.leftText ?? "", indent: line.indent)
+        } ?? cellIfStructure(line, side: .left)
+        let right = line.newLineNumber.map {
+            DiffAlignedCell(lineNumber: $0, text: line.rightText ?? "", indent: line.indent)
+        } ?? cellIfStructure(line, side: .right)
 
         return DiffAlignedRow(kind: kind, left: left, right: right)
     }
@@ -84,9 +88,9 @@ extension DiffAlignedRow {
             kind: .removed,
             left: DiffAlignedCell(
                 lineNumber: line.oldLineNumber,
-                text: line.text,
+                text: line.leftText ?? line.text,
                 indent: line.indent,
-                segments: [DiffTextSegment(text: line.text, kind: .removed)]
+                segments: [DiffTextSegment(text: line.leftText ?? line.text, kind: .removed)]
             ),
             right: nil
         )
@@ -98,9 +102,9 @@ extension DiffAlignedRow {
             left: nil,
             right: DiffAlignedCell(
                 lineNumber: line.newLineNumber,
-                text: line.text,
+                text: line.rightText ?? line.text,
                 indent: line.indent,
-                segments: [DiffTextSegment(text: line.text, kind: .added)]
+                segments: [DiffTextSegment(text: line.rightText ?? line.text, kind: .added)]
             )
         )
     }
@@ -281,7 +285,7 @@ extension DiffAlignedRow {
         cancellation: DiffCancellationChecker
     ) throws -> Double {
         try cancellation.check()
-        guard left.source != right.source else {
+        guard JSONExactTextIdentity(left.source) != JSONExactTextIdentity(right.source) else {
             return 1.0
         }
 
@@ -436,7 +440,14 @@ extension DiffAlignedRow {
             number = line.newLineNumber
         }
 
-        return DiffAlignedCell(lineNumber: number, text: line.text, indent: line.indent)
+        let text: String?
+        switch side {
+        case .left:
+            text = line.leftText
+        case .right:
+            text = line.rightText
+        }
+        return DiffAlignedCell(lineNumber: number, text: text ?? line.text, indent: line.indent)
     }
 
     static func alignedKind(from kind: DiffDisplayLine.Kind) -> Kind {

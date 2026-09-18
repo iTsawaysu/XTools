@@ -10,7 +10,7 @@ struct DiffWorkspaceTests {
         let workspace = DiffToolWorkspaceModel(
             kind: .text,
             debounce: .zero,
-            operation: { request in
+            operation: { request, _ in
                 probe.recordStart(request)
                 while !Task.isCancelled {
                     Thread.sleep(forTimeInterval: 0.002)
@@ -38,7 +38,7 @@ struct DiffWorkspaceTests {
         let workspace = DiffToolWorkspaceModel(
             kind: .text,
             debounce: .zero,
-            operation: { request in
+            operation: { request, _ in
                 probe.recordStart(request)
                 return DiffExecutionBinding()
             }
@@ -71,12 +71,12 @@ struct DiffWorkspaceTests {
         #expect(workspace.ignoreWhitespace == true)
     }
 
-    @Test func jsonOptionsIncludeFoldUnchangedInRequest() async throws {
+    @Test func foldUnchangedIsPureProjectionAndDoesNotScheduleOperation() async throws {
         let probe = DiffWorkspaceOperationProbe()
         let workspace = DiffToolWorkspaceModel(
             kind: .json(labels: JSONDiffValidation.SideLabels(left: "L", right: "R")),
             debounce: .zero,
-            operation: { request in
+            operation: { request, _ in
                 probe.recordStart(request)
                 return DiffExecutionBinding()
             }
@@ -84,14 +84,17 @@ struct DiffWorkspaceTests {
 
         workspace.left = "{}"
         workspace.right = "{}"
-        try await Self.waitUntil { probe.startedCount >= 1 }
+        try await Self.waitUntil { !workspace.execution.isRunning && probe.startedCount >= 1 }
+        let callCount = probe.startedCount
 
         workspace.foldUnchanged = true
-        try await Self.waitUntil {
-            if case .json(_, let options) = probe.lastRequest?.kind {
-                return options.foldUnchanged == true
-            }
-            return false
+        try await Task.sleep(for: .milliseconds(100))
+
+        #expect(probe.startedCount == callCount)
+        if case .json(_, let options) = probe.lastRequest?.kind {
+            #expect(options.foldUnchanged == false)
+        } else {
+            Issue.record("Expected JSON request")
         }
     }
 

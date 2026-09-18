@@ -67,11 +67,11 @@ struct TestMarkdownDiffRegexCoverageTests {
             let left = #"{"items": ["# + (0..<3500).map(String.init).joined(separator: ",") + "]}"
             let right = #"{"items": ["# + (0..<3499).map(String.init).joined(separator: ",") + ",999999]}"
             let decision = JSONStructuralDiff.alignedDiff(left: left, right: right, labels: labels, budget: .standard)
-            guard case .tooLarge(let message) = decision else {
-                Issue.record("Expected diff budget failure")
+            guard case .comparable(let rows) = decision else {
+                Issue.record("Expected sparse large JSON diff to remain comparable")
                 return
             }
-            #expect(message.contains("对比内容过大"))
+            #expect(rows.filter { $0.kind.isDifference }.count == 1)
             #expect(JSONStructuralDiff.alignedDiff(left: #"{"a":1}"#, right: #"{"a":2}"#, labels: labels).isComparable)
         case "JSON-DIFF-12":
             #expect(JSONDiffValidation.evaluate(left: "", right: " \n", labels: labels) == .empty)
@@ -150,9 +150,15 @@ struct TestMarkdownDiffRegexCoverageTests {
         case "TEXT-DIFF-10":
             let rows = LineDiffer.alignedDiff(left: try block(testCase, 0), right: try block(testCase, 1))
             #expect(rows.contains { $0.kind.isDifference })
-        case "TEXT-DIFF-11", "TEXT-DIFF-13":
+        case "TEXT-DIFF-11":
             let left = (0..<4000).map { "line-\($0)" }.joined(separator: "\n")
             let right = (0..<4000).map { $0 == 3999 ? "line-changed" : "line-\($0)" }.joined(separator: "\n")
+            let rows = try LineDiffer.safeAlignedDiff(left: left, right: right)
+            #expect(rows.count == 4_000)
+            #expect(rows.filter { $0.kind.isDifference }.count == 1)
+        case "TEXT-DIFF-13":
+            let left = (0..<4000).map { "left-\($0)" }.joined(separator: "\n")
+            let right = (0..<4000).map { "right-\($0)" }.joined(separator: "\n")
             let error = #expect(throws: LineDiffError.self) {
                 _ = try LineDiffer.safeAlignedDiff(left: left, right: right)
             }

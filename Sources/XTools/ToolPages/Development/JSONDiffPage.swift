@@ -18,9 +18,7 @@ final class DiffToolWorkspaceModel: ObservableObject {
     @Published var ignoreArrayOrder: Bool = false {
         didSet { optionDidChange() }
     }
-    @Published var foldUnchanged: Bool = false {
-        didSet { optionDidChange() }
-    }
+    @Published var foldUnchanged: Bool = false
 
     let execution: DiffExecutionSession
     let kind: DiffExecutionKind
@@ -89,7 +87,7 @@ final class DiffToolWorkspaceModel: ObservableObject {
                 labels: labels,
                 options: JSONDiffOptions(
                     ignoreArrayOrder: ignoreArrayOrder,
-                    foldUnchanged: foldUnchanged
+                    foldUnchanged: false
                 )
             )
         }
@@ -139,6 +137,7 @@ private struct IndexJSONDiffWorkspaceContent: View {
                 left: $workspace.left,
                 right: $workspace.right,
                 rows: execution.binding.rows,
+                resultState: execution.resultState,
                 syntax: .json,
                 foldUnchanged: workspace.foldUnchanged,
                 error: execution.binding.error,

@@ -88,6 +88,22 @@ struct JSONStructuralDiffTests {
         #expect(rows.isEmpty)
     }
 
+    @Test func reversedCanonicalEquivalentUnicodeArraysUseExactSortIdentity() throws {
+        let composed = #""caf\u00e9""#
+        let decomposed = #""cafe\u0301""#
+        let left = "{\"values\":[\(composed),\(decomposed)]}"
+        let right = "{\"values\":[\(decomposed),\(composed)]}"
+
+        let decision = try JSONStructuralDiff.cancellableAlignedDiff(
+            left: left,
+            right: right,
+            labels: labels,
+            options: JSONDiffOptions(ignoreArrayOrder: true)
+        )
+
+        #expect(decision == .comparable([]))
+    }
+
     @Test func typeDifferencesStillProduceRows() throws {
         let rows = try comparableRows(
             left: #"{"count":1,"enabled":true,"empty":null,"id":"001"}"#,
@@ -95,6 +111,17 @@ struct JSONStructuralDiffTests {
         )
 
         #expect(rows.contains { $0.kind.isDifference })
+    }
+
+    @Test func canonicallyEquivalentUnicodeSequencesRemainDistinctJSONValues() throws {
+        let rows = try comparableRows(
+            left: #"{"value":"caf\u00e9"}"#,
+            right: #"{"value":"cafe\u0301"}"#
+        )
+
+        let changed = try #require(rows.first { $0.kind.isDifference })
+        #expect(changed.left?.segments.contains { $0.kind == .removed } == true)
+        #expect(changed.right?.segments.contains { $0.kind == .added } == true)
     }
 
     @Test func invalidRightSideBlocksRows() throws {
@@ -138,6 +165,45 @@ struct JSONStructuralDiffTests {
         }
     }
 
+    @Test func preparedDiffParsesEachNonemptySideOnceAndReusesOutputs() throws {
+        let parserProbe = JSONParserStartProbe()
+        let prepared = try JSONStructuralDiff.cancellablePreparedDiff(
+            left: #"{"name":"first","name":"second","values":[2,1]}"#,
+            right: #"{"name":"second","values":[1,2]}"#,
+            labels: labels,
+            options: JSONDiffOptions(ignoreArrayOrder: true),
+            shouldCancel: { false },
+            parserDidStart: parserProbe.record
+        )
+
+        #expect(parserProbe.count == 2)
+        #expect(prepared.leftDisplayText?.contains(#""values": ["#) == true)
+        #expect(prepared.rightDisplayText?.contains(#""values": ["#) == true)
+        #expect(prepared.warning == "JSON A 含重复 key。")
+        guard case .comparable = prepared.decision else {
+            Issue.record("Expected comparable prepared result")
+            return
+        }
+    }
+
+    @Test func inputByteBudgetRejectsBeforeStartingEitherJSONParser() throws {
+        let parserProbe = JSONParserStartProbe()
+        let prepared = try JSONStructuralDiff.cancellablePreparedDiff(
+            left: #"{"value":1}"#,
+            right: #"{"value":2}"#,
+            labels: labels,
+            budget: LineDiffBudget(
+                maximumLCSCells: 100,
+                maximumInputBytesPerSide: 4
+            ),
+            shouldCancel: { false },
+            parserDidStart: parserProbe.record
+        )
+
+        #expect(prepared.decision == .tooLarge(LineDiffError.inputTooLargeMessage))
+        #expect(parserProbe.count == 0)
+    }
+
     @Test func oneEmptySideStillCompares() throws {
         let rows = try comparableRows(left: "", right: #"{"id":1}"#)
         #expect(rows.contains { $0.kind.isDifference })
@@ -150,5 +216,16 @@ struct JSONStructuralDiffTests {
             return []
         }
         return rows
+    }
+}
+
+private final class JSONParserStartProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedCount = 0
+
+    var count: Int { lock.withLock { storedCount } }
+
+    func record() {
+        lock.withLock { storedCount += 1 }
     }
 }

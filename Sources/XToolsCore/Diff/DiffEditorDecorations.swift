@@ -137,7 +137,7 @@ public enum DiffDecorationFreshness {
 
             let index = lineNumber - 1
             guard lines.indices.contains(index),
-                  lines[index] == cell.text else {
+                  JSONExactTextIdentity(lines[index]) == JSONExactTextIdentity(cell.text) else {
                 return false
             }
 
