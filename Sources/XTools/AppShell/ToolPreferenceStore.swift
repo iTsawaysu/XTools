@@ -415,6 +415,15 @@ enum TextDevelopmentToolPreferenceKeys {
         "tools.jsonFormatter.escape.v1",
         default: false
     )
+    static let htmlMarkdownRenderedPreview = ToolPreferenceKey<Bool>.bool(
+        "tools.htmlToMarkdown.renderedPreview.v1",
+        default: true
+    )
+    static let dockerConversionDirection = ToolPreferenceKey<String>.string(
+        "tools.dockerConversion.direction.v1",
+        default: "run-to-compose",
+        allowedValues: ["run-to-compose", "compose-to-run"]
+    )
     static let sqlKeywordCase = ToolPreferenceKey<SQLFormatting.KeywordCase>.rawRepresentable(
         "tools.sqlFormatter.keywordCase.v1",
         default: .upper

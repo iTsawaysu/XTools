@@ -1,5 +1,5 @@
 {
-  "originHash" : "4151731f6ce2946c853de88e4c0877a50af537d322301c16561017c3fcf51112",
+  "originHash" : "2d8799213bf0277fee44fe0342a937076a5f767c656d77176571c3482fe8c4f7",
   "pins" : [
     {
       "identity" : "cryptoswift",
@@ -8,6 +8,24 @@
       "state" : {
         "revision" : "f2a627b84c1ff96f21ac2fcb623ab36142dd5512",
         "version" : "1.10.0"
+      }
+    },
+    {
+      "identity" : "networkimage",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/gonzalezreal/NetworkImage",
+      "state" : {
+        "revision" : "2849f5323265386e200484b0d0f896e73c3411b9",
+        "version" : "6.0.1"
+      }
+    },
+    {
+      "identity" : "swift-cmark",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swiftlang/swift-cmark",
+      "state" : {
+        "revision" : "924936d0427cb25a61169739a7660230bffa6ea6",
+        "version" : "0.8.0"
       }
     },
     {

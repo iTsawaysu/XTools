@@ -3,17 +3,34 @@ import SwiftUI
 
 @MainActor
 final class HTMLToMarkdownToolWorkspaceModel: ObservableObject {
-    static let key = ToolWorkspaceKey<HTMLToMarkdownToolWorkspaceModel>(toolID: "html-to-markdown") { _ in
-        HTMLToMarkdownToolWorkspaceModel()
+    static let key = ToolWorkspaceKey<HTMLToMarkdownToolWorkspaceModel>(toolID: "html-to-markdown") { preferences in
+        HTMLToMarkdownToolWorkspaceModel(preferences: preferences)
     }
 
     let session = HTMLToMarkdownSession()
+
+    /// Renders the Markdown output through the Clay preview theme; the
+    /// monospaced source view stays one toggle away. Persisted per tool.
+    @Published var showsRenderedPreview: Bool {
+        didSet {
+            guard showsRenderedPreview != oldValue else { return }
+            preferences.set(showsRenderedPreview, for: TextDevelopmentToolPreferenceKeys.htmlMarkdownRenderedPreview)
+        }
+    }
+
+    private let preferences: ToolPreferenceStore
+
+    init(preferences: ToolPreferenceStore = ToolPreferenceStore(defaults: .standard)) {
+        self.preferences = preferences
+        showsRenderedPreview = preferences.value(for: TextDevelopmentToolPreferenceKeys.htmlMarkdownRenderedPreview)
+    }
 }
 
 struct IndexHTMLToMarkdownPage: View {
     var body: some View {
         ToolWorkspaceHost(key: HTMLToMarkdownToolWorkspaceModel.key) { workspace, _ in
             IndexHTMLToMarkdownWorkspaceContent(
+                workspace: workspace,
                 session: workspace.session
             )
         }
@@ -25,6 +42,7 @@ struct IndexHTMLToMarkdownPage: View {
 /// and Markdown output keeps the native large-text surface with in-pane
 /// processing state; the toolbar ends 清空 · 复制 · 保存 (no format action).
 private struct IndexHTMLToMarkdownWorkspaceContent: View {
+    @ObservedObject var workspace: HTMLToMarkdownToolWorkspaceModel
     @ObservedObject var session: HTMLToMarkdownSession
 
     var body: some View {
@@ -45,7 +63,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 outputLineNumbers: false,
                 clearDisabled: !session.canClear,
                 onClear: session.clear,
-                outputPresentation: .nativeReadOnlyText,
+                outputPresentation: workspace.showsRenderedPreview ? .markdownPreview : .nativeReadOnlyText,
                 outputProcessingText: session.processingText,
                 showsOutputSave: true,
                 outputFileName: "markdown-output.md",
@@ -62,6 +80,18 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                     ) {
                         session.extractArticleOnly.toggle()
                     }
+                    .fixedSize(horizontal: true, vertical: false)
+                },
+                outputControl: {
+                    IndexSegmentedControl(
+                        items: [("source", "源码"), ("preview", "预览")],
+                        selection: Binding(
+                            get: { workspace.showsRenderedPreview ? "preview" : "source" },
+                            set: { workspace.showsRenderedPreview = $0 == "preview" }
+                        ),
+                        density: .compact
+                    )
+                    .help("切换 Markdown 源码与排版预览")
                     .fixedSize(horizontal: true, vertical: false)
                 }
             )
