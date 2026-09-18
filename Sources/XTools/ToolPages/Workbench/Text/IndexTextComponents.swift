@@ -754,7 +754,8 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
         AppKitTextEditingConfiguration.configurePlainTextEditor(textView)
         textView.isRichText = false
         textView.importsGraphics = false
-        textView.usesFindPanel = true
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
         textView.textContainerInset = NSSize(width: 13, height: 12)
 
         if let textContainer = textView.textContainer {
@@ -1044,7 +1045,8 @@ struct IndexUndoableTextView: NSViewRepresentable {
         AppKitTextEditingConfiguration.configurePlainTextEditor(textView)
         textView.isRichText = false
         textView.importsGraphics = false
-        textView.usesFindPanel = true
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
         textView.textContainerInset = NSSize(
             width: lineNumbers ? IndexEditorLineNumberGutter.width + 13 : 13,
             height: 12

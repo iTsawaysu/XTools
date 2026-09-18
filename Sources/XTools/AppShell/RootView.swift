@@ -582,9 +582,9 @@ struct RootView: View {
 
     private var keyboardShortcuts: some View {
         Group {
-            Button("Focus Search", action: focusSidebarSearch)
-                .keyboardShortcut("f", modifiers: .command)
-
+            // ⌘F lives in the Edit menu (FindMenuCommands): it opens the
+            // focused text surface's native find bar and falls back to the
+            // sidebar tool search when no editor holds focus.
             Button("Workbench", action: { navigationActions.openDashboard() })
                 .keyboardShortcut("0", modifiers: .command)
 
@@ -604,14 +604,6 @@ struct RootView: View {
         .opacity(0)
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
-    }
-
-    private func focusSidebarSearch() {
-        if viewModel.sidebarVisibility == .hidden {
-            setSidebarVisibility(.visible)
-        }
-
-        viewModel.focusSearch()
     }
 
     private func showPreferences() {

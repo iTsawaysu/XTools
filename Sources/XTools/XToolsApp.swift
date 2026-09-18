@@ -77,6 +77,7 @@ struct XToolsApp: App {
         .commands {
             SidebarMenuCommands()
             CommandPaletteMenuCommands()
+            FindMenuCommands()
 
             CommandGroup(replacing: .undoRedo) {
                 Button("撤销") {
