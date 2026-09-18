@@ -89,16 +89,10 @@ public enum DiffExecution {
                 )
                 try Task.checkCancellation()
 
-                if options.foldUnchanged && !rows.isEmpty && rows.contains(where: { $0.kind.isDifference }) {
-                    let folded = JSONStructuralDiff.foldUnchangedRows(rows)
-                    return DiffExecutionBinding(
-                        leftDisplayText: folded.leftDisplayText,
-                        rightDisplayText: folded.rightDisplayText,
-                        rows: folded.rows,
-                        warning: warning
-                    )
-                }
-
+                // Folding is a view-mode projection: the binding always
+                // carries the full canonical rows and display text, and the
+                // editable diff workspace re-projects them through
+                // DiffFoldProjection with its per-region expansion state.
                 return DiffExecutionBinding(
                     leftDisplayText: leftDisplayText,
                     rightDisplayText: rightDisplayText,

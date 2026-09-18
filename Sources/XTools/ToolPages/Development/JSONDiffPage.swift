@@ -140,6 +140,7 @@ private struct IndexJSONDiffWorkspaceContent: View {
                 right: $workspace.right,
                 rows: execution.binding.rows,
                 syntax: .json,
+                foldUnchanged: workspace.foldUnchanged,
                 error: execution.binding.error,
                 warning: execution.binding.warning,
                 onClear: workspace.clear,
@@ -147,7 +148,14 @@ private struct IndexJSONDiffWorkspaceContent: View {
                 leadingControl: {
                     HStack(spacing: 8) {
                         IndexOptionSwitch(title: "忽略数组顺序", style: .embeddedSwitch, isOn: $workspace.ignoreArrayOrder)
-                        IndexOptionSwitch(title: "折叠未变更行", style: .embeddedSwitch, isOn: $workspace.foldUnchanged)
+                        IndexIconButton(
+                            systemImage: "chevron.up.chevron.down",
+                            help: "折叠未变更行",
+                            isActive: workspace.foldUnchanged
+                        ) {
+                            workspace.foldUnchanged.toggle()
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
                     }
                 }
             )

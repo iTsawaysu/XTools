@@ -346,7 +346,7 @@ struct UndoAppKitBehaviorTests {
         #expect(leftManager.canUndo)
 
         #expect(window.makeFirstResponder(nil))
-        coordinator.update(left: "x", right: "", rows: [], syntax: .plain)
+        coordinator.update(left: "x", right: "", rows: [], syntax: .plain, foldUnchanged: false)
 
         #expect(leftTextView.string == "x")
         #expect(!leftManager.canUndo)

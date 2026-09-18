@@ -100,6 +100,18 @@ public struct DiffAlignedCell: Equatable, Sendable {
         self.segments = segments ?? [DiffTextSegment(text: text, kind: .unchanged)]
         self.originalLineNumber = originalLineNumber ?? lineNumber
     }
+
+    /// Fold placeholders carry a visual line number for gutter alignment but
+    /// must keep a nil original line number so the gutter suppresses their
+    /// number; the coalescing init above would otherwise restore the visual
+    /// number and break fold detection.
+    public init(foldPlaceholderLineNumber lineNumber: Int, text: String) {
+        self.lineNumber = lineNumber
+        self.text = text
+        self.indent = 0
+        self.segments = [DiffTextSegment(text: text, kind: .unchanged)]
+        self.originalLineNumber = nil
+    }
 }
 
 public struct DiffAlignedRow: Identifiable, Equatable, Sendable {
@@ -109,23 +121,29 @@ public struct DiffAlignedRow: Identifiable, Equatable, Sendable {
     public let kind: Kind
     public let left: DiffAlignedCell?
     public let right: DiffAlignedCell?
+    /// Set on fold placeholder rows emitted by `DiffFoldProjection` so views
+    /// can render click-to-expand affordances; nil on every content row.
+    public let foldRegion: DiffFoldRegion?
 
     public init(
         id: UUID = UUID(),
         kind: Kind,
         left: DiffAlignedCell?,
-        right: DiffAlignedCell?
+        right: DiffAlignedCell?,
+        foldRegion: DiffFoldRegion? = nil
     ) {
         self.id = id
         self.kind = kind
         self.left = left
         self.right = right
+        self.foldRegion = foldRegion
     }
 
     public static func == (lhs: DiffAlignedRow, rhs: DiffAlignedRow) -> Bool {
         lhs.kind == rhs.kind
             && lhs.left == rhs.left
             && lhs.right == rhs.right
+            && lhs.foldRegion == rhs.foldRegion
     }
 
     public static func rows(from lines: [DiffDisplayLine]) -> [DiffAlignedRow] {

@@ -39,7 +39,8 @@ struct EditableDiffInteractionTests {
             left: leftDisplay,
             right: rightDisplay,
             rows: rows,
-            syntax: .json
+            syntax: .json,
+            foldUnchanged: false
         )
 
         // Fresh JSON computation: canonical text and decorations appear
@@ -85,7 +86,8 @@ struct EditableDiffInteractionTests {
             left: leftDisplay,
             right: rightDisplay,
             rows: rows,
-            syntax: .json
+            syntax: .json,
+            foldUnchanged: false
         )
 
         // Simulate the user editing the right side, reverting to raw source.
@@ -97,7 +99,8 @@ struct EditableDiffInteractionTests {
             left: leftDisplay,
             right: rightDisplay,
             rows: rows,
-            syntax: .json
+            syntax: .json,
+            foldUnchanged: false
         )
         #expect(rightTextView.string == rightSource)
 
@@ -131,7 +134,8 @@ struct EditableDiffInteractionTests {
             left: leftDisplay,
             right: rightDisplay,
             rows: rows,
-            syntax: .json
+            syntax: .json,
+            foldUnchanged: false
         )
         leftTextView.string = #"{"name":"Still stale"}"#
         coordinator.textDidEndEditing(Notification(name: NSText.didEndEditingNotification, object: rightTextView))

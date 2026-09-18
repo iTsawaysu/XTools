@@ -66,26 +66,32 @@ struct DiffExecutionProjectionTests {
     }
 
     @Test
-    func jsonFoldUnchangedHidesUnchangedRows() throws {
+    func jsonFoldOptionKeepsFullRowsInViewBinding() throws {
+        // Folding is a view-mode projection (DiffFoldProjection); the binding
+        // carries the full canonical rows and display text either way so the
+        // workspace can re-project with per-region expansion state.
         let labels = JSONDiffValidation.SideLabels(left: "左", right: "右")
+        let left = "{\n  \"a\": 1,\n  \"b\": 2,\n  \"c\": 3,\n  \"d\": 4,\n  \"e\": 5,\n  \"f\": 6,\n  \"g\": 7\n}"
+        let right = "{\n  \"a\": 1,\n  \"b\": 20,\n  \"c\": 3,\n  \"d\": 4,\n  \"e\": 5,\n  \"f\": 6,\n  \"g\": 7\n}"
         let fullBinding = try DiffExecution.project(
             DiffExecutionRequest(
                 kind: .json(labels: labels, options: JSONDiffOptions(foldUnchanged: false)),
-                left: "{\n  \"a\": 1,\n  \"b\": 2,\n  \"c\": 3,\n  \"d\": 4,\n  \"e\": 5,\n  \"f\": 6,\n  \"g\": 7\n}",
-                right: "{\n  \"a\": 1,\n  \"b\": 20,\n  \"c\": 3,\n  \"d\": 4,\n  \"e\": 5,\n  \"f\": 6,\n  \"g\": 7\n}"
+                left: left,
+                right: right
             )
         )
         let foldedBinding = try DiffExecution.project(
             DiffExecutionRequest(
                 kind: .json(labels: labels, options: JSONDiffOptions(foldUnchanged: true)),
-                left: "{\n  \"a\": 1,\n  \"b\": 2,\n  \"c\": 3,\n  \"d\": 4,\n  \"e\": 5,\n  \"f\": 6,\n  \"g\": 7\n}",
-                right: "{\n  \"a\": 1,\n  \"b\": 20,\n  \"c\": 3,\n  \"d\": 4,\n  \"e\": 5,\n  \"f\": 6,\n  \"g\": 7\n}"
+                left: left,
+                right: right
             )
         )
         #expect(fullBinding.error == nil)
         #expect(foldedBinding.error == nil)
-        #expect(foldedBinding.rows.count < fullBinding.rows.count)
-        #expect(foldedBinding.rows.contains(where: { $0.left?.text.contains("折叠") == true }))
+        #expect(foldedBinding.rows.count == fullBinding.rows.count)
+        #expect(foldedBinding.leftDisplayText == fullBinding.leftDisplayText)
+        #expect(!foldedBinding.rows.contains(where: { $0.foldRegion != nil }))
     }
 
     @Test

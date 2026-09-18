@@ -34,6 +34,7 @@ private struct IndexTextDiffWorkspaceContent: View {
                 right: $workspace.right,
                 rows: execution.binding.rows,
                 syntax: .plain,
+                foldUnchanged: workspace.foldUnchanged,
                 error: execution.binding.error,
                 onClear: workspace.clear,
                 clearDisabled: !workspace.hasAnyContent,
@@ -41,6 +42,14 @@ private struct IndexTextDiffWorkspaceContent: View {
                     HStack(spacing: 6) {
                         IndexOptionSwitch(title: "忽略空白", style: .embeddedSwitch, isOn: $workspace.ignoreWhitespace)
                         IndexOptionSwitch(title: "忽略大小写", style: .embeddedSwitch, isOn: $workspace.ignoreCase)
+                        IndexIconButton(
+                            systemImage: "chevron.up.chevron.down",
+                            help: "折叠未变更行",
+                            isActive: workspace.foldUnchanged
+                        ) {
+                            workspace.foldUnchanged.toggle()
+                        }
+                        .fixedSize(horizontal: true, vertical: false)
                     }
                 }
             )

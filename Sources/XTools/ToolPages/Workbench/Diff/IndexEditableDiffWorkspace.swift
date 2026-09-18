@@ -2,6 +2,12 @@ import AppKit
 import SwiftUI
 import XToolsCore
 
+/// A toolbar/keyboard request to jump to the previous or next difference.
+struct DiffDifferenceNavigationRequest: Equatable {
+    let id: Int
+    let forward: Bool
+}
+
 struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     var inputTitle: String = "原始文本"
     var outputTitle: String = "对比文本"
@@ -13,11 +19,18 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     @Binding var right: String
     let rows: [DiffAlignedRow]
     var syntax: IndexDiffSyntax = .plain
+    /// Enables the view-mode fold projection over unchanged regions. The
+    /// binding keeps full canonical text; collapsed regions render as
+    /// click-to-expand placeholder rows and panes turn read-only while any
+    /// region stays collapsed.
+    var foldUnchanged: Bool = false
     var error: String?
     var warning: String?
     var onClear: (() -> Void)? = nil
     var clearDisabled = false
     var leadingControl: () -> LeadingControl
+
+    @State private var navigationRequest: DiffDifferenceNavigationRequest?
 
     init(
         inputTitle: String = "原始文本",
@@ -30,6 +43,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
         right: Binding<String>,
         rows: [DiffAlignedRow],
         syntax: IndexDiffSyntax = .plain,
+        foldUnchanged: Bool = false,
         error: String? = nil,
         warning: String? = nil,
         onClear: (() -> Void)? = nil,
@@ -46,6 +60,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
         self._right = right
         self.rows = rows
         self.syntax = syntax
+        self.foldUnchanged = foldUnchanged
         self.error = error
         self.warning = warning
         self.onClear = onClear
@@ -120,7 +135,9 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
                 leftDisplayText: leftDisplayText,
                 rightDisplayText: rightDisplayText,
                 rows: rows,
-                syntax: syntax
+                syntax: syntax,
+                foldUnchanged: foldUnchanged,
+                differenceNavigationRequest: navigationRequest
             )
             .padding(.horizontal, ToolMetrics.Spacing.md)
             .padding(.bottom, ToolMetrics.Spacing.md)
@@ -177,6 +194,20 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
                 Spacer(minLength: 0)
 
                 HStack(spacing: 6) {
+                    IndexIconButton(
+                        systemImage: "chevron.up",
+                        help: "上一处差异（⌥⌘↑）"
+                    ) {
+                        navigateDifference(false)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    IndexIconButton(
+                        systemImage: "chevron.down",
+                        help: "下一处差异（⌥⌘↓）"
+                    ) {
+                        navigateDifference(true)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
                     if let onClear {
                         IndexClearButton(
                             isDisabled: clearDisabled,
@@ -199,6 +230,13 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
                 .frame(height: 0.5)
         }
         .accessibilityElement(children: .contain)
+    }
+
+    private func navigateDifference(_ forward: Bool) {
+        navigationRequest = DiffDifferenceNavigationRequest(
+            id: (navigationRequest?.id ?? 0) + 1,
+            forward: forward
+        )
     }
 
     @ViewBuilder
@@ -234,6 +272,7 @@ extension IndexEditableDiffWorkspace where LeadingControl == EmptyView {
         right: Binding<String>,
         rows: [DiffAlignedRow],
         syntax: IndexDiffSyntax = .plain,
+        foldUnchanged: Bool = false,
         error: String? = nil,
         warning: String? = nil,
         onClear: (() -> Void)? = nil,
@@ -250,6 +289,7 @@ extension IndexEditableDiffWorkspace where LeadingControl == EmptyView {
             right: right,
             rows: rows,
             syntax: syntax,
+            foldUnchanged: foldUnchanged,
             error: error,
             warning: warning,
             onClear: onClear,
@@ -286,6 +326,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
     let rightDisplayText: String?
     let rows: [DiffAlignedRow]
     let syntax: IndexDiffSyntax
+    let foldUnchanged: Bool
+    var differenceNavigationRequest: DiffDifferenceNavigationRequest? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator(left: $left, right: $right)
@@ -293,6 +335,9 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         let hostView = IndexEditableDiffScrollHostView()
+        hostView.onNavigateDifference = { [weak coordinator = context.coordinator] forward in
+            coordinator?.navigateDifference(forward: forward)
+        }
         let splitView = IndexEditableDiffSplitView()
         splitView.isVertical = true
         splitView.dividerStyle = .thin
@@ -317,7 +362,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             left: leftDisplayText ?? left,
             right: rightDisplayText ?? right,
             rows: rows,
-            syntax: syntax
+            syntax: syntax,
+            foldUnchanged: foldUnchanged
         )
         DispatchQueue.main.async {
             context.coordinator.applyStoredDividerRatio(in: splitView)
@@ -339,8 +385,15 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             left: leftDisplayText ?? left,
             right: rightDisplayText ?? right,
             rows: rows,
-            syntax: syntax
+            syntax: syntax,
+            foldUnchanged: foldUnchanged
         )
+
+        if let request = differenceNavigationRequest,
+           request.id != context.coordinator.lastNavigationRequestID {
+            context.coordinator.lastNavigationRequestID = request.id
+            context.coordinator.navigateDifference(forward: request.forward)
+        }
     }
 
     @MainActor
@@ -370,6 +423,16 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         private var currentSyntax: IndexDiffSyntax = .plain
         private var latestLeftDisplayText = ""
         private var latestRightDisplayText = ""
+
+        // Fold projection state: full canonical rows arrive from the binding;
+        // the coordinator owns the per-region expansion set so an expand click
+        // re-projects locally without re-running the diff.
+        private var fullRows: [DiffAlignedRow] = []
+        private var foldEnabled = false
+        private var expandedFoldRegions: Set<Int> = []
+        private var leftFoldPlaceholders: [Int: DiffFoldRegion] = [:]
+        private var rightFoldPlaceholders: [Int: DiffFoldRegion] = [:]
+        var lastNavigationRequestID = 0
 
         // Each editor pane resolves undo to its own private manager rather than
         // the shared window manager. NSTextView has no built-in per-view undo
@@ -537,38 +600,131 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             return min(max(availableWidth * storedDividerRatio, minimumPosition), maximumPosition)
         }
 
-        func update(left: String, right: String, rows: [DiffAlignedRow], syntax: IndexDiffSyntax) {
-            // Detect whether the display text has genuinely changed (a fresh
-            // computation result arrived from the debounce pipeline). For JSON
-            // mode the active editor is normally blocked from programmatic
-            // updates to protect user keystrokes from stale SwiftUI re-renders.
-            // When a fresh result arrives, we allow the override so that the
-            // canonical text and diff decorations appear immediately — the user
-            // no longer needs to click away to trigger `textDidEndEditing`.
-            let freshLeftDisplay = left != latestLeftDisplayText
-            let freshRightDisplay = right != latestRightDisplayText
-            let jsonFresh = syntax == .json
-
-            currentRows = rows
+        func update(left: String, right: String, rows: [DiffAlignedRow], syntax: IndexDiffSyntax, foldUnchanged: Bool) {
+            fullRows = rows
+            foldEnabled = foldUnchanged
             currentSyntax = syntax
             latestLeftDisplayText = left
             latestRightDisplayText = right
-            let isFolded = rows.contains(where: { $0.kind == .structure && $0.left?.originalLineNumber == nil })
-            leftTextView?.isEditable = !isFolded
-            rightTextView?.isEditable = !isFolded
-            setText(left, source: self.left.wrappedValue, in: leftTextView, allowActiveEditorOverride: jsonFresh && freshLeftDisplay)
-            setText(right, source: self.right.wrappedValue, in: rightTextView, allowActiveEditorOverride: jsonFresh && freshRightDisplay)
+            render()
+        }
+
+        /// Re-projects the full rows through the fold planner (honoring the
+        /// expansion set) and pushes the composed text into both editors.
+        private func render() {
+            let composition: (rows: [DiffAlignedRow], leftText: String, rightText: String)
+            if foldEnabled, fullRows.contains(where: { $0.kind.isDifference }) {
+                let applied = DiffFoldProjection.apply(rows: fullRows, expandedRegionIDs: expandedFoldRegions)
+                composition = (applied.rows, applied.leftText, applied.rightText)
+            } else {
+                composition = (fullRows, latestLeftDisplayText, latestRightDisplayText)
+            }
+
+            currentRows = composition.rows
+            leftFoldPlaceholders = Dictionary(
+                composition.rows.compactMap { row in
+                    guard let region = row.foldRegion, let visual = row.left?.lineNumber else { return nil }
+                    return (visual, region)
+                },
+                uniquingKeysWith: { first, _ in first }
+            )
+            rightFoldPlaceholders = Dictionary(
+                composition.rows.compactMap { row in
+                    guard let region = row.foldRegion, let visual = row.right?.lineNumber else { return nil }
+                    return (visual, region)
+                },
+                uniquingKeysWith: { first, _ in first }
+            )
+
+            // Editing stays blocked only while some region is collapsed; once
+            // every region is expanded the editors accept keystrokes again.
+            let hasCollapsedRegion = !leftFoldPlaceholders.isEmpty || !rightFoldPlaceholders.isEmpty
+            leftTextView?.isEditable = !hasCollapsedRegion
+            rightTextView?.isEditable = !hasCollapsedRegion
+
+            let freshComposedLeft = composition.leftText != latestAppliedLeftText
+            let freshComposedRight = composition.rightText != latestAppliedRightText
+            let overrideFresh = currentSyntax == .json && (freshComposedLeft || freshComposedRight)
+            setText(composition.leftText, source: self.left.wrappedValue, in: leftTextView, allowActiveEditorOverride: overrideFresh && freshComposedLeft)
+            setText(composition.rightText, source: self.right.wrappedValue, in: rightTextView, allowActiveEditorOverride: overrideFresh && freshComposedRight)
+            latestAppliedLeftText = composition.leftText
+            latestAppliedRightText = composition.rightText
             refreshEditorLayout()
             applyDecorations()
             refreshPlaceholders()
             refreshEditorLayout()
         }
 
-        func textDidChange(_ notification: Notification) {
-            guard !isApplyingProgrammaticText, let textView = notification.object as? NSTextView else {
+        private var latestAppliedLeftText = ""
+        private var latestAppliedRightText = ""
+
+        private func toggleFoldRegion(_ regionID: Int) {
+            if expandedFoldRegions.contains(regionID) {
+                expandedFoldRegions.remove(regionID)
+            } else {
+                expandedFoldRegions.insert(regionID)
+            }
+            render()
+        }
+
+        func textView(_ textView: NSTextView, clickedOnLink link: Any, at charIndex: Int) -> Bool {
+            guard let raw = link as? String, let regionID = Int(raw) else {
+                return false
+            }
+            toggleFoldRegion(regionID)
+            return true
+        }
+
+        // MARK: Difference navigation
+
+        func navigateDifference(forward: Bool) {
+            let differenceLines = currentRows
+                .compactMap { row -> Int? in
+                    guard row.kind.isDifference else { return nil }
+                    return row.left?.lineNumber ?? row.right?.lineNumber
+                }
+                .sorted()
+            guard !differenceLines.isEmpty,
+                  let textView = leftTextView ?? rightTextView else {
                 return
             }
-            guard !textView.string.contains("⋯") else {
+
+            let anchor = Self.anchorVisualLine(in: textView)
+            let target: Int
+            if forward {
+                target = differenceLines.first { $0 > anchor } ?? differenceLines[0]
+            } else {
+                target = differenceLines.last { $0 < anchor } ?? differenceLines[differenceLines.count - 1]
+            }
+            selectVisualLine(target, in: textView)
+        }
+
+        private static func anchorVisualLine(in textView: NSTextView) -> Int {
+            let nsText = textView.string as NSString
+            guard nsText.length > 0 else { return 1 }
+            let selected = textView.selectedRange()
+            let location = min(max(selected.location, 0), max(nsText.length - 1, 0))
+            var line = 1
+            var index = 0
+            while index < location {
+                if nsText.character(at: index) == unichar(10) {
+                    line += 1
+                }
+                index += 1
+            }
+            return line
+        }
+
+        private func selectVisualLine(_ line: Int, in textView: NSTextView) {
+            let lineRanges = IndexDiffSourceText.lineRanges(in: textView.string)
+            guard line >= 1, line <= lineRanges.count else { return }
+            let range = lineRanges[line - 1]
+            textView.setSelectedRange(NSRange(location: range.location, length: 0))
+            scrollSelectionIntoOuterView(textView)
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard !isApplyingProgrammaticText, let textView = notification.object as? NSTextView else {
                 return
             }
 
@@ -619,7 +775,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             AppKitTextEditingConfiguration.configurePlainTextEditor(textView)
             textView.isRichText = false
             textView.importsGraphics = false
-            textView.usesFindPanel = true
+            textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
             textView.textContainerInset = IndexDiffEditorMetrics.textInset
             textView.minSize = NSSize(width: 0, height: 0)
             textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
@@ -763,8 +920,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             let decorations = DiffEditorDecorations(rows: currentRows)
             (leftTextView as? IndexDiffTextView)?.lineDecorations = decorations.left
             (rightTextView as? IndexDiffTextView)?.lineDecorations = decorations.right
-            applyDecorations(to: leftTextView, lineDecorations: decorations.left, syntax: currentSyntax)
-            applyDecorations(to: rightTextView, lineDecorations: decorations.right, syntax: currentSyntax)
+            applyDecorations(to: leftTextView, lineDecorations: decorations.left, syntax: currentSyntax, foldPlaceholders: leftFoldPlaceholders)
+            applyDecorations(to: rightTextView, lineDecorations: decorations.right, syntax: currentSyntax, foldPlaceholders: rightFoldPlaceholders)
             leftLineNumberView?.lineStatuses = decorations.left.mapValues(\.status)
             rightLineNumberView?.lineStatuses = decorations.right.mapValues(\.status)
             leftLineNumberView?.customLineNumbers = Dictionary(
@@ -815,7 +972,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         private func applyDecorations(
             to textView: NSTextView?,
             lineDecorations: [Int: DiffLineDecoration],
-            syntax: IndexDiffSyntax
+            syntax: IndexDiffSyntax,
+            foldPlaceholders: [Int: DiffFoldRegion]
         ) {
             guard let textView,
                   let layoutManager = textView.layoutManager,
@@ -832,11 +990,20 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             for (index, range) in lineRanges.enumerated() {
                 let lineNumber = index + 1
                 let line = nsText.substring(with: range)
-                if line.contains("⋯") {
+
+                if let region = foldPlaceholders[lineNumber] {
                     layoutManager.addTemporaryAttribute(
                         .foregroundColor,
                         value: IndexDiffNSPalette.textTertiary,
                         forCharacterRange: range
+                    )
+                    // The placeholder line is the expand/collapse affordance;
+                    // the link value carries the region identity back through
+                    // textView(_:clickedOnLink:at:).
+                    textView.textStorage?.addAttribute(
+                        .link,
+                        value: String(region.id),
+                        range: range
                     )
                     continue
                 }
@@ -964,6 +1131,22 @@ private final class IndexEditableDiffScrollHostView: NSView {
     let outerScrollView = NSScrollView(frame: .zero)
     let documentView = IndexDiffScrollDocumentView(frame: .zero)
     var onLayout: (() -> Void)?
+    var onNavigateDifference: ((Bool) -> Void)?
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.type == .keyDown,
+           event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.option, .command] {
+            if event.charactersIgnoringModifiers == String(NSDownArrowFunctionKey) {
+                onNavigateDifference?(true)
+                return true
+            }
+            if event.charactersIgnoringModifiers == String(NSUpArrowFunctionKey) {
+                onNavigateDifference?(false)
+                return true
+            }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 
     var splitView = IndexEditableDiffSplitView() {
         didSet {

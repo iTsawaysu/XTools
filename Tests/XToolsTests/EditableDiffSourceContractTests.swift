@@ -145,7 +145,7 @@ struct EditableDiffSourceContractTests {
         contains(source, "var rightDisplayText: String?", "Diff workspace must accept optional normalized display text for structured diff tools")
         contains(source, "left: leftDisplayText ?? left", "Diff workspace must render normalized left text when JSON diff provides it")
         contains(source, "right: rightDisplayText ?? right", "Diff workspace must render normalized right text when JSON diff provides it")
-        contains(source, "setText(left, source: self.left.wrappedValue", "Diff workspace must compare display updates against the editable source binding before replacing visible text")
+        contains(source, "setText(composition.leftText, source: self.left.wrappedValue", "Diff workspace must compare display updates against the editable source binding before replacing visible text")
         contains(source, "isActiveEditor(textView), textView.string == source", "Diff workspace must not overwrite the active editor with normalized display text during ordinary user edits")
         contains(source, "textView.setStringWithoutUndoRegistration(text)", "Diff workspace programmatic replacements must establish a safe undo baseline through the shared helper")
         contains(source, "IndexBadge(\"STDIN\"", "Diff workspace must show standard workbench badges")
