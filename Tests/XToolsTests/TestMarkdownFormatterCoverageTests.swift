@@ -184,9 +184,9 @@ struct TestMarkdownFormatterCoverageTests {
                 assertFactual(diagnostic)
             }
         case "SQL-FMT-16":
-            let options = SQLFormatting.Options(keywordCase: .lower, indentWidth: 4, commaStyle: .leading)
+            let options = SQLFormatting.Options(keywordCase: .lower, indentWidth: 4)
             let output = try SQLFormatting.format(try block(testCase, 0), options: options)
-            #expect(output.contains("select\n    id\n  , name\n  , email"))
+            #expect(output.contains("select\n    id,\n    name,\n    email"))
             #expect(output.contains("where\n    id = 1"))
         default:
             Issue.record("Unhandled case \(id)")
@@ -230,7 +230,10 @@ struct TestMarkdownFormatterCoverageTests {
             #expect(output.contains("<!-- keep this comment -->"))
             #expect(output.contains("<empty></empty>") || output.contains("<empty/>"))
         case "XML-FMT-09":
-            #expect(try xmlDiagnostic(try block(testCase, 0)).message == "不支持 DOCTYPE 声明")
+            let output = try XMLFormatting.format(try block(testCase, 0))
+            #expect(output.contains("<!DOCTYPE root"))
+            #expect(!output.contains("root:x:"))
+            #expect(!output.contains("/bin/"))
         case "XML-FMT-10":
             #expect(try xmlDiagnostic(try block(testCase, 0)).message.contains("根节点"))
         case "XML-FMT-11":

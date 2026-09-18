@@ -52,17 +52,16 @@ struct SQLFormattingTests {
         let input = "select id,name,email from users where id=1 and deleted_at is null"
         let options = SQLFormatting.Options(
             keywordCase: .lower,
-            indentWidth: 4,
-            commaStyle: .leading
+            indentWidth: 4
         )
 
         let output = try SQLFormatting.format(input, options: options)
 
         #expect(output == """
             select
-                id
-              , name
-              , email
+                id,
+                name,
+                email
             from
                 users
             where

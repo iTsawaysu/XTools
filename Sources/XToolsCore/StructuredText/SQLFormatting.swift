@@ -6,26 +6,18 @@ public enum SQLFormatting {
         case lower
     }
 
-    public enum CommaStyle: String, CaseIterable, Sendable {
-        case trailing
-        case leading
-    }
-
     public struct Options: Equatable, Sendable {
         public var keywordCase: KeywordCase
         public var indentWidth: Int
-        public var commaStyle: CommaStyle
         public var minify: Bool
 
         public init(
             keywordCase: KeywordCase = .upper,
             indentWidth: Int = 2,
-            commaStyle: CommaStyle = .trailing,
             minify: Bool = false
         ) {
             self.keywordCase = keywordCase
             self.indentWidth = max(2, min(8, indentWidth))
-            self.commaStyle = commaStyle
             self.minify = minify
         }
     }

@@ -147,7 +147,11 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
         let minify = workspace.formatMode == .compact
         let snapshot = (
             input: workspace.input,
-            options: SQLFormatting.Options(keywordCase: workspace.keywordCase, indentWidth: indentWidth, commaStyle: .trailing, minify: minify)
+            options: SQLFormatting.Options(
+                keywordCase: workspace.keywordCase,
+                indentWidth: indentWidth,
+                minify: minify
+            )
         )
         execution.schedule(snapshot: snapshot, delay: .zero) { snapshot in
             FormatRunner.run(snapshot.input) {

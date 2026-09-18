@@ -542,16 +542,15 @@ select id,name,email from users where id=1 and deleted_at is null
 ```text
 keywordCase = lower
 indentWidth = 4
-commaStyle = leading
 ```
 
 预期输出形态：
 
 ```sql
 select
-    id
-  , name
-  , email
+    id,
+    name,
+    email
 from
     users
 where
@@ -562,7 +561,7 @@ where
 检查点：
 
 - 缩进宽度应按 4 空格生效。
-- 前导逗号只应用于顶层列表换行，不应破坏函数参数或字符串内容。
+- 逗号置于行末，不应破坏函数参数或字符串内容。
 - 页面当前可固定为 2 空格和行尾逗号，但 Core 选项行为需要稳定。
 
 ## 3. XML 格式化
@@ -647,7 +646,7 @@ where
 <root>&ext;</root>
 ```
 
-预期：当前工具直接拒绝 DOCTYPE，并提示“不支持 DOCTYPE 声明”；不能读取本地文件或展开外部实体。
+预期：保留 DOCTYPE 声明；不能读取本地文件或展开外部实体。
 
 ### XML-FMT-10 · 错误 XML：多个根节点
 

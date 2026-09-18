@@ -19,7 +19,6 @@ struct SQLFormatter {
     var conditionIndentLevel: Int?
     var inlineParenthesesDepth = 0
     var caseBaseIndents: [Int] = []
-    var pendingLeadingComma = false
     var lastWordNormalized: String?
     var betweenDepth = 0
     var overDepth = 0

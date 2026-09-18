@@ -67,18 +67,9 @@ extension SQLFormatter {
     }
 
     mutating func handleListComma() {
-        switch options.commaStyle {
-        case .trailing:
-            appendRaw(",")
-            flushLine()
-            setIndent(listIndentLevel ?? blockIndentLevel)
-        case .leading:
-            flushLine()
-            let spaces = max(0, ((listIndentLevel ?? blockIndentLevel) * options.indentWidth) - 2)
-            currentAbsoluteIndent = spaces
-            currentIndentLevel = listIndentLevel ?? blockIndentLevel
-            pendingLeadingComma = true
-        }
+        appendRaw(",")
+        flushLine()
+        setIndent(listIndentLevel ?? blockIndentLevel)
     }
 
     mutating func appendOpeningQueryParenthesis() {
@@ -111,10 +102,7 @@ extension SQLFormatter {
     }
 
     mutating func appendWord(_ value: String, normalized: String?) {
-        if pendingLeadingComma {
-            appendRaw(", ")
-            pendingLeadingComma = false
-        } else if needsSpaceBeforeWord {
+        if needsSpaceBeforeWord {
             appendRaw(" ")
         }
 
@@ -150,7 +138,6 @@ extension SQLFormatter {
         }
         current = ""
         currentAbsoluteIndent = nil
-        pendingLeadingComma = false
     }
 
     mutating func setIndent(_ level: Int) {
