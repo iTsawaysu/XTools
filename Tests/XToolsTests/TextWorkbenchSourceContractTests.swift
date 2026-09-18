@@ -327,7 +327,7 @@ struct TextWorkbenchSourceContractTests {
         contains(controls, "ProgressView()", "The shared HTML URL action label must show an indeterminate progress indicator")
         contains(source, "正在解析…", "HTML URL processing must expose the reference-matched loading copy")
         contains(source, "outputProcessingText: session.processingText", "HTML processing phases must replace stale STDOUT with a status surface")
-        contains(source, "outputPresentation: .nativeReadOnlyText", "HTML Markdown output must opt into the large-text native surface")
+        contains(source, "outputPresentation: workspace.showsRenderedPreview ? .markdownPreview : .nativeReadOnlyText", "HTML Markdown output must toggle between the rendered preview and the large-text native source surface")
         contains(source, "diagnostic: session.error ?? session.warning", "HTML to Markdown diagnostics must render inside the prototype workbench toolbar")
         contains(source, "outputFileName: \"markdown-output.md\"", "HTML to Markdown save action must use a stable Markdown file name")
         contains(source, "showsOutputSave: true", "HTML to Markdown keeps its save action in the prototype toolbar")
@@ -403,16 +403,19 @@ struct TextWorkbenchSourceContractTests {
             contains(page, "outputLineNumbers: true", "Prototype family outputs keep the structured line-number gutter")
         }
         doesNotContain(html, "outputLineNumbers: true", "Markdown prose output must not spend width on a gutter")
-        contains(json, "outputColorize: outputColorizer", "JSON formatter must route highlighting through a degradable output colorizer")
-        contains(xml, "outputColorize: outputColorizer", "XML formatter must route highlighting through a degradable output colorizer")
-        contains(yaml, "outputColorize: outputColorizer", "YAML formatter must route highlighting through a degradable output colorizer")
-        contains(sql, "outputColorize: outputColorizer", "SQL formatter must route highlighting through a degradable output colorizer")
-        contains(json, "if execution.binding.output.count > Self.maxHighlightedOutputCharacters", "JSON formatter must degrade highlighting before editor behavior on large output")
-        contains(xml, "if execution.binding.output.count > Self.maxHighlightedOutputCharacters", "XML formatter must degrade highlighting before editor behavior on large output")
-        contains(yaml, "if execution.binding.output.count > Self.maxHighlightedOutputCharacters", "YAML formatter must degrade highlighting before editor behavior on large output")
-        contains(sql, "if execution.binding.output.count > Self.maxHighlightedOutputCharacters", "SQL formatter must degrade highlighting before editor behavior on large output")
-        contains(docker, "outputColorize: outputColorizer", "Docker Run to Compose must route highlighting through a degradable output colorizer")
-        contains(docker, "if execution.binding.output.count > Self.maxHighlightedOutputCharacters", "Docker Run to Compose must degrade highlighting before editor behavior on large output")
+        contains(json, "outputSyntax: .json", "JSON formatter must declare its syntax for the viewport-lazy viewer highlighter")
+        contains(xml, "outputSyntax: .xml", "XML formatter must declare its syntax for the viewport-lazy viewer highlighter")
+        contains(yaml, "outputSyntax: .yaml", "YAML formatter must declare its syntax for the viewport-lazy viewer highlighter")
+        contains(sql, "outputSyntax: .sql", "SQL formatter must declare its syntax for the viewport-lazy viewer highlighter")
+        contains(docker, "outputSyntax: workspace.direction == .runToCompose ? .yaml : nil", "Docker Run to Compose must declare YAML syntax only for compose-direction output")
+        // Viewport highlighting in the shared code viewer replaces the old
+        // per-page character budgets: large output keeps full highlighting.
+        for page in [json, xml, yaml, sql, docker] {
+            doesNotContain(page, "maxHighlightedOutputCharacters", "Viewport highlighting must replace per-page highlight budgets")
+        }
+        let codeViewer = try readSource("Sources/XTools/Shared/Components/IndexCodeViewerSurface.swift")
+        contains(codeViewer, "IndexViewportHighlighting", "The shared code viewer must own viewport-lazy highlighting")
+        contains(codeViewer, "syntax.tokens(line: line)", "The viewer must colorize from per-line tokens inside the visible span only")
         for page in [json, xml, yaml, docker, sql] {
             doesNotContain(page, "outputFileName:", "Copy-only formatter pages must not retain unreachable text-save filenames")
         }
@@ -466,7 +469,7 @@ struct TextWorkbenchSourceContractTests {
         contains(sql, "execution.schedule(snapshot: snapshot, delay: .zero)", "SQL formatting must be explicit and still submit an immutable snapshot")
         contains(sql, "formatAttempt += 1", "Each SQL format attempt must advance the shake generation")
         contains(sql, "outputLineNumbers: true", "SQL formatter must keep syntax highlighting with a line-number gutter")
-        contains(sql, "outputColorize: outputColorizer", "SQL formatter must keep structured output highlighting")
+        contains(sql, "outputSyntax: .sql", "SQL formatter must keep structured output highlighting")
         contains(sql, "IndexPage(\"SQL 格式化\", subtitle: \"格式化与压缩 SQL，支持关键字大小写和缩进选项。\", workspaceSemantic: .structuredEditorTransform)", "SQL formatter must let the semantic resolve the compact fixed workbench page shell")
         contains(sql, "workspaceSemantic: .structuredEditorTransform", "SQL formatter must express editor-transform behavior through the semantic seam")
         doesNotContain(sql, "expandsWithContent: true", "SQL formatter must not hand-assemble input growth for editor-transform behavior")

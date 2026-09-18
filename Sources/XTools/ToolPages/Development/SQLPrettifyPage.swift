@@ -62,8 +62,6 @@ struct IndexSQLPrettifyPage: View {
 }
 
 private struct IndexSQLPrettifyWorkspaceContent: View {
-    private static let maxHighlightedOutputCharacters = 200_000
-
     @ObservedObject var workspace: SQLPrettifyToolWorkspaceModel
     @ObservedObject var execution: IndexFormatExecutionSession
     @State private var formatAttempt = 0
@@ -81,7 +79,7 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
                 formatAttempt: formatAttempt,
                 // SQL output is line-oriented; keep the gutter aligned with syntax colors.
                 outputLineNumbers: true,
-                outputColorize: outputColorizer,
+                outputSyntax: .sql,
                 clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
                 onFormat: format,
                 onClear: workspace.clear,
@@ -127,13 +125,6 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
                 }
             }
         )
-    }
-
-    private var outputColorizer: ((String) -> AttributedString)? {
-        if execution.binding.output.count > Self.maxHighlightedOutputCharacters {
-            return nil
-        }
-        return { StructuredSyntaxHighlighter.sql(line: $0) }
     }
 
     private func format() {

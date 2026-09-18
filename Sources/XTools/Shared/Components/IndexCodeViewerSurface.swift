@@ -6,14 +6,17 @@ import SwiftUI
 ///
 /// Provides:
 /// - True viewport virtualization (instant rendering & 120 FPS scrolling on 100k+ lines)
+/// - Viewport-lazy syntax highlighting: only logical lines around the visible
+///   rect are colorized, so arbitrarily large outputs highlight without a
+///   per-page character budget
 /// - Native First Responder support for `⌘A` (Select All) and `⌘C` (Copy)
 /// - Native macOS Find Bar support (`⌘F`)
-/// - Integrated syntax highlighting with line spacing matching the input editor
+/// - Line spacing matching the input editor
 struct IndexCodeViewerSurface: View {
     let text: String
     var placeholder: String = IndexEmptyStateCopy.outputWillShowHere
     var lineNumbers: Bool = true
-    var colorize: ((String) -> AttributedString)? = nil
+    var syntax: IndexSyntaxKind? = nil
     var fillsHeight: Bool = true
     var minHeight: CGFloat = 220
     var lineBreakMode: NSLineBreakMode = .byCharWrapping
@@ -26,7 +29,7 @@ struct IndexCodeViewerSurface: View {
             IndexCodeViewerTextView(
                 text: text,
                 lineNumbers: lineNumbers,
-                colorize: colorize,
+                syntax: syntax,
                 lineBreakMode: lineBreakMode,
                 embedsFlat: embedsFlat
             )
@@ -92,6 +95,13 @@ private final class IndexCodeViewerTextViewInternal: NSTextView, IndexAsymmetric
     var leadingTextContainerInset: CGFloat {
         textContainerInset.width
     }
+
+    var onEffectiveAppearanceChange: (() -> Void)?
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        onEffectiveAppearanceChange?()
+    }
 }
 
 private final class IndexCodeViewerScrollView: NSScrollView {
@@ -137,7 +147,7 @@ private final class IndexCodeViewerScrollView: NSScrollView {
 private struct IndexCodeViewerTextView: NSViewRepresentable {
     let text: String
     var lineNumbers: Bool
-    var colorize: ((String) -> AttributedString)?
+    var syntax: IndexSyntaxKind?
     var lineBreakMode: NSLineBreakMode
     var embedsFlat: Bool
 
@@ -163,13 +173,17 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
         textView.isHorizontallyResizable = false
         textView.isRichText = false
         textView.importsGraphics = false
-        textView.usesFindPanel = true
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
         textView.isEditable = false
         textView.isSelectable = true
         textView.drawsBackground = false
         textView.backgroundColor = .clear
 
         configure(textView)
+        textView.onEffectiveAppearanceChange = { [weak coordinator = context.coordinator] in
+            coordinator?.highlighting.resetAppliedTokens()
+        }
 
         if lineNumbers {
             let gutter = IndexEditorLineNumberGutterView(scrollView: scrollView, textView: textView)
@@ -180,8 +194,17 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
         }
 
         applyContent(to: textView)
+
+        context.coordinator.highlighting.install(
+            scrollView: scrollView,
+            textView: textView,
+            syntax: syntax,
+            baseAttributes: Self.baseAttributes(lineSpacing: 6)
+        )
+        context.coordinator.highlighting.contentChanged(text: text, syntax: syntax)
         scrollView.synchronizeTextGeometry()
         context.coordinator.lastText = text
+        context.coordinator.lastSyntax = syntax
         return scrollView
     }
 
@@ -190,8 +213,9 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
               let textView = customScrollView.documentView as? IndexCodeViewerTextViewInternal else { return }
         configure(textView)
 
-        if context.coordinator.lastText != text {
+        if context.coordinator.lastText != text || context.coordinator.lastSyntax != syntax {
             context.coordinator.lastText = text
+            context.coordinator.lastSyntax = syntax
             let previousSelectedRanges = textView.selectedRanges
             applyContent(to: textView)
             let stringLength = (text as NSString).length
@@ -200,16 +224,19 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
                 textView.selectedRanges = validRanges
             }
             customScrollView.synchronizeTextGeometry()
+            context.coordinator.highlighting.contentChanged(text: text, syntax: syntax)
             context.coordinator.lineNumberGutter?.refresh()
         } else {
             customScrollView.synchronizeTextGeometry()
+            context.coordinator.highlighting.highlightVisibleIfNeeded()
         }
     }
 
     private func configure(_ textView: NSTextView) {
         textView.isEditable = false
         textView.isSelectable = true
-        textView.usesFindPanel = true
+        textView.usesFindBar = true
+        textView.isIncrementalSearchingEnabled = true
         AppKitTextEditingConfiguration.configurePlainTextEditor(textView, allowsUndo: false)
 
         textView.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
@@ -231,60 +258,186 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
         }
     }
 
+    /// Plain base attributes only; syntax colors are applied lazily by the
+    /// viewport highlighter, which keeps first paint O(visible) regardless of
+    /// document size.
     private func applyContent(to textView: NSTextView) {
-        guard !text.isEmpty else {
-            textView.string = ""
-            return
-        }
+        let attributed = NSAttributedString(string: text, attributes: Self.baseAttributes(lineSpacing: 6))
+        textView.textStorage?.setAttributedString(attributed)
+    }
 
+    private static func baseAttributes(lineSpacing: CGFloat) -> [NSAttributedString.Key: Any] {
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineSpacing = 6
-        let baseFont = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular)
-        let baseColor = NSColor(ToolTheme.textSecondary)
-
-        let baseAttributes: [NSAttributedString.Key: Any] = [
-            .font: baseFont,
+        paragraphStyle.lineSpacing = lineSpacing
+        return [
+            .font: NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular),
             .paragraphStyle: paragraphStyle,
-            .foregroundColor: baseColor
+            .foregroundColor: NSColor(ToolTheme.textSecondary)
         ]
-
-        if let colorize {
-            let lines = text.components(separatedBy: "\n")
-            let combined = NSMutableAttributedString()
-
-            for (index, line) in lines.enumerated() {
-                if index > 0 {
-                    combined.append(NSAttributedString(string: "\n", attributes: baseAttributes))
-                }
-                if line.isEmpty {
-                    combined.append(NSAttributedString(string: "", attributes: baseAttributes))
-                } else {
-                    let attrLine = colorize(line)
-                    let nsLine = NSMutableAttributedString(attributedString: NSAttributedString(attrLine))
-                    let fullRange = NSRange(location: 0, length: nsLine.length)
-                    nsLine.addAttribute(.font, value: baseFont, range: fullRange)
-                    nsLine.addAttribute(.paragraphStyle, value: paragraphStyle, range: fullRange)
-
-                    // Ensure uncolored segments have default text color
-                    nsLine.enumerateAttribute(.foregroundColor, in: fullRange) { val, rng, _ in
-                        if val == nil {
-                            nsLine.addAttribute(.foregroundColor, value: baseColor, range: rng)
-                        }
-                    }
-
-                    combined.append(nsLine)
-                }
-            }
-            textView.textStorage?.setAttributedString(combined)
-        } else {
-            let attrStr = NSAttributedString(string: text, attributes: baseAttributes)
-            textView.textStorage?.setAttributedString(attrStr)
-        }
     }
 
     @MainActor
     final class Coordinator: NSObject {
         var lastText: String?
+        var lastSyntax: IndexSyntaxKind?
         weak var lineNumberGutter: IndexEditorLineNumberGutterView?
+        let highlighting = IndexViewportHighlighting()
+    }
+}
+
+/// Colors only the logical lines inside (and near) the current scroll
+/// viewport. Per-line tokenizing is stateless, so a partially highlighted
+/// document is always visually consistent; lines outside the viewport keep
+/// the plain base color until they scroll into view.
+@MainActor
+final class IndexViewportHighlighting {
+    /// Extra fully-colored lines kept above and below the viewport so fast
+    /// scrolls reveal pre-highlighted content instead of plain flashes.
+    private static let viewportLineMargin = 12
+
+    private weak var scrollView: NSScrollView?
+    private weak var textView: NSTextView?
+    private var syntax: IndexSyntaxKind?
+    private var baseAttributes: [NSAttributedString.Key: Any] = [:]
+
+    /// UTF-16 ranges of each logical line including its trailing newline.
+    private var lineRanges: [NSRange] = []
+    private var highlightedLines: [Bool] = []
+    private nonisolated(unsafe) var boundsObserver: (any NSObjectProtocol)?
+
+    func install(
+        scrollView: NSScrollView,
+        textView: NSTextView,
+        syntax: IndexSyntaxKind?,
+        baseAttributes: [NSAttributedString.Key: Any]
+    ) {
+        self.scrollView = scrollView
+        self.textView = textView
+        self.baseAttributes = baseAttributes
+
+        let contentView = scrollView.contentView
+        contentView.postsBoundsChangedNotifications = true
+        boundsObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: contentView,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.highlightVisibleIfNeeded()
+            }
+        }
+    }
+
+    deinit {
+        if let boundsObserver {
+            NotificationCenter.default.removeObserver(boundsObserver)
+        }
+    }
+
+    func contentChanged(text: String, syntax: IndexSyntaxKind?) {
+        self.syntax = syntax
+        rebuildLineRanges(for: text)
+        resetAppliedTokens()
+    }
+
+    /// Wipes token colors (appearance flip, syntax change) and re-colors the
+    /// visible window from the plain base attributes.
+    func resetAppliedTokens() {
+        guard let textView else { return }
+        let fullRange = NSRange(location: 0, length: (textView.string as NSString).length)
+        textView.textStorage?.setAttributes(baseAttributes, range: fullRange)
+        highlightedLines = Array(repeating: false, count: lineRanges.count)
+        highlightVisibleIfNeeded()
+    }
+
+    private func rebuildLineRanges(for text: String) {
+        let nsText = text as NSString
+        var ranges: [NSRange] = []
+        ranges.reserveCapacity(nsText.length / 32 + 1)
+
+        var searchRange = NSRange(location: 0, length: nsText.length)
+        var lineStart = 0
+        while searchRange.location < nsText.length {
+            let newline = nsText.range(of: "\n", options: [], range: searchRange)
+            guard newline.location != NSNotFound else { break }
+            ranges.append(NSRange(location: lineStart, length: newline.location - lineStart + 1))
+            lineStart = newline.location + 1
+            searchRange = NSRange(location: lineStart, length: nsText.length - lineStart)
+        }
+        if lineStart <= nsText.length, nsText.length > 0 {
+            ranges.append(NSRange(location: lineStart, length: nsText.length - lineStart))
+        }
+        lineRanges = ranges
+    }
+
+    func highlightVisibleIfNeeded() {
+        guard let scrollView, let textView, let syntax,
+              !lineRanges.isEmpty,
+              let layoutManager = textView.layoutManager,
+              let textContainer = textView.textContainer,
+              let textStorage = textView.textStorage else {
+            return
+        }
+
+        let visibleRect = scrollView.contentView.bounds
+        guard visibleRect.height > 0 else { return }
+        let origin = textView.textContainerOrigin
+        let containerRect = NSRect(
+            x: visibleRect.minX - origin.x,
+            y: visibleRect.minY - origin.y,
+            width: visibleRect.width,
+            height: visibleRect.height
+        )
+        let glyphRange = layoutManager.glyphRange(forBoundingRect: containerRect, in: textContainer)
+        let characterRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+        guard characterRange.length > 0 || characterRange.location == 0 else { return }
+
+        let span = IndexViewportHighlightMath.lineSpan(
+            covering: characterRange,
+            lineRanges: lineRanges,
+            margin: Self.viewportLineMargin
+        )
+        guard !span.isEmpty else { return }
+
+        let nsText = textView.string as NSString
+        for lineIndex in span where !highlightedLines[lineIndex] {
+            highlightedLines[lineIndex] = true
+            let fullRange = lineRanges[lineIndex]
+            let hasNewline = NSMaxRange(fullRange) > fullRange.location
+                && nsText.character(at: NSMaxRange(fullRange) - 1) == unichar(10)
+            let contentLength = max(0, fullRange.length - (hasNewline ? 1 : 0))
+            guard contentLength > 0 else { continue }
+
+            let contentRange = NSRange(location: fullRange.location, length: contentLength)
+            let line = nsText.substring(with: contentRange)
+            for token in syntax.tokens(line: line) {
+                guard let tokenRange = utf16Range(for: token, in: line, lineRange: contentRange) else {
+                    continue
+                }
+                textStorage.addAttribute(
+                    .foregroundColor,
+                    value: token.kind.nsColor,
+                    range: tokenRange
+                )
+            }
+        }
+    }
+
+    /// Token offsets count characters; NSTextStorage wants UTF-16. Mirrors the
+    /// diff editor's proven conversion pattern.
+    private func utf16Range(
+        for token: IndexSyntaxToken,
+        in line: String,
+        lineRange: NSRange
+    ) -> NSRange? {
+        guard token.length > 0,
+              let start = line.index(line.startIndex, offsetBy: token.start, limitedBy: line.endIndex),
+              let end = line.index(start, offsetBy: token.length, limitedBy: line.endIndex) else {
+            return nil
+        }
+
+        let prefixLength = line[..<start].utf16.count
+        let tokenLength = line[start..<end].utf16.count
+        return NSRange(location: lineRange.location + prefixLength, length: tokenLength)
     }
 }

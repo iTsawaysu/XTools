@@ -42,8 +42,6 @@ struct IndexYAMLPrettifyPage: View {
 }
 
 private struct IndexYAMLPrettifyWorkspaceContent: View {
-    private static let maxHighlightedOutputCharacters = 200_000
-
     @ObservedObject var workspace: YAMLPrettifyToolWorkspaceModel
     @ObservedObject var execution: IndexFormatExecutionSession
     @State private var formatAttempt = 0
@@ -60,7 +58,7 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
                 diagnosticTone: execution.binding.error == nil ? .warning : .error,
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
-                outputColorize: outputColorizer,
+                outputSyntax: .yaml,
                 clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
                 onFormat: format,
                 onClear: workspace.clear,
@@ -74,13 +72,6 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
                 format()
             }
         }
-    }
-
-    private var outputColorizer: ((String) -> AttributedString)? {
-        if execution.binding.output.count > Self.maxHighlightedOutputCharacters {
-            return nil
-        }
-        return { StructuredSyntaxHighlighter.yaml(line: $0) }
     }
 
     private func format() {

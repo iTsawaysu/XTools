@@ -7,6 +7,29 @@ import XToolsCore
 /// using the shared content-only syntax palette: key / string / number /
 /// bool-null / punctuation. Pure presentation — does not validate or reformat.
 enum JSONSyntaxHighlighter {
+    /// Line tokens for the viewport-lazy AppKit viewer; offsets follow the
+    /// core `JSONHighlightToken` character-offset convention.
+    static func tokens(line: String) -> [IndexSyntaxToken] {
+        JSONHighlighting.tokens(in: line).map { token in
+            IndexSyntaxToken(start: token.start, length: token.length, kind: tokenKind(for: token.kind))
+        }
+    }
+
+    private static func tokenKind(for kind: JSONHighlightToken.Kind) -> IndexSyntaxToken.Kind {
+        switch kind {
+        case .key:
+            return .key
+        case .string:
+            return .string
+        case .number:
+            return .number
+        case .literal:
+            return .literal
+        case .punctuation:
+            return .punctuation
+        }
+    }
+
     /// Highlight one line of JSON. Designed for the per-line gutter path in
     /// `IndexOutputSurface`, where each visual row is colored independently.
     /// Pretty-printed JSON keeps each token on a single line, so line-local

@@ -22,7 +22,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     /// Bump per format attempt so a repeated identical error re-shakes.
     var formatAttempt = 0
     var outputLineNumbers = true
-    var outputColorize: ((String) -> AttributedString)? = nil
+    var outputSyntax: IndexSyntaxKind? = nil
     var outputPlaceholder = IndexEmptyStateCopy.outputWillShowHere
     var actionTitle = "格式化"
     var actionHint = "⌘↩"
@@ -54,7 +54,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         diagnosticTone: ToolFeedbackTone = .error,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
-        outputColorize: ((String) -> AttributedString)? = nil,
+        outputSyntax: IndexSyntaxKind? = nil,
         outputPlaceholder: String = IndexEmptyStateCopy.outputWillShowHere,
         actionTitle: String = "格式化",
         actionHint: String = "⌘↩",
@@ -79,7 +79,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             diagnosticTone: diagnosticTone,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
-            outputColorize: outputColorize,
+            outputSyntax: outputSyntax,
             outputPlaceholder: outputPlaceholder,
             actionTitle: actionTitle,
             actionHint: actionHint,
@@ -107,7 +107,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         diagnosticTone: ToolFeedbackTone = .error,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
-        outputColorize: ((String) -> AttributedString)? = nil,
+        outputSyntax: IndexSyntaxKind? = nil,
         outputPlaceholder: String = IndexEmptyStateCopy.outputWillShowHere,
         actionTitle: String = "格式化",
         actionHint: String = "⌘↩",
@@ -133,7 +133,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             diagnosticTone: diagnosticTone,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
-            outputColorize: outputColorize,
+            outputSyntax: outputSyntax,
             outputPlaceholder: outputPlaceholder,
             actionTitle: actionTitle,
             actionHint: actionHint,
@@ -161,7 +161,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         diagnosticTone: ToolFeedbackTone,
         formatAttempt: Int,
         outputLineNumbers: Bool,
-        outputColorize: ((String) -> AttributedString)?,
+        outputSyntax: IndexSyntaxKind?,
         outputPlaceholder: String,
         actionTitle: String,
         actionHint: String,
@@ -186,7 +186,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         self.diagnosticTone = diagnosticTone
         self.formatAttempt = formatAttempt
         self.outputLineNumbers = outputLineNumbers
-        self.outputColorize = outputColorize
+        self.outputSyntax = outputSyntax
         self.outputPlaceholder = outputPlaceholder
         self.actionTitle = actionTitle
         self.actionHint = actionHint
@@ -393,7 +393,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                     text: output,
                     placeholder: outputPlaceholder,
                     lineNumbers: outputLineNumbers,
-                    colorize: outputColorize,
+                    syntax: outputSyntax,
                     fillsHeight: true,
                     embedsFlat: false
                 )
@@ -429,7 +429,7 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
         diagnosticTone: ToolFeedbackTone = .error,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
-        outputColorize: ((String) -> AttributedString)? = nil,
+        outputSyntax: IndexSyntaxKind? = nil,
         outputPlaceholder: String = IndexEmptyStateCopy.outputWillShowHere,
         actionTitle: String = "格式化",
         actionHint: String = "⌘↩",
@@ -453,7 +453,7 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
             diagnosticTone: diagnosticTone,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
-            outputColorize: outputColorize,
+            outputSyntax: outputSyntax,
             outputPlaceholder: outputPlaceholder,
             actionTitle: actionTitle,
             actionHint: actionHint,
@@ -481,7 +481,7 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
         diagnosticTone: ToolFeedbackTone = .error,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
-        outputColorize: ((String) -> AttributedString)? = nil,
+        outputSyntax: IndexSyntaxKind? = nil,
         outputPlaceholder: String = IndexEmptyStateCopy.outputWillShowHere,
         actionTitle: String = "格式化",
         actionHint: String = "⌘↩",
@@ -506,7 +506,7 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
             diagnosticTone: diagnosticTone,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
-            outputColorize: outputColorize,
+            outputSyntax: outputSyntax,
             outputPlaceholder: outputPlaceholder,
             actionTitle: actionTitle,
             actionHint: actionHint,
@@ -522,56 +522,5 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
             outputControl: outputControl,
             workspaceSemantic: workspaceSemantic
         )
-    }
-}
-
-struct IndexMarkdownPreviewSurface: View {
-    let text: String
-    var placeholder: String = IndexEmptyStateCopy.outputWillShowHere
-    var fillsHeight = false
-
-    var body: some View {
-        ZStack(alignment: .topLeading) {
-            ScrollView(.vertical) {
-                VStack(alignment: .leading, spacing: 12) {
-                    if let attributed = try? AttributedString(
-                        markdown: text,
-                        options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .full)
-                    ) {
-                        Text(attributed)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                    } else {
-                        Text(text)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
-                }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-            .opacity(text.isEmpty ? 0 : 1)
-            .accessibilityHidden(text.isEmpty)
-
-            if text.isEmpty {
-                Text(placeholder)
-                    .font(ToolTypography.body)
-                    .foregroundStyle(ToolTheme.textTertiary)
-                    .padding(12)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .accessibilityLabel(placeholder)
-            }
-        }
-        .frame(
-            maxWidth: .infinity,
-            minHeight: fillsHeight ? 60 : 220,
-            maxHeight: fillsHeight ? .infinity : nil,
-            alignment: .topLeading
-        )
-        .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                .strokeBorder(ToolTheme.border, lineWidth: 0.5)
-        }
     }
 }

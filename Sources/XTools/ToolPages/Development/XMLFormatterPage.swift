@@ -58,8 +58,6 @@ struct IndexXMLFormatPage: View {
 }
 
 private struct IndexXMLFormatWorkspaceContent: View {
-    private static let maxHighlightedOutputCharacters = 200_000
-
     @ObservedObject var workspace: XMLFormatterToolWorkspaceModel
     @ObservedObject var execution: IndexFormatExecutionSession
     @State private var formatAttempt = 0
@@ -76,7 +74,7 @@ private struct IndexXMLFormatWorkspaceContent: View {
                 diagnosticTone: execution.binding.error == nil ? .warning : .error,
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
-                outputColorize: outputColorizer,
+                outputSyntax: .xml,
                 clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
                 onFormat: format,
                 onClear: workspace.clear,
@@ -102,13 +100,6 @@ private struct IndexXMLFormatWorkspaceContent: View {
                 }
             }
         )
-    }
-
-    private var outputColorizer: ((String) -> AttributedString)? {
-        if execution.binding.output.count > Self.maxHighlightedOutputCharacters {
-            return nil
-        }
-        return { StructuredSyntaxHighlighter.xml(line: $0) }
     }
 
     private func format() {

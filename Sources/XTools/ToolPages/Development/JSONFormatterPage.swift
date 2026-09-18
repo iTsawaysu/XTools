@@ -98,8 +98,6 @@ struct IndexJSONFormatterPage: View {
 /// Command-Return; indent applies at the next format. A failed format tints
 /// the panel outline, rings it, and shakes once per attempt.
 private struct IndexJSONFormatterWorkspaceContent: View {
-    private static let maxHighlightedOutputCharacters = 200_000
-
     private struct Snapshot: Sendable {
         let input: String
         let mode: JSONFormatterToolWorkspaceModel.FormatMode
@@ -124,7 +122,7 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                 diagnosticTone: execution.binding.error == nil ? .warning : .error,
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
-                outputColorize: outputColorizer,
+                outputSyntax: .json,
                 clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
                 onFormat: format,
                 onClear: workspace.clear,
@@ -182,13 +180,6 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                 }
             }
         )
-    }
-
-    private var outputColorizer: ((String) -> AttributedString)? {
-        if execution.binding.output.count > Self.maxHighlightedOutputCharacters {
-            return nil
-        }
-        return { JSONSyntaxHighlighter.highlight(line: $0) }
     }
 
     private func format() {
