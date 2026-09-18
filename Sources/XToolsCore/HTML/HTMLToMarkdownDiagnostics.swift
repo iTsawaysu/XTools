@@ -5,11 +5,11 @@ public enum HTMLToMarkdownDiagnostics {
         guard !warnings.isEmpty else { return nil }
 
         let largestInputLimit = warnings.compactMap { warning -> Int? in
-            if case .inputTooLarge(let limit) = warning { return limit }
+            if case .completedInputExceedsThreshold(let limit) = warning { return limit }
             return nil
         }.max()
         if let largestInputLimit {
-            return warningText(for: .inputTooLarge(largestInputLimit))
+            return warningText(for: .completedInputExceedsThreshold(largestInputLimit))
         }
 
         if warnings.contains(.emptyVisibleContent) {
@@ -20,7 +20,7 @@ public enum HTMLToMarkdownDiagnostics {
             switch warning {
             case .unsupportedElement, .droppedUnsafeElement:
                 return true
-            case .flattenedTableSpan, .emptyVisibleContent, .inputTooLarge:
+            case .flattenedTableSpan, .emptyVisibleContent, .completedInputExceedsThreshold:
                 return false
             }
         }
@@ -45,8 +45,15 @@ public enum HTMLToMarkdownDiagnostics {
             return "部分 HTML 内容无法完整转换。"
         case .emptyVisibleContent:
             return "未检测到可见内容。"
-        case .inputTooLarge(let limit):
-            return "输入超过 \(ByteSizeFormatter.format(bytes: limit))，实时转换已暂停。"
+        case .completedInputExceedsThreshold(let limit):
+            return "输入超过 \(ByteSizeFormatter.format(bytes: limit))，本次已完成转换。"
+        }
+    }
+
+    public static func conversionErrorMessage(for error: HTMLToMarkdownConversionError) -> String {
+        switch error {
+        case .inputExceedsPreParseByteLimit(let limit):
+            return "输入超过 \(ByteSizeFormatter.format(bytes: limit))，未开始转换。"
         }
     }
 

@@ -234,6 +234,68 @@ struct HTMLToMarkdownSessionTests {
         #expect(finished.value == 1)
     }
 
+    @Test func manualLargeInputKeepsCompletedOutputAndUsesFactualWarning() async throws {
+        let session = HTMLToMarkdownSession(manualDebounce: .milliseconds(1))
+        let html = "<p>" + String(repeating: "x", count: 512_001) + "</p>"
+
+        session.userEditedHTML(html)
+        try await Self.waitUntil { session.phase == .ready }
+
+        #expect(!session.markdown.isEmpty)
+        #expect(session.error == nil)
+        #expect(session.warning == "输入超过 500 KB，本次已完成转换。")
+    }
+
+    @Test func manualInputAbovePreParseLimitClearsOutputWithStableError() async throws {
+        let session = HTMLToMarkdownSession(manualDebounce: .milliseconds(1))
+        let html = "<p>" + String(repeating: "x", count: HTMLToMarkdownInputBudget.manual.preParseByteLimit + 1) + "</p>"
+
+        session.userEditedHTML(html)
+        try await Self.waitUntil { session.phase == .failed }
+
+        #expect(session.markdown.isEmpty)
+        #expect(session.warning == nil)
+        #expect(session.error == "输入超过 5 MB，未开始转换。")
+    }
+
+    @Test func unexpectedManualFailurePublishesStableRedactedDiagnostic() async throws {
+        let sensitiveDetail = "/Users/private/secret.html parser exploded"
+        let session = HTMLToMarkdownSession(
+            manualOperation: { _ in
+                throw HTMLSessionUnexpectedManualError.failed(sensitiveDetail)
+            },
+            manualDebounce: .milliseconds(1)
+        )
+
+        session.userEditedHTML("<p>input</p>")
+        try await Self.waitUntil { session.phase == .failed }
+
+        #expect(session.markdown.isEmpty)
+        #expect(session.warning == nil)
+        #expect(session.error == "HTML 转换失败，请检查输入后重试。")
+        #expect(session.error?.contains(sensitiveDetail) == false)
+        #expect(session.formatAttempt == 1)
+    }
+
+    @Test func everyHTMLInputActionRevokesPreviewAuthorizationEvenForTheSameResult() async throws {
+        let session = HTMLToMarkdownSession(
+            manualOperation: { _ in HTMLToMarkdownConversionResult(markdown: "same") },
+            manualDebounce: .milliseconds(1)
+        )
+        let initialGeneration = session.previewAuthorizationGeneration
+
+        session.userEditedHTML("<p>first</p>")
+        try await Self.waitUntil { session.markdown == "same" }
+        let firstGeneration = session.previewAuthorizationGeneration
+
+        session.userEditedHTML("<p>second</p>")
+        try await Self.waitUntil { session.phase == .ready && session.inputHTML.contains("second") }
+
+        #expect(firstGeneration > initialGeneration)
+        #expect(session.previewAuthorizationGeneration > firstGeneration)
+        #expect(session.markdown == "same")
+    }
+
     nonisolated private static func urlResult(title: String, marker: String) -> HTMLToMarkdownURLResult {
         HTMLToMarkdownURLResult(
             finalURL: URL(string: "https://example.com/\(marker)")!,
@@ -303,4 +365,8 @@ private final class HTMLSessionManualOperationGate: @unchecked Sendable {
         }
         try Task.checkCancellation()
     }
+}
+
+private enum HTMLSessionUnexpectedManualError: Error, Sendable {
+    case failed(String)
 }

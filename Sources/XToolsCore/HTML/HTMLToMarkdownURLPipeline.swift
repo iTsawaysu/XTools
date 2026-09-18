@@ -52,7 +52,7 @@ public struct HTMLToMarkdownURLPipeline: Sendable {
             cleanedHTML,
             options: HTMLToMarkdownOptions(
                 baseURL: fetched.responseURL,
-                liveConversionByteLimit: .max
+                inputBudget: .urlFetchedDocument
             ),
             shouldCancel: { Task.isCancelled }
         )

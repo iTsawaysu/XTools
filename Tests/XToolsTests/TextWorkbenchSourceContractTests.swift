@@ -32,10 +32,6 @@ struct TextWorkbenchSourceContractTests {
     }
 
     @Test func formatterAndDockerInputsShowCharacterCounts() throws {
-        let docker = try readSource("Sources/XTools/ToolPages/Development/DockerRunToComposePage.swift")
-        let yaml = try readSource("Sources/XTools/ToolPages/Development/YAMLPrettifyPage.swift")
-        let xml = try readSource("Sources/XTools/ToolPages/Development/XMLFormatterPage.swift")
-        let json = try readSource("Sources/XTools/ToolPages/Development/JSONFormatterPage.swift")
         let sql = try readSource("Sources/XTools/ToolPages/Development/SQLPrettifyPage.swift")
         let shared = try readSharedBagComponents()
         let pageShell = try readSource("Sources/XTools/ToolPages/Workbench/PageChrome/IndexPageShell.swift")
@@ -323,6 +319,7 @@ struct TextWorkbenchSourceContractTests {
         contains(source, "IndexFormatWorkbench(", "HTML to Markdown must use the shared prototype workbench")
         contains(source, "ToolWorkspaceHost(key: HTMLToMarkdownToolWorkspaceModel.key)", "HTML to Markdown must delegate workflow state and cancellation to its session")
         contains(source, "session.fetchURL()", "HTML URL submit and button actions must use the same session operation")
+        contains(source, "onEscape: clearURL", "HTML URL input must make its Escape help actionable while focused")
         contains(source, "IndexProgressMotionLabel(", "HTML URL processing must use the shared indeterminate action label")
         contains(controls, "ProgressView()", "The shared HTML URL action label must show an indeterminate progress indicator")
         contains(source, "正在解析…", "HTML URL processing must expose the reference-matched loading copy")
@@ -338,6 +335,7 @@ struct TextWorkbenchSourceContractTests {
         contains(workbench, "IndexTextConversionProcessingSurface", "Workbench must provide an in-pane processing state without covering output text")
         contains(prototypeWorkbench, "IndexTextConversionProcessingSurface(text: outputProcessingText)", "The prototype workbench must reuse the shared processing surface")
         contains(prototypeWorkbench, "case .nativeReadOnlyText", "The prototype workbench must expose the native large-text output path")
+        contains(prototypeWorkbench, "accessibilityTitle: outputTitle", "Markdown output identity must be passed into the preview without overriding its authorization controls")
         contains(nativeOutput, "NSTextView", "Native large-text output must use AppKit text storage instead of SwiftUI Text layout")
         contains(nativeOutput, "textView.isEditable = false", "Native output must remain read-only")
         contains(nativeOutput, "textView.isSelectable = true", "Native output must preserve text selection")

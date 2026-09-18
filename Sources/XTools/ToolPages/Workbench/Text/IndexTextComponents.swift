@@ -151,6 +151,7 @@ struct IndexTextInput: View {
     var focusRequestToken: Int? = nil
     var selectAllOnFocus = false
     var onSubmit: (() -> Void)? = nil
+    var onEscape: (() -> Void)? = nil
     var onFocusChange: ((Bool) -> Void)? = nil
 
     @Environment(\.toolPageEntryTraceContext) private var toolPageEntryTraceContext
@@ -169,6 +170,7 @@ struct IndexTextInput: View {
             entryTraceContext: toolPageEntryTraceContext,
             selectAllOnFocus: selectAllOnFocus,
             onSubmit: onSubmit,
+            onEscape: onEscape,
             onFocusChange: { focused in
                 isFocused = focused
                 onFocusChange?(focused)
@@ -253,10 +255,18 @@ private struct IndexUndoableTextField: NSViewRepresentable {
     let entryTraceContext: ToolPageEntryTraceContext?
     let selectAllOnFocus: Bool
     let onSubmit: (() -> Void)?
+    let onEscape: (() -> Void)?
     let onFocusChange: ((Bool) -> Void)?
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text, allowsCopy: allowsCopy, selectAllOnFocus: selectAllOnFocus, onSubmit: onSubmit, onFocusChange: onFocusChange)
+        Coordinator(
+            text: $text,
+            allowsCopy: allowsCopy,
+            selectAllOnFocus: selectAllOnFocus,
+            onSubmit: onSubmit,
+            onEscape: onEscape,
+            onFocusChange: onFocusChange
+        )
     }
 
     func makeNSView(context: Context) -> NSTextField {
@@ -278,6 +288,7 @@ private struct IndexUndoableTextField: NSViewRepresentable {
         context.coordinator.allowsCopy = allowsCopy
         context.coordinator.selectAllOnFocus = selectAllOnFocus
         context.coordinator.onSubmit = onSubmit
+        context.coordinator.onEscape = onEscape
         context.coordinator.onFocusChange = onFocusChange
         configure(textField)
 
@@ -343,17 +354,26 @@ private struct IndexUndoableTextField: NSViewRepresentable {
         var allowsCopy: Bool
         var selectAllOnFocus: Bool
         var onSubmit: (() -> Void)?
+        var onEscape: (() -> Void)?
         var onFocusChange: ((Bool) -> Void)?
 
         private var didFocus = false
         private var processedFocusRequestToken: Int?
         private var shouldPlaceCursorAtEndAfterFocus = false
 
-        init(text: Binding<String>, allowsCopy: Bool, selectAllOnFocus: Bool, onSubmit: (() -> Void)?, onFocusChange: ((Bool) -> Void)?) {
+        init(
+            text: Binding<String>,
+            allowsCopy: Bool,
+            selectAllOnFocus: Bool,
+            onSubmit: (() -> Void)?,
+            onEscape: (() -> Void)?,
+            onFocusChange: ((Bool) -> Void)?
+        ) {
             self.text = text
             self.allowsCopy = allowsCopy
             self.selectAllOnFocus = selectAllOnFocus
             self.onSubmit = onSubmit
+            self.onEscape = onEscape
             self.onFocusChange = onFocusChange
         }
 
@@ -413,6 +433,12 @@ private struct IndexUndoableTextField: NSViewRepresentable {
             textView: NSTextView,
             doCommandBy commandSelector: Selector
         ) -> Bool {
+            if commandSelector == #selector(NSResponder.cancelOperation(_:)),
+               let onEscape {
+                onEscape()
+                return true
+            }
+
             guard commandSelector == #selector(NSResponder.insertNewline(_:)) else {
                 if commandSelector == #selector(NSText.copy(_:)) && !allowsCopy {
                     return true

@@ -113,4 +113,38 @@ public struct MarkdownContent: Equatable, MarkdownContentProtocol {
   public func renderHTML() -> String {
     self.blocks.renderHTML()
   }
+
+  /// Exercises the same attributed-string inline renderer used by the SwiftUI
+  /// preview. Kept behind SPI so host-app regression tests can verify vendor
+  /// rendering behavior without expanding MarkdownUI's public API.
+  @_spi(XToolsTesting)
+  public func renderFirstTextBlockAttributedString() -> AttributedString? {
+    guard let block = self.blocks.first else { return nil }
+    let inlines: [InlineNode]
+    switch block {
+    case .paragraph(let content), .heading(_, let content):
+      inlines = content
+    default:
+      return nil
+    }
+
+    let theme = Theme()
+    let styles = InlineTextStyles(
+      code: theme.code,
+      emphasis: theme.emphasis,
+      strong: theme.strong,
+      strikethrough: theme.strikethrough,
+      link: theme.link
+    )
+    var baseAttributes = AttributeContainer()
+    theme.text._collectAttributes(in: &baseAttributes)
+    return inlines.reduce(into: AttributedString()) { result, inline in
+      result += inline.renderAttributedString(
+        baseURL: nil,
+        textStyles: styles,
+        softBreakMode: .space,
+        attributes: baseAttributes
+      )
+    }
+  }
 }

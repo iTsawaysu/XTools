@@ -3,23 +3,59 @@ import Foundation
 public struct HTMLToMarkdownConversionResult: Equatable, Sendable {
     public let markdown: String
     public let warnings: [HTMLToMarkdownWarning]
+    public let error: HTMLToMarkdownConversionError?
 
-    public init(markdown: String, warnings: [HTMLToMarkdownWarning] = []) {
+    public init(
+        markdown: String,
+        warnings: [HTMLToMarkdownWarning] = [],
+        error: HTMLToMarkdownConversionError? = nil
+    ) {
         self.markdown = markdown
         self.warnings = warnings
+        self.error = error
     }
 }
 
 public struct HTMLToMarkdownOptions: Equatable, Sendable {
-    public static let defaultLiveConversionByteLimit = 512_000
-
     public var baseURL: URL?
-    public var liveConversionByteLimit: Int
+    public var inputBudget: HTMLToMarkdownInputBudget
 
-    public init(baseURL: URL? = nil, liveConversionByteLimit: Int = Self.defaultLiveConversionByteLimit) {
+    public init(
+        baseURL: URL? = nil,
+        inputBudget: HTMLToMarkdownInputBudget = .manual
+    ) {
         self.baseURL = baseURL
-        self.liveConversionByteLimit = liveConversionByteLimit
+        self.inputBudget = inputBudget
     }
+
+    public static var manual: Self { .init(inputBudget: .manual) }
+}
+
+public struct HTMLToMarkdownInputBudget: Equatable, Sendable {
+    public static let defaultCompletedResultThreshold = 512_000
+    public static let defaultPreParseByteLimit = 5 * 1_024 * 1_024
+
+    public static let manual = Self(
+        preParseByteLimit: defaultPreParseByteLimit,
+        completedResultThreshold: defaultCompletedResultThreshold
+    )
+
+    public static let urlFetchedDocument = Self(
+        preParseByteLimit: defaultPreParseByteLimit,
+        completedResultThreshold: nil
+    )
+
+    public var preParseByteLimit: Int
+    public var completedResultThreshold: Int?
+
+    public init(preParseByteLimit: Int, completedResultThreshold: Int?) {
+        self.preParseByteLimit = preParseByteLimit
+        self.completedResultThreshold = completedResultThreshold
+    }
+}
+
+public enum HTMLToMarkdownConversionError: Error, Equatable, Sendable {
+    case inputExceedsPreParseByteLimit(Int)
 }
 
 public enum HTMLToMarkdownWarning: Equatable, Sendable {
@@ -27,7 +63,7 @@ public enum HTMLToMarkdownWarning: Equatable, Sendable {
     case flattenedTableSpan
     case droppedUnsafeElement(String)
     case emptyVisibleContent
-    case inputTooLarge(Int)
+    case completedInputExceedsThreshold(Int)
 }
 
 public enum HTMLToMarkdownConverter {
@@ -41,8 +77,13 @@ public enum HTMLToMarkdownConverter {
     ) -> HTMLToMarkdownConversionResult {
         do {
             return try convert(html, options: options, shouldCancel: { false })
+        } catch let conversionError as HTMLToMarkdownConversionError {
+            return HTMLToMarkdownConversionResult(
+                markdown: "",
+                error: conversionError
+            )
         } catch {
-            preconditionFailure("Non-cancellable HTML conversion path unexpectedly cancelled")
+            preconditionFailure("Non-cancellable HTML conversion produced an unexpected error: \(error)")
         }
     }
 

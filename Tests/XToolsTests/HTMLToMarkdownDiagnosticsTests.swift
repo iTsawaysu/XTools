@@ -32,8 +32,8 @@ struct HTMLToMarkdownDiagnosticsTests {
                 == "未检测到可见内容。"
         )
         #expect(
-            HTMLToMarkdownDiagnostics.warningText(for: .inputTooLarge(512_000))
-                == "输入超过 500 KB，实时转换已暂停。"
+            HTMLToMarkdownDiagnostics.warningText(for: .completedInputExceedsThreshold(512_000))
+                == "输入超过 500 KB，本次已完成转换。"
         )
     }
 
@@ -112,7 +112,7 @@ struct HTMLToMarkdownDiagnosticsTests {
         // Deletion guard: Converter is a real contract, not a pass-through to delete.
         let result = HTMLToMarkdownConverter.convert("<p>hi</p>")
         #expect(result == "hi" || result.contains("hi"))
-        #expect(HTMLToMarkdownOptions.defaultLiveConversionByteLimit == 512_000)
+        #expect(HTMLToMarkdownInputBudget.manual.completedResultThreshold == 512_000)
     }
 
     @Test func repeatedElementWarningsCollapseToOnePrimarySummary() {
@@ -144,7 +144,7 @@ struct HTMLToMarkdownDiagnosticsTests {
 
         let result = HTMLToMarkdownConverter.convert(html, options: HTMLToMarkdownOptions())
 
-        #expect(result.markdown == "# Visible\n\n    [https://example.com/embed](https://example.com/embed) [movie.mp4](movie.mp4) [sound.mp3](sound.mp3) Vector label \n\nStill visible")
+        #expect(result.markdown == "# Visible\n\n    [https\\://example.com/embed](https://example.com/embed) [movie.mp4](movie.mp4) [sound.mp3](sound.mp3) Vector label \n\nStill visible")
         #expect(result.warnings.contains(.droppedUnsafeElement("script")))
         #expect(result.warnings.contains(.droppedUnsafeElement("style")))
         #expect(result.warnings.contains(.droppedUnsafeElement("template")))

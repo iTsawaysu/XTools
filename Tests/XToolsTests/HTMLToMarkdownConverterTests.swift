@@ -1,5 +1,6 @@
 import XToolsCore
 import Foundation
+@_spi(XToolsTesting) import MarkdownUI
 import Testing
 
 struct HTMLToMarkdownConverterTests {
@@ -42,6 +43,116 @@ struct HTMLToMarkdownConverterTests {
     @Test func decodesBasicHTMLEntities() {
         #expect(HTMLToMarkdownConverter.convert("<p>Tom &amp; Jerry&nbsp;&#x1F600;</p>") == "Tom & Jerry 😀")
         #expect(HTMLToMarkdownConverter.convert("<code>&lt;tag&gt;</code>") == "`<tag>`")
+    }
+
+    @Test func preservesLiteralMarkdownTextWithoutChangingItsParsedMeaning() {
+        let html = """
+        <p># literal heading</p><p>- literal list</p><p>1. literal ordered list</p>
+        <p>&gt; literal quote</p><p>**literal strong** and *literal emphasis*</p>
+        <p>[literal link](https://example.com) and ---</p>
+        """
+
+        let markdown = HTMLToMarkdownConverter.convert(html)
+
+        #expect(markdown == """
+        \\# literal heading
+
+        \\- literal list
+
+        1\\. literal ordered list
+
+        \\> literal quote
+
+        \\*\\*literal strong\\*\\* and \\*literal emphasis\\*
+
+        \\[literal link\\](https\\://example.com) and ---
+        """)
+
+        let parsedHTML = MarkdownContent(markdown).renderHTML()
+        #expect(!parsedHTML.contains("<h1>"))
+        #expect(!parsedHTML.contains("<ul>"))
+        #expect(!parsedHTML.contains("<ol>"))
+        #expect(!parsedHTML.contains("<blockquote>"))
+        #expect(!parsedHTML.contains("<strong>"))
+        #expect(!parsedHTML.contains("<em>"))
+        #expect(!parsedHTML.contains("<a "))
+        #expect(!parsedHTML.contains("<hr"))
+    }
+
+    @Test func preservesBlockMarkerTextSplitAcrossInlineDOMNodes() {
+        let html = """
+        <p><span>#</span> literal heading</p>
+        <p><span>-</span> literal list</p>
+        <p><span>1</span>. literal ordered list</p>
+        <p><span>&gt;</span> literal quote</p>
+        """
+
+        let markdown = HTMLToMarkdownConverter.convert(html)
+        let parsedHTML = MarkdownContent(markdown).renderHTML()
+
+        #expect(parsedHTML.components(separatedBy: "<p>").count - 1 == 4)
+        #expect(!parsedHTML.contains("<h1>"))
+        #expect(!parsedHTML.contains("<ul>"))
+        #expect(!parsedHTML.contains("<ol>"))
+        #expect(!parsedHTML.contains("<blockquote>"))
+    }
+
+    @Test func preservesOrdinaryGFMUrlAndEmailTextWithoutCreatingLinks() {
+        let expected = "https://example.com www.example.com user@example.com"
+        let markdown = HTMLToMarkdownConverter.convert(
+            "<p>\(expected)</p>"
+        )
+        let parsed = MarkdownContent(markdown)
+
+        #expect(markdown.contains("user@<!-- -->example.com"))
+        #expect(!parsed.renderHTML().contains("<a "))
+        #expect(parsed.renderPlainText() == expected)
+        #expect(!markdown.contains("\u{200B}"))
+    }
+
+    @Test func markdownUIParserDoesNotCreateMailtoForCommentSeparatedEmail() {
+        let markdown = HTMLToMarkdownConverter.convert("<p>user@example.com</p>")
+        let vendorRenderedHTML = MarkdownContent(markdown).renderHTML()
+
+        #expect(markdown == "user@<!-- -->example.com")
+        #expect(!vendorRenderedHTML.contains("mailto:"))
+        #expect(!vendorRenderedHTML.contains("<a "))
+    }
+
+    @Test func markdownUIAttributedRendererShowsLiteralEmailWithoutCommentOrLink() throws {
+        let markdown = HTMLToMarkdownConverter.convert("<p>user@example.com</p>")
+        let attributed = try #require(
+            MarkdownContent(markdown).renderFirstTextBlockAttributedString()
+        )
+
+        #expect(String(attributed.characters) == "user@example.com")
+        #expect(attributed.runs.allSatisfy { $0.link == nil })
+    }
+
+    @Test func preservesBackticksAnglesAndMarkersAsOrdinaryPlainText() {
+        let samples = [
+            ("<p>`literal` and ``two``</p>", "`literal` and ``two``"),
+            ("<p>&lt;tag&gt; and 1 &lt; 2 &gt; 0</p>", "<tag> and 1 < 2 > 0"),
+            ("<p># heading marker</p>", "# heading marker"),
+            ("<p>- list marker</p>", "- list marker"),
+            ("<p>1. ordered marker</p>", "1. ordered marker"),
+            ("<p>&gt; quote marker</p>", "> quote marker")
+        ]
+
+        for (html, expected) in samples {
+            let markdown = HTMLToMarkdownConverter.convert(html)
+            let parsed = MarkdownContent(markdown)
+
+            #expect(parsed.renderPlainText() == expected)
+            #expect(!parsed.renderHTML().contains("<code>"))
+            #expect(!parsed.renderHTML().contains("<blockquote>"))
+        }
+    }
+
+    @Test func preservesBlockMarkerTextSplitAcrossRootInlineNodes() {
+        let markdown = HTMLToMarkdownConverter.convert("<span>-</span> literal root text")
+
+        #expect(MarkdownContent(markdown).renderHTML() == "<p>- literal root text</p>\n")
     }
 
     @Test func convertsImagesInBothAttributeOrders() {
@@ -122,6 +233,14 @@ struct HTMLToMarkdownConverterTests {
         #expect(HTMLToMarkdownConverter.convert("<pre><code>let x = 1</code></pre>") == "```\nlet x = 1\n```")
     }
 
+    @Test func codeContentKeepsMarkdownCharactersVerbatim() {
+        let inline = HTMLToMarkdownConverter.convert("<code>*[]#|\\\\</code>")
+        let block = HTMLToMarkdownConverter.convert("<pre><code>*[]#|\\\\</code></pre>")
+
+        #expect(inline == "`*[]#|\\\\`")
+        #expect(block == "```\n*[]#|\\\\\n```")
+    }
+
     @Test func preservesFenceLanguageHints() {
         let html = #"<pre><code class="language-swift">let x = 1</code></pre>"#
         #expect(HTMLToMarkdownConverter.convert(html) == "```swift\nlet x = 1\n```")
@@ -188,6 +307,82 @@ struct HTMLToMarkdownConverterTests {
     @Test func escapesPipesInsideTableCells() {
         let html = "<table><tr><th>Name</th><th>Value</th></tr><tr><td>A | B</td><td>1</td></tr></table>"
         #expect(HTMLToMarkdownConverter.convert(html) == "| Name | Value |\n| --- | --- |\n| A \\| B | 1 |")
+    }
+
+    @Test func escapesLiteralMarkdownInsideLinkLabelsAndTableCells() {
+        let link = HTMLToMarkdownConverter.convert("<a href=\"https://example.com\">[literal] *label*</a>")
+        let table = HTMLToMarkdownConverter.convert("<table><tr><td>**literal** | [cell]</td></tr></table>")
+
+        #expect(link == "[\\[literal\\] \\*label\\*](https://example.com)")
+        #expect(table == "| \\*\\*literal\\*\\* \\| \\[cell\\] |\n| --- |")
+    }
+
+    @Test func escapesCodePipesAtTheTableSerializationBoundary() {
+        let html = "<table><tr><th>Value</th><th>Other</th></tr><tr><td><code>a|b</code></td><td>x</td></tr></table>"
+        let markdown = HTMLToMarkdownConverter.convert(html)
+
+        #expect(markdown == "| Value | Other |\n| --- | --- |\n| `a\\|b` | x |")
+        #expect(MarkdownContent(markdown).renderHTML().contains("<code>a|b</code>"))
+    }
+
+    @Test func completedLargeManualInputKeepsResultAndEmitsCompletedWarning() {
+        let input = "<p>" + String(repeating: "x", count: 512_001) + "</p>"
+        let result = HTMLToMarkdownConverter.convert(input, options: .manual)
+
+        #expect(!result.markdown.isEmpty)
+        #expect(result.warnings.contains(.completedInputExceedsThreshold(HTMLToMarkdownInputBudget.manual.completedResultThreshold!)))
+    }
+
+    @Test func inputAbovePreParseLimitFailsBeforeRendering() {
+        let input = "<p>" + String(repeating: "x", count: HTMLToMarkdownInputBudget.manual.preParseByteLimit + 1) + "</p>"
+        let counter = HTMLConverterCancelCounter()
+
+        #expect {
+            _ = try HTMLToMarkdownConverter.convert(input, options: .manual, shouldCancel: {
+                _ = counter.incrementAndRead()
+                return false
+            })
+        } throws: { error in
+            error as? HTMLToMarkdownConversionError == .inputExceedsPreParseByteLimit(
+                HTMLToMarkdownInputBudget.manual.preParseByteLimit
+            )
+        }
+        #expect(counter.value == 1, "超限输入必须在 parser/traversal 前拒绝")
+    }
+
+    @Test func nonThrowingConvenienceReportsOversizedInputWithoutCrashing() {
+        let input = "<p>" + String(
+            repeating: "x",
+            count: HTMLToMarkdownInputBudget.manual.preParseByteLimit + 1
+        ) + "</p>"
+
+        let result = HTMLToMarkdownConverter.convert(input, options: .manual)
+
+        #expect(result.markdown.isEmpty)
+        #expect(result.warnings.isEmpty)
+        #expect(
+            result.error == .inputExceedsPreParseByteLimit(
+                HTMLToMarkdownInputBudget.manual.preParseByteLimit
+            )
+        )
+        #expect(HTMLToMarkdownConverter.convert(input).isEmpty)
+    }
+
+    @Test func oversizedWhitespaceInputStillFailsThePreParseBudget() {
+        let input = String(
+            repeating: " ",
+            count: HTMLToMarkdownInputBudget.manual.preParseByteLimit + 1
+        )
+
+        let result = HTMLToMarkdownConverter.convert(input, options: .manual)
+
+        #expect(result.markdown.isEmpty)
+        #expect(result.warnings.isEmpty)
+        #expect(
+            result.error == .inputExceedsPreParseByteLimit(
+                HTMLToMarkdownInputBudget.manual.preParseByteLimit
+            )
+        )
     }
 
     @Test func returnsWarningsForDroppedAndFlattenedHTML() {
@@ -404,6 +599,11 @@ struct HTMLToMarkdownURLFetchServiceTests {
             }
             return true
         }
+    }
+
+    @Test func defaultURLResponseBudgetRemainsFiveMiB() {
+        #expect(HTMLToMarkdownURLFetchOptions.defaultResponseBodyByteLimit == 5 * 1024 * 1024)
+        #expect(HTMLToMarkdownURLFetchOptions().responseBodyByteLimit == 5 * 1024 * 1024)
     }
 
     @Test func fetchRejectsHTTPFailures() async throws {

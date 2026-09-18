@@ -85,6 +85,8 @@ struct UIInfrastructureSourceTests {
         contains(source, "AppKitTextEditingConfiguration.configureCurrentFieldEditor(for: textField)", "Shared single-line inputs must enable native field-editor undo through the shared AppKit text configuration")
         contains(textEditingConfig, "configureCurrentFieldEditor(for textField: NSTextField", "Shared AppKit text configuration must support NSTextField field editors")
         contains(source, "func controlTextDidChange(_ notification: Notification)", "Shared single-line inputs must sync NSTextField edits back into SwiftUI state")
+        contains(source, "var onEscape: (() -> Void)? = nil", "Shared single-line inputs must expose an optional Escape action")
+        contains(source, "#selector(NSResponder.cancelOperation(_:))", "The AppKit field bridge must handle Escape through native command routing")
         contains(source, "shouldPlaceCursorAtEndAfterFocus", "Shared single-line autofocus must track the first programmatic focus selection")
         contains(source, "textField.currentEditor()?.selectedRange = NSRange(location: end, length: 0)", "Autofocused single-line inputs must place the cursor at the end unless select-all is explicit")
         contains(geometry, "class IndexPaddedTextFieldCell: NSTextFieldCell", "Shared inputs must keep plain text in an AppKit cell with internal content geometry")

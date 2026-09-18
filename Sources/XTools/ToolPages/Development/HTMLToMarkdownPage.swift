@@ -95,6 +95,10 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                     .fixedSize(horizontal: true, vertical: false)
                 }
             )
+            .environment(
+                \.markdownPreviewAuthorizationGeneration,
+                session.previewAuthorizationGeneration
+            )
         }
     }
 
@@ -104,13 +108,14 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
             text: $session.urlText,
             height: 26,
             trailingInset: session.urlText.isEmpty ? 11 : 28,
-            onSubmit: session.fetchURL
+            onSubmit: session.fetchURL,
+            onEscape: clearURL
         )
         .disabled(session.isURLProcessing)
         .overlay(alignment: .trailing) {
             if !session.urlText.isEmpty && !session.isURLProcessing {
                 Button {
-                    session.urlText = ""
+                    clearURL()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(ToolTypography.caption)
@@ -122,6 +127,11 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 .accessibilityLabel("清空 URL 地址")
             }
         }
+    }
+
+    private func clearURL() {
+        guard !session.urlText.isEmpty, !session.isURLProcessing else { return }
+        session.urlText = ""
     }
 
     private var fetchButton: some View {

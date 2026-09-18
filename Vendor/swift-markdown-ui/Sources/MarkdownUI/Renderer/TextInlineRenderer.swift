@@ -89,6 +89,9 @@ private struct TextInlineRenderer {
   }
 
   private mutating func renderHTML(_ html: String) {
+    guard !html.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<!--") else {
+      return
+    }
     let tag = HTMLTag(html)
 
     switch tag?.name.lowercased() {

@@ -39,7 +39,7 @@ struct HTMLReadableArticleCleanerTests {
         )
         let converted = HTMLToMarkdownConverter.convert(
             cleaned.contentHTML,
-            options: HTMLToMarkdownOptions(baseURL: baseURL, liveConversionByteLimit: .max)
+            options: HTMLToMarkdownOptions(baseURL: baseURL, inputBudget: .urlFetchedDocument)
         )
 
         #expect(cleaned.contentHTML.contains("readability-page-1"))
@@ -83,7 +83,7 @@ struct HTMLReadableArticleCleanerTests {
         )
         let markdown = HTMLToMarkdownConverter.convert(
             cleaned.contentHTML,
-            options: HTMLToMarkdownOptions(baseURL: baseURL, liveConversionByteLimit: .max)
+            options: HTMLToMarkdownOptions(baseURL: baseURL, inputBudget: .urlFetchedDocument)
         ).markdown
 
         #expect(markdown.contains("+ Kept item"))

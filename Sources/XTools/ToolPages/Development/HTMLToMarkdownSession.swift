@@ -17,6 +17,7 @@ final class HTMLToMarkdownSession: ObservableObject {
     @Published var urlText = "" {
         didSet {
             guard urlText != oldValue else { return }
+            revokeRemoteImageAuthorization()
             if error != nil {
                 error = nil
             }
@@ -28,6 +29,7 @@ final class HTMLToMarkdownSession: ObservableObject {
     @Published var extractArticleOnly: Bool = true {
         didSet {
             guard extractArticleOnly != oldValue else { return }
+            revokeRemoteImageAuthorization()
             if !urlText.isEmpty && !isURLProcessing {
                 fetchURL()
             }
@@ -39,6 +41,7 @@ final class HTMLToMarkdownSession: ObservableObject {
     @Published private(set) var warning: String?
     @Published private(set) var phase: HTMLToMarkdownSessionPhase = .idle
     @Published private(set) var formatAttempt = 0
+    @Published private(set) var previewAuthorizationGeneration = 0
 
     private let urlOperation: HTMLToMarkdownURLOperation
     private let manualOperation: HTMLToMarkdownManualOperation
@@ -81,6 +84,7 @@ final class HTMLToMarkdownSession: ObservableObject {
     }
 
     func fetchURL() {
+        revokeRemoteImageAuthorization()
         let requestURLText = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !requestURLText.isEmpty else {
             _ = workGate.invalidate()
@@ -148,6 +152,11 @@ final class HTMLToMarkdownSession: ObservableObject {
                 self.phase = .ready
             } catch is CancellationError {
                 // A new action, clear, or session deallocation owns the replacement state.
+            } catch let conversionError as HTMLToMarkdownConversionError {
+                self.finishFailure(
+                    HTMLToMarkdownDiagnostics.conversionErrorMessage(for: conversionError),
+                    generation: currentGeneration
+                )
             } catch let fetchError as HTMLToMarkdownURLFetchError {
                 self.finishFailure(
                     HTMLToMarkdownDiagnostics.urlFetchErrorMessage(for: fetchError),
@@ -168,6 +177,7 @@ final class HTMLToMarkdownSession: ObservableObject {
     }
 
     func userEditedHTML(_ html: String) {
+        revokeRemoteImageAuthorization()
         let currentGeneration = workGate.invalidate()
         inputHTML = html
         markdown = ""
@@ -207,13 +217,22 @@ final class HTMLToMarkdownSession: ObservableObject {
                 self.phase = .ready
             } catch is CancellationError {
                 // Superseded generation or explicit cancel — do not publish markdown.
+            } catch let conversionError as HTMLToMarkdownConversionError {
+                self.finishFailure(
+                    HTMLToMarkdownDiagnostics.conversionErrorMessage(for: conversionError),
+                    generation: currentGeneration
+                )
             } catch {
-                // Manual conversion only throws CancellationError in production.
+                self.finishFailure(
+                    "HTML 转换失败，请检查输入后重试。",
+                    generation: currentGeneration
+                )
             }
         }
     }
 
     func clear() {
+        revokeRemoteImageAuthorization()
         _ = workGate.invalidate()
         urlText = ""
         inputHTML = ""
@@ -252,12 +271,16 @@ final class HTMLToMarkdownSession: ObservableObject {
         formatAttempt += 1
     }
 
+    private func revokeRemoteImageAuthorization() {
+        previewAuthorizationGeneration &+= 1
+    }
+
     nonisolated private static func defaultManualOperation(
         _ html: String
     ) throws -> HTMLToMarkdownConversionResult {
         try HTMLToMarkdownConverter.convert(
             html,
-            options: HTMLToMarkdownOptions(liveConversionByteLimit: .max),
+            options: .manual,
             shouldCancel: { Task.isCancelled }
         )
     }

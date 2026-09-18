@@ -23,6 +23,13 @@ final class HTMLToMarkdownDOMRenderer {
     func convert(_ html: String) throws -> HTMLToMarkdownConversionResult {
         try cancellation.check()
 
+        let inputByteCount = html.utf8.count
+        guard inputByteCount <= options.inputBudget.preParseByteLimit else {
+            throw HTMLToMarkdownConversionError.inputExceedsPreParseByteLimit(
+                options.inputBudget.preParseByteLimit
+            )
+        }
+
         let trimmed = html.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return HTMLToMarkdownConversionResult(markdown: "", warnings: [])
@@ -34,22 +41,26 @@ final class HTMLToMarkdownDOMRenderer {
             try cancellation.check()
             try recordDroppedUnsafeElements(in: document)
             let root: Node = document.body() ?? document
-            let rendered = try renderChildren(of: root, context: .normal)
+            let rendered = escapeLineStartMarkers(
+                in: try renderChildren(of: root, context: .normal)
+            )
             let markdown = normalizeDocumentMarkdown(rendered)
 
             if markdown.isEmpty {
                 appendWarning(.emptyVisibleContent)
             }
 
-            if html.utf8.count > options.liveConversionByteLimit {
-                appendWarning(.inputTooLarge(options.liveConversionByteLimit))
+            if !markdown.isEmpty,
+               let threshold = options.inputBudget.completedResultThreshold,
+               inputByteCount > threshold {
+                appendWarning(.completedInputExceedsThreshold(threshold))
             }
 
             return HTMLToMarkdownConversionResult(markdown: markdown, warnings: warnings)
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            let fallback = escapeMarkdownText(trimmed)
+            let fallback = escapeMarkdownText(trimmed, context: .normal)
             appendWarning(.unsupportedElement("HTML 解析失败，已按纯文本降级。"))
             return HTMLToMarkdownConversionResult(markdown: fallback, warnings: warnings)
         }
@@ -124,7 +135,7 @@ final class HTMLToMarkdownDOMRenderer {
         case "iframe", "video", "audio", "canvas", "svg":
             return try unsupportedMediaFallback(for: element, tagName: tagName)
         default:
-            return try renderChildren(of: element, context: context)
+            return escapeLineStartMarkers(in: try renderChildren(of: element, context: context))
         }
     }
 
@@ -138,7 +149,11 @@ final class HTMLToMarkdownDOMRenderer {
     }
 
     private func renderInlineChildren(of node: Node) throws -> String {
-        collapseInlineWhitespace(try renderChildren(of: node, context: .normal))
+        let rendered = collapseInlineWhitespace(try renderChildren(of: node, context: .normal))
+        // A Markdown block marker can be split across adjacent inline DOM nodes
+        // (for example `<span>1</span>. item`). Protect the combined visible
+        // text as well as each individual text node.
+        return escapeLineStartMarkers(in: rendered)
     }
 
     private func renderTextNode(_ textNode: TextNode, context: HTMLToMarkdownRenderContext) -> String {
@@ -152,7 +167,7 @@ final class HTMLToMarkdownDOMRenderer {
             return collapsed.isEmpty ? "" : " "
         }
 
-        return escapeMarkdownText(collapsed)
+        return escapeMarkdownText(collapsed, context: context)
     }
 
     private func link(for element: Element) throws -> String {
@@ -163,7 +178,7 @@ final class HTMLToMarkdownDOMRenderer {
         }
 
         let title = attribute("title", for: element)
-        let visibleLabel = label.isEmpty ? escapeMarkdownText(href) : label
+        let visibleLabel = label.isEmpty ? escapeMarkdownText(href, context: .normal) : label
         return "[\(visibleLabel)](\(escapeMarkdownDestination(href))\(markdownTitle(title)))"
     }
 
@@ -186,7 +201,7 @@ final class HTMLToMarkdownDOMRenderer {
         }
 
         if let value = firstNonEmptyAttribute(["value", "placeholder", "aria-label"], for: element) {
-            return escapeMarkdownText(value)
+            return escapeMarkdownText(value, context: .normal)
         }
 
         return ""
@@ -196,7 +211,7 @@ final class HTMLToMarkdownDOMRenderer {
         if let source = firstNonEmptyResolvedAttribute(["src", "poster", "href"], for: element) {
             let label = firstNonEmptyAttribute(["title", "aria-label", "alt"], for: element) ?? source
             appendWarning(.unsupportedElement(tagName))
-            return "[\(escapeMarkdownText(label))](\(escapeMarkdownDestination(source)))"
+            return "[\(escapeMarkdownText(label, context: .normal))](\(escapeMarkdownDestination(source)))"
         }
 
         let children = try renderInlineChildren(of: element)
@@ -502,15 +517,33 @@ final class HTMLToMarkdownDOMRenderer {
         return output
     }
 
-    private func escapeMarkdownText(_ text: String) -> String {
-        text
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "[", with: "\\[")
-            .replacingOccurrences(of: "]", with: "\\]")
+    private func escapeMarkdownText(_ text: String, context: HTMLToMarkdownRenderContext) -> String {
+        var escaped = ""
+        escaped.reserveCapacity(text.utf8.count)
+
+        for character in text {
+            switch character {
+            case "@":
+                // Split GFM email autolinks with a zero-text CommonMark HTML
+                // comment. The vendored MarkdownUI renderer intentionally
+                // ignores comments just like cmark's HTML renderer.
+                escaped.append("@<!-- -->")
+            case "\\", "[", "]", "*", "_", "~", ":", "`", "<", ">":
+                // Backslash escapes keep ordinary punctuation as the same
+                // copied/searchable text while preventing GFM from turning it
+                // into emphasis, code, raw HTML, or an automatic link.
+                escaped.append("\\")
+                escaped.append(character)
+            default:
+                escaped.append(character)
+            }
+        }
+
+        return escapeLineStartMarkers(in: escapeWWWAutolinks(in: escaped))
     }
 
     private func escapeImageAlt(_ text: String) -> String {
-        escapeMarkdownText(text)
+        escapeMarkdownText(text, context: .normal)
             .replacingOccurrences(of: "\n", with: " ")
     }
 
@@ -518,6 +551,50 @@ final class HTMLToMarkdownDOMRenderer {
         text
             .replacingOccurrences(of: "\n", with: "<br>")
             .replacingOccurrences(of: "|", with: "\\|")
+    }
+
+    private func escapeWWWAutolinks(in text: String) -> String {
+        var escaped = ""
+        escaped.reserveCapacity(text.utf8.count)
+
+        for character in text {
+            if character == ".", String(escaped.suffix(3)).lowercased() == "www" {
+                escaped.append("\\")
+            }
+            escaped.append(character)
+        }
+
+        return escaped
+    }
+
+    private func escapeLineStartMarkers(in text: String) -> String {
+        let orderedListPattern = #"^( {0,3})\d{1,9}[.)](?=\s)"#
+        if let range = text.range(of: orderedListPattern, options: .regularExpression),
+           let marker = text[range].last,
+           let markerRange = text.range(of: String(marker), options: .backwards, range: range) {
+            return String(text[..<markerRange.lowerBound]) + "\\\(marker)" + text[markerRange.upperBound...]
+        }
+
+        let patterns = [
+            #"^( {0,3})#{1,6}(?=\s|$)"#,
+            #"^( {0,3})>"#,
+            #"^( {0,3})[-+*](?=\s)"#,
+            #"^( {0,3})([-*_])(?:\2\2)+\s*$"#
+        ]
+
+        for pattern in patterns {
+            guard let range = text.range(of: pattern, options: .regularExpression) else { continue }
+            let marker = String(text[range])
+            guard let character = marker.first(where: { !$0.isWhitespace }) else { continue }
+            guard let characterRange = marker.range(of: String(character)) else { continue }
+            let escapedMarker = marker.replacingCharacters(
+                in: characterRange,
+                with: "\\\(character)"
+            )
+            return String(text[..<range.lowerBound]) + escapedMarker + text[range.upperBound...]
+        }
+
+        return text
     }
 
     private func escapeMarkdownDestination(_ text: String) -> String {
