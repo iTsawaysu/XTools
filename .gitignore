@@ -10,10 +10,9 @@ DerivedData/
 *.xctest
 *.playground/
 
-# Swift 包管理器 (SPM)
+# Swift 包管理器
 .build/
-.swiftpm-build/
-.swiftpm-test/
+.swiftpm-*
 .swiftpm/
 *.swiftpm
 .Package.test.resolved
@@ -24,12 +23,9 @@ dist/
 # Xcode 用户配置与个人工作区偏好
 xcuserdata/
 *.xcuserstate
-*.xcworkspace/xcuserdata/
-*.xcodeproj/xcuserdata/
-*.xcodeproj/project.xcworkspace/xcuserdata/
 Timeline.xctimeline
 
-# 主流编辑器与 IDE 配置 (VS Code, JetBrains, Sublime, Vim)
+# 主流编辑器与 IDE 配置
 .vscode/
 *.code-workspace
 .idea/
@@ -40,7 +36,7 @@ Timeline.xctimeline
 *.swo
 *~
 
-# macOS 系统文件与外置卷缓存
+# macOS 系统文件
 .DS_Store
 .DS_Store?
 .AppleDouble
@@ -61,14 +57,14 @@ Temporary Items
 *.p12
 *.cer
 
-# 日志与临时调试 / 演练产物
+# 日志与临时产物
 *.log
 scratch/
 .scratch/
 tmp/
 temp/
 
-# AI 辅助工具本地配置、上下文与 Vibe Coding 痕迹
+# AI 相关
 .claude/
 CLAUDE.md
 .codex/
@@ -76,6 +72,7 @@ CLAUDE.md
 .workbuddy/
 .trellis/
 .mimosa/
+.zcode/
 .cursor/
 .cursorrules
 .windsurf/
@@ -85,8 +82,7 @@ CLAUDE.md
 .antigravity/
 AGENTS.md
 CONTEXT.md
+.gitattributes
 
-# 内部文档与设计过程产物
+# 文档相关
 docs/
-.swiftpm-build-proto
-
