@@ -224,7 +224,7 @@ final class HTMLToMarkdownSession: ObservableObject {
                 )
             } catch {
                 self.finishFailure(
-                    "HTML 转换失败，请检查输入后重试。",
+                    "HTML 转换失败，输入内容无法解析。",
                     generation: currentGeneration
                 )
             }

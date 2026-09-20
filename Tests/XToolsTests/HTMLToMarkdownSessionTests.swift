@@ -272,8 +272,9 @@ struct HTMLToMarkdownSessionTests {
 
         #expect(session.markdown.isEmpty)
         #expect(session.warning == nil)
-        #expect(session.error == "HTML 转换失败，请检查输入后重试。")
+        #expect(session.error == "HTML 转换失败，输入内容无法解析。")
         #expect(session.error?.contains(sensitiveDetail) == false)
+        ToolDiagnosticContract.expectFactual(session.error ?? "", sensitiveInputs: [sensitiveDetail])
         #expect(session.formatAttempt == 1)
     }
 

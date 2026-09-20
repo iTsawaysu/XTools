@@ -1,4 +1,4 @@
-import XToolsCore
+@testable import XToolsCore
 import Testing
 
 struct JSONDiffValidationTests {
@@ -61,7 +61,7 @@ struct JSONDiffValidationTests {
         #expect(!message.contains("处理方式："))
     }
 
-    @Test func bothBadSidesAreJoined() {
+    @Test func bothBadSidesAreReportedInOneParagraph() {
         let decision = JSONDiffValidation.evaluate(
             left: "{bad",
             right: "]also bad",
@@ -71,13 +71,33 @@ struct JSONDiffValidationTests {
             Issue.record("Expected invalid decision")
             return
         }
-        #expect(message.contains("JSON A 格式错误"))
-        #expect(message.contains("JSON B 格式错误"))
+        #expect(message.contains("JSON A 与 JSON B 均有格式错误"))
+        #expect(message.contains("JSON A：对象键必须使用双引号包裹"))
+        #expect(message.contains("JSON B：遇到不能作为 JSON 值开头的字符 ]"))
         #expect(!message.contains("处理方式："))
         #expect(!message.contains("请修正该侧后再对比"))
-        #expect(message.contains("\nJSON B 格式错误"))
-        #expect(!message.contains("；"))
-        #expect(message == "JSON A 格式错误：对象键必须使用双引号包裹\nJSON B 格式错误：遇到不能作为 JSON 值开头的字符 ]")
+        // 顶栏通栏横幅只承载单段文案：不能再用换行拼接两侧原因。
+        #expect(!message.contains("\n"))
+        #expect(!message.contains("\r"))
+        ToolDiagnosticContract.expectFactual(message)
+    }
+
+    @Test func bothBadSidesFallBackToAShortSummaryWhenDetailIsTooLong() {
+        let longLeft = FormatDiagnostic(
+            formatName: "JSON",
+            message: String(repeating: "甲", count: 100)
+        )
+        let longRight = FormatDiagnostic(
+            formatName: "JSON",
+            message: String(repeating: "乙", count: 100)
+        )
+        let message = JSONDiffValidation.bothSidesErrorMessage(
+            left: longLeft,
+            right: longRight,
+            labels: labels
+        )
+        #expect(message == "JSON A 与 JSON B 均有格式错误。")
+        ToolDiagnosticContract.expectFactual(message)
     }
 
     @Test func emptySideIsNotReportedEvenWhenOtherIsBad() {

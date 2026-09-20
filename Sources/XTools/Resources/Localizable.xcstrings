@@ -76,10 +76,16 @@
     "Chmod 计算器" : {
       "extractionState" : "manual"
     },
+    "Compose 转换" : {
+      "extractionState" : "manual"
+    },
     "Cron 表达式" : {
       "extractionState" : "manual"
     },
     "Crontab 生成" : {
+      "extractionState" : "manual"
+    },
+    "Docker 转换" : {
       "extractionState" : "manual"
     },
     "Emoji 与符号" : {
@@ -107,6 +113,9 @@
       "extractionState" : "manual"
     },
     "HTML 引用片段（假设文件位于站点根目录）" : {
+      "extractionState" : "manual"
+    },
+    "HTML 转换失败，输入内容无法解析。" : {
       "extractionState" : "manual"
     },
     "HTTP 状态码" : {
@@ -194,6 +203,9 @@
       "extractionState" : "manual"
     },
     "docker run 命令与 Compose YAML 双向转换。" : {
+      "extractionState" : "manual"
+    },
+    "docker-compose YAML 格式无效。" : {
       "extractionState" : "manual"
     },
     "macOS 设备信息" : {
@@ -467,6 +479,9 @@
       "extractionState" : "manual"
     },
     "信息" : {
+      "extractionState" : "manual"
+    },
+    "修复建议" : {
       "extractionState" : "manual"
     },
     "修饰键" : {
@@ -1339,6 +1354,9 @@
     "提取结果为空。页面可能由客户端 JS 动态渲染，或无有效文本内容。" : {
       "extractionState" : "manual"
     },
+    "提示" : {
+      "extractionState" : "manual"
+    },
     "搜索 Emoji 或符号（如 right / 右 / 播放）…" : {
       "extractionState" : "manual"
     },
@@ -1406,6 +1424,9 @@
       "extractionState" : "manual"
     },
     "收起" : {
+      "extractionState" : "manual"
+    },
+    "收起建议" : {
       "extractionState" : "manual"
     },
     "数值" : {
@@ -1750,6 +1771,9 @@
     "查看常用颜色格式" : {
       "extractionState" : "manual"
     },
+    "查看针对该问题的智能修复建议" : {
+      "extractionState" : "manual"
+    },
     "查询 HTTP 状态码及其含义。" : {
       "extractionState" : "manual"
     },
@@ -1784,6 +1808,12 @@
       "extractionState" : "manual"
     },
     "格式无效，请输入井号和六位十六进制颜色" : {
+      "extractionState" : "manual"
+    },
+    "检查命令是否包含有效的容器参数和镜像名称。" : {
+      "extractionState" : "manual"
+    },
+    "检查命令格式，必须以 docker run 开头并指定镜像。" : {
       "extractionState" : "manual"
     },
     "检查明细" : {
@@ -2179,6 +2209,15 @@
     "目标格式" : {
       "extractionState" : "manual"
     },
+    "确认 YAML 包含合法的 version 或 services 服务定义块。" : {
+      "extractionState" : "manual"
+    },
+    "确认输入以 docker run 开头，且镜像名与参数格式正确。" : {
+      "extractionState" : "manual"
+    },
+    "确认输入符合标准 Docker Compose YAML 语法规范。" : {
+      "extractionState" : "manual"
+    },
     "秒表" : {
       "extractionState" : "manual"
     },
@@ -2566,9 +2605,6 @@
     "输入 HTML" : {
       "extractionState" : "manual"
     },
-    "HTML 转换失败，请检查输入后重试。" : {
-      "extractionState" : "manual"
-    },
     "输入 JWT 后可检查签名与时间声明" : {
       "extractionState" : "manual"
     },
@@ -2795,6 +2831,12 @@
       "extractionState" : "manual"
     },
     "遮蔽后" : {
+      "extractionState" : "manual"
+    },
+    "部分 Compose 声明在单一 docker run 中无法直接表达，请在命令生成后检查网络与存储卷配置。" : {
+      "extractionState" : "manual"
+    },
+    "部分命令行参数在 Docker Compose 中没有直接对应的单一指令，已被忽略；建议在生成的 Compose 文件中手动完善相应配置。" : {
       "extractionState" : "manual"
     },
     "部署文件" : {

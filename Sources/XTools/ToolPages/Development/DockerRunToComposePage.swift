@@ -175,7 +175,7 @@ private struct IndexDockerWorkspaceContent: View {
                 diagnostic = FormatDiagnostic(
                     formatName: "Docker 转换",
                     message: errorText,
-                    suggestion: "请检查命令是否包含有效的容器参数和镜像名称。"
+                    suggestion: "检查命令是否包含有效的容器参数和镜像名称。"
                 )
             } else if let warningText {
                 let unmapped = result.warnings.map { $0.option }.filter { !$0.isEmpty }.joined(separator: ", ")
@@ -201,7 +201,7 @@ private struct IndexDockerWorkspaceContent: View {
             let diagnostic = FormatDiagnostic(
                 formatName: "Docker 转换",
                 message: msg,
-                suggestion: "请确认输入的命令以 docker run 开头，且镜像名与参数格式正确。"
+                suggestion: "确认输入以 docker run 开头，且镜像名与参数格式正确。"
             )
             return FormatBinding(error: msg, diagnostic: diagnostic)
         } catch {
@@ -209,7 +209,7 @@ private struct IndexDockerWorkspaceContent: View {
             let diagnostic = FormatDiagnostic(
                 formatName: "Docker 转换",
                 message: msg,
-                suggestion: "请检查输入的命令格式，必须以 docker run 开头并指定镜像。"
+                suggestion: "检查命令格式，必须以 docker run 开头并指定镜像。"
             )
             return FormatBinding(error: msg, diagnostic: diagnostic)
         }
@@ -243,7 +243,7 @@ private struct IndexDockerWorkspaceContent: View {
             let diagnostic = FormatDiagnostic(
                 formatName: "Compose 转换",
                 message: msg,
-                suggestion: "请确认 YAML 包含合法的 version 或 services 服务定义块。"
+                suggestion: "确认 YAML 包含合法的 version 或 services 服务定义块。"
             )
             return FormatBinding(error: msg, diagnostic: diagnostic)
         } catch {
@@ -251,7 +251,7 @@ private struct IndexDockerWorkspaceContent: View {
             let diagnostic = FormatDiagnostic(
                 formatName: "Compose 转换",
                 message: msg,
-                suggestion: "请确认输入符合标准 Docker Compose YAML 语法规范。"
+                suggestion: "确认输入符合标准 Docker Compose YAML 语法规范。"
             )
             return FormatBinding(error: msg, diagnostic: diagnostic)
         }

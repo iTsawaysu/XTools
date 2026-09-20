@@ -1,10 +1,15 @@
 import Foundation
 import Yams
 
-public enum DockerComposeToRunError: Error, Equatable, Sendable {
+public enum DockerComposeToRunError: Error, Equatable, Sendable, LocalizedError {
     case invalidYAML
     case missingServicesSection
     case noServices
+
+    /// 单一真相源在 `DockerComposeToRunDiagnostics`，避免页面与错误类型各写一份文案后漂移。
+    public var errorDescription: String? {
+        DockerComposeToRunDiagnostics.message(for: self)
+    }
 }
 
 public struct DockerComposeToRunResult: Equatable, Sendable {
@@ -20,7 +25,7 @@ public struct DockerComposeToRunResult: Equatable, Sendable {
 }
 
 public enum DockerComposeToRunDiagnostics {
-    public static let invalidYAMLMessage = "无法解析 YAML：请检查缩进与语法。"
+    public static let invalidYAMLMessage = "无法解析 YAML：缩进或语法不合法。"
     public static let missingServicesMessage = "未找到 services 段：Compose 文件需要顶级 services 键。"
     public static let noServicesMessage = "services 段为空：至少需要一个服务定义。"
 

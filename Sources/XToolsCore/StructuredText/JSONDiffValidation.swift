@@ -56,13 +56,36 @@ public enum JSONDiffValidation {
             return .empty
         }
 
-        let badSides = [
-            leftDiagnostic.map { sideErrorMessage(label: labels.left, diagnostic: $0) },
-            rightDiagnostic.map { sideErrorMessage(label: labels.right, diagnostic: $0) }
-        ].compactMap(\.self)
-
-        return badSides.isEmpty ? .comparable : .invalid(badSides.joined(separator: "\n"))
+        switch (leftDiagnostic, rightDiagnostic) {
+        case (nil, nil):
+            return .comparable
+        case (let left?, nil):
+            return .invalid(sideErrorMessage(label: labels.left, diagnostic: left))
+        case (nil, let right?):
+            return .invalid(sideErrorMessage(label: labels.right, diagnostic: right))
+        case (let left?, let right?):
+            return .invalid(bothSidesErrorMessage(left: left, right: right, labels: labels))
+        }
     }
+
+    /// 顶栏通栏横幅只承载单段文案，因此两侧同时格式错误时不能用换行拼接。
+    /// 优先给出双侧原因；总长超出可读上限时退化为不指明具体原因的双侧结论。
+    static func bothSidesErrorMessage(
+        left: FormatDiagnostic,
+        right: FormatDiagnostic,
+        labels: SideLabels
+    ) -> String {
+        let detailed = "\(labels.left) 与 \(labels.right) 均有格式错误；"
+            + "\(labels.left)：\(left.message)；"
+            + "\(labels.right)：\(right.message)"
+        guard detailed.count > maximumMessageCharacters else {
+            return detailed
+        }
+        return "\(labels.left) 与 \(labels.right) 均有格式错误。"
+    }
+
+    /// 与 `ToolDiagnosticContract.maximumMessageCharacters` 保持一致的可读上限。
+    static let maximumMessageCharacters = 180
 
     static func comparisonWarning(
         leftHasDuplicateKeys: Bool,

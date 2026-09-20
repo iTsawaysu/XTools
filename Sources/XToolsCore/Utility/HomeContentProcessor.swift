@@ -104,7 +104,7 @@ public enum HomeContentProcessor {
             }
         } catch {
             let message = (error as? LocalizedError)?.errorDescription
-                ?? "处理失败，请检查输入内容。"
+                ?? "处理失败，输入内容无法解析。"
             return .failure(.processingFailed(message))
         }
     }

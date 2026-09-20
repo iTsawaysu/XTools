@@ -11,12 +11,27 @@ public enum JWTParser {
         }
     }
 
-    public enum ParseError: Error, Equatable {
+    public enum ParseError: Error, Equatable, LocalizedError {
         case invalidSegmentCount
         case emptyHeader
         case emptyPayload
         case invalidBase64
         case invalidJSON
+
+        public var errorDescription: String? {
+            switch self {
+            case .invalidSegmentCount:
+                return "JWT 必须包含 header.payload.signature 三段。"
+            case .emptyHeader:
+                return "JWT Header 不能为空。"
+            case .emptyPayload:
+                return "JWT Payload 不能为空。"
+            case .invalidBase64:
+                return "JWT 包含无效的 Base64URL 内容。"
+            case .invalidJSON:
+                return "JWT Header 或 Payload 不是有效的 JSON 对象。"
+            }
+        }
     }
 
     public static func parse(_ token: String) throws -> DecodedToken {
