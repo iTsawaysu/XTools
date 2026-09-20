@@ -232,7 +232,7 @@ struct YAMLPrettifierTests {
                 Issue.record("Expected comment-preserving sort capability diagnostic")
                 continue
             }
-            #expect(diagnostic.message == "当前无法在保留评论的同时排序 YAML Key")
+            #expect(diagnostic.message == "当前无法在保留注释的同时对键排序")
 
             let outcome = FormatRunner.run(input) {
                 try YAMLPrettifier.formatValidated($0, options: .init(indent: 2, sortKeys: true))

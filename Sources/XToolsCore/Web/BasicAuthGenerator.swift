@@ -18,6 +18,7 @@ public enum BasicAuthCodec {
 
     public enum ParseError: Error, Equatable {
         case emptyInput
+        case missingCredentials
         case unsupportedHeader(String)
         case unsupportedScheme(String)
         case invalidHeader
@@ -105,12 +106,19 @@ public enum BasicAuthCodec {
             return try tokenFromHeaderValue(input)
         }
 
+        // 只有方案名而没有凭据（用户粘贴了 `Basic`）：这既不是 Base64 也不该报格式无效。
+        if asciiCaseInsensitiveEqual(input, "Basic") {
+            throw ParseError.missingCredentials
+        }
+
         return input
     }
 
     private static func tokenFromHeaderValue(_ value: String) throws -> String {
         guard let separator = value.firstIndex(where: \.isWhitespace) else {
-            throw ParseError.invalidHeader
+            throw asciiCaseInsensitiveEqual(value, "Basic")
+                ? ParseError.missingCredentials
+                : ParseError.invalidHeader
         }
 
         let scheme = String(value[..<separator])

@@ -115,6 +115,8 @@ public enum MathExpressionEvaluator {
             case .invalidNumber:
                 return "表达式中的数字格式无效。"
             case .unknownIdentifier:
+                // 刻意不回显标识符：诊断不得把用户输入的片段带进文案
+                // （由 MathEvaluatorTests.everyMathErrorUsesSpecificFactualChineseCopy 锁定）。
                 return "表达式包含不支持的函数或常量。"
             case .unexpectedToken:
                 return "运算符或参数分隔符的位置无效。"

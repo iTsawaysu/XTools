@@ -118,6 +118,13 @@ public enum XMLFormatting {
         )
     }
 
+    /// 把 libxml 的解析错误码翻译成用户能据以定位的文案。
+    ///
+    /// 码值取自 `XMLParserDelegate` 上报的 NSError（`parser.parserError` 只给出
+    /// 笼统的 5/111，必须优先取 delegate 的细粒度错误）。下表经语料实测确认：
+    /// 4=文档为空、5=文档结束异常、26=未定义实体、38=属性值未闭合、
+    /// 39=属性值缺引号、42=属性名重复、45=注释未闭合、68=名称非法（该码同时
+    /// 覆盖未转义的 & 与非法标签名，故文案必须同时说明两者）、76=标签不匹配。
     private static func xmlMessage(from error: Error?) -> String {
         guard let error else { return "XML 语法错误" }
 
@@ -127,16 +134,22 @@ public enum XMLFormatting {
         }
 
         switch nsError.code {
+        case 4:
+            return "输入中没有 XML 内容"
         case 5:
             return "XML 文档没有正确闭合，或存在多个根节点"
         case 26, 111:
             return "引用了未定义的实体，或 & 没有正确转义"
-        case 42:
-            return "同一个标签上有重复属性名"
+        case 38:
+            return "属性值没有闭合"
         case 39:
             return "属性值必须使用引号"
+        case 42:
+            return "同一个标签上有重复属性名"
+        case 45:
+            return "注释没有闭合"
         case 68:
-            return "文本中的 & 没有转义，或实体引用不完整"
+            return "文本中的 & 没有正确转义，或标签名与属性名无效"
         case 76:
             return "开始标签和结束标签不匹配"
         default:

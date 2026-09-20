@@ -37,6 +37,14 @@ extension RegexMatcher {
             return .invalidPattern("字符组范围顺序无效。")
         }
 
+        if hasUnsupportedGroupSyntax(pattern) {
+            return .invalidPattern("正则引擎不支持 (?P<...) 分组写法，命名分组应写成 (?<名称>...)。")
+        }
+
+        if hasUnclosedQuantifierBrace(pattern) {
+            return .invalidPattern("量词缺少右花括号。")
+        }
+
         if hasLeadingQuantifierWithoutTarget(pattern) {
             return .invalidPattern("量词前缺少表达式。")
         }
@@ -44,6 +52,57 @@ extension RegexMatcher {
         return .invalidPattern(
             "正则表达式格式无效。"
         )
+    }
+
+    /// ICU 只接受 `(?<名称>...)` 形式的命名分组；Python/PCRE 的 `(?P<名称>...)`
+    /// 会编译失败，但它并不是「量词位置」问题，需要单独说明。
+    static func hasUnsupportedGroupSyntax(_ pattern: String) -> Bool {
+        pattern.contains("(?P<")
+    }
+
+    /// `a{` 这类缺少右花括号的量词在旧实现里只会落到笼统的「格式无效」。
+    static func hasUnclosedQuantifierBrace(_ pattern: String) -> Bool {
+        let characters = Array(pattern)
+        var escaped = false
+        var inClass = false
+        var index = 0
+
+        while index < characters.count {
+            let character = characters[index]
+            if escaped {
+                escaped = false
+                index += 1
+                continue
+            }
+            if character == "\\" {
+                escaped = true
+                index += 1
+                continue
+            }
+            if character == "[" {
+                inClass = true
+                index += 1
+                continue
+            }
+            if character == "]", inClass {
+                inClass = false
+                index += 1
+                continue
+            }
+            guard !inClass else {
+                index += 1
+                continue
+            }
+
+            if character == "{",
+               unescapedClosingBraceIndex(in: characters, startingAt: index + 1) == nil {
+                return true
+            }
+
+            index += 1
+        }
+
+        return false
     }
 
     static func hasVariableLengthLookbehind(_ pattern: String) -> Bool {
@@ -491,7 +550,12 @@ extension RegexMatcher {
             }
 
             if character == "*" || character == "+" || character == "?" {
-                if previousSignificant == nil || previousSignificant == "(" || previousSignificant == "|" {
+                if previousSignificant == nil || previousSignificant == "|" {
+                    return true
+                }
+                // `(?` 是分组或标志前缀（如 (?i)、(?<名称>...)），不是量词；
+                // 而 `(*`、`(+` 仍然是缺少左侧表达式的量词。
+                if previousSignificant == "(", character != "?" {
                     return true
                 }
             }

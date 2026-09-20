@@ -74,8 +74,8 @@ public enum YAMLPrettifier {
             throw ValidationError.unsupportedCommentPreservingSort(
                 FormatDiagnostic(
                     formatName: "YAML",
-                    message: "当前无法在保留评论的同时排序 YAML Key",
-                    suggestion: "关闭 Key 排序后重试。"
+                    message: "当前无法在保留注释的同时对键排序",
+                    suggestion: "关闭键排序后重试。"
                 )
             )
         }
@@ -459,6 +459,7 @@ public enum YAMLPrettifier {
     private static func diagnostic(from error: YamlError, input: String) -> FormatDiagnostic {
         switch error {
         case let .reader(problem, offset, _, yaml):
+            let readerSuggestion = suggestion(forReaderMessage: yamlReaderMessage(problem))
             if let offset,
                let index = yaml.index(yaml.startIndex, offsetBy: offset, limitedBy: yaml.endIndex) {
                 return FormatDiagnostic(
@@ -466,26 +467,27 @@ public enum YAMLPrettifier {
                     message: yamlReaderMessage(problem),
                     input: yaml,
                     index: index,
-                    suggestion: genericYAMLSuggestion
+                    suggestion: readerSuggestion
                 )
             }
 
             return FormatDiagnostic(
                 formatName: "YAML",
                 message: yamlReaderMessage(problem),
-                suggestion: genericYAMLSuggestion
+                suggestion: readerSuggestion
             )
 
         case let .scanner(context, problem, mark, yaml),
              let .parser(context, problem, mark, yaml),
              let .composer(context, problem, mark, yaml):
+            let syntaxMessage = yamlSyntaxMessage(problem, context: context?.text, yaml: yaml, mark: mark)
             return FormatDiagnostic(
                 formatName: "YAML",
-                message: yamlSyntaxMessage(problem, context: context?.text, yaml: yaml, mark: mark),
+                message: syntaxMessage,
                 input: yaml,
                 line: mark.line,
                 column: mark.column,
-                suggestion: genericYAMLSuggestion
+                suggestion: suggestion(forSyntaxMessage: syntaxMessage)
             )
 
         case let .duplicatedKeysInMapping(duplicates, yaml):
@@ -639,6 +641,57 @@ public enum YAMLPrettifier {
 
     private static func yamlOutputMessage(_: String) -> String {
         return "YAML 输出生成失败"
+    }
+
+    /// 把已确定的中文语法错误文案映射到贴切的修复建议。
+    /// 早先所有语法错误共用通用的「检查缩进…」建议，对锚点、引号、文档分隔符类
+    /// 错误会指向无关方向；这里按文案给出针对性建议，未覆盖时退回通用提示。
+    private static func suggestion(forSyntaxMessage message: String) -> String {
+        switch message {
+        case "缩进层级不一致", "缩进必须使用空格，不能使用制表符":
+            return "同一层级的键使用相同数量的空格缩进，并删除行首的制表符。"
+        case "键后缺少冒号":
+            return "在键名后补上冒号与一个空格，例如 `key: value`。"
+        case "流程列表缺少逗号或右方括号":
+            return "在列表元素之间补上逗号，并补上结尾的 ]。"
+        case "流程映射缺少逗号或右花括号":
+            return "在映射条目之间补上逗号，并补上结尾的 }。"
+        case "引号字符串没有闭合":
+            return "补上与被引用内容成对的引号。"
+        case "引用了未定义的锚点别名":
+            return "先用 &名称 定义锚点，再在同级或后续节点用 *名称 引用。"
+        case "使用了未定义的标签句柄":
+            return "先在 %TAG 指令中声明该标签句柄，或改用完整标签。"
+        case "只允许包含一个 YAML 文档":
+            return "删除多余的 --- 分隔符，只保留一个文档。"
+        case "文档分隔符出现在不允许的位置":
+            return "确认 --- 只出现在文档开头或两个文档之间。"
+        case "YAML 版本指令重复":
+            return "每个文档只保留一条 %YAML 指令。"
+        case "YAML 标签指令重复":
+            return "合并重复的 %TAG 指令，或改用不同的标签句柄。"
+        case "列表项缺少短横线标记":
+            return "为每个列表项补上开头的短横线与一个空格。"
+        case "双引号字符串中包含不支持的转义字符":
+            return "改用 YAML 支持的转义序列，或把内容放进单引号字符串。"
+        case "Unicode 转义后缺少十六进制数字":
+            return "在 \\u 或 \\U 后补足对应的十六进制数字。"
+        default:
+            return genericYAMLSuggestion
+        }
+    }
+
+    /// 读取阶段的失败都发生在字符解码层面，通用缩进建议在这里不成立。
+    private static func suggestion(forReaderMessage message: String) -> String {
+        switch message {
+        case "YAML 文本包含无效的 UTF-8 字节",
+             "YAML 文本包含孤立的低位代理字符",
+             "YAML 文本中的 Unicode 代理对不完整",
+             "YAML 文本包含无法读取的字符":
+            return "确认输入是 UTF-8 兼容文本，且字符串中没有残缺的代理字符。"
+        default:
+            return genericYAMLSuggestion
+        }
     }
 
     private static func normalizedYAMLProblem(_ problem: String) -> String {

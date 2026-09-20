@@ -60,10 +60,24 @@ public enum CronScheduler {
             return nil
         }
 
+        guard !trimmed.isEmpty else {
+            return "请输入 cron 表达式。"
+        }
+
         let resolved = resolveExpression(expression)
+
+        // 未识别的 @ 预设不能再报「需要 5 个字段」——那会把宏当成字段数错误。
+        // resolveExpression 对无法识别的宏原样返回，据此判断。
+        if trimmed.hasPrefix("@"), resolved == trimmed {
+            let macro = String(trimmed.prefix(16))
+            return "不支持的 @ 预设「\(macro)」；可用 @yearly、@monthly、@weekly、@daily、@hourly、@reboot。"
+        }
+
         let parts = resolved.split(whereSeparator: \.isWhitespace).map(String.init)
         guard parts.count == 5 else {
-            return "cron 表达式需要 5 个字段：分钟 小时 日 月 星期。"
+            return parts.count > 5
+                ? "cron 表达式最多 5 个字段：分钟 小时 日 月 星期。"
+                : "cron 表达式需要 5 个字段：分钟 小时 日 月 星期。"
         }
 
         let fieldSpecs: [(name: String, sample: String, min: Int, max: Int, values: Set<Int>?)] = [

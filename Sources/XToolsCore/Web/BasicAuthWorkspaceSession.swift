@@ -131,6 +131,8 @@ public struct BasicAuthWorkspaceSession: Equatable, Sendable {
         switch error {
         case .emptyInput:
             return ""
+        case .missingCredentials:
+            return "Authorization 请求头缺少 Basic 凭据。"
         case .unsupportedHeader:
             return "只支持 Authorization 请求头。"
         case .unsupportedScheme:

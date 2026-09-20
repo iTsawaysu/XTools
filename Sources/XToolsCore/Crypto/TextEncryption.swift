@@ -72,6 +72,7 @@ public enum TextEncryptionService {
 
     public enum Error: LocalizedError {
         case emptyPassword
+        case emptyCiphertext
         case invalidBase64
         case invalidFormat
         case decryptionFailed
@@ -82,6 +83,8 @@ public enum TextEncryptionService {
             switch self {
             case .emptyPassword:
                 return "加密口令不能为空。"
+            case .emptyCiphertext:
+                return "密文不能为空。"
             case .invalidBase64:
                 return "密文不是有效的 Base64。"
             case .invalidFormat:
@@ -132,6 +135,9 @@ public enum TextEncryptionService {
     /// the supplied password. Returns the original plaintext string.
     public static func decrypt(_ ciphertext: String, password: String, algorithm: Algorithm) throws -> String {
         guard !password.isEmpty else { throw Error.emptyPassword }
+        guard !ciphertext.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw Error.emptyCiphertext
+        }
         guard let passwordData = password.data(using: .utf8) else {
             throw Error.cryptOperationFailed
         }
