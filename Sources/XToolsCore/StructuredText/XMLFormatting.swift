@@ -1,6 +1,14 @@
 import Foundation
 
 public enum XMLFormatting {
+    /// 允许的最大元素嵌套深度。
+    ///
+    /// 缩进渲染递归实现，每层都会对整棵子树调用一次 `xmlString`；而深层 `XMLNode`
+    /// 树连释放都是递归的。实测约 160 层渲染即栈溢出，2000 层即使不渲染也会在
+    /// 释放时崩溃。这里取与 JSON 侧同一量级的保守上限（JSON 为 32），
+    /// 足以覆盖真实文档。
+    public static let maximumNestingDepth = 64
+
     public enum FormattingError: Error, LocalizedError, Equatable {
         case invalidXML(FormatDiagnostic)
 
@@ -46,6 +54,10 @@ public enum XMLFormatting {
                     FormatDiagnostic(formatName: "XML", message: "XML 文档缺少根节点")
                 )
             }
+
+            // 缩进渲染是递归的，且每层都要对整个子树调用一次 xmlString；深度守卫在
+            // syntaxDiagnostic 里随解析一起完成，必须在构造 XMLDocument 之前拦住：
+            // 深层文档一旦被构造成 XMLNode 树，连释放都是递归的，会在 dealloc 时崩溃。
 
             var outputParts = topLevelPreamble(in: normalizedInput)
             let topChildren = document.children ?? []
@@ -95,13 +107,22 @@ public enum XMLFormatting {
             )
         }
 
-        let delegate = XMLSyntaxErrorDelegate()
+        let delegate = XMLSyntaxErrorDelegate(depthLimit: maximumNestingDepth)
         let parser = XMLParser(data: data)
         parser.shouldResolveExternalEntities = false
         parser.delegate = delegate
 
         guard !parser.parse() else {
             return nil
+        }
+
+        // 深度超限时解析是被主动 abort 的，随后的解析错误只是副产品，必须先报深度。
+        if delegate.exceededDepthLimit {
+            return FormatDiagnostic(
+                formatName: "XML",
+                message: "XML 嵌套层级过深，超过最大安全深度 \(maximumNestingDepth) 层",
+                suggestion: "减少标签嵌套层数后重试。"
+            )
         }
 
         let line = max(1, parser.lineNumber)
@@ -119,7 +140,6 @@ public enum XMLFormatting {
     }
 
     /// 把 libxml 的解析错误码翻译成用户能据以定位的文案。
-    ///
     /// 码值取自 `XMLParserDelegate` 上报的 NSError（`parser.parserError` 只给出
     /// 笼统的 5/111，必须优先取 delegate 的细粒度错误）。下表经语料实测确认：
     /// 4=文档为空、5=文档结束异常、26=未定义实体、38=属性值未闭合、
@@ -571,8 +591,43 @@ public enum XMLFormatting {
     }
 }
 
+/// 解析期同时统计元素嵌套深度：超过上限就主动 abort。
+///
+/// 守卫之所以放在解析阶段而不是渲染前，是因为深层文档一旦被构造成 `XMLNode` 树，
+/// 连释放都是递归的——实测 2000 层文档即使不渲染，`dealloc` 也会栈溢出崩溃。
+/// 用 SAX 回调计数（由 C 层解析器驱动，本身不递归）可以从根上避免构造深树。
 private final class XMLSyntaxErrorDelegate: NSObject, XMLParserDelegate {
     var error: Error?
+    private(set) var exceededDepthLimit = false
+
+    private let depthLimit: Int
+    private var currentDepth = 0
+
+    init(depthLimit: Int) {
+        self.depthLimit = depthLimit
+    }
+
+    func parser(
+        _ parser: XMLParser,
+        didStartElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?,
+        attributes attributeDict: [String: String] = [:]
+    ) {
+        currentDepth += 1
+        guard currentDepth > depthLimit else { return }
+        exceededDepthLimit = true
+        parser.abortParsing()
+    }
+
+    func parser(
+        _ parser: XMLParser,
+        didEndElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?
+    ) {
+        currentDepth -= 1
+    }
 
     func parser(_ parser: XMLParser, parseErrorOccurred parseError: Error) {
         error = parseError

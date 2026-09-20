@@ -462,4 +462,52 @@ struct XMLFormattingTests {
         #expect(try XMLFormatting.format(input) == expected)
         #expect(try XMLFormatting.minify(input) == expected)
     }
+
+    // MARK: - Nesting depth guard
+
+    /// 缩进渲染是递归的且每层都会序列化整棵子树，过深的文档会让进程栈溢出崩溃
+    /// （实测约 160 层即 signal 10）。这道守卫必须在进入渲染前拦住它。
+    @Test func deeplyNestedDocumentsAreRejectedInsteadOfCrashing() throws {
+        func nested(_ depth: Int) -> String {
+            String(repeating: "<a>", count: depth) + String(repeating: "</a>", count: depth)
+        }
+
+        // 恰好等于上限仍然可以格式化。
+        let atLimit = try XMLFormatting.format(nested(XMLFormatting.maximumNestingDepth))
+        #expect(atLimit.contains("<a>"), Comment(rawValue: atLimit))
+
+        // 超过上限给出可定位的诊断，而不是崩溃。
+        for depth in [XMLFormatting.maximumNestingDepth + 1, 200, 2000] {
+            let error = #expect(throws: (any Error).self) {
+                _ = try XMLFormatting.format(nested(depth))
+            }
+            guard let error,
+                  case XMLFormatting.FormattingError.invalidXML(let diagnostic) = error else {
+                Issue.record("Expected nesting diagnostic for depth \(depth)")
+                continue
+            }
+            #expect(diagnostic.message.contains("嵌套"), Comment(rawValue: diagnostic.message))
+            #expect(diagnostic.message.contains("\(XMLFormatting.maximumNestingDepth)"), Comment(rawValue: diagnostic.message))
+            ToolDiagnosticContract.expectFactual(diagnostic.message)
+        }
+
+        // minify 走同一条渲染路径，也必须被拦住。
+        let minifyError = #expect(throws: (any Error).self) {
+            _ = try XMLFormatting.minify(nested(2000))
+        }
+        #expect(minifyError != nil)
+    }
+
+    /// 深度统计用显式栈，且要跨过注释/CDATA 里的尖括号，不能把文本当成嵌套。
+    @Test func depthGuardCountsOnlyElementNesting() throws {
+        let withCommentNoise = """
+        <root><!-- <a><a><a><a> --><b>text</b></root>
+        """
+        let output = try XMLFormatting.format(withCommentNoise)
+        #expect(output.contains("<b>text</b>"), Comment(rawValue: output))
+
+        let withCData = "<root><![CDATA[<a><a><a>]]></root>"
+        let cdataOutput = try XMLFormatting.format(withCData)
+        #expect(cdataOutput.contains("CDATA"), Comment(rawValue: cdataOutput))
+    }
 }
