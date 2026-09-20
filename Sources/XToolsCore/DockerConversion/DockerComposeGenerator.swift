@@ -311,6 +311,11 @@ extension DockerRunToDockerComposeService {
         var namedVolumes = Set<String>()
 
         for volume in volumes {
+            // Windows 盘符宿主路径（`C:\data:/data`）直接按 “:” 切分会把盘符误判成
+            // 具名卷，从而在顶层凭空生成 `volumes: C:`。输入文本可能来自 Windows
+            // 上写的命令，因此需要识别这种形态；单字母具名卷（`x:/data`）不受影响。
+            if isWindowsDrivePath(volume) { continue }
+
             let parts = volume.split(separator: ":")
             guard parts.count >= 2 else { continue }
 

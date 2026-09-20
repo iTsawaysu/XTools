@@ -384,6 +384,101 @@ struct DockerRunToDockerComposeServiceTests {
         #expect(!result.yaml.contains("weight: \"300\""))
     }
 
+    // MARK: - Unknown / boolean flags
+
+    /// 布尔标志不接收值，不能把紧随其后的镜像名吞掉。
+    /// 此前 `-P` / `--disable-content-trust` / `--no-healthcheck` 未列入布尔标志，
+    /// 解析器按「未知标志可能有值」处理，把镜像名当成了它的参数。
+    @Test func booleanFlagsDoNotSwallowTheImageName() throws {
+        let commands = [
+            "docker run -P nginx",
+            "docker run --publish-all nginx",
+            "docker run --disable-content-trust nginx",
+            "docker run --no-healthcheck nginx",
+            "docker run -d -P nginx",
+            "docker run --privileged --no-healthcheck nginx"
+        ]
+
+        for command in commands {
+            let result = try DockerRunToDockerComposeService.convert(command)
+            #expect(
+                result.yaml.contains("image: nginx"),
+                Comment(rawValue: "「\(command)」丢失镜像：\(result.yaml)")
+            )
+        }
+    }
+
+    /// 未知标志后面只剩一个 token 时不能吞掉它，否则整条命令找不到镜像。
+    /// 同时保留「未知标志确实带值」的常见形态（值后面还有 token）。
+    @Test func unknownFlagsKeepTheImageRecoverable() throws {
+        let trailingImage = try DockerRunToDockerComposeService.convert("docker run -Z alpine")
+        #expect(trailingImage.yaml.contains("image: alpine"), Comment(rawValue: trailingImage.yaml))
+        #expect(trailingImage.unknownFlags == ["-Z"])
+
+        let flagWithValue = try DockerRunToDockerComposeService.convert("docker run --tlsverify value alpine")
+        #expect(flagWithValue.yaml.contains("image: alpine"), Comment(rawValue: flagWithValue.yaml))
+        #expect(flagWithValue.unknownFlags == ["--tlsverify"])
+    }
+
+    /// `--` 终止选项解析：其后第一个 token 是镜像，而不是命令的一部分。
+    @Test func doubleDashTreatsTheNextTokenAsTheImage() throws {
+        let result = try DockerRunToDockerComposeService.convert("docker run -- alpine echo hi")
+        #expect(result.yaml.contains("image: alpine"), Comment(rawValue: result.yaml))
+        #expect(result.yaml.contains("command:"), Comment(rawValue: result.yaml))
+        #expect(!result.yaml.contains("image: echo"), Comment(rawValue: result.yaml))
+
+        let withOptions = try DockerRunToDockerComposeService.convert("docker run -d --name x -- busybox sh -c 'echo hi'")
+        #expect(withOptions.yaml.contains("image: busybox"), Comment(rawValue: withOptions.yaml))
+        #expect(withOptions.yaml.contains("command:"), Comment(rawValue: withOptions.yaml))
+    }
+
+    // MARK: - Network mode
+
+    /// `--network` 的 none / bridge / container: 不是外部网络名，必须走
+    /// network_mode；否则会凭空生成同名外部网络，语义与 docker 完全相反。
+    @Test func networkModesDoNotBecomeExternalNetworks() throws {
+        let expectations = [
+            ("docker run --network none alpine", "network_mode: none"),
+            ("docker run --network bridge alpine", "network_mode: bridge"),
+            ("docker run --network host alpine", "network_mode: host"),
+            ("docker run --network container:abc alpine", "network_mode: \"container:abc\"")
+        ]
+
+        for (command, expected) in expectations {
+            let result = try DockerRunToDockerComposeService.convert(command)
+            #expect(result.yaml.contains(expected), Comment(rawValue: "「\(command)」→ \(result.yaml)"))
+            #expect(!result.yaml.contains("external: true"), Comment(rawValue: result.yaml))
+        }
+
+        // 自定义网络名仍然走外部网络。
+        let custom = try DockerRunToDockerComposeService.convert("docker run --network mynet alpine")
+        #expect(custom.yaml.contains("      - mynet"), Comment(rawValue: custom.yaml))
+        #expect(custom.yaml.contains("external: true"), Comment(rawValue: custom.yaml))
+    }
+
+    /// 宿主路径里的 Windows 盘符不能被凭空生成成具名卷。
+    /// （本工具跑在 macOS，但输入是粘贴来的 docker 命令文本，可能来自 Windows 上写的命令。）
+    @Test func windowsDriveVolumeStaysABindMount() throws {
+        for command in ["docker run -v C:\\data:/data nginx", "docker run -v c:/data:/data nginx"] {
+            let result = try DockerRunToDockerComposeService.convert(command)
+            #expect(
+                !result.yaml.contains("\nvolumes:"),
+                Comment(rawValue: "「\(command)」凭空生成了具名卷：\(result.yaml)")
+            )
+            #expect(result.yaml.contains("image: nginx"), Comment(rawValue: result.yaml))
+        }
+
+        // 单字母具名卷必须仍然被声明，不能被盘符判定误伤。
+        let singleLetter = try DockerRunToDockerComposeService.convert("docker run -v x:/data nginx")
+        #expect(singleLetter.yaml.contains("\nvolumes:"), Comment(rawValue: singleLetter.yaml))
+        #expect(singleLetter.yaml.contains("  x:"), Comment(rawValue: singleLetter.yaml))
+
+        // 具名卷仍然要被声明。
+        let named = try DockerRunToDockerComposeService.convert("docker run -v vol:/data nginx")
+        #expect(named.yaml.contains("\nvolumes:"), Comment(rawValue: named.yaml))
+        #expect(named.yaml.contains("  vol:"), Comment(rawValue: named.yaml))
+    }
+
     // MARK: - YAML scalar quoting
 
     /// 以 YAML 节点指示符开头的参数值必须加引号：`*` 会被读成别名、`&` 锚点、

@@ -64,7 +64,16 @@ public enum DockerRunToDockerComposeService {
             let token = expandedTokens[index]
 
             if token == "--" {
-                service.command.append(contentsOf: expandedTokens[(index + 1)...])
+                // `--` 终止选项解析。按 docker 语义，其后的第一个 token 是镜像，
+                // 其余才是命令；此前把整段都当成 command，导致 `docker run -- alpine echo hi`
+                // 报「缺少镜像名称」。
+                let remaining = expandedTokens[(index + 1)...]
+                if let image = remaining.first {
+                    service.image = image
+                    service.name = sanitizedServiceName(from: service.containerName ?? image)
+                    imageFound = true
+                    service.command.append(contentsOf: remaining.dropFirst())
+                }
                 break
             }
 
@@ -135,8 +144,12 @@ public enum DockerRunToDockerComposeService {
                 }
             case "--network":
                 let value = try takeValue()
-                if value == "host" {
-                    service.networkMode = "host"
+                // docker 的 --network 有几类取值不是「外部网络名」，必须映射到
+                // compose 的 network_mode；否则会凭空生成一个同名外部网络
+                // （`--network none` 曾生成 `networks: [none]` + `none: external: true`，
+                // 语义与「禁用网络」完全相反）。
+                if let mode = Self.networkModeValue(for: value) {
+                    service.networkMode = mode
                 } else {
                     let parsed = parseNetworkAttachment(value)
                     notImplemented.append(contentsOf: parsed.unsupported.map { "--network.\($0)" })
@@ -343,16 +356,22 @@ public enum DockerRunToDockerComposeService {
                 service.oomKillDisable = (value != "false")
                 index += 1
 
+            case let flag where Self.booleanFlags.contains(flag):
+                notImplemented.append(token)
+                index += 1
             case let flag where unsupportedValueFlags.contains(flag):
                 notImplemented.append(token)
                 skipFlag(true)
-            case let flag where unsupportedBooleanFlags.contains(flag):
-                notImplemented.append(token)
-                index += 1
 
             default:
                 unknownFlags.append(token)
-                skipFlag(true)  // Assume it might have a value
+                // 未知标志是否带值不可知。若它后面只剩一个 token，吞掉就会让整条
+                // 命令找不到镜像（`-P nginx` 报「缺少镜像名称」就是这么来的），
+                // 因此这种情况下按布尔标志处理，把该 token 留给镜像判定。
+                let hasTokenAfterNext = index + 2 < expandedTokens.count
+                let nextLooksLikeValue = index + 1 < expandedTokens.count
+                    && !expandedTokens[index + 1].hasPrefix("-")
+                skipFlag(nextLooksLikeValue && hasTokenAfterNext)
             }
         }
 
