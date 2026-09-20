@@ -80,8 +80,10 @@ public enum YAMLPrettifier {
             )
         }
 
-        if !options.sortKeys && input.contains("#") {
-            return format(input)
+        if !options.sortKeys, containsStructuralComment(in: input) {
+            // 序列化器不保留注释，带注释的输入只能走逐行路径；但逐行路径同样要兑现
+            // indent 选项，否则用户改了缩进宽度却看不到任何变化。
+            return formatPreservingComments(input, indentWidth: options.indent)
         }
 
         let nodes = Array(try compose_all(yaml: input))
@@ -93,6 +95,11 @@ public enum YAMLPrettifier {
     }
 
     public static func format(_ input: String) -> String {
+        formatPreservingComments(input, indentWidth: nil)
+    }
+
+    /// 逐行格式化（保留注释）。`indentWidth` 为 nil 时保持原有缩进不变。
+    private static func formatPreservingComments(_ input: String, indentWidth: Int?) -> String {
         guard !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return ""
         }
@@ -114,7 +121,7 @@ public enum YAMLPrettifier {
                 activeBlockScalar = nil
             }
 
-            let formattedLine = formatLine(line.replacingOccurrences(of: "\t", with: "  "))
+            let formattedLine = formatLine(expandingIndentationTabs(in: line))
             appendOutsideBlockLine(formattedLine, to: &formattedLines, previousWasBlank: &previousWasBlank)
 
             if let header = blockScalarHeader(in: formattedLine) {
@@ -128,7 +135,77 @@ public enum YAMLPrettifier {
             }
         }
 
-        return formattedLines.joined(separator: "\n")
+        guard let indentWidth else {
+            return formattedLines.joined(separator: "\n")
+        }
+        return reindented(formattedLines, indentWidth: indentWidth).joined(separator: "\n")
+    }
+
+    /// 只展开行首缩进里的制表符，保留标量内容中的字面 tab。
+    /// 此前是整行替换，`key: "a<TAB>b"` 会被悄悄改成 `key: "a  b"`（数据损坏）。
+    private static func expandingIndentationTabs(in line: String) -> String {
+        let indentation = line.prefix { $0 == "\t" || $0 == " " }
+        guard indentation.contains("\t") else { return line }
+
+        return String(indentation).replacingOccurrences(of: "\t", with: "  ")
+            + String(line.dropFirst(indentation.count))
+    }
+
+    /// 逐行路径不解析结构，但要兑现 indent 选项：把输入里最小的正缩进视为一级，
+    /// 按层级折算成请求的宽度。块标量内容行与空行不参与。
+    ///
+    /// 仅在缩进一致（所有正缩进都是该单位的整数倍）时重排——否则可能把不同层级
+    /// 压平，宁可不改，保持与旧行为一致。
+    private static func reindented(_ lines: [String], indentWidth: Int) -> [String] {
+        guard indentWidth > 0 else { return lines }
+
+        let unit = detectedIndentUnit(in: lines)
+        guard unit > 0, unit != indentWidth, hasConsistentIndentation(lines, unit: unit) else {
+            return lines
+        }
+
+        var result: [String] = []
+        var activeBlockScalar: BlockScalarState?
+
+        for line in lines {
+            if var blockScalar = activeBlockScalar {
+                let stillInside = blockScalar.contains(line)
+                result.append(line)
+                activeBlockScalar = stillInside ? blockScalar : nil
+                continue
+            }
+
+            let leading = line.prefix { $0 == " " }.count
+            if !line.isEmpty {
+                let level = leading / unit
+                result.append(String(repeating: " ", count: level * indentWidth) + line.dropFirst(leading))
+            } else {
+                result.append(line)
+            }
+
+            if let header = blockScalarHeader(in: line) {
+                activeBlockScalar = BlockScalarState(header: header)
+            }
+        }
+
+        return result
+    }
+
+    private static func detectedIndentUnit(in lines: [String]) -> Int {
+        var unit = 0
+        for line in lines {
+            let leading = line.prefix { $0 == " " }.count
+            guard leading > 0, !line.dropFirst(leading).isEmpty else { continue }
+            unit = unit == 0 ? leading : min(unit, leading)
+        }
+        return unit
+    }
+
+    private static func hasConsistentIndentation(_ lines: [String], unit: Int) -> Bool {
+        lines.allSatisfy { line in
+            let leading = line.prefix { $0 == " " }.count
+            return leading == 0 || leading % unit == 0
+        }
     }
 
     private static func formatLine(_ line: String) -> String {

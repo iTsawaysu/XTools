@@ -428,4 +428,77 @@ struct YAMLPrettifierTests {
         #expect(!message.contains("parser"))
         #expect(!message.contains("YamlError"))
     }
+
+    // MARK: - Comment-preserving path
+
+    /// 带注释的输入走逐行路径（序列化器不保留注释），但 indent 选项仍必须兑现，
+    /// 否则用户把缩进从 4 改成 2 会看不到任何变化。
+    @Test func commentBearingInputStillHonorsTheIndentOption() throws {
+        let fourToTwo = try YAMLPrettifier.format(
+            "a:\n    b: 1\nc: 2 # x",
+            options: .init(indent: 2, sortKeys: false)
+        )
+        #expect(fourToTwo == "a:\n  b: 1\nc: 2 # x", Comment(rawValue: fourToTwo))
+
+        let twoToFour = try YAMLPrettifier.format(
+            "a:\n  b: 1\nc: 2 # x",
+            options: .init(indent: 4, sortKeys: false)
+        )
+        #expect(twoToFour == "a:\n    b: 1\nc: 2 # x", Comment(rawValue: twoToFour))
+
+        // 多层嵌套按层级折算，注释原样保留。
+        let nested = try YAMLPrettifier.format(
+            "a: 1 # c\nb:\n    c:\n        d: 2",
+            options: .init(indent: 2, sortKeys: false)
+        )
+        #expect(nested == "a: 1 # c\nb:\n  c:\n    d: 2", Comment(rawValue: nested))
+
+        // 缩进不一致时宁可不改，避免把不同层级压平。
+        let inconsistent = try YAMLPrettifier.format(
+            "a:\n   b: 1\n     c: 2 # x",
+            options: .init(indent: 2, sortKeys: false)
+        )
+        #expect(inconsistent == "a:\n   b: 1\n     c: 2 # x", Comment(rawValue: inconsistent))
+    }
+
+    /// 制表符只有在行首缩进里才展开；标量内容里的字面 tab 必须保留语义。
+    /// 此前逐行路径是整行替换，`key: "a<TAB>b"` 会被悄悄改成两个空格（数据损坏）。
+    @Test func tabsInsideScalarValuesAreNotRewritten() throws {
+        // 逐行路径（带注释）：字面 tab 原样保留。
+        let quoted = try YAMLPrettifier.format(
+            "key: \"a\tb\" # c",
+            options: .init(indent: 2, sortKeys: false)
+        )
+        #expect(quoted.contains("a\tb"), Comment(rawValue: quoted.debugDescription))
+
+        // 序列化路径（无注释）：tab 写成 YAML 的 \t 转义，语义等价而非被抹成空格。
+        let withoutComment = try YAMLPrettifier.format(
+            "key: \"a\tb\"",
+            options: .init(indent: 2, sortKeys: false)
+        )
+        #expect(withoutComment == #"key: "a\tb""#, Comment(rawValue: withoutComment.debugDescription))
+        #expect(!withoutComment.contains("a  b"), Comment(rawValue: withoutComment.debugDescription))
+
+        // 行首缩进里的 tab 仍然要展开。
+        let indented = YAMLPrettifier.format("key: 1\n\tnested: 2 # c")
+        #expect(!indented.contains("\t"), Comment(rawValue: indented.debugDescription))
+    }
+
+    /// `#` 只在行首或前面是空白、且不在引号标量内时才开启注释。
+    /// `url: http://x#y` 这类值不该把格式化整体降级到逐行路径。
+    @Test func hashesInsideScalarValuesDoNotDegradeFormatting() throws {
+        let url = try YAMLPrettifier.format(
+            "url: http://x#y\nnested:\n    child: 1",
+            options: .init(indent: 2, sortKeys: false)
+        )
+        // 若被误判成注释就会走逐行路径、保留 4 空格。
+        #expect(url == "url: http://x#y\nnested:\n  child: 1", Comment(rawValue: url))
+
+        let quotedHash = try YAMLPrettifier.format(
+            "key: \"a#b\"\nnested:\n    child: 1",
+            options: .init(indent: 2, sortKeys: false)
+        )
+        #expect(quotedHash.contains("nested:\n  child: 1"), Comment(rawValue: quotedHash))
+        #expect(quotedHash.contains("\"a#b\""), Comment(rawValue: quotedHash))
+    }
 }
