@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import XToolsCore
 
 enum IndexTextConversionOutputPresentation: Equatable, Sendable {
     case standard
@@ -88,6 +89,7 @@ struct IndexTextConversionWorkbench: View {
     let output: String
     var inputError: String? = nil
     var inputWarning: String? = nil
+    var inputDiagnostic: FormatDiagnostic? = nil
     var outputLineNumbers = false
     var outputColorize: ((String) -> AttributedString)? = nil
     var outputProcessingText: String? = nil
@@ -130,9 +132,29 @@ struct IndexTextConversionWorkbench: View {
         visibleInputError == nil && visibleInputWarning != nil ? .warning : .error
     }
 
+    private var hasDiagnostic: Bool {
+        inputDiagnosticText != nil
+    }
+
     var body: some View {
-        workbenchBody
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        VStack(spacing: 8) {
+            if let diagnosticText = inputDiagnosticText {
+                IndexDiagnosticBanner(
+                    diagnostic: inputDiagnostic,
+                    message: diagnosticText,
+                    tone: inputDiagnosticTone
+                )
+                .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .opacity.combined(with: .move(edge: .top))
+                ))
+            }
+
+            workbenchBody
+        }
+        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: hasDiagnostic)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var workbenchBody: some View {
@@ -163,11 +185,11 @@ struct IndexTextConversionWorkbench: View {
                 inputRenderingMode: inputRenderingMode,
                 workspaceSemantic: workspaceSemantic
             )
-            .indexWorkspaceDiagnostic(inputDiagnosticText, tone: inputDiagnosticTone)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } accessory: {
             inputHeaderAccessory
         }
+        .withoutDiagnosticStatusSlot()
         .terminal("STDIN")
         .verticallyFilling()
     }
@@ -179,6 +201,7 @@ struct IndexTextConversionWorkbench: View {
         } accessory: {
             outputHeaderActions
         }
+        .withoutDiagnosticStatusSlot()
         .terminal("STDOUT")
         .verticallyFilling()
     }

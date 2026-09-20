@@ -42,11 +42,18 @@ public struct FormatBinding: Equatable, Sendable {
     public var output: String
     public var error: String?
     public var warning: String?
+    public var diagnostic: FormatDiagnostic?
 
-    public init(output: String = "", error: String? = nil, warning: String? = nil) {
+    public init(
+        output: String = "",
+        error: String? = nil,
+        warning: String? = nil,
+        diagnostic: FormatDiagnostic? = nil
+    ) {
         self.output = output
         self.error = error
         self.warning = warning
+        self.diagnostic = diagnostic
     }
 }
 
@@ -59,11 +66,11 @@ public extension FormatOutcome {
     ) -> FormatBinding {
         switch self {
         case .empty:
-            return FormatBinding(output: "", error: nil, warning: nil)
+            return FormatBinding(output: "", error: nil, warning: nil, diagnostic: nil)
         case .produced(let value):
-            return FormatBinding(output: text(value), error: nil, warning: warning(value))
+            return FormatBinding(output: text(value), error: nil, warning: warning(value), diagnostic: nil)
         case .failed(let diagnostic):
-            return FormatBinding(output: "", error: diagnostic.workspaceMessage, warning: nil)
+            return FormatBinding(output: "", error: diagnostic.workspaceMessage, warning: nil, diagnostic: diagnostic)
         }
     }
 }

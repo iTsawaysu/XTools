@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import XToolsCore
 
 /// Prototype v3 (Clay 收敛 + 轻量过渡) structured formatter workbench.
 ///
@@ -19,6 +20,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     var inputPlaceholder = ""
     var diagnostic: String? = nil
     var diagnosticTone: ToolFeedbackTone = .error
+    var diagnosticDetail: FormatDiagnostic? = nil
     /// Bump per format attempt so a repeated identical error re-shakes.
     var formatAttempt = 0
     var outputLineNumbers = true
@@ -54,6 +56,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         inputPlaceholder: String = "",
         diagnostic: String? = nil,
         diagnosticTone: ToolFeedbackTone = .error,
+        diagnosticDetail: FormatDiagnostic? = nil,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
         outputSyntax: IndexSyntaxKind? = nil,
@@ -81,6 +84,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             inputPlaceholder: inputPlaceholder,
             diagnostic: diagnostic,
             diagnosticTone: diagnosticTone,
+            diagnosticDetail: diagnosticDetail,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
             outputSyntax: outputSyntax,
@@ -111,6 +115,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         inputPlaceholder: String = "",
         diagnostic: String? = nil,
         diagnosticTone: ToolFeedbackTone = .error,
+        diagnosticDetail: FormatDiagnostic? = nil,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
         outputSyntax: IndexSyntaxKind? = nil,
@@ -139,6 +144,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             inputPlaceholder: inputPlaceholder,
             diagnostic: diagnostic,
             diagnosticTone: diagnosticTone,
+            diagnosticDetail: diagnosticDetail,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
             outputSyntax: outputSyntax,
@@ -169,6 +175,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         inputPlaceholder: String,
         diagnostic: String?,
         diagnosticTone: ToolFeedbackTone,
+        diagnosticDetail: FormatDiagnostic?,
         formatAttempt: Int,
         outputLineNumbers: Bool,
         outputSyntax: IndexSyntaxKind?,
@@ -196,6 +203,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         self.inputPlaceholder = inputPlaceholder
         self.diagnostic = diagnostic
         self.diagnosticTone = diagnosticTone
+        self.diagnosticDetail = diagnosticDetail
         self.formatAttempt = formatAttempt
         self.outputLineNumbers = outputLineNumbers
         self.outputSyntax = outputSyntax
@@ -221,6 +229,10 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         !isRunning && isOutputFresh && diagnostic != nil && diagnosticTone == .error
     }
 
+    private var hasDiagnostic: Bool {
+        !isRunning && isOutputFresh && diagnostic != nil
+    }
+
     private var hasStaleResult: Bool {
         !isOutputFresh && (!output.isEmpty || diagnostic != nil)
     }
@@ -233,13 +245,20 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         actionTitle == "转换" ? "输入已更改，请重新转换。" : "输入已更改，请重新格式化。"
     }
 
-    /// Maximum width of the inline toolbar diagnostic; it compresses before
-    /// the fixed action buttons when the output half runs out of room.
-    private var diagnosticSlotWidth: CGFloat { 260 }
-
     var body: some View {
         VStack(spacing: 0) {
             toolbar
+            if hasDiagnostic {
+                IndexDiagnosticBanner(
+                    diagnostic: diagnosticDetail,
+                    message: diagnostic!,
+                    tone: diagnosticTone
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .opacity.combined(with: .move(edge: .top))
+                ))
+            }
             HStack(spacing: ToolMetrics.Spacing.sm) {
                 inputPane
                 outputPane
@@ -248,6 +267,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             .padding(.bottom, ToolMetrics.Spacing.md)
             .padding(.top, ToolMetrics.Spacing.sm)
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: hasDiagnostic)
         .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))
         .background(
             ToolTheme.panelBackground,
@@ -265,12 +285,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                 : ToolTheme.Shadow.panel
         )
         .toolAnimation(ToolMotion.Preset.diagnostic, value: showsErrorState)
-        .toolErrorShake(trigger: errorShakeTrigger)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var errorShakeTrigger: String {
-        showsErrorState ? "\(formatAttempt)" : ""
     }
 
     // MARK: Toolbar
@@ -356,12 +371,6 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                 tone: .info,
                 showsSpinner: false
             )
-        } else if let diagnostic {
-            inlineDiagnosticContent(
-                message: diagnostic,
-                tone: diagnosticTone,
-                showsSpinner: false
-            )
         }
     }
 
@@ -384,7 +393,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             }
             .font(ToolTypography.caption)
             .foregroundStyle(tone.tint)
-            .frame(maxWidth: diagnosticSlotWidth, alignment: .leading)
+            .frame(maxWidth: 240, alignment: .leading)
             .layoutPriority(1)
             .help(message)
             .accessibilityElement(children: .combine)
@@ -485,6 +494,7 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
         inputPlaceholder: String = "",
         diagnostic: String? = nil,
         diagnosticTone: ToolFeedbackTone = .error,
+        diagnosticDetail: FormatDiagnostic? = nil,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
         outputSyntax: IndexSyntaxKind? = nil,
@@ -511,6 +521,7 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
             inputPlaceholder: inputPlaceholder,
             diagnostic: diagnostic,
             diagnosticTone: diagnosticTone,
+            diagnosticDetail: diagnosticDetail,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
             outputSyntax: outputSyntax,
@@ -541,6 +552,7 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
         inputPlaceholder: String = "",
         diagnostic: String? = nil,
         diagnosticTone: ToolFeedbackTone = .error,
+        diagnosticDetail: FormatDiagnostic? = nil,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
         outputSyntax: IndexSyntaxKind? = nil,
@@ -568,6 +580,7 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
             inputPlaceholder: inputPlaceholder,
             diagnostic: diagnostic,
             diagnosticTone: diagnosticTone,
+            diagnosticDetail: diagnosticDetail,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
             outputSyntax: outputSyntax,

@@ -21,6 +21,10 @@ final class IndexFormatExecutionSession: ObservableObject {
         hasResult && !isOutputFresh
     }
 
+    var diagnostic: FormatDiagnostic? {
+        binding.diagnostic
+    }
+
     init(binding: FormatBinding = FormatBinding()) {
         self.binding = binding
         self.isOutputFresh = true
@@ -70,6 +74,6 @@ final class IndexFormatExecutionSession: ObservableObject {
     }
 
     private static func hasResult(_ binding: FormatBinding) -> Bool {
-        !binding.output.isEmpty || binding.error != nil || binding.warning != nil
+        !binding.output.isEmpty || binding.error != nil || binding.warning != nil || binding.diagnostic != nil
     }
 }

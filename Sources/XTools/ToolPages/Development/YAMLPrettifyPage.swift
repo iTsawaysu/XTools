@@ -65,6 +65,7 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
                 inputPlaceholder: "key:   value\nlist:\n   - a\n   - b",
                 diagnostic: execution.binding.error ?? execution.binding.warning,
                 diagnosticTone: execution.binding.error == nil ? .warning : .error,
+                diagnosticDetail: execution.diagnostic,
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
                 outputSyntax: .yaml,

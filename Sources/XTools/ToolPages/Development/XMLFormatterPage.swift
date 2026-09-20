@@ -81,6 +81,7 @@ private struct IndexXMLFormatWorkspaceContent: View {
                 inputPlaceholder: #"<root><item id="1">a</item></root>"#,
                 diagnostic: execution.binding.error ?? execution.binding.warning,
                 diagnosticTone: execution.binding.error == nil ? .warning : .error,
+                diagnosticDetail: execution.diagnostic,
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
                 outputSyntax: .xml,

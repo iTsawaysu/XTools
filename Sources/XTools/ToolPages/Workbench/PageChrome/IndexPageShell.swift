@@ -419,13 +419,6 @@ struct IndexPanel<Content: View, Accessory: View>: View {
                 }
                 panelTitle
                 Spacer(minLength: 8)
-                // Keep the trailing diagnostic slot stable for every panel
-                // that can publish a workspace diagnostic. The payload is
-                // optional inside the slot, so nil → error/success never
-                // moves the title or accessory cluster horizontally.
-                if reservesDiagnosticStatusSlot {
-                    IndexPanelWorkspaceDiagnostic(payload: workspaceDiagnostic)
-                }
                 accessory
                     .layoutPriority(2)
             }
@@ -433,6 +426,18 @@ struct IndexPanel<Content: View, Accessory: View>: View {
             .padding(.horizontal, IndexPanelMetrics.headerHorizontalPadding)
             .overlay(alignment: .bottom) {
                 Rectangle().fill(ToolTheme.border).frame(height: 0.5)
+            }
+
+            if reservesDiagnosticStatusSlot, let diagnostic = workspaceDiagnostic {
+                IndexDiagnosticBanner(
+                    diagnostic: nil,
+                    message: diagnostic.text,
+                    tone: diagnostic.tone
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .opacity.combined(with: .move(edge: .top))
+                ))
             }
 
             content
@@ -444,7 +449,9 @@ struct IndexPanel<Content: View, Accessory: View>: View {
                 ))
                 .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: workspaceDiagnostic != nil)
         .frame(maxHeight: fillsHeight ? .infinity : nil, alignment: .top)
+        .clipShape(RoundedRectangle(cornerRadius: IndexPanelMetrics.cornerRadius, style: .continuous))
         .background(
             ToolTheme.panelBackground,
             in: RoundedRectangle(cornerRadius: IndexPanelMetrics.cornerRadius, style: .continuous)

@@ -82,6 +82,7 @@ private struct IndexDockerWorkspaceContent: View {
                 inputPlaceholder: inputPlaceholder,
                 diagnostic: execution.binding.error ?? execution.binding.warning,
                 diagnosticTone: execution.binding.error == nil ? .warning : .error,
+                diagnosticDetail: execution.diagnostic,
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
                 outputSyntax: workspace.direction == .runToCompose ? .yaml : nil,
@@ -165,17 +166,52 @@ private struct IndexDockerWorkspaceContent: View {
     nonisolated private static func runToComposeBinding(_ input: String) -> FormatBinding {
         do {
             let result = try DockerRunToDockerComposeService.convert(input)
+            let warningText = DockerRunToDockerComposeDiagnostics.warningMessage(for: result.warnings)
+            let errorText = result.yaml.isEmpty
+                ? DockerRunToDockerComposeDiagnostics.emptyOutputMessage
+                : nil
+            let diagnostic: FormatDiagnostic?
+            if let errorText {
+                diagnostic = FormatDiagnostic(
+                    formatName: "Docker 转换",
+                    message: errorText,
+                    suggestion: "请检查命令是否包含有效的容器参数和镜像名称。"
+                )
+            } else if let warningText {
+                let unmapped = result.warnings.map { $0.option }.filter { !$0.isEmpty }.joined(separator: ", ")
+                let detailSuggestion = unmapped.isEmpty
+                    ? "部分命令行参数在 Docker Compose 中没有直接对应的单一指令，已被忽略；建议在生成的 Compose 文件中手动完善相应配置。"
+                    : "未支持或未映射的选项（\(unmapped)）已被忽略；建议在生成的 Compose 文件中手动配置对应字段，或检查参数拼写。"
+                diagnostic = FormatDiagnostic(
+                    formatName: "Docker 转换",
+                    message: warningText,
+                    suggestion: detailSuggestion
+                )
+            } else {
+                diagnostic = nil
+            }
             return FormatBinding(
                 output: result.yaml,
-                error: result.yaml.isEmpty
-                    ? DockerRunToDockerComposeDiagnostics.emptyOutputMessage
-                    : nil,
-                warning: DockerRunToDockerComposeDiagnostics.warningMessage(for: result.warnings)
+                error: errorText,
+                warning: warningText,
+                diagnostic: diagnostic
             )
         } catch let error as DockerRunToDockerComposeError {
-            return FormatBinding(error: error.errorDescription ?? "无法转换 docker run 命令。")
+            let msg = error.errorDescription ?? "无法转换 docker run 命令。"
+            let diagnostic = FormatDiagnostic(
+                formatName: "Docker 转换",
+                message: msg,
+                suggestion: "请确认输入的命令以 docker run 开头，且镜像名与参数格式正确。"
+            )
+            return FormatBinding(error: msg, diagnostic: diagnostic)
         } catch {
-            return FormatBinding(error: DockerRunToDockerComposeDiagnostics.fallbackErrorMessage)
+            let msg = DockerRunToDockerComposeDiagnostics.fallbackErrorMessage
+            let diagnostic = FormatDiagnostic(
+                formatName: "Docker 转换",
+                message: msg,
+                suggestion: "请检查输入的命令格式，必须以 docker run 开头并指定镜像。"
+            )
+            return FormatBinding(error: msg, diagnostic: diagnostic)
         }
     }
 
@@ -185,15 +221,39 @@ private struct IndexDockerWorkspaceContent: View {
             let body = result.commands
                 .map { "# 服务命令\n\($0)" }
                 .joined(separator: "\n\n")
+            let warningText = DockerComposeToRunDiagnostics.warningMessage(for: result.warnings)
+            let diagnostic: FormatDiagnostic?
+            if let warningText {
+                diagnostic = FormatDiagnostic(
+                    formatName: "Compose 转换",
+                    message: warningText,
+                    suggestion: "部分 Compose 声明在单一 docker run 中无法直接表达，请在命令生成后检查网络与存储卷配置。"
+                )
+            } else {
+                diagnostic = nil
+            }
             return FormatBinding(
                 output: body,
                 error: nil,
-                warning: DockerComposeToRunDiagnostics.warningMessage(for: result.warnings)
+                warning: warningText,
+                diagnostic: diagnostic
             )
         } catch let error as DockerComposeToRunError {
-            return FormatBinding(error: DockerComposeToRunDiagnostics.message(for: error))
+            let msg = DockerComposeToRunDiagnostics.message(for: error)
+            let diagnostic = FormatDiagnostic(
+                formatName: "Compose 转换",
+                message: msg,
+                suggestion: "请确认 YAML 包含合法的 version 或 services 服务定义块。"
+            )
+            return FormatBinding(error: msg, diagnostic: diagnostic)
         } catch {
-            return FormatBinding(error: DockerComposeToRunDiagnostics.message(for: .invalidYAML))
+            let msg = "docker-compose YAML 格式无效。"
+            let diagnostic = FormatDiagnostic(
+                formatName: "Compose 转换",
+                message: msg,
+                suggestion: "请确认输入符合标准 Docker Compose YAML 语法规范。"
+            )
+            return FormatBinding(error: msg, diagnostic: diagnostic)
         }
     }
 }

@@ -638,13 +638,6 @@ struct IndexDiagnosticStatusButton: View {
     let payload: IndexWorkspaceDiagnosticPayload
     @State private var showsPopover = false
 
-    /// v3: error-tone arrivals shake the status slot exactly once through the
-    /// shared bounded shake; non-error tones keep the slot calm, and repeated
-    /// identical errors do not retrigger.
-    private var errorShakeTrigger: String? {
-        payload.tone == .error ? payload.text : nil
-    }
-
     var body: some View {
         Button {
             showsPopover.toggle()
@@ -661,7 +654,6 @@ struct IndexDiagnosticStatusButton: View {
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
         }
         .buttonStyle(.plain)
-        .toolErrorShake(trigger: errorShakeTrigger)
         .help(payload.text)
         .accessibilityLabel("\(payload.tone.accessibilityPrefix)：\(payload.text)")
         .popover(isPresented: $showsPopover, arrowEdge: .bottom) {

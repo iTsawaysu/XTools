@@ -89,6 +89,7 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
                 inputPlaceholder: "with active_users as (select id,name from users where deleted_at is null) select * from active_users order by name",
                 diagnostic: execution.binding.error ?? execution.binding.warning,
                 diagnosticTone: execution.binding.error == nil ? .warning : .error,
+                diagnosticDetail: execution.diagnostic,
                 formatAttempt: formatAttempt,
                 // SQL output is line-oriented; keep the gutter aligned with syntax colors.
                 outputLineNumbers: true,

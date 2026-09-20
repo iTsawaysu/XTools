@@ -138,6 +138,7 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                 inputPlaceholder: #"{"name":"XTools","tags":["dev","macos"]}"#,
                 diagnostic: execution.binding.error ?? execution.binding.warning,
                 diagnosticTone: execution.binding.error == nil ? .warning : .error,
+                diagnosticDetail: execution.diagnostic,
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
                 outputSyntax: .json,

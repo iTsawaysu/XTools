@@ -172,9 +172,24 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
         diagnosticText != nil && diagnosticTone == .error
     }
 
+    private var hasDiagnostic: Bool {
+        diagnosticText != nil && (diagnosticTone == .error || diagnosticTone == .warning)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             toolbar
+            if hasDiagnostic {
+                IndexDiagnosticBanner(
+                    diagnostic: nil,
+                    message: diagnosticText!,
+                    tone: diagnosticTone
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .top).combined(with: .opacity),
+                    removal: .opacity.combined(with: .move(edge: .top))
+                ))
+            }
             IndexEditableDiffMergeView(
                 left: $left,
                 right: $right,
@@ -206,6 +221,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
             .padding(.top, ToolMetrics.Spacing.sm)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: hasDiagnostic)
         .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))
         .background(
             ToolTheme.panelBackground,
@@ -317,7 +333,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
 
     @ViewBuilder
     private var inlineDiagnostic: some View {
-        if let diagnosticText {
+        if let diagnosticText, !hasDiagnostic {
             HStack(spacing: 4) {
                 Image(systemName: diagnosticTone.systemImage)
                     .font(.system(size: ToolMetrics.IconSize.small, weight: .semibold))
