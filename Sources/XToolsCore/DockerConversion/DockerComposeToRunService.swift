@@ -979,15 +979,28 @@ public enum DockerComposeToRunService {
 
     // MARK: - Shell tokenization
 
-    private static let shellUnsafeCharacters = CharacterSet(
-        charactersIn: " \t\"'\\$`&|;<>(){}*?[]#~"
-    )
+    /// 可以安全裸写进 shell 的字符：字母、数字，以及不会触发分词、通配、重定向或
+    /// 变量展开的标点。
+    ///
+    /// 这里必须用白名单而不是黑名单。早先的实现用「不安全字符集合」，漏掉了换行，
+    /// 于是含换行的环境变量值既不进引号也不做任何处理，生成的命令粘贴到终端后会
+    /// 被换行切成两条命令（`-e K=a\nwhoami` → 执行完 `-e K=a` 再执行 `whoami`）。
+    ///
+    /// 注意不能用 `CharacterSet(charactersIn:)` 直接写含 `-` 的字面量：该初始化器
+    /// 会把 `-` 当作范围分隔符，必须用 `insert` 显式加入连字符。
+    private static let shellSafeCharacters: CharacterSet = {
+        var set = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+        set.formUnion(CharacterSet(charactersIn: "._/:=@%+,"))
+        set.insert("-")
+        return set
+    }()
 
     private static func shellToken(_ raw: String) -> String {
-        guard raw.rangeOfCharacter(from: shellUnsafeCharacters) != nil || raw.isEmpty else {
-            return raw
+        guard !raw.isEmpty,
+              raw.unicodeScalars.allSatisfy({ shellSafeCharacters.contains($0) }) else {
+            let escaped = raw.replacingOccurrences(of: "'", with: "'\\''")
+            return "'\(escaped)'"
         }
-        let escaped = raw.replacingOccurrences(of: "'", with: "'\\''")
-        return "'\(escaped)'"
+        return raw
     }
 }

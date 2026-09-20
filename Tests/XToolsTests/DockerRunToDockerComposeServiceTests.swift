@@ -383,4 +383,77 @@ struct DockerRunToDockerComposeServiceTests {
         #expect(result.yaml.contains("weight: 300"))
         #expect(!result.yaml.contains("weight: \"300\""))
     }
+
+    // MARK: - YAML scalar quoting
+
+    /// 以 YAML 节点指示符开头的参数值必须加引号：`*` 会被读成别名、`&` 锚点、
+    /// `!` 标签、`|`/`>` 块标量、`%`/`@` 保留指示符。早先只检查「是否包含」常见
+    /// 标点，于是 `echo '*'` 生成 `- *`（空别名），整份 Compose 直接解析失败。
+    @Test func argumentsStartingWithYAMLIndicatorsStayParseable() throws {
+        let commands = [
+            "docker run alpine echo '*'",
+            "docker run alpine echo '%pct'",
+            "docker run alpine echo '@at'",
+            "docker run alpine echo '|pipe'",
+            "docker run alpine echo '>gt'",
+            "docker run alpine echo '&anchor'",
+            "docker run alpine echo '!tag'",
+            "docker run alpine echo ',comma'",
+            "docker run alpine echo '#hash'",
+            "docker run alpine echo '`tick'",
+            "docker run alpine echo '-'",
+            "docker run alpine echo '?'",
+            "docker run alpine echo ':'",
+            "docker run alpine echo 'plain'",
+            "docker run alpine echo '-dash'",
+            "docker run alpine echo '?q'"
+        ]
+
+        for command in commands {
+            let generated = try DockerRunToDockerComposeService.convert(command)
+            // 生成物必须能被 Compose 解析器吃回去，否则用户拿到的是坏 YAML。
+            let reparsed = try DockerComposeToRunService.convert(generated.yaml)
+            let rerun = try #require(
+                reparsed.commands.first,
+                Comment(rawValue: "生成物无法回灌：\n\(generated.yaml)")
+            )
+            #expect(
+                rerun.contains("--entrypoint") || rerun.contains(" echo ") || rerun.contains("-c "),
+                Comment(rawValue: "「\(command)」的参数在回灌后丢失：\(rerun)")
+            )
+        }
+    }
+
+    /// `-m` / `-c` 是 `--memory` / `--cpu-shares` 的短写，此前被当成未知标志静默丢弃。
+    @Test func shortResourceFlagsAreMappedInsteadOfDropped() throws {
+        let memory = try DockerRunToDockerComposeService.convert("docker run -m 512m nginx")
+        #expect(memory.yaml.contains("memory: 512m"), Comment(rawValue: memory.yaml))
+        #expect(memory.unknownFlags.isEmpty, Comment(rawValue: "\(memory.unknownFlags)"))
+
+        let shares = try DockerRunToDockerComposeService.convert("docker run -c 2 nginx")
+        #expect(shares.yaml.contains("cpu_shares: \"2\""), Comment(rawValue: shares.yaml))
+        #expect(shares.unknownFlags.isEmpty, Comment(rawValue: "\(shares.unknownFlags)"))
+
+        // 同样支持短写紧贴取值：`-m512m` / `-c2`
+        let tight = try DockerRunToDockerComposeService.convert("docker run -m512m -c2 nginx")
+        #expect(tight.yaml.contains("memory: 512m"), Comment(rawValue: tight.yaml))
+        #expect(tight.yaml.contains("cpu_shares: \"2\""), Comment(rawValue: tight.yaml))
+    }
+
+    /// Compose→Run 方向生成的正是 `-m`，两个方向必须对称，否则往返还原会丢字段。
+    @Test func resourceLimitRoundTripReachesAFixedPoint() throws {
+        let command = "docker run -d --cpus 1.5 -m 512m nginx"
+        let first = try DockerRunToDockerComposeService.convert(command)
+        // 第一轮就必须完整保留两项限制，否则「固定点」只是丢字段后的假稳定。
+        #expect(first.yaml.contains("cpus: \"1.5\""), Comment(rawValue: first.yaml))
+        #expect(first.yaml.contains("memory: 512m"), Comment(rawValue: first.yaml))
+
+        let back = try DockerComposeToRunService.convert(first.yaml)
+        let rerun = try #require(back.commands.first)
+        #expect(rerun.contains("-m 512m"), Comment(rawValue: rerun))
+        #expect(rerun.contains("--cpus 1.5"), Comment(rawValue: rerun))
+
+        let second = try DockerRunToDockerComposeService.convert(rerun)
+        #expect(second.yaml == first.yaml, Comment(rawValue: "第一轮:\(first.yaml)\n第二轮:\(second.yaml)"))
+    }
 }

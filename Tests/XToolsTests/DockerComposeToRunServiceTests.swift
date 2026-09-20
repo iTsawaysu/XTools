@@ -974,4 +974,76 @@ struct DockerComposeToRunWarningTests {
         #expect(DockerComposeToRunDiagnostics.warningMessage(for: ["单独一条"]) == "单独一条")
         #expect(DockerComposeToRunDiagnostics.warningMessage(for: []) == nil)
     }
+
+    // MARK: - Shell quoting safety
+
+    /// 生成命令里的每个值都必须能在 shell 引号语义下原样取回。
+    /// 早先的转义用「不安全字符黑名单」，漏掉了换行，含换行的环境变量值既不加引号
+    /// 也不做处理，粘贴执行时会被换行切成两条命令（`-e K=a` 之后又执行 `whoami`）。
+    ///
+    /// 未覆盖 `\r\n` 相邻出现：YAML 依赖会把双引号标量里转义出的 CRLF 当成换行
+    /// 折成空格，属于依赖层行为，与本工具的引用逻辑无关（单独 CR / 单独 LF 均原样保留）。
+    @Test func generatedCommandsTokenizeBackToTheirOriginalValues() throws {
+        let values = [
+            "K=plain",
+            "K=a b",
+            "K=a\nwhoami",
+            "K=a\rwhoami",
+            "K=a\tb",
+            "K=$(whoami)",
+            "K=`whoami`",
+            "K=a;whoami",
+            "K=a&&whoami",
+            "K=a|whoami",
+            "K=a>b",
+            "K=a<b",
+            "K=a(b)",
+            "K=a{b}",
+            "K=a[b]",
+            "K=*",
+            "K=?",
+            "K=~root",
+            "K=a#b",
+            "K=a%b",
+            "K=a&b",
+            "K=a!b",
+            "K=it's",
+            "K=\"quoted\"",
+            "K=a'b",
+            "K=a\\b"
+        ]
+
+        for value in values {
+            let yaml = """
+            services:
+              a:
+                image: alpine
+                environment:
+                  - \(Self.yamlDoubleQuoted(value))
+            """
+            let result = try DockerComposeToRunService.convert(yaml)
+            let command = try #require(result.commands.first, Comment(rawValue: "missing command for \(value.debugDescription)"))
+            let semantics = try DockerInvocationSemantics(command)
+            #expect(
+                semantics.environment == [value],
+                Comment(rawValue: "值 \(value.debugDescription) 未能从「\(command)」原样取回")
+            )
+        }
+    }
+
+    /// 双引号 YAML 标量：把控制字符写成转义，避免测试自身构造出无效 YAML。
+    static func yamlDoubleQuoted(_ value: String) -> String {
+        var out = ""
+        for character in value {
+            switch character {
+            case "\\": out += "\\\\"
+            case "\"": out += "\\\""
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            case "\t": out += "\\t"
+            default: out.append(character)
+            }
+        }
+        return "\"\(out)\""
+    }
 }

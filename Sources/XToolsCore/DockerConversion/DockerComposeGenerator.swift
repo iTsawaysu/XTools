@@ -355,6 +355,18 @@ extension DockerRunToDockerComposeService {
             return "\"\(escaped)\""
         }
 
+        // YAML 的节点指示符出现在标量开头时会被解析成结构，而不是文本：
+        // `*` 变成别名引用、`&` 变成锚点、`!` 变成标签、`|`/`>` 变成块标量、
+        // `%`/`@`/`` ` `` 是保留指示符。此前只检查了「是否包含」常见标点，
+        // 于是 `echo '*'` 会生成 `- *`（空别名），整份 Compose 直接解析失败。
+        // 另：`-`/`?`/`:` 只有后跟空白或独占整个标量时才算指示符，单独判断以免无谓加引号。
+        if let first = value.first {
+            if yamlNodeIndicators.contains(first) || (value.count == 1 && "-?:".contains(first)) {
+                let escaped = escapeDoubleQuotedYAML(value)
+                return "\"\(escaped)\""
+            }
+        }
+
         let needsQuotes = value.contains(":")
             || value.contains("#")
             || value.contains("{")
@@ -374,6 +386,11 @@ extension DockerRunToDockerComposeService {
         let escaped = escapeDoubleQuotedYAML(value)
         return "\"\(escaped)\""
     }
+
+    /// 出现在标量开头即成为 YAML 节点指示符、必须加引号的字符。
+    private static let yamlNodeIndicators: Set<Character> = [
+        ",", "[", "]", "{", "}", "#", "&", "*", "!", "|", ">", "%", "@", "`"
+    ]
 
     /// Compose schema fields that are numerically typed must remain YAML
     /// numbers. The general scalar helper intentionally quotes numeric-looking

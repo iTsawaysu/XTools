@@ -73,13 +73,18 @@ extension DockerRunToDockerComposeService {
         return value
     }
 
+    /// docker run 的短选项别名。必须与长写保持完整对应，否则短写会被当成未知标志
+    /// 而被静默丢弃（`-m 512m`、`-c 2` 曾经完全不出现在生成的 Compose 里），
+    /// 而 Compose→Run 方向生成的正是 `-m`，造成两个方向不对称、往返丢字段。
     static let shortFlagAliases: [String: String] = [
         "-p": "--publish",
         "-v": "--volume",
         "-e": "--env",
         "-l": "--label",
         "-w": "--workdir",
-        "-u": "--user"
+        "-u": "--user",
+        "-m": "--memory",
+        "-c": "--cpu-shares"
     ]
 
     static let unsupportedValueFlags: Set<String> = [
