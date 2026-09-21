@@ -49,7 +49,7 @@ struct SQLLexer {
                     diagnostic(
                         message: "暂不支持 PostgreSQL dollar-quoted 字符串",
                         offset: startOffset,
-                        suggestion: "请先改用普通单引号字符串，或在 PostgreSQL 客户端/专用 SQL 格式化器中处理；本工具不会拆开 $$...$$ 或 $tag$...$tag$ 后伪成功。"
+                        suggestion: "改用普通单引号字符串后再格式化；本工具暂不解析 $$...$$ 或 $tag$...$tag$ 形式的字符串。"
                     )
                 )
             } else if startsPositionalParameter() {

@@ -88,7 +88,7 @@ public enum XMLFormatting {
                 FormatDiagnostic(
                     formatName: "XML",
                     message: xmlMessage(from: error),
-                    suggestion: "检查标签是否成对闭合、属性值是否使用引号。"
+                    suggestion: xmlSuggestion(from: error)
                 )
             )
         }
@@ -127,7 +127,8 @@ public enum XMLFormatting {
 
         let line = max(1, parser.lineNumber)
         let column = max(1, parser.columnNumber)
-        let message = xmlMessage(from: delegate.error ?? parser.parserError)
+        let sourceError = delegate.error ?? parser.parserError
+        let message = xmlMessage(from: sourceError)
 
         return FormatDiagnostic(
             formatName: "XML",
@@ -135,7 +136,7 @@ public enum XMLFormatting {
             input: input,
             line: line,
             column: column,
-            suggestion: "检查标签是否成对闭合、是否只有一个根节点、属性名是否重复，以及属性值是否使用引号。"
+            suggestion: xmlSuggestion(from: sourceError)
         )
     }
 
@@ -143,8 +144,10 @@ public enum XMLFormatting {
     /// 码值取自 `XMLParserDelegate` 上报的 NSError（`parser.parserError` 只给出
     /// 笼统的 5/111，必须优先取 delegate 的细粒度错误）。下表经语料实测确认：
     /// 4=文档为空、5=文档结束异常、26=未定义实体、38=属性值未闭合、
-    /// 39=属性值缺引号、42=属性名重复、45=注释未闭合、68=名称非法（该码同时
-    /// 覆盖未转义的 & 与非法标签名，故文案必须同时说明两者）、76=标签不匹配。
+    /// 39=属性值缺引号、42=属性名重复、45=注释未闭合、47=处理指令未闭合、
+    /// 68=名称非法（该码同时覆盖未转义的 & 与非法标签名，故文案必须同时说明两者）、
+    /// 76=标签不匹配。码 1 实测出现于未闭合的 `<!` 声明，但它同时是
+    /// NSXMLParser 的通用内部错误码，映射会过拟合，保持兜底。
     private static func xmlMessage(from error: Error?) -> String {
         guard let error else { return "XML 语法错误" }
 
@@ -168,12 +171,52 @@ public enum XMLFormatting {
             return "同一个标签上有重复属性名"
         case 45:
             return "注释没有闭合"
+        case 47:
+            return "处理指令没有闭合"
         case 68:
             return "文本中的 & 没有正确转义，或标签名与属性名无效"
         case 76:
             return "开始标签和结束标签不匹配"
         default:
             return "XML 语法错误"
+        }
+    }
+
+    /// 与 `xmlMessage` 同源的修复建议：按错误码给出针对性引导，而不是
+    /// 让所有错误共享一条「检查一切」的万金油。码值语义见 `xmlMessage` 注释。
+    private static func xmlSuggestion(from error: Error?) -> String {
+        guard let error else {
+            return "检查标签是否成对闭合、属性值是否使用引号。"
+        }
+
+        let nsError = error as NSError
+        guard nsError.domain == "NSXMLParserErrorDomain" else {
+            return "检查标签是否成对闭合、属性值是否使用引号。"
+        }
+
+        switch nsError.code {
+        case 4:
+            return "XML 输入需要至少包含一个标签。"
+        case 5:
+            return "补全未闭合的标签，或删除第一个根节点之后的多余内容。"
+        case 26, 111:
+            return "把 & 写成 &amp;，或使用 &lt;、&gt;、&quot;、&apos; 等预定义实体。"
+        case 38:
+            return "为属性值补上成对的引号。"
+        case 39:
+            return "把属性值放在双引号或单引号中。"
+        case 42:
+            return "删除标签上重复的属性，一个属性名只保留一份。"
+        case 45:
+            return "补上注释结尾的 -->，或删除未完成的注释。"
+        case 47:
+            return "补上处理指令结尾的 ?>。"
+        case 68:
+            return "把 & 转义为 &amp;，并修正标签名与属性名的写法。"
+        case 76:
+            return "修正开始标签与结束标签，使标签名成对一致。"
+        default:
+            return "检查标签是否成对闭合、是否只有一个根节点、属性名是否重复，以及属性值是否使用引号。"
         }
     }
 

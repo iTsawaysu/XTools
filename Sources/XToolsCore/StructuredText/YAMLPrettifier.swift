@@ -30,6 +30,14 @@ public enum YAMLPrettifier {
         }
     }
 
+    /// 供其他 YAML 消费方（如 Docker Compose 转换）复用的 Yams 错误翻译：
+    /// 把底层 problem/mark 转成带行列与建议的 `FormatDiagnostic`。
+    /// 非 Yams 错误返回 nil，由调用方决定兜底文案。
+    public static func parsingDiagnostic(from error: Error, input: String) -> FormatDiagnostic? {
+        guard let yamlError = error as? YamlError else { return nil }
+        return diagnostic(from: yamlError, input: input)
+    }
+
     public static func validate(_ input: String) throws {
         guard !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
@@ -761,8 +769,12 @@ public enum YAMLPrettifier {
             if isLikelyMissingMappingColon(around: mark, in: yaml) {
                 return "键后缺少冒号"
             }
+            if hasDeeperIndentWithoutContainer(around: mark, in: yaml) {
+                return "缩进层级不合法：这一行比上方的键值行更深，但没有可嵌套的容器"
+            }
             return "冒号出现在不允许的位置"
-        case "found a tab character where an indentation space is expected":
+        case "found a tab character where an indentation space is expected",
+             "found a tab character that violates indentation":
             return "缩进必须使用空格，不能使用制表符"
         case "found character that cannot start any token":
             if yamlScalar(at: mark, in: yaml) == "\t" {
@@ -830,6 +842,8 @@ public enum YAMLPrettifier {
         switch message {
         case "缩进层级不一致", "缩进必须使用空格，不能使用制表符":
             return "同一层级的键使用相同数量的空格缩进，并删除行首的制表符。"
+        case "缩进层级不合法：这一行比上方的键值行更深，但没有可嵌套的容器":
+            return "把这一行回退到与同层级键相同的缩进；若确实要嵌套，上一行只保留键和冒号，值另起一行书写。"
         case "键后缺少冒号":
             return "在键名后补上冒号与一个空格，例如 `key: value`。"
         case "流程列表缺少逗号或右方括号":
@@ -897,6 +911,39 @@ public enum YAMLPrettifier {
         return currentIndent > 0
             && previousIndent > currentIndent
             && (firstMappingDelimiterIndex(in: currentTrimmed) != nil || currentTrimmed.hasPrefix("- "))
+    }
+
+    /// 「a: 1」之后紧跟缩进更深的「b: 2」时，Yams 报的是直译难懂的
+    /// "mapping values are not allowed in this context"；真实原因是更深缩进
+    /// 没有可挂靠的容器（上一行已带标量值）。这里据缩进几何识别该场景。
+    private static func hasDeeperIndentWithoutContainer(around mark: Mark, in yaml: String) -> Bool {
+        let lines = yaml.components(separatedBy: .newlines)
+        guard lines.indices.contains(mark.line - 1),
+              let previous = previousSignificantLine(before: mark.line, in: lines) else {
+            return false
+        }
+
+        let currentLine = lines[mark.line - 1]
+        let currentIndent = leadingIndentWidth(currentLine)
+        let previousIndent = leadingIndentWidth(previous.text)
+        let currentTrimmed = currentLine.trimmingCharacters(in: .whitespaces)
+        let previousTrimmed = previous.text.trimmingCharacters(in: .whitespaces)
+
+        guard !currentTrimmed.isEmpty, !currentTrimmed.hasPrefix("#"),
+              !previousTrimmed.isEmpty, !previousTrimmed.hasPrefix("#") else {
+            return false
+        }
+
+        // 上一行是「键: 值」形式（分隔符后还有同行的值），当前行缩进更深却不是
+        // 列表项——它既不属于任何子映射也无列表可挂靠。上一行若以冒号或
+        // flow 标点结尾（容器键 / 跨行 flow），更深的缩进是合法嵌套。
+        return currentIndent > previousIndent
+            && firstMappingDelimiterIndex(in: previousTrimmed) != nil
+            && !previousTrimmed.hasSuffix(":")
+            && !previousTrimmed.hasSuffix("[")
+            && !previousTrimmed.hasSuffix("{")
+            && !previousTrimmed.hasSuffix(",")
+            && !currentTrimmed.hasPrefix("- ")
     }
 
     private static func isLikelyMissingMappingColon(around mark: Mark, in yaml: String) -> Bool {
