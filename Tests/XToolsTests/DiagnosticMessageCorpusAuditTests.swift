@@ -174,6 +174,7 @@ struct DiagnosticMessageCorpusAuditTests {
             ("<root attr=\"unclosed></root>", 38),
             ("<root a=1/>", 39),
             ("<root><!-- unterminated comment </root>", 45),
+            ("<root><?pi unterminated</root>", 47),
             ("<root><item>one</items></root>", 76)
         ]
 
@@ -387,18 +388,8 @@ struct DiagnosticMessageCorpusAuditTests {
         }
 
         for input in chmodCorpus {
-            do {
-                _ = try ChmodMode(octal: input)
-            } catch let error as ChmodMode.ParseError {
-                collectMessage(
-                    ledger,
-                    tool: "chmod-calculator",
-                    input: input,
-                    channel: "error",
-                    message: "（ParseError 无 errorDescription：\(error)）"
-                )
-            } catch {
-                collectMessage(ledger, tool: "chmod-calculator", input: input, channel: "error", message: error.localizedDescription)
+            collectThrowing(ledger, tool: "chmod-calculator", input: input) {
+                try ChmodMode(octal: input)
             }
         }
 
@@ -551,8 +542,13 @@ struct DiagnosticMessageCorpusAuditTests {
         }
 
         for input in dockerComposeCorpus {
-            collectThrowing(ledger, tool: "docker-compose→run", input: input) {
-                try DockerComposeToRunService.convert(input)
+            do {
+                _ = try DockerComposeToRunService.convert(input)
+            } catch let error as DockerComposeToRunError {
+                let diagnostic = DockerComposeToRunDiagnostics.diagnostic(for: error)
+                collectDiagnostic(ledger, tool: "docker-compose→run", input: input, channel: "error", diagnostic: diagnostic)
+            } catch {
+                collectMessage(ledger, tool: "docker-compose→run", input: input, channel: "error", message: error.localizedDescription)
             }
         }
     }
@@ -604,7 +600,16 @@ struct DiagnosticMessageCorpusAuditTests {
         #"{"a":"\u0000"}"#,
         #"{"secret":"AKIAIOSFODNN7EXAMPLE","token":"sk-live-9f8e7d6c5b4a3210"}"#,
         String(repeating: "[", count: 40) + String(repeating: "]", count: 40),
-        "{" + (0..<40).map { "\"k\($0)\":" }.joined() + "1" + String(repeating: "}", count: 40)
+        "{" + (0..<40).map { "\"k\($0)\":" }.joined() + "1" + String(repeating: "}", count: 40),
+        #"{"a":1..2}"#,
+        #"[1 2]"#,
+        #""unterminated"#,
+        #"tru"#,
+        #"nul"#,
+        #"{"a":"b\x41"}"#,
+        #"[-]"#,
+        #"{"a"}"#,
+        #"{"a":trailing}"#
     ]
 
     static let jsonDiffCorpus: [(String, String)] = [
@@ -637,6 +642,11 @@ struct DiagnosticMessageCorpusAuditTests {
         #"<root><!-- unterminated comment </root>"#,
         #"<root><![CDATA[unterminated</root>"#,
         #"<root>text</root>trailing"#,
+        #"<root a="1" a="2"/>"#,
+        #"<root><?pi unterminated</root>"#,
+        #"<root><![CDATA[ok]]></root>"#,
+        #"< root/>"#,
+        #"<root></roots >"#,
         "<root>" + String(repeating: "<n>", count: 60) + String(repeating: "</n>", count: 60) + "</root>"
     ]
 
@@ -661,7 +671,12 @@ struct DiagnosticMessageCorpusAuditTests {
         ("a: *undefined_anchor", false),
         ("a: &anchor 1\nb: *anchor", false),
         ("a: !!int notanint", false),
-        ("- name: x\n  ports:\n    - '8080:80'", false)
+        ("- name: x\n  ports:\n    - '8080:80'", false),
+        ("\ta: 1", false),
+        ("a:\n  b: 1\n c: 2", false),
+        ("{a: 1", false),
+        ("a: 1\n\tb: 2", false),
+        ("a: 'unclosed", false)
     ]
 
     static let sqlCorpus: [String] = [
@@ -685,7 +700,12 @@ struct DiagnosticMessageCorpusAuditTests {
         "select * from t where x = 1 and order by 1",
         "insert into",
         "select 1 -- trailing comment",
-        "select 'quote''escaped' from t"
+        "select 'quote''escaped' from t",
+        "select 1; select 2",
+        "select * from t where a = -1",
+        "select $tag$ broken dollar quote",
+        "update t set",
+        "delete from"
     ]
 
     static let integerBaseCorpus: [(String, Int)] = [
@@ -721,7 +741,8 @@ struct DiagnosticMessageCorpusAuditTests {
     static let urlCorpus: [String] = [
         "", "plain", "a%20b", "%", "%2", "%ZZ", "%GG",
         "%E4%B8%AD", "%FF", "%C3%28", "%F0%9F%98%80",
-        "100%", "a%2Bb", "%25"
+        "100%", "a%2Bb", "%25",
+        "%E4%B8", "%E4%B8%AD%E6", "%%", "%-1"
     ]
 
     static let asciiToTextCorpus: [String] = [
@@ -748,7 +769,9 @@ struct DiagnosticMessageCorpusAuditTests {
         "data:;base64,aGVsbG8=",
         "data:image/png;base64,iVBORw0KGgo=",
         "////", "8J+YgA==", "😀",
-        "AKIAIOSFODNN7EXAMPLE"
+        "AKIAIOSFODNN7EXAMPLE",
+        "aG VsbG8=", "YW Jj", "YWJ j", "====", "=AAA",
+        "aGVsbG8==", "aGVsbG8x="
     ]
 
     static let regexCorpus: [(String, String, String)] = [
@@ -778,7 +801,13 @@ struct DiagnosticMessageCorpusAuditTests {
         (#"(?P<name>a)"#, "a", "g"),
         (#"a*"#, "", "g"),
         (#"(?i)abc"#, "ABC", "g"),
-        ("[" + String(repeating: "a", count: 300) + "]", "a", "g")
+        ("[" + String(repeating: "a", count: 300) + "]", "a", "g"),
+        (String(repeating: "a", count: 20_000), "a", "g"),
+        ("a{1000000}", "a", "g"),
+        ("(a", "a", "g"),
+        ("a{2,1}b", "a", "g"),
+        (#"\p{Greek}"#, "α", "g"),
+        (#"(?<name>a)"#, "a", "g")
     ]
 
     static let mathCorpus: [String] = [
@@ -801,7 +830,9 @@ struct DiagnosticMessageCorpusAuditTests {
         "* * * *", "* * * * * *", "60 * * * *", "* 24 * * *",
         "*/0 * * * *", "*/-1 * * * *", "1-5 * * * *", "1-5/2 * * * *",
         "abc * * * *", "* * abc * *", "5-1 * * * *", "1,2,3 * * * *",
-        "0 0 30 2 *", "0 0 31 4 *", "0 0 29 2 *"
+        "0 0 30 2 *", "0 0 31 4 *", "0 0 29 2 *",
+        "60-70 * * * *", "1,2, * * * *", "*/60 * * * *",
+        "* * * * 7", "* * * * MON", "5--7 * * * *", "* * 0 * *"
     ]
 
     static let htmlToMarkdownCorpus: [String] = [
@@ -842,7 +873,11 @@ struct DiagnosticMessageCorpusAuditTests {
         "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.",
         "!!!.!!!.!!!",
         "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig",
-        "eyJhbGciOiJIUzI1NiJ9.eyJleHAiOiJub3QifQ.sig"
+        "eyJhbGciOiJIUzI1NiJ9.eyJleHAiOiJub3QifQ.sig",
+        "eyJhbGciOiJIUzI1NiJ9..sig",
+        ".eyJzdWIiOiIxIn0.sig",
+        "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig.extra",
+        "...."
     ]
 
     static let timestampCorpus: [String] = [
@@ -872,7 +907,8 @@ struct DiagnosticMessageCorpusAuditTests {
         "", "   ", #"{"a":1}"#, #"{"a":1"#, "aGVsbG8=", "hello%20world",
         "plain text", String(repeating: "a", count: 200_000),
         "{" + String(repeating: "{\"a\":", count: 40) + "1" + String(repeating: "}", count: 40),
-        #"{"secret":"AKIAIOSFODNN7EXAMPLE"}"#
+        #"{"secret":"AKIAIOSFODNN7EXAMPLE"}"#,
+        "%ZZ%FF", "%E4%B8"
     ]
 
     static let fileTypeCorpus: [(String, Int64?, Data?)] = [
@@ -909,7 +945,12 @@ struct DiagnosticMessageCorpusAuditTests {
         "docker run -d --memory=512m --cpus=1.5 nginx",
         "docker run --rm -it ubuntu bash",
         "docker run " + String(repeating: "-e A=1 ", count: 500) + "nginx",
-        "docker run --network=host --pid=host nginx"
+        "docker run --network=host --pid=host nginx",
+        "docker run --name=web nginx",
+        "docker exec -it web sh",
+        "docker run -p",
+        "docker  run   nginx",
+        "docker run --entrypoint /bin/sh alpine -c 'echo hi'"
     ]
 
     static let dockerComposeCorpus: [String] = [        "", "   ", "not: yaml: [", "[1,2,3]", "a: 1",
@@ -924,7 +965,11 @@ struct DiagnosticMessageCorpusAuditTests {
         "services:\n  web:\n    image: nginx\n    volumes:\n      - ./a:/b:ro\n      - vol:/data",
         "services:\n  web:\n    image: nginx\n    healthcheck:\n      test: [\"CMD\", \"curl\", \"-f\", \"http://localhost\"]",
         "services:\n  web:\n    image: nginx\n    sysctls:\n      net.core.somaxconn: 1024\n    ulimits:\n      nofile: 65535",
-        "services:\n  a:\n    image: nginx\n  b:\n    image: redis\n    depends_on:\n      - a"
+        "services:\n  a:\n    image: nginx\n  b:\n    image: redis\n    depends_on:\n      - a",
+        "services:\n\tweb:\n\t\timage: nginx",
+        "services: 1",
+        "services:\n  web: image: nginx",
+        "services:\n  web:\n    image: nginx\n    ports:\n      - '80"
     ]
 }
 
