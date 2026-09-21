@@ -24,10 +24,12 @@ public struct LineDiffBudget: Equatable, Sendable {
     func validateInputBytes(leftByteCount: Int, rightByteCount: Int) throws {
         guard leftByteCount <= maximumInputBytesPerSide,
               rightByteCount <= maximumInputBytesPerSide else {
-            throw LineDiffError.inputTooLarge(
-                leftLineCount: 0,
-                rightLineCount: 0,
-                maximumLCSCells: maximumLCSCells
+            // 字节超限与行数超限是两种不同的原因，此前复用了 inputTooLarge 并填入
+            // 0 行/0 行，既说不出真实规模也指不出是哪条限制被突破。
+            throw LineDiffError.inputBytesTooLarge(
+                leftByteCount: leftByteCount,
+                rightByteCount: rightByteCount,
+                maximumBytesPerSide: maximumInputBytesPerSide
             )
         }
     }
@@ -76,16 +78,41 @@ public struct LineDiffBudget: Equatable, Sendable {
 
 public enum LineDiffError: Error, Equatable, LocalizedError, Sendable {
     case inputTooLarge(leftLineCount: Int, rightLineCount: Int, maximumLCSCells: Int)
+    case inputBytesTooLarge(leftByteCount: Int, rightByteCount: Int, maximumBytesPerSide: Int)
 
     public static let inputTooLargeMessage = """
     对比内容过大，无法计算。
     """
 
     public var errorDescription: String? {
+        // 带上实际规模与上限：只说「过大」既不说明差多少，也不说明该裁到多少。
+        // 关联值此前从未被渲染，于是超限提示永远是同一句空话。
         switch self {
-        case .inputTooLarge:
-            return Self.inputTooLargeMessage
+        case let .inputTooLarge(leftLineCount, rightLineCount, maximumLCSCells):
+            return """
+            对比内容过大：左侧 \(Self.grouped(leftLineCount)) 行、右侧 \(Self.grouped(rightLineCount)) 行，超过可计算的比对上限（\(Self.grouped(maximumLCSCells)) 个比对单元）。
+            """
+        case let .inputBytesTooLarge(leftByteCount, rightByteCount, maximumBytesPerSide):
+            return """
+            对比内容过大：左侧 \(Self.grouped(leftByteCount)) 字节、右侧 \(Self.grouped(rightByteCount)) 字节，单侧上限 \(Self.grouped(maximumBytesPerSide)) 字节。
+            """
         }
+    }
+
+    /// 千分位分组。上限动辄七位数，直接输出 `12000000` 几乎无法一眼读准。
+    /// 手写而非用 `formatted()`，是为了不依赖运行环境locale，保证文案在任意机器上一致。
+    private static func grouped(_ value: Int) -> String {
+        let digits = String(value)
+        guard digits.count > 3 else { return digits }
+
+        var result = ""
+        for (offset, character) in digits.enumerated() {
+            if offset > 0, (digits.count - offset) % 3 == 0 {
+                result.append(",")
+            }
+            result.append(character)
+        }
+        return result
     }
 }
 

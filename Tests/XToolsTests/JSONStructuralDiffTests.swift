@@ -151,7 +151,15 @@ struct JSONStructuralDiffTests {
             budget: LineDiffBudget(maximumLCSCells: 1)
         )
 
-        #expect(decision == .tooLarge(LineDiffError.inputTooLargeMessage))
+        guard case .tooLarge(let message) = decision else {
+            Issue.record("Expected tooLarge decision, got \(decision)")
+            return
+        }
+        #expect(message.contains("对比内容过大"), Comment(rawValue: message))
+        #expect(message.contains("1 个比对单元"), Comment(rawValue: message))
+        // 超限提示必须带上真实规模：旧实现把关联值填成 0 行且从不渲染。
+        #expect(!message.contains("左侧 0 行"), Comment(rawValue: message))
+        ToolDiagnosticContract.expectFactual(message)
     }
 
     @Test func cancellableDiffPropagatesCancellationInsteadOfReportingTooLarge() {
@@ -200,7 +208,14 @@ struct JSONStructuralDiffTests {
             parserDidStart: parserProbe.record
         )
 
-        #expect(prepared.decision == .tooLarge(LineDiffError.inputTooLargeMessage))
+        guard case .tooLarge(let message) = prepared.decision else {
+            Issue.record("Expected tooLarge decision, got \(prepared.decision)")
+            return
+        }
+        // 字节超限要说出字节规模与上限，而不是复用行数超限的文案。
+        #expect(message.contains("字节"), Comment(rawValue: message))
+        #expect(message.contains("单侧上限 4 字节"), Comment(rawValue: message))
+        ToolDiagnosticContract.expectFactual(message)
         #expect(parserProbe.count == 0)
     }
 

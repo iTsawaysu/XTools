@@ -270,11 +270,32 @@ struct LineDifferTests {
             budget: LineDiffBudget(maximumLCSCells: 16)
         )
         #expect(rows.count == 3)
-        #expect(LineDiffError.inputTooLarge(
+        let lineMessage = LineDiffError.inputTooLarge(
             leftLineCount: 2,
             rightLineCount: 3,
             maximumLCSCells: 11
-        ).errorDescription == "对比内容过大，无法计算。")
+        ).errorDescription
+        #expect(lineMessage?.contains("左侧 2 行、右侧 3 行") == true, Comment(rawValue: lineMessage ?? "nil"))
+        #expect(lineMessage?.contains("11 个比对单元") == true, Comment(rawValue: lineMessage ?? "nil"))
+        ToolDiagnosticContract.expectFactual(lineMessage ?? "")
+
+        // 字节超限是另一条限制，必须有自己的文案而不是退回行数超限那句话。
+        let byteMessage = LineDiffError.inputBytesTooLarge(
+            leftByteCount: 9_000,
+            rightByteCount: 3,
+            maximumBytesPerSide: 4
+        ).errorDescription
+        #expect(byteMessage?.contains("左侧 9,000 字节、右侧 3 字节") == true, Comment(rawValue: byteMessage ?? "nil"))
+        #expect(byteMessage?.contains("单侧上限 4 字节") == true, Comment(rawValue: byteMessage ?? "nil"))
+        // 上限动辄七位数，必须带千分位，否则用户无法一眼读准。
+        let largeMessage = LineDiffError.inputTooLarge(
+            leftLineCount: 4_000,
+            rightLineCount: 4_000,
+            maximumLCSCells: 12_000_000
+        ).errorDescription
+        #expect(largeMessage?.contains("12,000,000 个比对单元") == true, Comment(rawValue: largeMessage ?? "nil"))
+        ToolDiagnosticContract.expectFactual(byteMessage ?? "")
+        ToolDiagnosticContract.expectFactual(largeMessage ?? "")
     }
 
     @Test func safeAlignedDiffAcceleratesWithPrefixSuffixTrimming() throws {

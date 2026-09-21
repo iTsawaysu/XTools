@@ -711,6 +711,12 @@ private struct OrderedJSONParser {
             throw error(hasMinus ? .invalidNumber(.missingIntegerAfterMinus) : .invalidNumber(.invalid))
         }
 
+        // `-Infinity` / `-NaN` 会先被 `-` 带进数字分支。此时若报「负号后缺少数字」，
+        // 就把「不支持的字面量」说成了「数字写错」，也与不带负号的诊断不一致。
+        if hasMinus, let literal = unsupportedLiteralPrefix() {
+            throw error(.unsupportedLiteral("-\(literal)"))
+        }
+
         if first == "0" {
             result.append(advance()!)
             if let next = peek() {
@@ -863,6 +869,15 @@ private struct OrderedJSONParser {
             }
         }
         return true
+    }
+
+    /// 紧接当前位置出现的不属于 JSON 的数值字面量（Infinity / NaN）。
+    /// 与值分派里的 `case "I"` / `case "N"` 使用同一份字面量清单。
+    private func unsupportedLiteralPrefix() -> String? {
+        for literal in ["Infinity", "NaN"] where startsIdentifier(literal) {
+            return literal
+        }
+        return nil
     }
 
     private func isJSONDigit(_ character: Character) -> Bool {

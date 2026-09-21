@@ -162,7 +162,11 @@ struct TestMarkdownDiffRegexCoverageTests {
             let error = #expect(throws: LineDiffError.self) {
                 _ = try LineDiffer.safeAlignedDiff(left: left, right: right)
             }
-            #expect(error?.errorDescription == "对比内容过大，无法计算。")
+            // 超限提示要说清实际规模与上限，而不是一句不透露任何信息的「过大，无法计算」。
+            let message = error?.errorDescription ?? ""
+            #expect(message.contains("对比内容过大"), Comment(rawValue: message))
+            #expect(message.contains("左侧 4,000 行、右侧 4,000 行"), Comment(rawValue: message))
+            #expect(message.contains("12,000,000 个比对单元"), Comment(rawValue: message))
             #expect(try LineDiffer.safeAlignedDiff(left: "a", right: "b").contains { $0.kind.isDifference })
         case "TEXT-DIFF-12":
             #expect(LineDiffer.diff(left: "", right: "") == "")

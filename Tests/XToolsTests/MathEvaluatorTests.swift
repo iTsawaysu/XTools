@@ -116,6 +116,26 @@ struct MathEvaluatorTests {
         #expect(MathExpressionEvaluator.evaluateLiveInput("1,") == .invalid(.unexpectedToken))
     }
 
+    /// 多余的右括号要报「括号不匹配」，与 `(1+2` 的左侧不匹配保持同一类文案；
+    /// 此前会落进笼统的「运算符或参数分隔符的位置无效」。
+    @Test func surplusClosingParenthesisReportsMismatchedParentheses() {
+        for expression in ["1+2)", "1)", "(1+2))"] {
+            #expect(
+                MathExpressionEvaluator.evaluateLiveInput(expression) == .invalid(.mismatchedParentheses),
+                Comment(rawValue: expression)
+            )
+        }
+
+        // 左右两侧的不匹配必须使用同一条文案。
+        let left = MathExpressionEvaluator.MathError.mismatchedParentheses.errorDescription
+        let right = MathExpressionEvaluator.evaluateLiveInput("1+2)")
+        guard case .invalid(let error) = right else {
+            Issue.record("Expected invalid result")
+            return
+        }
+        #expect(error.errorDescription == left, Comment(rawValue: error.errorDescription ?? "nil"))
+    }
+
     @Test func everyMathErrorUsesSpecificFactualChineseCopy() {
         let errors: [MathExpressionEvaluator.MathError] = [
             .unexpectedCharacter("@"),

@@ -262,6 +262,9 @@ struct JSONFormattingTests {
             ("{\n  // comment\n  \"value\": 1\n}", "JSON 不支持注释"),
             (#"{"value": 1 // comment}"#, "JSON 不支持注释"),
             (#"{"value": NaN}"#, "JSON 不支持 NaN"),
+            // 带负号的字面量会先被 `-` 带进数字分支，不能报成「负号后缺少数字」。
+            (#"{"n": -Infinity}"#, "JSON 不支持 -Infinity"),
+            (#"{"n": -NaN}"#, "JSON 不支持 -NaN"),
             (#"{"user":{"id":1}"#, "对象没有完整闭合"),
             (#"[1,2,]"#, "数组末尾多了逗号"),
             (#"[1,,2]"#, "数组元素之间多了逗号"),

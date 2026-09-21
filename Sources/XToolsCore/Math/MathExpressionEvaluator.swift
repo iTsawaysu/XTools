@@ -388,6 +388,11 @@ private struct TokenParser {
         }
         let value = try parseExpression()
         guard position == tokens.count else {
+            // 多出来的若是右括号，「括号不匹配」比笼统的「分隔符位置无效」准确，
+            // 也与 `(1+2` 的诊断保持一致。
+            if case .rightParen = tokens[position] {
+                throw MathExpressionEvaluator.MathError.mismatchedParentheses
+            }
             throw MathExpressionEvaluator.MathError.unexpectedToken
         }
         return value
