@@ -501,4 +501,62 @@ struct YAMLPrettifierTests {
         #expect(quotedHash.contains("nested:\n  child: 1"), Comment(rawValue: quotedHash))
         #expect(quotedHash.contains("\"a#b\""), Comment(rawValue: quotedHash))
     }
+
+    /// 序列化器在 compose→dump 之间会解析锚点、把别名展开成字面值
+    /// （`a: &x 1` + `b: *x` 曾变成 `a: 1` + `b: 1`）。带锚点/别名的输入
+    /// 必须改走逐行路径原样保留。
+    @Test func anchorsAndAliasesSurviveFormatting() throws {
+        let anchors = try YAMLPrettifier.format(
+            "a: &x 1\nb: *x",
+            options: .init(indent: 2, sortKeys: false)
+        )
+        #expect(anchors == "a: &x 1\nb: *x", Comment(rawValue: anchors))
+
+        // 锚点路径同样要兑现 indent 选项。
+        let indented = try YAMLPrettifier.format(
+            "root:\n    a: &x 1\n    b: *x",
+            options: .init(indent: 2, sortKeys: false)
+        )
+        #expect(indented == "root:\n  a: &x 1\n  b: *x", Comment(rawValue: indented))
+
+        // 合并键 `<<: *base` 是别名最常见的真实用法。
+        let merged = try YAMLPrettifier.format(
+            "base: &b\n  x: 1\nmerged:\n  <<: *b",
+            options: .init(indent: 2, sortKeys: false)
+        )
+        #expect(merged.contains("<<: *b"), Comment(rawValue: merged))
+        #expect(merged.contains("&b"), Comment(rawValue: merged))
+    }
+
+    /// 排序会移动键所在的行，可能把别名挪到锚点定义之前而产出非法 YAML，
+    /// 所以与注释一样显式拒绝，而不是静默展开别名。
+    @Test func sortingWithAnchorsIsRejectedInsteadOfSilentlyExpanding() throws {
+        let error = #expect(throws: (any Error).self) {
+            _ = try YAMLPrettifier.format("a: &x 1\nb: *x", options: .init(indent: 2, sortKeys: true))
+        }
+
+        guard let error,
+              case YAMLPrettifier.ValidationError.unsupportedAnchorPreservingSort(let diagnostic) = error else {
+            Issue.record("Expected anchor-preserving sort capability diagnostic")
+            return
+        }
+        #expect(diagnostic.message == "当前无法在保留锚点与别名的同时对键排序")
+    }
+
+    /// 引号内的 `*x`、标量中段的 `&`、无名称的裸 `*` 都不是锚点/别名；
+    /// 误判会让这些输入在开启排序时被错误拒绝。
+    @Test func anchorDetectionDoesNotFireOnLookalikes() throws {
+        #expect(throws: Never.self) {
+            _ = try YAMLPrettifier.format(#"key: "*x""#, options: .init(indent: 2, sortKeys: true))
+        }
+        #expect(throws: Never.self) {
+            _ = try YAMLPrettifier.format("key: a*b", options: .init(indent: 2, sortKeys: true))
+        }
+        #expect(throws: Never.self) {
+            _ = try YAMLPrettifier.format("cmd: echo *", options: .init(indent: 2, sortKeys: true))
+        }
+        #expect(throws: Never.self) {
+            _ = try YAMLPrettifier.format("key: a&b", options: .init(indent: 2, sortKeys: true))
+        }
+    }
 }

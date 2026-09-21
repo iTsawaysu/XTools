@@ -5,12 +5,15 @@ public enum YAMLPrettifier {
     public enum ValidationError: Error, LocalizedError, Equatable, Sendable {
         case invalidSyntax(FormatDiagnostic)
         case unsupportedCommentPreservingSort(FormatDiagnostic)
+        case unsupportedAnchorPreservingSort(FormatDiagnostic)
 
         public var errorDescription: String? {
             switch self {
             case .invalidSyntax(let diagnostic):
                 return diagnostic.workspaceMessage
             case .unsupportedCommentPreservingSort(let diagnostic):
+                return diagnostic.workspaceMessage
+            case .unsupportedAnchorPreservingSort(let diagnostic):
                 return diagnostic.workspaceMessage
             }
         }
@@ -20,6 +23,8 @@ public enum YAMLPrettifier {
             case .invalidSyntax(let diagnostic):
                 return diagnostic
             case .unsupportedCommentPreservingSort(let diagnostic):
+                return diagnostic
+            case .unsupportedAnchorPreservingSort(let diagnostic):
                 return diagnostic
             }
         }
@@ -78,6 +83,24 @@ public enum YAMLPrettifier {
                     suggestion: "关闭键排序后重试。"
                 )
             )
+        }
+
+        if options.sortKeys, containsAnchorOrAlias(in: input) {
+            throw ValidationError.unsupportedAnchorPreservingSort(
+                FormatDiagnostic(
+                    formatName: "YAML",
+                    message: "当前无法在保留锚点与别名的同时对键排序",
+                    suggestion: "关闭键排序后重试。"
+                )
+            )
+        }
+
+        if !options.sortKeys, containsAnchorOrAlias(in: input) {
+            // 序列化器在 compose→dump 之间会解析锚点、把别名展开成字面值：
+            // `a: &x 1` + `b: *x` 会变成 `a: 1` + `b: 1`，之后锚点改动时别名
+            // 不再跟随，输出与输入语义不同。带锚点/别名的输入改走逐行路径，
+            // 原样保留这些记号（与带注释输入同一处理方式）。
+            return formatPreservingComments(input, indentWidth: options.indent)
         }
 
         if !options.sortKeys, containsStructuralComment(in: input) {
@@ -382,6 +405,86 @@ public enum YAMLPrettifier {
             return nil
         }
         return BlockScalarIndicator(explicitIndent: explicitIndent)
+    }
+
+    /// 输入里是否出现锚点定义（`&name`）或别名引用（`*name`）。
+    /// 序列化器路径会把它们解析展开，凡命中就应改走逐行保留路径。
+    private static func containsAnchorOrAlias(in input: String) -> Bool {
+        let lines = input.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var activeBlockScalar: BlockScalarState?
+
+        for line in lines {
+            if var blockScalar = activeBlockScalar {
+                if blockScalar.contains(line) {
+                    activeBlockScalar = blockScalar
+                    continue
+                }
+                activeBlockScalar = nil
+            }
+
+            if lineContainsAnchorOrAliasToken(line) {
+                return true
+            }
+            if let header = blockScalarHeader(in: line) {
+                activeBlockScalar = BlockScalarState(header: header)
+            }
+        }
+
+        return false
+    }
+
+    /// 只有 token 起始位置的 `&`/`*` 才可能是锚点/别名（前一字符是行首、空白
+    /// 或 flow 分隔符）。`a*b`、`echo *`、`"&x"`、注释里的 `*x` 都不算，避免
+    /// 把普通标量误判成锚点而白白放弃序列化路径。
+    private static func lineContainsAnchorOrAliasToken(_ line: String) -> Bool {
+        var inSingleQuote = false
+        var inDoubleQuote = false
+        var previous: Character?
+
+        var index = line.startIndex
+        while index < line.endIndex {
+            let character = line[index]
+
+            if inSingleQuote {
+                if character == "'" {
+                    // 单引号标量里 '' 是转义的单引号，不是引号结束。
+                    let next = line.index(after: index)
+                    if next < line.endIndex, line[next] == "'" {
+                        index = next
+                    } else {
+                        inSingleQuote = false
+                    }
+                }
+            } else if inDoubleQuote {
+                if character == "\\" {
+                    index = line.index(after: index)
+                } else if character == "\"" {
+                    inDoubleQuote = false
+                }
+            } else if character == "'" {
+                inSingleQuote = true
+            } else if character == "\"" {
+                inDoubleQuote = true
+            } else if character == "#", previous == nil || previous == " " || previous == "\t" {
+                // 行内注释从此开始，注释内容里的 &/* 不算。
+                return false
+            } else if character == "&" || character == "*" {
+                let isTokenStart = previous == nil || previous == " " || previous == "\t"
+                    || previous == "[" || previous == "{" || previous == ","
+                let next = line.index(after: index)
+                if isTokenStart, next < line.endIndex, isAnchorNameCharacter(line[next]) {
+                    return true
+                }
+            }
+
+            previous = character
+            index = line.index(after: index)
+        }
+        return false
+    }
+
+    private static func isAnchorNameCharacter(_ character: Character) -> Bool {
+        character.isLetter || character.isNumber || character == "_" || character == "-"
     }
 
     private static func containsStructuralComment(in input: String) -> Bool {
