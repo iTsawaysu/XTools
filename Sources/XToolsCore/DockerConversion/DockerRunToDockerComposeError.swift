@@ -10,7 +10,7 @@ public enum DockerRunToDockerComposeError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .invalidCommand:
-            return "仅支持单条 docker run 命令。"
+            return "无法识别 docker run 命令：输入必须以 docker run 开头。"
         case .multipleCommands:
             return "一次只能转换一条 docker run 命令。"
         case .missingImage:

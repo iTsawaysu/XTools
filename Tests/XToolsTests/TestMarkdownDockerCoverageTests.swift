@@ -100,7 +100,7 @@ struct TestMarkdownDockerCoverageTests {
             #expect(result.yaml.contains(#"CTRL=line\tbreak"#))
             #expect(result.yaml.contains(#"note=A # B: C"#))
         case "DOCKER-16":
-            #expect(DockerRunToDockerComposeError.invalidCommand.errorDescription == "仅支持单条 docker run 命令。")
+            #expect(DockerRunToDockerComposeError.invalidCommand.errorDescription == "无法识别 docker run 命令：输入必须以 docker run 开头。")
             #expect(DockerRunToDockerComposeError.multipleCommands.errorDescription == "一次只能转换一条 docker run 命令。")
             #expect(DockerRunToDockerComposeError.missingImage.errorDescription == "docker run 命令缺少镜像名称。")
             #expect(DockerRunToDockerComposeError.missingOptionValue("--name").errorDescription == "选项 `--name` 缺少参数值。")

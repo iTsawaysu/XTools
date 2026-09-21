@@ -385,7 +385,7 @@ struct DevelopmentTestDataProbeTests {
                   let description = (error as? LocalizedError)?.errorDescription else {
                 return false
             }
-            return description == "仅支持单条 docker run 命令。"
+            return description == "无法识别 docker run 命令：输入必须以 docker run 开头。"
         }
     }
 

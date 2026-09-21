@@ -2,7 +2,7 @@ import Foundation
 import Yams
 
 public enum DockerComposeToRunError: Error, Equatable, Sendable, LocalizedError {
-    case invalidYAML
+    case invalidYAML(FormatDiagnostic)
     case missingServicesSection
     case noServices
 
@@ -29,14 +29,40 @@ public enum DockerComposeToRunDiagnostics {
     public static let missingServicesMessage = "未找到 services 段：Compose 文件需要顶级 services 键。"
     public static let noServicesMessage = "services 段为空：至少需要一个服务定义。"
 
+    /// 无法从底层错误获得更多信息时的兜底诊断。
+    public static let invalidYAMLFallbackDiagnostic = FormatDiagnostic(
+        formatName: "Compose 转换",
+        message: invalidYAMLMessage,
+        suggestion: "检查缩进、冒号后的空格、列表括号和引号是否闭合。"
+    )
+
     public static func message(for error: DockerComposeToRunError) -> String {
         switch error {
-        case .invalidYAML:
-            return invalidYAMLMessage
+        case .invalidYAML(let diagnostic):
+            return diagnostic.workspaceMessage
         case .missingServicesSection:
             return missingServicesMessage
         case .noServices:
             return noServicesMessage
+        }
+    }
+
+    public static func diagnostic(for error: DockerComposeToRunError) -> FormatDiagnostic {
+        switch error {
+        case .invalidYAML(let diagnostic):
+            return diagnostic
+        case .missingServicesSection:
+            return FormatDiagnostic(
+                formatName: "Compose 转换",
+                message: missingServicesMessage,
+                suggestion: "确认 YAML 包含合法的 version 或 services 服务定义块。"
+            )
+        case .noServices:
+            return FormatDiagnostic(
+                formatName: "Compose 转换",
+                message: noServicesMessage,
+                suggestion: "在 services 下至少定义一个服务，例如 web: {image: nginx}。"
+            )
         }
     }
 
@@ -62,7 +88,12 @@ public enum DockerComposeToRunService {
         do {
             document = try Yams.load(yaml: yamlText)
         } catch {
-            throw DockerComposeToRunError.invalidYAML
+            // 复用 YAMLPrettifier 的 Yams problem 翻译表，让行内缩进/引号类
+            // 错误带上行列与针对性建议，而不是一律报「缩进或语法不合法」。
+            throw DockerComposeToRunError.invalidYAML(
+                YAMLPrettifier.parsingDiagnostic(from: error, input: yamlText)
+                    ?? DockerComposeToRunDiagnostics.invalidYAMLFallbackDiagnostic
+            )
         }
 
         guard let root = document as? [String: Any] else {

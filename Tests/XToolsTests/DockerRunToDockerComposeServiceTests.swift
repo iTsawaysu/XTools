@@ -150,7 +150,7 @@ struct DockerRunToDockerComposeServiceTests {
     }
 
     @Test func diagnosticsStayLocalizedAndGroupWarnings() {
-        #expect(DockerRunToDockerComposeError.invalidCommand.errorDescription == "仅支持单条 docker run 命令。")
+        #expect(DockerRunToDockerComposeError.invalidCommand.errorDescription == "无法识别 docker run 命令：输入必须以 docker run 开头。")
         #expect(DockerRunToDockerComposeError.multipleCommands.errorDescription == "一次只能转换一条 docker run 命令。")
         #expect(DockerRunToDockerComposeError.missingImage.errorDescription == "docker run 命令缺少镜像名称。")
         #expect(DockerRunToDockerComposeError.missingOptionValue("--name").errorDescription == "选项 `--name` 缺少参数值。")
@@ -192,6 +192,17 @@ struct DockerRunToDockerComposeServiceTests {
             _ = try DockerRunToDockerComposeService.convert("docker compose up")
         } throws: { error in
             guard case DockerRunToDockerComposeError.invalidCommand = error else { return false }
+            return true
+        }
+    }
+
+    /// 裸「docker run」没有镜像参数，必须报缺镜像而不是「无法识别命令」——
+    /// 它本来就是一条 docker run 命令。
+    @Test func bareDockerRunReportsMissingImage() throws {
+        #expect {
+            _ = try DockerRunToDockerComposeService.convert("docker run")
+        } throws: { error in
+            guard case DockerRunToDockerComposeError.missingImage = error else { return false }
             return true
         }
     }

@@ -239,13 +239,9 @@ private struct IndexDockerWorkspaceContent: View {
                 diagnostic: diagnostic
             )
         } catch let error as DockerComposeToRunError {
-            let msg = DockerComposeToRunDiagnostics.message(for: error)
-            let diagnostic = FormatDiagnostic(
-                formatName: "Compose 转换",
-                message: msg,
-                suggestion: "确认 YAML 包含合法的 version 或 services 服务定义块。"
-            )
-            return FormatBinding(error: msg, diagnostic: diagnostic)
+            // 细化诊断优先：invalidYAML 现在携带行列与针对性建议。
+            let diagnostic = DockerComposeToRunDiagnostics.diagnostic(for: error)
+            return FormatBinding(error: diagnostic.workspaceMessage, diagnostic: diagnostic)
         } catch {
             let msg = "docker-compose YAML 格式无效。"
             let diagnostic = FormatDiagnostic(

@@ -419,8 +419,22 @@ struct DockerComposeToRunServiceTests {
     // MARK: - Error paths
 
     @Test func invalidYAMLThrows() {
-        #expect(throws: DockerComposeToRunError.invalidYAML) {
+        #expect(throws: DockerComposeToRunError.self) {
             _ = try DockerComposeToRunService.convert("services: [broken")
+        }
+    }
+
+    @Test func invalidYAMLCarriesTranslatedDiagnostic() throws {
+        do {
+            _ = try DockerComposeToRunService.convert("services:\n\tweb:\n\t\timage: nginx")
+            Issue.record("expected invalidYAML")
+        } catch let error as DockerComposeToRunError {
+            guard case .invalidYAML(let diagnostic) = error else {
+                Issue.record("expected invalidYAML, got \(error)")
+                return
+            }
+            #expect(diagnostic.line == 2)
+            #expect(diagnostic.message == "缩进必须使用空格，不能使用制表符")
         }
     }
 
@@ -740,7 +754,7 @@ private struct DockerInvocationSemantics: Equatable {
     init(_ commandText: String) throws {
         let tokens = try DockerRunToDockerComposeService.tokenize(commandText)
         guard let runIndex = tokens.firstIndex(of: "run") else {
-            throw DockerComposeToRunError.invalidYAML
+            throw DockerComposeToRunError.invalidYAML(DockerComposeToRunDiagnostics.invalidYAMLFallbackDiagnostic)
         }
 
         var entrypoint: [String] = []

@@ -10,7 +10,7 @@ struct DockerRunToComposePageSourceTests {
 
         #expect(source.contains("@ObservedObject var workspace: DockerConversionToolWorkspaceModel"))
         #expect(source.contains("outputSyntax: workspace.direction == .runToCompose ? .yaml : nil"))
-        #expect(source.contains("DockerComposeToRunDiagnostics.message(for:"))
+        #expect(source.contains("DockerComposeToRunDiagnostics.diagnostic(for:"))
         #expect(source.contains("diagnostic: execution.binding.error ?? execution.binding.warning"))
         #expect(source.contains("diagnosticTone: execution.binding.error == nil ? .warning : .error"))
         #expect(source.contains("DockerRunToDockerComposeError"))

@@ -27,10 +27,15 @@ public enum DockerRunToDockerComposeService {
 
     public static func convert(_ command: String) throws -> Result {
         let tokens = try tokenize(command)
-        guard tokens.count >= 3,
+        guard tokens.count >= 2,
               tokens[0] == "docker",
               tokens[1] == "run" else {
             throw DockerRunToDockerComposeError.invalidCommand
+        }
+        // 「docker run」后面没有任何参数时是缺少镜像，不是命令无法识别——
+        // 报 invalidCommand 会让用户误以为要拆成多条命令。
+        guard tokens.count >= 3 else {
+            throw DockerRunToDockerComposeError.missingImage
         }
 
         if dockerRunOccurrences(in: command) > 1 {
