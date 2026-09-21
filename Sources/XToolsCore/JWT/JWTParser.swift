@@ -12,7 +12,7 @@ public enum JWTParser {
     }
 
     public enum ParseError: Error, Equatable, LocalizedError {
-        case invalidSegmentCount
+        case invalidSegmentCount(Int)
         case emptyHeader
         case emptyPayload
         case invalidBase64
@@ -20,6 +20,8 @@ public enum JWTParser {
 
         public var errorDescription: String? {
             switch self {
+            case .invalidSegmentCount(let count) where count > 3:
+                return "JWT 只能包含 header.payload.signature 三段（当前有 \(count) 段）。"
             case .invalidSegmentCount:
                 return "JWT 必须包含 header.payload.signature 三段。"
             case .emptyHeader:
@@ -39,7 +41,7 @@ public enum JWTParser {
         let parts = value.split(separator: ".", omittingEmptySubsequences: false).map(String.init)
 
         guard parts.count == 3 else {
-            throw ParseError.invalidSegmentCount
+            throw ParseError.invalidSegmentCount(parts.count)
         }
         guard !parts[0].isEmpty else {
             throw ParseError.emptyHeader
