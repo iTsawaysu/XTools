@@ -423,4 +423,35 @@ struct SQLFormattingTests {
         // Closing paren of window function should be on its own line
         #expect(output.contains("category_id\n"))
     }
+
+    // MARK: - Line endings
+
+    /// 行注释必须在任何换行形式上终止。Swift 里 `\r\n` 是**单个** Character
+    /// （一个字素簇），它既不等于 "\n" 也不等于 "\r"；早先逐字符比较的写法会让
+    /// CRLF 输入下的行注释一路吞到结尾，把整条语句都变成注释。
+    @Test func lineCommentsTerminateOnEveryLineEndingForm() throws {
+        let outputs = ["\n", "\r", "\r\n"].map { ending in
+            (try? SQLFormatting.format("select 1 -- c\(ending)from t")) ?? "<throw>"
+        }
+
+        for output in outputs {
+            #expect(!output.contains("\r"), Comment(rawValue: output.debugDescription))
+            #expect(output.contains("FROM"), Comment(rawValue: output.debugDescription))
+            #expect(output.contains("t"), Comment(rawValue: output.debugDescription))
+            // 注释不能吞掉后面的语句：FROM 必须仍然被识别为关键字而独立成行。
+            #expect(output.contains("-- c\n"), Comment(rawValue: output.debugDescription))
+        }
+
+        #expect(outputs[0] == outputs[1], Comment(rawValue: outputs.map(\.debugDescription).joined(separator: " vs ")))
+        #expect(outputs[0] == outputs[2], Comment(rawValue: outputs.map(\.debugDescription).joined(separator: " vs ")))
+    }
+
+    /// 块注释与普通语句同样不应残留孤立回车。
+    @Test func blockCommentsAndStatementsDropCarriageReturns() throws {
+        let block = try SQLFormatting.format("select /* a */ 1\r\nfrom t")
+        #expect(!block.contains("\r"), Comment(rawValue: block.debugDescription))
+
+        let plain = try SQLFormatting.format("select 1\r\nfrom t")
+        #expect(!plain.contains("\r"), Comment(rawValue: plain.debugDescription))
+    }
 }

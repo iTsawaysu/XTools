@@ -205,7 +205,10 @@ struct SQLLexer {
 
     private mutating func readLineComment() -> String {
         var value = ""
-        while let character = peek(), character != "\n" {
+        // 必须用 isNewline 而不是逐个比较 "\n"/"\r"：Swift 里 `\r\n` 是**单个**
+        // Character（一个字素簇），它既不等于 "\n" 也不等于 "\r"，于是 CRLF 输入
+        // 下注释会一路吞到输入结尾——整条语句都被当成注释。
+        while let character = peek(), !character.isNewline {
             value.append(character)
             advance()
         }

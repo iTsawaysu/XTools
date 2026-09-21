@@ -325,6 +325,29 @@ struct HTMLToMarkdownConverterTests {
         #expect(MarkdownContent(markdown).renderHTML().contains("<code>a|b</code>"))
     }
 
+    /// `select("tr")` 是递归匹配：嵌套表格的内层行曾被同时算进外层表格，
+    /// 于是内层行既出现在外层单元格里、又作为独立行重复渲染，列数也错乱。
+    @Test func nestedTablesDoNotDuplicateInnerRows() {
+        let html = "<table><tr><td><table><tr><td>x</td></tr></table></td></tr></table>"
+        let markdown = HTMLToMarkdownConverter.convert(html)
+
+        // 内层内容只应出现一次（作为外层单元格的内容），不能再多出一行。
+        #expect(markdown.components(separatedBy: "x").count - 1 == 1, Comment(rawValue: markdown))
+
+        // 外层表格只有一行：渲染成表头行 + 分隔行，共 2 行。
+        #expect(markdown.components(separatedBy: "\n").count == 2, Comment(rawValue: markdown))
+        #expect(markdown.hasSuffix("| --- |"), Comment(rawValue: markdown))
+    }
+
+    @Test func siblingTablesStayIndependent() {
+        let html = "<table><tr><td>x</td></tr></table><table><tr><td>y</td></tr></table>"
+        let markdown = HTMLToMarkdownConverter.convert(html)
+
+        #expect(markdown.contains("| x |"), Comment(rawValue: markdown))
+        #expect(markdown.contains("| y |"), Comment(rawValue: markdown))
+        #expect(markdown.components(separatedBy: "| --- |").count - 1 == 2, Comment(rawValue: markdown))
+    }
+
     @Test func completedLargeManualInputKeepsResultAndEmitsCompletedWarning() {
         let input = "<p>" + String(repeating: "x", count: 512_001) + "</p>"
         let result = HTMLToMarkdownConverter.convert(input, options: .manual)

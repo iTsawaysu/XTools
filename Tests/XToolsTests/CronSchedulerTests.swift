@@ -108,6 +108,38 @@ struct CronSchedulerTests {
         #expect(CronScheduler.dayMatchingExplanation("invalid") == nil)
     }
 
+    /// Vixie cron 以字段**首字符是否为 `*`** 判定是否受限，因此 `*/2` 属于不受限：
+    /// `0 0 */2 * MON` 只应在星期一触发。早先只把字面量 `*` 视为通配，
+    /// 会把 `*/2` 当成受限字段，从而在非星期一的日子也触发。
+    @Test func stepFieldsCountAsUnrestrictedForOrSemantics() {
+        #expect(CronScheduler.dayMatchingExplanation("0 0 */2 * MON") == nil)
+
+        let calendar = gregorianUTC()
+        let anchor = DateComponents(
+            calendar: calendar,
+            year: 2023,
+            month: 11,
+            day: 14,
+            hour: 0,
+            minute: 0,
+            second: 0
+        ).date!
+
+        let mondays = CronScheduler.nextRuns("0 0 */2 * MON", count: 4, after: anchor, calendar: calendar)
+        #expect(mondays.count == 4)
+        for date in mondays {
+            let weekday = calendar.component(.weekday, from: date)
+            #expect(weekday == 2, Comment(rawValue: "\(date) 不是星期一"))
+        }
+
+        // 不以 `*` 开头的步长写法仍是受限字段，维持「或」语义。
+        let orSemantics = CronScheduler.nextRuns("0 0 1-31/2 * MON", count: 6, after: anchor, calendar: calendar)
+        #expect(
+            orSemantics.contains { calendar.component(.weekday, from: $0) != 2 },
+            Comment(rawValue: "\(orSemantics) 应当包含非星期一的日子")
+        )
+    }
+
     @Test func computesDailyNextRuns() {
         let calendar = gregorianUTC()
         let after = date(calendar, 2026, 1, 1, 12, 0)

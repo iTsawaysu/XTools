@@ -379,10 +379,27 @@ final class HTMLToMarkdownDOMRenderer {
 
     private func tableRows(in table: Element) -> [Element] {
         do {
-            return try table.select("tr").map { $0 }
+            // `select("tr")` 是递归匹配，会把嵌套表格里的行也算进来，导致内层行
+            // 既出现在外层单元格里、又作为独立行重复渲染，列数还会错乱。
+            // 只保留最近祖先正是这个 table 的行（按引用同一性比较，避免结构相同的
+            // 两张表被误判为同一张）。
+            return try table.select("tr").filter { row in
+                closestTable(ancestorOf: row) === table
+            }
         } catch {
             return []
         }
+    }
+
+    private func closestTable(ancestorOf element: Element) -> Element? {
+        var current = element.parent()
+        while let node = current {
+            if node.tagNameNormal() == "table" {
+                return node
+            }
+            current = node.parent()
+        }
+        return nil
     }
 
     private func tableCells(in row: Element) -> [Element] {

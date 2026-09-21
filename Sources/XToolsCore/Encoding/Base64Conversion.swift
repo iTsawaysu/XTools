@@ -340,6 +340,9 @@ public enum Base64Conversion {
 
     public static func decodeData(_ value: String) throws -> Data {
         let sanitized = value.filter { !$0.isWhitespace }
+        // 刻意要求规范的带填充 Base64：放宽会引入误判——
+        // 例如 `this is not base64` 去掉空白后全落在 Base64 字母表内，
+        // 补齐填充即可解出垃圾字节。该严格性由 Base64ConversionTests 锁定。
         guard isValidPaddedBase64(sanitized),
               let data = Data(base64Encoded: sanitized) else {
             throw ConversionError.invalidBase64

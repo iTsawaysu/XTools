@@ -368,8 +368,14 @@ public enum CronScheduler {
         return describeFieldValue(raw, index: index)
     }
 
+    /// 字段是否「不受限」，用于日/星期字段的「或」语义判定。
+    ///
+    /// Vixie cron 以字段**首字符是否为 `*`** 置位 DOM_STAR / DOW_STAR，因此
+    /// `*/2` 属于不受限，而不是受限；只有「两个字段都受限（都不是以 `*` 开头）」
+    /// 时才按「任一字段匹配即运行」处理。此前只把字面量 `*` 视为通配，
+    /// 于是 `0 0 */2 * MON` 会额外在非星期一的日子触发。
     private static func isWildcard(_ raw: String) -> Bool {
-        raw == "*"
+        raw.hasPrefix("*")
     }
 
     private static let monthAliases: [String: Int] = [
