@@ -1,10 +1,21 @@
 import Foundation
 
 public struct ChmodMode: Equatable, Sendable {
-    public enum ParseError: Error, Equatable, Sendable {
+    public enum ParseError: Error, Equatable, Sendable, LocalizedError {
         case invalidLength
         case nonOctalDigit
         case digitOutOfRange
+
+        public var errorDescription: String? {
+            switch self {
+            case .invalidLength:
+                return "Chmod 八进制需要 3 位或 4 位数字。"
+            case .nonOctalDigit:
+                return "Chmod 八进制只能包含数字。"
+            case .digitOutOfRange:
+                return "Chmod 八进制每一位只能是 0–7。"
+            }
+        }
     }
 
     public struct PermissionTriad: Equatable, Sendable {

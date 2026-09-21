@@ -23,7 +23,7 @@ final class ChmodToolWorkspaceModel: ObservableObject {
             mode = try ChmodMode(octal: draft)
             error = nil
         } catch let issue {
-            self.error = Self.message(for: issue)
+            self.error = issue.localizedDescription
         }
     }
 
@@ -78,17 +78,6 @@ final class ChmodToolWorkspaceModel: ObservableObject {
     var o1: Bool {
         get { mode.other.execute }
         set { set(newValue, for: \ChmodMode.other.execute) }
-    }
-
-    private static func message(for error: ChmodMode.ParseError) -> String {
-        switch error {
-        case .invalidLength:
-            return "Chmod 八进制需要 3 位或 4 位数字。"
-        case .nonOctalDigit:
-            return "Chmod 八进制只能包含数字。"
-        case .digitOutOfRange:
-            return "Chmod 八进制每一位只能是 0–7。"
-        }
     }
 }
 
