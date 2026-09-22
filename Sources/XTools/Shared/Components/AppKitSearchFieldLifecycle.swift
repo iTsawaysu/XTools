@@ -254,7 +254,7 @@ enum AppKitSearchFieldLifecycle {
             ? window?.makeFirstResponder(textField)
             : nil
         let makeFirstResponderMilliseconds = makeFirstResponderStartedAt.map {
-            milliseconds(from: $0, to: .now)
+            $0.duration(to: .now).milliseconds
         }
         let firstResponderIsFieldEditor: Bool
         if let window, let editor = textField.currentEditor() {
@@ -275,15 +275,6 @@ enum AppKitSearchFieldLifecycle {
                 firstResponderIsFieldEditor: firstResponderIsFieldEditor
             )
         )
-    }
-
-    private static func milliseconds(
-        from start: ContinuousClock.Instant,
-        to end: ContinuousClock.Instant
-    ) -> Double {
-        let value = (end - start).components
-        return Double(value.seconds) * 1_000
-            + Double(value.attoseconds) / 1_000_000_000_000_000
     }
 
     /// Accept the complete proposed height for hit testing instead of the
@@ -316,5 +307,14 @@ enum AppKitSearchFieldLifecycle {
         textField.indexContentInsets = configuration.contentInsets
         textField.setContentHuggingPriority(.defaultLow, for: .horizontal)
         textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    }
+}
+
+extension Duration {
+    /// Duration → 毫秒（浮点）。App 内统一的耗时换算，避免各处重复 components 数学。
+    var milliseconds: Double {
+        let value = components
+        return Double(value.seconds) * 1_000
+            + Double(value.attoseconds) / 1_000_000_000_000_000
     }
 }

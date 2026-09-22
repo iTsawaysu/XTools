@@ -214,7 +214,7 @@ enum ToolPageEntryTrace {
             context.toolID.rawValue,
             context.title,
             phase,
-            milliseconds(since: startedAt)
+            startedAt.duration(to: .now).milliseconds
         )
         FileHandle.standardError.write(Data(line.utf8))
     }
@@ -231,7 +231,7 @@ enum ToolPageEntryTrace {
             format: "TOOL_PAGE_ENTRY_RESULT tool=%@ title=%@ milliseconds=%.3f\n",
             context.toolID.rawValue,
             context.title,
-            milliseconds(since: startedAt)
+            startedAt.duration(to: .now).milliseconds
         )
         FileHandle.standardError.write(Data(line.utf8))
     }
@@ -244,17 +244,11 @@ enum ToolPageEntryTrace {
             context.toolID.rawValue,
             context.title,
             phase,
-            milliseconds(since: startedAt)
+            startedAt.duration(to: .now).milliseconds
         )
         FileHandle.standardError.write(Data(line.utf8))
     }
 
-    private static func milliseconds(since startedAt: ContinuousClock.Instant) -> Double {
-        let duration = startedAt.duration(to: .now)
-        let components = duration.components
-        return Double(components.seconds) * 1_000
-            + Double(components.attoseconds) / 1_000_000_000_000_000
-    }
 #endif
 }
 
