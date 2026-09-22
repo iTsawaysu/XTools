@@ -82,11 +82,42 @@ struct TextEncryptionServiceTests {
                 } catch TextEncryptionService.Error.decryptionFailed,
                         TextEncryptionService.Error.invalidBase64,
                         TextEncryptionService.Error.invalidFormat,
+                        TextEncryptionService.Error.modernCiphertextWithLegacyAlgorithm,
+                        TextEncryptionService.Error.legacyCiphertextWithModernAlgorithm,
                         TextEncryptionService.Error.cryptOperationFailed {
                     continue
                 }
             }
         }
+    }
+
+    @Test func modernCiphertextWithLegacyAlgorithmReportsSwitchHint() throws {
+        let ciphertext = try TextEncryptionService.encrypt("plain", password: "secret", algorithm: .aesGCM)
+
+        for algorithm in [TextEncryptionService.Algorithm.aes, .tripleDES, .rabbit, .rc4] {
+            #expect(throws: TextEncryptionService.Error.modernCiphertextWithLegacyAlgorithm) {
+                _ = try TextEncryptionService.decrypt(ciphertext, password: "secret", algorithm: algorithm)
+            }
+        }
+    }
+
+    @Test func legacyCiphertextWithModernAlgorithmReportsSwitchHint() throws {
+        let ciphertext = try TextEncryptionService.encrypt("plain", password: "secret", algorithm: .aes)
+
+        #expect(throws: TextEncryptionService.Error.legacyCiphertextWithModernAlgorithm) {
+            _ = try TextEncryptionService.decrypt(ciphertext, password: "secret", algorithm: .aesGCM)
+        }
+    }
+
+    @Test func mismatchHintsKeepFactualToneAndNameTheSwitch() {
+        #expect(
+            TextEncryptionService.Error.modernCiphertextWithLegacyAlgorithm.errorDescription
+                == "密文是 AES-GCM 格式（以 DT-AES-GCM-v1: 开头）；把算法切换为 AES-GCM 后再解密。"
+        )
+        #expect(
+            TextEncryptionService.Error.legacyCiphertextWithModernAlgorithm.errorDescription
+                == "密文是 OpenSSL 兼容格式（Salted__ 开头）；把算法切换为 AES 或 TripleDES 等传统算法后再解密。"
+        )
     }
 
     @Test func encryptedOutputUsesOpenSSLSaltedFormat() throws {
@@ -170,6 +201,7 @@ struct TextEncryptionServiceTests {
         let secret = "private-password-value"
         let errors: [TextEncryptionService.Error] = [
             .emptyPassword, .invalidBase64, .invalidFormat, .decryptionFailed,
+            .modernCiphertextWithLegacyAlgorithm, .legacyCiphertextWithModernAlgorithm,
             .cryptOperationFailed, .secureRandomUnavailable,
         ]
         for error in errors {

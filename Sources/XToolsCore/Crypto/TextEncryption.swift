@@ -75,6 +75,8 @@ public enum TextEncryptionService {
         case emptyCiphertext
         case invalidBase64
         case invalidFormat
+        case modernCiphertextWithLegacyAlgorithm
+        case legacyCiphertextWithModernAlgorithm
         case decryptionFailed
         case cryptOperationFailed
         case secureRandomUnavailable
@@ -89,6 +91,10 @@ public enum TextEncryptionService {
                 return "密文不是有效的 Base64。"
             case .invalidFormat:
                 return "密文格式与当前算法不匹配。"
+            case .modernCiphertextWithLegacyAlgorithm:
+                return "密文是 AES-GCM 格式（以 DT-AES-GCM-v1: 开头）；把算法切换为 AES-GCM 后再解密。"
+            case .legacyCiphertextWithModernAlgorithm:
+                return "密文是 OpenSSL 兼容格式（Salted__ 开头）；把算法切换为 AES 或 TripleDES 等传统算法后再解密。"
             case .decryptionFailed:
                 return "加密口令、算法或密文不匹配，无法解密。"
             case .cryptOperationFailed:
@@ -147,6 +153,11 @@ public enum TextEncryptionService {
         }
 
         let normalizedCiphertext = ciphertext.filter { !$0.isWhitespace }
+        // 先识别错配：密文带本工具 AES-GCM 前缀却选了传统算法时，Base64 解码
+        // 必然失败，报「不是有效的 Base64」会把用户引向错误方向。
+        if normalizedCiphertext.hasPrefix(modernPrefix) {
+            throw Error.modernCiphertextWithLegacyAlgorithm
+        }
         guard let data = Data(base64Encoded: String(normalizedCiphertext)) else {
             throw Error.invalidBase64
         }
@@ -235,6 +246,12 @@ public enum TextEncryptionService {
     private static func decryptModern(_ ciphertext: String, password: [UInt8]) throws -> String {
         let normalizedCiphertext = ciphertext.filter { !$0.isWhitespace }
         guard normalizedCiphertext.hasPrefix(modernPrefix) else {
+            // 反向错配：选了 AES-GCM 但密文能解出 OpenSSL 的 Salted__ 头——
+            // 给出算法切换指引，而不是笼统的「格式与算法不匹配」。
+            if let data = Data(base64Encoded: normalizedCiphertext),
+               data.starts(with: Data(saltedHeader)) {
+                throw Error.legacyCiphertextWithModernAlgorithm
+            }
             throw Error.invalidFormat
         }
 

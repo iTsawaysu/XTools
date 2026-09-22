@@ -448,6 +448,18 @@ struct DiagnosticMessageCorpusAuditTests {
             }
         }
 
+        // 算法与密文格式错配：用只带格式签名的静态样本触发前缀/头检测，
+        // 避免每次审计都跑真实的 PBKDF2 加密。
+        let algorithmMismatchCorpus: [(String, TextEncryptionService.Algorithm)] = [
+            ("DT-AES-GCM-v1:QUFBQUFBQUFBQUFB", .aes),
+            (Data("Salted__".utf8 + [UInt8](repeating: 0, count: 16)).base64EncodedString(), .aesGCM)
+        ]
+        for entry in algorithmMismatchCorpus {
+            collectThrowing(ledger, tool: "text-encryption(解密)", input: "格式错配样本[\(entry.1.rawValue)]") {
+                try TextEncryptionService.decrypt(entry.0, password: "pw", algorithm: entry.1)
+            }
+        }
+
         for entry in basicAuthCorpus {
             var session = BasicAuthWorkspaceSession(mode: .parse, parseInput: entry)
             session.parse()
