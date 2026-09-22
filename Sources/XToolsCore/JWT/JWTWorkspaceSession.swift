@@ -168,16 +168,10 @@ public struct JWTWorkspaceSession: Equatable, Sendable {
                 payloadJSON: decoded.payload
             )) ?? []
             verify()
-        } catch JWTParser.ParseError.invalidSegmentCount {
-            clearParsedResult(error: "JWT 必须包含 header.payload.signature 三段。")
-        } catch JWTParser.ParseError.emptyHeader {
-            clearParsedResult(error: "JWT Header 不能为空。")
-        } catch JWTParser.ParseError.emptyPayload {
-            clearParsedResult(error: "JWT Payload 不能为空。")
-        } catch JWTParser.ParseError.invalidBase64 {
-            clearParsedResult(error: "JWT 包含无效的 Base64URL 内容。")
-        } catch JWTParser.ParseError.invalidJSON {
-            clearParsedResult(error: "JWT Header 或 Payload 不是有效的 JSON 对象。")
+        } catch let error as JWTParser.ParseError {
+            // ParseError 全 case 都有 errorDescription；文案以 core 为单一真相源，
+            // 会话层不再复制——否则 core 更新文案时页面会静默停留旧版。
+            clearParsedResult(error: error.errorDescription ?? "JWT 解析失败。")
         } catch {
             clearParsedResult(error: "JWT 解析失败。")
         }
@@ -199,7 +193,9 @@ public struct JWTWorkspaceSession: Equatable, Sendable {
                 )
             )
         } catch let error as JWTVerifier.VerificationError {
-            verificationResult = verificationFailureResult(message: verificationFailureMessage(error))
+            verificationResult = verificationFailureResult(
+                message: error.errorDescription ?? "JWT 本地检查失败。"
+            )
         } catch {
             verificationResult = verificationFailureResult(message: "JWT 本地检查失败。")
         }
@@ -344,20 +340,5 @@ public struct JWTWorkspaceSession: Equatable, Sendable {
                 .init(name: "本地检查", status: .failed, message: message, category: .signature)
             ]
         )
-    }
-
-    private func verificationFailureMessage(_ error: JWTVerifier.VerificationError) -> String {
-        switch error {
-        case .missingAlgorithm:
-            return "JWT Header 缺少 alg。"
-        case .unsupportedAlgorithm:
-            return "JWT 使用了当前不支持的签名算法。"
-        case .missingSecret:
-            return "Secret 不能为空。"
-        case .invalidSignature:
-            return "JWT 签名无效。"
-        case .parseError:
-            return "JWT 格式无效，无法执行本地检查。"
-        }
     }
 }

@@ -96,12 +96,29 @@ public enum JWTVerifier {
         }
     }
 
-    public enum VerificationError: Error, Equatable {
+    public enum VerificationError: Error, Equatable, LocalizedError {
         case missingAlgorithm
         case unsupportedAlgorithm(String)
         case missingSecret
         case invalidSignature
         case parseError
+
+        /// 验证失败的文案以 core 为单一真相源；会话层直接透传，
+        /// 避免 core 更新文案时页面停留旧版。
+        public var errorDescription: String? {
+            switch self {
+            case .missingAlgorithm:
+                return "JWT Header 缺少 alg。"
+            case .unsupportedAlgorithm:
+                return "JWT 使用了当前不支持的签名算法。"
+            case .missingSecret:
+                return "Secret 不能为空。"
+            case .invalidSignature:
+                return "JWT 签名无效。"
+            case .parseError:
+                return "JWT 格式无效，无法执行本地检查。"
+            }
+        }
     }
 
     public static func verify(token: String, config: VerificationConfig) throws -> VerificationResult {

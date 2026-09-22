@@ -456,9 +456,14 @@ struct DiagnosticMessageCorpusAuditTests {
             }
         }
 
+        // 走会话层而非直调 JWTParser：parseError 是页面实际显示的字段，
+        // 这样 core 文案与会话层硬编码漂移（core 已改、UI 停旧版）会被语料直接拦下。
         for input in jwtCorpus {
-            collectThrowing(ledger, tool: "jwt-parser", input: input) {
-                try JWTParser.parse(input)
+            var session = JWTWorkspaceSession()
+            session.parseInput = input
+            session.parse()
+            if let error = session.parseError, !error.isEmpty {
+                collectMessage(ledger, tool: "jwt-parser", input: input, channel: "error", message: error)
             }
         }
     }

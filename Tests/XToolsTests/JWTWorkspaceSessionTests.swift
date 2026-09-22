@@ -50,6 +50,21 @@ struct JWTWorkspaceSessionTests {
         #expect(session.registeredClaimInsights.isEmpty)
     }
 
+    @Test func tooManySegmentsReportActualCountThroughSession() {
+        var session = JWTWorkspaceSession()
+        session.parseInput = "a.b.c.d"
+        session.parse()
+        #expect(session.parseError == "JWT 只能包含 header.payload.signature 三段（当前有 4 段）。")
+        #expect(session.parsedHeader.isEmpty)
+    }
+
+    @Test func emptyPayloadSegmentReportsEmptyPayloadNotSegmentCount() {
+        var session = JWTWorkspaceSession()
+        session.parseInput = "eyJhbGciOiJIUzI1NiJ9..sig"
+        session.parse()
+        #expect(session.parseError == "JWT Payload 不能为空。")
+    }
+
     @Test func successfulParseBuildsRegisteredClaimProjection() throws {
         var session = JWTWorkspaceSession()
         session.parseInput = Self.knownToken
