@@ -28,10 +28,6 @@ public enum TextEncryptionService {
             }
         }
 
-        public var isLegacy: Bool {
-            self != .aesGCM
-        }
-
         public var displayName: String {
             switch self {
             case .aesGCM:
