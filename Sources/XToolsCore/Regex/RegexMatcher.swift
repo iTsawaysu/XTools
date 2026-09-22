@@ -347,6 +347,10 @@ public enum RegexMatcher {
                 }
 
                 var matchContext = ICURegexMatchContext(totalStepLimit: budget.matchTimeLimit)
+                // 非 ASCII 文本：一次线性建表，后续每个捕获组的偏移换算走二分。
+                let boundaries = text.utf8.first { $0 > 0x7F } == nil
+                    ? nil
+                    : UTF16BoundaryTable(of: text)
                 return try withUnsafeMutablePointer(to: &matchContext) { context in
                     defer {
                         uregex_close(expression)
@@ -408,7 +412,8 @@ public enum RegexMatcher {
                             name: "0",
                             groupNumber: 0,
                             expression: expression,
-                            in: text
+                            in: text,
+                            boundaries: boundaries
                         ) else {
                             throw MatcherError.internalFailure
                         }
@@ -422,7 +427,8 @@ public enum RegexMatcher {
                                     name: "\(index)",
                                     groupNumber: Int32(index),
                                     expression: expression,
-                                    in: text
+                                    in: text,
+                                    boundaries: boundaries
                                 ) {
                                     try accountForResult(capture, isCapture: true)
                                     captures.append(capture)
@@ -437,7 +443,8 @@ public enum RegexMatcher {
                                 name: name,
                                 groupNumber: groupNumber,
                                 expression: expression,
-                                in: text
+                                in: text,
+                                boundaries: boundaries
                             ) {
                                 try accountForResult(capture, isCapture: true)
                                 groups.append(capture)
@@ -465,11 +472,53 @@ public enum RegexMatcher {
         }
     }
 
+    /// UTF-16 偏移 → 字符边界换算表。非 ASCII 文本上 `Range(NSRange, in:)`
+    /// 与 `distance(from:)` 都是 O(offset)，高匹配数模式会放大成 O(n×m)；
+    /// 一次线性建表把每次换算降为二分。表内恰好包含全部字符边界
+    /// （含末尾哨兵），未命中即偏移落在字符内部，与 Range 转换失败等价。
+    private struct UTF16BoundaryTable {
+        let utf16Offsets: [Int]
+        let indices: [String.Index]
+
+        init(of text: String) {
+            var utf16Offsets: [Int] = []
+            var indices: [String.Index] = []
+            let count = text.count
+            utf16Offsets.reserveCapacity(count + 1)
+            indices.reserveCapacity(count + 1)
+            var utf16Offset = 0
+            var index = text.startIndex
+            for _ in 0..<count {
+                utf16Offsets.append(utf16Offset)
+                indices.append(index)
+                utf16Offset += text[index].utf16.count
+                index = text.index(after: index)
+            }
+            utf16Offsets.append(utf16Offset)
+            indices.append(index)
+            self.utf16Offsets = utf16Offsets
+            self.indices = indices
+        }
+
+        func characterOffset(atUTF16Offset offset: Int) -> Int? {
+            var low = 0
+            var high = utf16Offsets.count - 1
+            while low <= high {
+                let mid = (low + high) / 2
+                let value = utf16Offsets[mid]
+                if value == offset { return mid }
+                if value < offset { low = mid + 1 } else { high = mid - 1 }
+            }
+            return nil
+        }
+    }
+
     private static func capture(
         name: String,
         groupNumber: Int32,
         expression: OpaquePointer,
-        in text: String
+        in text: String,
+        boundaries: UTF16BoundaryTable?
     ) throws -> Capture? {
         var status = U_ZERO_ERROR
         let start = uregex_start(expression, groupNumber, &status)
@@ -479,6 +528,19 @@ public enum RegexMatcher {
         }
         guard start >= 0, end >= start else {
             return nil
+        }
+
+        if let boundaries {
+            guard let characterStart = boundaries.characterOffset(atUTF16Offset: Int(start)),
+                  let characterEnd = boundaries.characterOffset(atUTF16Offset: Int(end)) else {
+                throw MatcherError.internalFailure
+            }
+            return Capture(
+                name: name,
+                value: String(text[boundaries.indices[characterStart]..<boundaries.indices[characterEnd]]),
+                start: characterStart,
+                end: characterEnd
+            )
         }
 
         let range = NSRange(location: Int(start), length: Int(end - start))

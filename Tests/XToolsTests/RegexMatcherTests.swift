@@ -99,6 +99,20 @@ struct RegexMatcherTests {
         #expect(match.groups == [RegexMatcher.Capture(name: "word", value: "测试", start: 1, end: 3)])
     }
 
+    /// 高匹配数 × 非 ASCII：锁定 UTF16BoundaryTable 换算路径的字符偏移正确性。
+    @Test func reportsCharacterOffsetsForHighMatchCountUnicodeText() throws {
+        let text = String(repeating: "😀中文abc", count: 200)
+        let report = try RegexMatcher.analyze(pattern: "中文", in: text, flags: "g")
+
+        #expect(report.matches.count == 200)
+        for (position, match) in report.matches.enumerated() {
+            let segmentStart = position * 6
+            #expect(match.value == "中文")
+            #expect(match.index == segmentStart + 1)
+            #expect(match.end == segmentStart + 3)
+        }
+    }
+
     @Test func matchesEmptyInputWhenPatternAllowsIt() throws {
         let report = try RegexMatcher.analyze(pattern: #"^$"#, in: "", flags: "")
         let match = try firstMatch(from: report)
