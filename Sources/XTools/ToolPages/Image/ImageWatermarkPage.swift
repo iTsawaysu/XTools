@@ -414,7 +414,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
 
     private var sourceMetadataSummary: String {
         guard let metadata = session.source?.metadata else { return "" }
-        return "\(metadata.pixelWidth)×\(metadata.pixelHeight) · \(metadata.format?.displayName ?? "未知格式") · \(ByteSizeFormatter.format(bytes: metadata.byteCount))"
+        return ImageOutputPresentation.sourceSummary(metadata)
     }
 
     private var sourceAccessibilityValue: String {

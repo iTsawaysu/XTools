@@ -2,6 +2,10 @@ import XToolsCore
 import SwiftUI
 
 enum ImageOutputPresentation {
+    static func sourceSummary(_ metadata: ImageMetadata) -> String {
+        "\(metadata.pixelWidth)×\(metadata.pixelHeight) · \(metadata.format?.displayName ?? "未知格式") · \(ByteSizeFormatter.format(bytes: metadata.byteCount))"
+    }
+
     static func sizeChangeText(_ assessment: ImageOutputAssessment) -> String {
         let percent = assessment.sizeDeltaPercent
         if percent < 0 {

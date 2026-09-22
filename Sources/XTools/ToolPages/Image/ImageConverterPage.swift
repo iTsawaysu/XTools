@@ -198,7 +198,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                             spacing: ToolMetrics.Spacing.md
                         ) {
                             if let sourceMetadata = session.sourceMetadata {
-                                Text("原图: \(sourceMetadata.pixelWidth)×\(sourceMetadata.pixelHeight) · \(sourceMetadata.format?.displayName ?? "未知格式") · \(ByteSizeFormatter.format(bytes: sourceMetadata.byteCount))")
+                                Text("原图: \(ImageOutputPresentation.sourceSummary(sourceMetadata))")
                                     .font(ToolTypography.caption)
                                     .foregroundStyle(ToolTheme.textSecondary)
                             }
