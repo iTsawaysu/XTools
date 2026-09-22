@@ -316,11 +316,13 @@ struct DockerComposeToRunServiceTests {
         """
         let result = try DockerComposeToRunService.convert(yaml)
         let command = try #require(result.commands.first)
-        let warning = try #require(result.warnings.first { $0.contains("服务 app 未映射字段") })
+        // 四条长路径恰好超过单条上限触发折叠；折叠文案仍完整列出全部字段。
+        let warning = try #require(result.warnings.first { $0.contains("未映射字段") })
         #expect(warning.contains("volumes.tmpfs.tmpfs.size(结构无法映射)"))
         #expect(warning.contains("networks.front.ipv4_address(结构无法映射)"))
         #expect(warning.contains("deploy.resources.limits.memory(结构无法映射)"))
         #expect(warning.contains("deploy.resources.reservations.memory(结构无法映射)"))
+        #expect(warning.count <= 180)
         #expect(!warning.contains("private-secret-value"))
         #expect(!command.contains("--mount"))
     }
@@ -395,7 +397,7 @@ struct DockerComposeToRunServiceTests {
         """
         let result = try DockerComposeToRunService.convert(yaml)
         #expect(result.commands.count == 2)
-        #expect(result.warnings.contains(where: { $0.contains("服务 web 未映射字段：build、depends_on") }))
+        #expect(result.warnings.contains(where: { $0.contains("服务 web 未映射字段（无对应）：build、depends_on") }))
 
         let dbCommand = result.commands.first { $0.contains("postgres") }
         #expect(dbCommand?.contains("--health-cmd pg_isready") == true)
@@ -983,10 +985,43 @@ struct DockerComposeToRunWarningTests {
     }
 
     @Test func multipleWarningsJoinWithSemicolonPrefix() throws {
-        let result = DockerComposeToRunDiagnostics.warningMessage(for: ["顶层 networks 定义不会写入命令（服务内引用已映射，需预先创建）", "服务 web 未映射字段：build"])
+        let result = DockerComposeToRunDiagnostics.warningMessage(for: ["顶层 networks 定义不会写入命令（服务内引用已映射，需预先创建）", "服务 web 未映射字段（无对应）：build"])
         #expect(result?.hasPrefix("转换提示（2 项）") == true)
         #expect(DockerComposeToRunDiagnostics.warningMessage(for: ["单独一条"]) == "单独一条")
         #expect(DockerComposeToRunDiagnostics.warningMessage(for: []) == nil)
+    }
+
+    /// 单个服务的未映射字段过多时折叠为前 5 个预览，保持单段可读。
+    @Test func excessiveUnmappedFieldsCollapseToPreview() throws {
+        let unknownFields = (1...20).map { "unmapped_compose_field_\(String(format: "%02d", $0))" }
+        let yaml = "services:\n  app:\n    image: nginx\n" + unknownFields
+            .map { "    \($0): 1" }
+            .joined(separator: "\n")
+
+        let result = try DockerComposeToRunService.convert(yaml)
+        let warning = try #require(result.warnings.first)
+        #expect(warning.contains("有 20 个未映射字段（无对应）"))
+        #expect(warning.contains("unmapped_compose_field_01、unmapped_compose_field_02、unmapped_compose_field_03、unmapped_compose_field_04、unmapped_compose_field_05…"))
+        #expect(!warning.contains("unmapped_compose_field_06"))
+        #expect(warning.count <= 180)
+    }
+
+    /// 多服务合成超出横幅可读上限时，保留放得下的完整条目并折叠剩余计数。
+    @Test func longWarningListsCollapseWithOmittedCount() throws {
+        let serviceBlock: (String) -> String = { name in
+            let fields = ["depends_on", "build", "profiles", "credential_spec", "cgroup_parent", "pull_policy"]
+            return "  \(name):\n    image: nginx\n" + fields.map { "    \($0): v" }.joined(separator: "\n")
+        }
+        let yaml = "services:\n" + ["alpha", "beta", "gamma"].map(serviceBlock).joined(separator: "\n")
+
+        let result = try DockerComposeToRunService.convert(yaml)
+        #expect(result.warnings.count == 3)
+
+        let summary = try #require(DockerComposeToRunDiagnostics.warningMessage(for: result.warnings))
+        #expect(summary.hasPrefix("转换提示（3 项）："))
+        #expect(summary.contains("服务 alpha"))
+        #expect(summary.contains("其余 2 项已省略。"))
+        #expect(summary.count <= 180)
     }
 
     // MARK: - Shell quoting safety

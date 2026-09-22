@@ -29,6 +29,32 @@ public enum DockerComposeToRunDiagnostics {
     public static let missingServicesMessage = "未找到 services 段：Compose 文件需要顶级 services 键。"
     public static let noServicesMessage = "services 段为空：至少需要一个服务定义。"
 
+    /// 与 JSONDiffValidation / 顶栏横幅一致的可读上限；单条与合成共用。
+    private static let maximumMessageCharacters = 180
+    private static let collapsedFieldPreviewCount = 5
+
+    /// 服务内未映射字段的一句话归因；字段过多时折叠列表，保持事实型单段，
+    /// 且不超横幅可读上限。字段路径保留 Compose 官方英文名——目标用户要
+    /// 拿着它对照 Compose 文档；括号补充「无对应」的含义说明。
+    static func unmappedFieldsMessage(service: String, fields: [String]) -> String {
+        let lead = "服务 \(service) 未映射字段（无对应）："
+        let list = fields.joined(separator: "、")
+        if lead.count + list.count <= maximumMessageCharacters {
+            return lead + list
+        }
+
+        // 折叠：只列前几个字段；不足预览数时全列（不写「前 N 个」措辞），
+        // 让边界场景（四五条长路径恰好超限）仍能看到完整清单。
+        let previewFields = Array(fields.prefix(collapsedFieldPreviewCount))
+        let showsAll = previewFields.count == fields.count
+        let previewList = previewFields.joined(separator: "、") + (showsAll ? "" : "…")
+        let preview = "服务 \(service) 有 \(fields.count) 个未映射字段（无对应）：\(previewList)"
+        if preview.count <= maximumMessageCharacters {
+            return preview
+        }
+        return "服务 \(service) 有 \(fields.count) 个未映射字段（无对应）。"
+    }
+
     /// 无法从底层错误获得更多信息时的兜底诊断。
     public static let invalidYAMLFallbackDiagnostic = FormatDiagnostic(
         formatName: "Compose 转换",
@@ -71,7 +97,29 @@ public enum DockerComposeToRunDiagnostics {
         if warnings.count == 1 {
             return warnings[0]
         }
-        return "转换提示（\(warnings.count) 项）：" + warnings.joined(separator: "；")
+
+        // 多条合成可能远超横幅可读上限；逐条累加到放得下的最后一条，
+        // 其余折叠为计数——与 JSONDiffValidation 的超限退化策略同型。
+        let prefix = "转换提示（\(warnings.count) 项）："
+        var included: [String] = []
+        for warning in warnings {
+            let omittedCount = warnings.count - included.count - 1
+            let suffix = omittedCount > 0 ? "；其余 \(omittedCount) 项已省略。" : ""
+            let candidate = prefix + (included + [warning]).joined(separator: "；") + suffix
+            guard candidate.count <= maximumMessageCharacters else { break }
+            included.append(warning)
+        }
+
+        let omittedCount = warnings.count - included.count
+        guard omittedCount > 0 else {
+            return prefix + included.joined(separator: "；")
+        }
+        if included.isEmpty {
+            // 防御：加前缀后连第一条都放不下时，直接返回第一条本身——
+            // 单条已在源头保证不超上限，且条目自含服务主语。
+            return warnings[0]
+        }
+        return prefix + included.joined(separator: "；") + "；其余 \(omittedCount) 项已省略。"
     }
 }
 
@@ -402,7 +450,7 @@ public enum DockerComposeToRunService {
         if !skipped.isEmpty {
             var seenSkipped = Set<String>()
             skipped.removeAll { !seenSkipped.insert($0).inserted }
-            warnings.append("服务 \(name) 未映射字段：\(skipped.sorted().joined(separator: "、"))")
+            warnings.append(DockerComposeToRunDiagnostics.unmappedFieldsMessage(service: name, fields: skipped.sorted()))
         }
 
         var tokens = ["docker", "run", "-d"] + args + [shellToken(image)]

@@ -560,7 +560,16 @@ struct DiagnosticMessageCorpusAuditTests {
 
         for input in dockerComposeCorpus {
             do {
-                _ = try DockerComposeToRunService.convert(input)
+                let result = try DockerComposeToRunService.convert(input)
+                if let warningText = DockerComposeToRunDiagnostics.warningMessage(for: result.warnings) {
+                    collectMessage(
+                        ledger,
+                        tool: "docker-compose→run",
+                        input: input,
+                        channel: "warning",
+                        message: warningText
+                    )
+                }
             } catch let error as DockerComposeToRunError {
                 let diagnostic = DockerComposeToRunDiagnostics.diagnostic(for: error)
                 collectDiagnostic(ledger, tool: "docker-compose→run", input: input, channel: "error", diagnostic: diagnostic)
@@ -986,7 +995,11 @@ struct DiagnosticMessageCorpusAuditTests {
         "services:\n\tweb:\n\t\timage: nginx",
         "services: 1",
         "services:\n  web: image: nginx",
-        "services:\n  web:\n    image: nginx\n    ports:\n      - '80"
+        "services:\n  web:\n    image: nginx\n    ports:\n      - '80",
+        "services:\n  app:\n    image: nginx\n" + (1...20).map { "    unmapped_compose_field_\(String(format: "%02d", $0)): 1" }.joined(separator: "\n"),
+        "services:\n" + ["alpha", "beta", "gamma"].map { name in
+            "  \(name):\n    image: nginx\n    depends_on: [db]\n    build: .\n    profiles: [p]"
+        }.joined(separator: "\n")
     ]
 }
 
