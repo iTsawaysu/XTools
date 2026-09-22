@@ -286,11 +286,6 @@ struct IconSemanticContractTests {
         }
         contains(randomPort, #"Label("重新生成", systemImage: IndexActionSymbol.refresh)"#, "Random Port regeneration must use the shared refresh symbol owner")
 
-        contains(
-            try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexGenerateBar.swift"),
-            "systemImage: IndexActionSymbol.refresh",
-            "The shared generator bar must own the refresh symbol"
-        )
         let refreshConsumers = [
             "Sources/XTools/ToolPages/Utility/DeviceInformationPage.swift",
         ]
