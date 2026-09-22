@@ -83,23 +83,26 @@ extension JWTWorkspaceSession {
             )
         case .failed:
             return .init(
-                title: failedSignatureTitle(message: message),
+                title: failedSignatureTitle(for: detail),
                 message: message,
                 status: .failed
             )
         }
     }
 
-    private static func failedSignatureTitle(message: String) -> String {
-        switch message {
-        case "不匹配":
-            return "签名不匹配"
-        case "JWT 使用了当前不支持的签名算法。":
-            return "签名算法不支持"
-        case "Secret 不是有效的 Base64。":
-            return "Secret 格式错误"
-        default:
+    /// 按 `VerificationItem.reason` 派生标题。此前用消息字符串相等反查，
+    /// 文案一改标题映射就会静默失效；reason 是结构化契约，不受文案演进影响。
+    private static func failedSignatureTitle(for detail: JWTVerifier.VerificationItem?) -> String {
+        guard let reason = detail?.reason ?? nil else {
             return "签名检查失败"
+        }
+        switch reason {
+        case .signatureMismatch:
+            return "签名不匹配"
+        case .unsupportedAlgorithm:
+            return "签名算法不支持"
+        case .invalidSecretBase64:
+            return "Secret 格式错误"
         }
     }
 

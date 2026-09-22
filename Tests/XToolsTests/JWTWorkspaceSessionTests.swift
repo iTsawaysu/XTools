@@ -410,4 +410,13 @@ struct JWTWorkspaceSessionTests {
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
     }
+    /// 展示层的标题映射必须走结构化 reason，禁止退回消息字符串反查——
+    /// 文案一改标题映射就会静默失效。
+    @Test func signatureTitleMappingStaysStructuralNotStringMatching() throws {
+        let source = try readSource("Sources/XToolsCore/JWT/JWTLocalCheckPresentation.swift")
+        #expect(!source.contains("case \"不匹配\""))
+        #expect(!source.contains("case \"JWT 使用了"))
+        #expect(!source.contains("case \"Secret 不是有效的 Base64"))
+        #expect(source.contains("failedSignatureTitle(for:"))
+    }
 }

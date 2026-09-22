@@ -60,6 +60,9 @@ public enum JWTVerifier {
         public let status: Status
         public let message: String
         public let category: Category
+        /// 签名检查的结构化归因。展示层按它派生标题，而不是反查 message
+        /// 字符串——那样文案一改标题映射就会静默失效。
+        public let reason: Reason?
 
         public var passed: Bool {
             status == .passed || status == .informational
@@ -79,11 +82,24 @@ public enum JWTVerifier {
             case security
         }
 
-        public init(name: String, status: Status, message: String, category: Category) {
+        public enum Reason: Equatable, Sendable {
+            case signatureMismatch
+            case unsupportedAlgorithm
+            case invalidSecretBase64
+        }
+
+        public init(
+            name: String,
+            status: Status,
+            message: String,
+            category: Category,
+            reason: Reason? = nil
+        ) {
             self.name = name
             self.status = status
             self.message = message
             self.category = category
+            self.reason = reason
         }
 
         public init(name: String, passed: Bool, message: String, category: Category) {
@@ -201,7 +217,8 @@ public enum JWTVerifier {
                 name: "签名",
                 status: .failed,
                 message: "Secret 不是有效的 Base64。",
-                category: .signature
+                category: .signature,
+                reason: .invalidSecretBase64
             ))
             return .failed
         } catch {
@@ -219,7 +236,8 @@ public enum JWTVerifier {
                 name: "签名",
                 status: .failed,
                 message: "JWT 使用了当前不支持的签名算法。",
-                category: .signature
+                category: .signature,
+                reason: .unsupportedAlgorithm
             ))
             return .failed
         }
@@ -233,7 +251,8 @@ public enum JWTVerifier {
             name: "签名",
             status: signaturePassed ? .passed : .failed,
             message: signaturePassed ? "匹配 (\(algorithm.rawValue))" : "不匹配",
-            category: .signature
+            category: .signature,
+            reason: signaturePassed ? nil : .signatureMismatch
         ))
 
         if secret.byteCount < algorithm.minimumKeyByteCount {
