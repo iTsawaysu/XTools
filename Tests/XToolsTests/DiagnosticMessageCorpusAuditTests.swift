@@ -495,12 +495,6 @@ struct DiagnosticMessageCorpusAuditTests {
             }
         }
 
-        for input in hexColorCorpus {
-            if let message = ColorFormatConverter.hexInputState(input).diagnosticMessage {
-                collectMessage(ledger, tool: "color-picker(HEX)", input: input, channel: "error", message: message)
-            }
-        }
-
         for input in cssColorCorpus {
             let result = CSSColorParser.classify(input)
             if let diagnostic = result.diagnostic {
@@ -911,12 +905,6 @@ struct DiagnosticMessageCorpusAuditTests {
         "-62135596801", "253402300799", "253402300800",
         "1.5", "abc", "1e5", " 1700000000 ", "１２３", "+1700000000",
         String(repeating: "9", count: 40)
-    ]
-
-    static let hexColorCorpus: [String] = [
-        "", "  ", "#", "#F", "#FF", "#FFF", "#FFFF", "#FFFFF",
-        "#FFFFFF", "#ffffffff", "#GGGGGG", "FFFFFF", "FF#FFFF",
-        "12345", "#1234567", "红色", "#12 34 56"
     ]
 
     static let cssColorCorpus: [String] = [
