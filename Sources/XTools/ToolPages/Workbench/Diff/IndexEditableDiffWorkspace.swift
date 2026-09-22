@@ -77,33 +77,34 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
         self.leadingControl = leadingControl
     }
 
-    private var isIdentical: Bool {
-        guard resultState == .current,
-              error == nil,
-              !left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !right.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return false
-        }
-        if syntax == .json && rows.isEmpty {
-            return true
-        }
-        guard !rows.isEmpty else {
-            return false
-        }
-        return rows.allSatisfy { !$0.kind.isDifference }
-    }
+    /// 一次共享的全文裁剪：body 里诊断文案、语气与差异导航都会读取这两个
+    /// 结论，合并计算避免对大文本重复全量 trim。
+    private var diffSummary: (isIdentical: Bool, differenceBlockCount: Int) {
+        let leftNonEmpty = !left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let rightNonEmpty = !right.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
-    private var differenceBlockCount: Int {
-        guard resultState == .current,
-              error == nil,
-              (!left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !right.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) else {
-            return 0
+        var identical = false
+        if resultState == .current,
+           error == nil,
+           leftNonEmpty,
+           rightNonEmpty {
+            if syntax == .json && rows.isEmpty {
+                identical = true
+            } else if !rows.isEmpty {
+                identical = rows.allSatisfy { !$0.kind.isDifference }
+            }
         }
-        return Self.differenceBlockCount(in: rows)
+
+        let inputsPresent = resultState == .current
+            && error == nil
+            && (leftNonEmpty || rightNonEmpty)
+        let blocks = inputsPresent ? Self.differenceBlockCount(in: rows) : 0
+
+        return (identical, blocks)
     }
 
     private var canNavigateDifferences: Bool {
-        Self.navigationEnabled(resultState: resultState, diffCount: differenceBlockCount)
+        Self.navigationEnabled(resultState: resultState, diffCount: diffSummary.differenceBlockCount)
     }
 
     static func navigationEnabled(
@@ -143,11 +144,12 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
         if let warning, !warning.isEmpty {
             return warning
         }
-        if isIdentical {
+        let summary = diffSummary
+        if summary.isIdentical {
             return syntax == .json ? "两段 JSON 完全一致" : "两段文本完全一致"
         }
-        if differenceBlockCount > 0 {
-            return "共 \(differenceBlockCount) 个差异块"
+        if summary.differenceBlockCount > 0 {
+            return "共 \(summary.differenceBlockCount) 个差异块"
         }
         return nil
     }
@@ -162,7 +164,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
         if let warning, !warning.isEmpty {
             return .warning
         }
-        if isIdentical {
+        if diffSummary.isIdentical {
             return .success
         }
         return .info
@@ -273,7 +275,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
 
                 HStack(spacing: 6) {
                     if let current = navigationProgress.current,
-                       navigationProgress.total == differenceBlockCount {
+                       navigationProgress.total == diffSummary.differenceBlockCount {
                         IndexBadge(
                             "\(current) / \(navigationProgress.total)",
                             tone: .accent,
@@ -766,7 +768,9 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
 
         func update(left: String, right: String, rows: [DiffAlignedRow], syntax: IndexDiffSyntax, foldUnchanged: Bool) {
             fullRows = rows
-            expandedFoldRegions.formIntersection(Set(DiffFoldProjection.regions(in: rows).map(\.id)))
+            if foldUnchanged {
+                expandedFoldRegions.formIntersection(Set(DiffFoldProjection.regions(in: rows).map(\.id)))
+            }
             foldEnabled = foldUnchanged
             currentSyntax = syntax
             latestLeftDisplayText = left
@@ -809,8 +813,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             leftTextView?.isEditable = !hasCollapsedRegion
             rightTextView?.isEditable = !hasCollapsedRegion
 
-            let freshComposedLeft = JSONExactTextIdentity(composition.leftText) != JSONExactTextIdentity(latestAppliedLeftText)
-            let freshComposedRight = JSONExactTextIdentity(composition.rightText) != JSONExactTextIdentity(latestAppliedRightText)
+            let freshComposedLeft = !JSONExactTextIdentity.isExactlyEqual(composition.leftText, latestAppliedLeftText)
+            let freshComposedRight = !JSONExactTextIdentity.isExactlyEqual(composition.rightText, latestAppliedRightText)
             let overrideFresh = currentSyntax == .json && (freshComposedLeft || freshComposedRight)
             // A collapsed projection is intentionally read-only and must
             // replace both native buffers, including the focused pane. The
@@ -1211,14 +1215,14 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             allowActiveEditorOverride: Bool = false
         ) {
             guard let textView,
-                  JSONExactTextIdentity(textView.string) != JSONExactTextIdentity(text),
+                  !JSONExactTextIdentity.isExactlyEqual(textView.string, text),
                   !textView.hasMarkedText() else {
                 return
             }
 
             if !allowActiveEditorOverride,
                isActiveEditor(textView),
-               JSONExactTextIdentity(textView.string) == JSONExactTextIdentity(source) {
+               JSONExactTextIdentity.isExactlyEqual(textView.string, source) {
                 return
             }
 
@@ -1228,7 +1232,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             textView.setStringWithoutUndoRegistration(text)
 
             let textLength = (text as NSString).length
-            if JSONExactTextIdentity(text) != JSONExactTextIdentity(source) {
+            if !JSONExactTextIdentity.isExactlyEqual(text, source) {
                 // Canonical replacement (e.g. JSON formatting/sorting): the
                 // text structure has changed so old cursor offsets are
                 // meaningless — dock to the end.

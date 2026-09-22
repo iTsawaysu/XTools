@@ -84,7 +84,7 @@ struct EditableDiffSourceContractTests {
         contains(source, "applyLatestDisplay(to: textView)", "End-editing reconciliation must use the same guarded programmatic text path")
         contains(source, "if textView === leftTextView", "Canonical reconciliation must distinguish the left editor")
         contains(source, "else if textView === rightTextView", "Canonical reconciliation must distinguish the right editor")
-        contains(source, "if !allowActiveEditorOverride,\n               isActiveEditor(textView),\n               JSONExactTextIdentity(textView.string) == JSONExactTextIdentity(source)", "Active editors must preserve only byte-identical user drafts while typing")
+        contains(source, "if !allowActiveEditorOverride,\n               isActiveEditor(textView),\n               JSONExactTextIdentity.isExactlyEqual(textView.string, source)", "Active editors must preserve only byte-identical user drafts while typing")
     }
 
     @Test func editableDiffWorkspaceUsesSingleOuterScrollAndWrapping() throws {
@@ -147,7 +147,7 @@ struct EditableDiffSourceContractTests {
         contains(source, "right: rightDisplayText ?? right", "Diff workspace must render normalized right text when JSON diff provides it")
         contains(source, "source: self.left.wrappedValue", "Diff workspace must compare display updates against the editable source binding before replacing visible text")
         contains(source, "let overrideFoldProjection = hasCollapsedRegion", "A read-only fold projection must override the focused editor on both sides")
-        contains(source, "isActiveEditor(textView),\n               JSONExactTextIdentity(textView.string) == JSONExactTextIdentity(source)", "Diff workspace must preserve byte-identical active drafts during ordinary user edits")
+        contains(source, "isActiveEditor(textView),\n               JSONExactTextIdentity.isExactlyEqual(textView.string, source)", "Diff workspace must preserve byte-identical active drafts during ordinary user edits")
         contains(source, "textView.setStringWithoutUndoRegistration(text)", "Diff workspace programmatic replacements must establish a safe undo baseline through the shared helper")
         contains(source, "IndexBadge(\"STDIN\"", "Diff workspace must show standard workbench badges")
         doesNotContain(source, "IndexTrafficLights()", "Diff workspace shell must not keep decorative traffic lights beside an active diagnostic")
