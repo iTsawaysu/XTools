@@ -68,8 +68,7 @@ final class StringObfuscatorToolWorkspaceModel: ObservableObject {
     private let debounce: Duration
     private let renderer: StringObfuscationRenderer
     private let backgroundRenderer: StringObfuscationBackgroundRenderer
-    private var backgroundTask: Task<Void, Never>?
-    private var generation = 0
+    private let workGate = AsyncWorkGate()
 
     init(
         preferences: ToolPreferenceStore,
@@ -100,10 +99,6 @@ final class StringObfuscatorToolWorkspaceModel: ObservableObject {
 
         let storedReplacement = preferences.value(for: SensitiveToolPreferenceKeys.obfuscatorReplacementCharacter)
         replacementChar = storedReplacement.count == 1 ? storedReplacement : "*"
-    }
-
-    deinit {
-        backgroundTask?.cancel()
     }
 
     func setReplacementCharacter(_ newValue: String) {
@@ -153,34 +148,20 @@ final class StringObfuscatorToolWorkspaceModel: ObservableObject {
     }
 
     private func scheduleBackgroundRender(for request: StringObfuscationRequest) {
-        let currentGeneration = generation
-        let debounce = self.debounce
-        let backgroundRenderer = self.backgroundRenderer
+        let token = workGate.token
+        workGate.schedule(debounce: debounce) { [weak self] in
+            guard let self, self.workGate.isCurrent(token) else { return }
 
-        backgroundTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: debounce)
-                try Task.checkCancellation()
+            let result = await backgroundRenderer(request)
 
-                let result = await backgroundRenderer(request)
-                try Task.checkCancellation()
-
-                guard let self, self.generation == currentGeneration else { return }
-                self.backgroundTask = nil
-                self.output = result ?? ""
-                self.isProcessing = false
-            } catch is CancellationError {
-                // A newer input, recipe, or clear owns the replacement state.
-            } catch {
-                // Task.sleep only throws cancellation; keep the latest stable state.
-            }
+            guard self.workGate.isCurrent(token) else { return }
+            self.output = result ?? ""
+            self.isProcessing = false
         }
     }
 
     private func invalidateCurrentRequest() {
-        backgroundTask?.cancel()
-        backgroundTask = nil
-        generation &+= 1
+        workGate.invalidate()
     }
 
     private func clearDerivedState() {
