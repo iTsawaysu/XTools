@@ -68,6 +68,7 @@ final class TextEncryptionToolWorkspaceModel: ObservableObject {
             output = ""
             error = err.errorDescription ?? (mode == "enc" ? "加密操作失败。" : "解密操作失败。")
         } catch {
+            DiagnosticFallbackLog.record(error, context: "TextEncryptionPage.convert")
             output = ""
             self.error = mode == "enc" ? "加密操作失败。" : "解密操作失败。"
         }

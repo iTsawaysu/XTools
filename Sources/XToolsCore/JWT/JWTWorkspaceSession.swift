@@ -173,6 +173,7 @@ public struct JWTWorkspaceSession: Equatable, Sendable {
             // 会话层不再复制——否则 core 更新文案时页面会静默停留旧版。
             clearParsedResult(error: error.errorDescription ?? "JWT 解析失败。")
         } catch {
+            DiagnosticFallbackLog.record(error, context: "JWTWorkspaceSession.parse")
             clearParsedResult(error: "JWT 解析失败。")
         }
     }
@@ -197,6 +198,7 @@ public struct JWTWorkspaceSession: Equatable, Sendable {
                 message: error.errorDescription ?? "JWT 本地检查失败。"
             )
         } catch {
+            DiagnosticFallbackLog.record(error, context: "JWTWorkspaceSession.verify")
             verificationResult = verificationFailureResult(message: "JWT 本地检查失败。")
         }
     }

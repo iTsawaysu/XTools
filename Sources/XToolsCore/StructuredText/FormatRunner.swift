@@ -30,6 +30,7 @@ public enum FormatRunner {
         } catch let error as FormatDiagnosticProviding {
             return .failed(error.diagnostic)
         } catch {
+            DiagnosticFallbackLog.record(error, context: "FormatRunner.run")
             return .failed(FormatDiagnostic(formatName: "", message: "格式化失败，输入内容无法解析"))
         }
     }

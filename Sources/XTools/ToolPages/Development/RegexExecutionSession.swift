@@ -42,6 +42,7 @@ final class RegexExecutionSession: ObservableObject {
             } catch let error as RegexMatcher.MatcherError {
                 return .failure(error)
             } catch {
+                DiagnosticFallbackLog.record(error, context: "RegexExecutionSession.run")
                 return .unknownFailure
             }
         } publish: { [weak self] outcome in

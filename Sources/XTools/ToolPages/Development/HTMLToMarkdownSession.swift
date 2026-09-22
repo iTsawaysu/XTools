@@ -223,6 +223,7 @@ final class HTMLToMarkdownSession: ObservableObject {
                     generation: currentGeneration
                 )
             } catch {
+                DiagnosticFallbackLog.record(error, context: "HTMLToMarkdownSession.convert")
                 self.finishFailure(
                     "HTML 转换失败，输入内容无法解析。",
                     generation: currentGeneration
