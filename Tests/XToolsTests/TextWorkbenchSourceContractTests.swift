@@ -68,7 +68,7 @@ struct TextWorkbenchSourceContractTests {
         contains(workbench, "private var inputDiagnosticText: String?", "Shared text conversion workbench must normalize errors and warnings into one diagnostic text")
         contains(workbench, "private var inputDiagnosticTone: ToolFeedbackTone", "Shared text conversion workbench must select a diagnostic tone from the active error/warning state")
         contains(shared, "struct IndexWorkspaceDiagnosticRegion", "Shared components must provide a safe diagnostic region outside editor text")
-        contains(workbench, ".indexWorkspaceDiagnostic(inputDiagnosticText, tone: inputDiagnosticTone)", "Shared text conversion workbench must attach errors and warnings as input-panel safe diagnostics")
+        contains(workbench, "IndexDiagnosticBanner(\n                    diagnostic: inputDiagnostic,\n                    message: diagnosticText,\n                    tone: inputDiagnosticTone", "Shared text conversion workbench must attach errors and warnings as the shared top diagnostic banner")
         contains(shared, ".indexWorkspaceDiagnostic(inputError, tone: .error)", "Legacy IO pairs must attach errors as input-panel safe diagnostics")
         contains(json, "diagnostic: execution.binding.error ?? execution.binding.warning", "JSON formatter diagnostics must render inside the prototype workbench toolbar")
         contains(json, "diagnosticTone: execution.binding.error == nil ? .warning : .error", "JSON formatter must select the diagnostic tone from the active error/warning state")
@@ -435,7 +435,6 @@ struct TextWorkbenchSourceContractTests {
         contains(formatWorkbench, "IndexBadge(\"STDOUT\", tone: .accent, isCapsule: true)", "The workbench toolbar must carry the STDOUT identity")
         contains(formatWorkbench, "IndexPrimaryActionButton(title: actionTitle, hint: actionHint", "The primary format action must be the shared prototype button")
         contains(formatWorkbench, ".keyboardShortcut(.return, modifiers: .command)", "Format must be reachable through Command-Return")
-        contains(formatWorkbench, ".toolErrorShake(trigger: errorShakeTrigger)", "A failed format must shake through the shared bounded shake")
 
         contains(formatWorkbench, "IndexWorkspaceTextArea(", "Workbench inputs must use the semantic text surface")
         contains(formatWorkbench, "var onFormat: (() -> Void)? = nil", "The prototype workbench must let session-owned converters (HTML) hide the primary action")

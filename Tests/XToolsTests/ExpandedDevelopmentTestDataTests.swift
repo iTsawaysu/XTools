@@ -219,7 +219,11 @@ struct ExpandedDevelopmentTestDataTests {
         let mounts = try DockerRunToDockerComposeService.convert(
             #"docker run --mount type=bind,source=/host/path,target=/data,readonly --tmpfs /run:size=64m -p127.0.0.1:8080:80/tcp -p 53:53/udp nginx"#
         )
-        #expect(mounts.yaml.contains("- \"/host/path:/data:ro\""))
+        // 8fe8d77：--mount 的完整选项映射为 Compose 长形式（-v 仍为短形式）。
+        #expect(mounts.yaml.contains("- type: bind"))
+        #expect(mounts.yaml.contains("source: /host/path"))
+        #expect(mounts.yaml.contains("target: /data"))
+        #expect(mounts.yaml.contains("read_only: true"))
         #expect(mounts.yaml.contains("- \"/run:size=64m\""))
         #expect(mounts.yaml.contains("- \"127.0.0.1:8080:80\""))
         #expect(mounts.yaml.contains("- \"53:53/udp\""))

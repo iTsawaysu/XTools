@@ -81,6 +81,7 @@ struct IconSemanticContractTests {
         "key",
         "keyboard",
         "lightbulb",
+        "lightbulb.fill",
         "link",
         "list.bullet.indent",
         "lock",

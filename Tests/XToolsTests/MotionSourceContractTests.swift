@@ -160,10 +160,12 @@ struct MotionSourceContractTests {
 
         contains(shared, ".toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)", "Workspace diagnostics may reveal, but only through the shared safe diagnostic transition")
         contains(shared, ".toolAnimation(ToolMotion.Preset.diagnostic, value: text)", "Workspace diagnostic regions must animate through ToolMotion")
-        contains(shared, ".toolErrorShake(trigger: errorShakeTrigger)", "v3: error-tone diagnostic arrivals must shake the status slot through the shared bounded shake")
         doesNotContain(shared, ".easeInOut(duration: 0.15)", "Workspace diagnostics must not keep hard-coded diagnostic animation durations")
 
-        doesNotContain(workbench, ".animation(", "The fixed text conversion workbench must not add structural implicit animation")
+        // 4c996aa：诊断提示统一为顶栏通栏横幅并刻意移除错误抖动；横幅出现
+        // 的 spring 必须继续绑定 hasDiagnostic（值作用域），不得退回无条件
+        // 隐式动画或 withAnimation。
+        contains(workbench, ".animation(.spring(response: 0.32, dampingFraction: 0.84), value: hasDiagnostic)", "The diagnostic banner reveal must stay scoped to hasDiagnostic changes")
         doesNotContain(workbench, "withAnimation(", "The fixed text conversion workbench must not retain a focus-mode animation path")
         doesNotContain(commandPalette, "withAnimation(.easeInOut(duration: 0.12))", "Command palette row reveal must remain unanimated")
         doesNotContain(commandPalette, "GeometryReader", "Command palette row reveal must not add continuous geometry measurement")

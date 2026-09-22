@@ -40,9 +40,9 @@ struct TextArtifactContractTests {
         #expect(readme.contains("macOS 13+")) // document the supported runtime baseline
         #expect(readme.contains("Xcode 16+")) // document the required build toolchain
         #expect(readme.contains("git clone https://github.com/iTsawaysu/XTools.git")) // provide the repository bootstrap command
-        #expect(readme.contains("./build.sh           # Incremental debug build & open app")) // document the daily development entrypoint
-        #expect(readme.contains("./build.sh release   # Production release build")) // document the release packaging entrypoint
-        #expect(readme.contains("swift test           # Run automated test suite")) // document the full test entrypoint beside build commands
+        #expect(readme.contains("./build.sh           # Incremental debug build, package, and open the app")) // document the daily development entrypoint
+        #expect(readme.contains("./build.sh release   # Incremental release build and package without opening")) // document the release packaging entrypoint
+        #expect(readme.contains("swift test           # Run the complete automated test suite")) // document the full test entrypoint beside build commands
         #expect(readme.contains("Run `swift test` before submitting")) // contributors must run the same public test entrypoint
         #expect(script.contains("TRASH_DIR=\"${TRASH_DIR:-${TMPDIR:-/tmp}/XTools-build-archive}\"")) // use a portable default while allowing overrides
 
