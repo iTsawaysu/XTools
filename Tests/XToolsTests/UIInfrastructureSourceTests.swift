@@ -229,13 +229,10 @@ struct UIInfrastructureSourceTests {
         contains(source, "self.hasAccessory = false", "Headers without an accessory must not enter the accessory HStack layout")
     }
 
-    @Test func diagnosticSlotRemainsPresentWhenPayloadIsNil() throws {
+    @Test func diagnosticBannerRendersThroughSharedOwner() throws {
         let panel = try readSource("Sources/XTools/ToolPages/Workbench/PageChrome/IndexPageShell.swift")
-        let diagnostic = try readSource("Sources/XTools/ToolPages/Workbench/Diagnostics/IndexResultDisplays.swift")
 
-        contains(panel, "if reservesDiagnosticStatusSlot {\n                    IndexPanelWorkspaceDiagnostic(payload: workspaceDiagnostic)", "Diagnostic-capable panels must render the slot even while payload is nil")
-        doesNotContain(panel, "if reservesDiagnosticStatusSlot, workspaceDiagnostic != nil", "Diagnostic slot geometry must not depend on payload presence")
-        contains(diagnostic, ".frame(width: 31, height: 24)", "The panel diagnostic slot must keep a fixed trailing width")
+        contains(panel, "if reservesDiagnosticStatusSlot, let diagnostic = workspaceDiagnostic {\n                IndexDiagnosticBanner(", "Diagnostic-capable panels must render the shared banner for the current payload")
         contains(panel, "func withoutDiagnosticStatusSlot() -> IndexPanel", "Panels without diagnostics must opt out explicitly")
     }
 
@@ -324,7 +321,7 @@ struct UIInfrastructureSourceTests {
         contains(panel, "@State private var workspaceDiagnostic: IndexWorkspaceDiagnosticPayload?", "IndexPanel must own the current diagnostic from its descendant surface")
         contains(panel, "@State private var diagnosticPresentation = IndexWorkspaceDiagnosticPresentationState()", "IndexPanel must gate first-appearance diagnostic HUD feedback locally")
         contains(panel, ".onPreferenceChange(IndexWorkspaceDiagnosticPreferenceKey.self)", "IndexPanel must consume descendant diagnostics at the owning panel boundary")
-        contains(panel, "IndexPanelWorkspaceDiagnostic(payload: workspaceDiagnostic)", "IndexPanel must render diagnostics in its stable header chrome")
+        contains(panel, "IndexDiagnosticBanner(\n                    diagnostic: nil,", "IndexPanel must render diagnostics through the shared banner owner")
         contains(panel, "toastCenter?.show(announcement.text, tone: announcement.tone)", "IndexPanel must copy a newly appearing or escalating diagnostic into the window HUD")
         contains(panel, "IndexPanelOutline(", "IndexPanel must keep a semantic outline after the transient HUD disappears")
         let outline = try readSource("Sources/XTools/ToolPages/Workbench/PageChrome/IndexPageShell.swift")
@@ -332,14 +329,10 @@ struct UIInfrastructureSourceTests {
         contains(outline, "colorScheme == .dark", "Light mode separates panels via the surface ladder, dark keeps the hairline")
         doesNotContain(panel, "IndexTrafficLights()", "IndexPanel must not keep decorative traffic lights beside a diagnostic marker")
         contains(source, "struct IndexDiagnosticStatusButton: View", "Shared components must own one reusable icon-only diagnostic status button")
-        contains(source, "struct IndexDiagnosticStatusSlot: View", "Control-specific diagnostics must have a stable optional status slot")
-        contains(source, ".frame(width: 24, height: 24)", "Control-specific diagnostic slots must keep their geometry when the diagnostic appears or clears")
-        contains(source, "struct IndexPanelWorkspaceDiagnostic: View", "Shared components must own the fixed-slot panel diagnostic presentation")
         contains(compactDiagnostic, "Button {", "Persistent panel diagnostics must be keyboard-accessible buttons")
         contains(compactDiagnostic, ".popover(isPresented:", "Persistent panel diagnostics must let users reopen the short summary")
         contains(compactDiagnostic, ".help(payload.text)", "Persistent panel diagnostics must expose their summary through Help")
         contains(compactDiagnostic, ".accessibilityLabel(\"\\(payload.tone.accessibilityPrefix)：\\(payload.text)\")", "Panel diagnostics must expose tone and summary to accessibility")
-        contains(compactDiagnostic, ".frame(width: 31", "Panel diagnostics must reuse the traffic-light slot without moving the title")
         doesNotContain(compactDiagnostic, "Label(payload.text", "Panel diagnostics must not place their prose in the fixed-height header")
         contains(source, ".preference(key: IndexWorkspaceDiagnosticPreferenceKey.self, value: diagnosticPayload)", "Default workspace diagnostics must publish an anchor payload without inserting a layout row")
         doesNotContain(source, "VStack(alignment: .leading, spacing: visibleText == nil ? 0 : spacing)", "Default workspace diagnostics must not reserve dynamic body space")

@@ -201,7 +201,6 @@ struct MotionSourceContractTests {
         contains(controls, "struct IndexMotionLabel<ID: Hashable>: View", "Short action-state labels must live in a shared component")
         contains(controls, "Text(title)\n                .toolMotionTextSwap(id: id)", "Shared action-state labels must animate only the short text identity")
         contains(controls, "Image(systemName: systemImage)\n                .toolMotionIconSwap(id: id)", "Shared action-state labels must animate only the short icon identity")
-        contains(controls, "struct IndexMotionIcon<ID: Hashable>: View", "Compact icon-only action states must share the same motion component")
         contains(controls, "struct IndexProgressMotionLabel<ID: Hashable>: View", "Indeterminate action-state labels must live in a shared component")
         contains(controls, "if isProcessing {\n                    ProgressView()", "The shared processing label must use a native indeterminate spinner")
 

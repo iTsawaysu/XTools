@@ -352,22 +352,3 @@ private struct IndexImageCompressorWorkspaceContent: View {
         }
     }
 }
-
-
-
-private struct CompressionComparisonFooterSlot<Content: View>: View {
-    private let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            content
-        }
-        .padding(ToolMetrics.Spacing.md)
-        .frame(maxWidth: .infinity, minHeight: 80, maxHeight: 80, alignment: .topLeading)
-        .background(ToolTheme.hoverFill)
-    }
-}

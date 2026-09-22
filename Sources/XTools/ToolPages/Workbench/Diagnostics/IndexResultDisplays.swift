@@ -510,37 +510,6 @@ struct IndexDiagnosticStatusButton: View {
     }
 }
 
-struct IndexDiagnosticStatusSlot: View {
-    let payload: IndexWorkspaceDiagnosticPayload?
-
-    var body: some View {
-        Group {
-            if let payload {
-                IndexDiagnosticStatusButton(payload: payload)
-            } else {
-                Color.clear
-                    .accessibilityHidden(true)
-            }
-        }
-        .frame(width: 24, height: 24)
-    }
-}
-
-struct IndexPanelWorkspaceDiagnostic: View {
-    let payload: IndexWorkspaceDiagnosticPayload?
-
-    var body: some View {
-        Group {
-            if let payload {
-                IndexDiagnosticStatusButton(payload: payload)
-            } else {
-                Color.clear
-            }
-        }
-        .frame(width: 31, height: 24)
-    }
-}
-
 struct IndexWorkspaceDiagnosticRegion<Content: View>: View {
     let text: String?
     var tone: ToolFeedbackTone = .error

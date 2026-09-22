@@ -171,8 +171,6 @@ struct ImageWorkflowSourceContractTests {
         contains(compressor, "isProcessing: session.isProcessing", "Image compressor must hand its in-card processing state to the shared comparison card")
         contains(compressor, "return \"正在优化图片\"", "Image compressor processing state must publish a concise accessibility value")
         doesNotContain(compressor, ".accessibilityLabel(\"图片优化偏好\")", "Image compressor picker must preserve distinct accessibility names for each optimization option")
-        contains(compressor, "private struct CompressionComparisonFooterSlot", "Image compressor cards must retain a real footer surface even when facts are not ready")
-        contains(compressor, "minHeight: 80, maxHeight: 80", "Image compressor card footers must keep their divider aligned at standard and large content text sizes")
         contains(compressor, "title: \"原图\"", "Image compressor source card must identify the original image inside the card")
         contains(compressor, "title: \"优化结果\"", "Image compressor result card must identify the optimized image inside the card")
         contains(compressor, "Text(\"原始大小\")", "Image compressor source facts must stay inside the source card")

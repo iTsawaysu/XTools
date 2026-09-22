@@ -337,16 +337,6 @@ struct IndexMotionLabel<ID: Hashable>: View {
     }
 }
 
-struct IndexMotionIcon<ID: Hashable>: View {
-    let systemImage: String
-    let id: ID
-
-    var body: some View {
-        Image(systemName: systemImage)
-            .toolMotionIconSwap(id: id)
-    }
-}
-
 struct IndexProgressMotionLabel<ID: Hashable>: View {
     let title: String
     let systemImage: String
