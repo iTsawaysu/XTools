@@ -15,10 +15,7 @@ public enum DigestEncoding {
         case .base64:
             return Data(digest).base64EncodedString()
         case .base64url:
-            return Data(digest).base64EncodedString()
-                .replacingOccurrences(of: "+", with: "-")
-                .replacingOccurrences(of: "/", with: "_")
-                .replacingOccurrences(of: "=", with: "")
+            return Base64Conversion.encodeBase64URL(Data(digest))
         case .hex, .none:
             return digest.toHexStringLowercased()
         }
@@ -31,7 +28,7 @@ public enum DigestEncoding {
     }
 }
 
-private extension Array where Element == UInt8 {
+extension Array where Element == UInt8 {
     private static let hexDigits: [UInt8] = Array("0123456789abcdef".utf8)
 
     func toHexStringLowercased() -> String {

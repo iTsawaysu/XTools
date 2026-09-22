@@ -89,13 +89,6 @@ public enum JWTParser {
 }
 
 enum JWTBase64URL {
-    static func encode(_ data: Data) -> String {
-        data.base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
-    }
-
     static func decode(_ segment: String) throws -> Data {
         guard segment.unicodeScalars.allSatisfy(isBase64URLScalar) else {
             throw Base64Conversion.ConversionError.invalidBase64

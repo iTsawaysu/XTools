@@ -182,20 +182,10 @@ public enum TokenGenerator {
     }
 
     private static func base64URL(_ bytes: [UInt8]) -> String {
-        Data(bytes)
-            .base64EncodedString()
-            .replacingOccurrences(of: "+", with: "-")
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: "=", with: "")
+        Base64Conversion.encodeBase64URL(Data(bytes))
     }
 
     private static func hex(_ bytes: [UInt8]) -> String {
-        let digits = Array("0123456789abcdef")
-        return bytes
-            .flatMap { byte in
-                [digits[Int(byte >> 4)], digits[Int(byte & 0x0f)]]
-            }
-            .map(String.init)
-            .joined()
+        bytes.toHexStringLowercased()
     }
 }

@@ -239,15 +239,15 @@ public enum JWTSigner {
             throw SigningError.invalidAdvancedHeaderJSON
         }
 
-        let encodedHeader = JWTBase64URL.encode(headerData)
-        let encodedPayload = JWTBase64URL.encode(Data(payload.minified.utf8))
+        let encodedHeader = Base64Conversion.encodeBase64URL(headerData)
+        let encodedPayload = Base64Conversion.encodeBase64URL(Data(payload.minified.utf8))
         let signingInput = "\(encodedHeader).\(encodedPayload)"
         let digest = try JWTHMAC.digest(
             message: signingInput,
             key: secret.bytes,
             algorithm: config.algorithm
         )
-        let signature = JWTBase64URL.encode(Data(digest))
+        let signature = Base64Conversion.encodeBase64URL(Data(digest))
 
         return SignedToken(
             token: "\(signingInput).\(signature)",

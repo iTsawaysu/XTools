@@ -350,6 +350,13 @@ public enum Base64Conversion {
         return data
     }
 
+    public static func encodeBase64URL(_ data: Data) -> String {
+        data.base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
     public static func decodeBase64URLData(_ value: String) throws -> Data {
         var base64 = value
             .replacingOccurrences(of: "-", with: "+")
