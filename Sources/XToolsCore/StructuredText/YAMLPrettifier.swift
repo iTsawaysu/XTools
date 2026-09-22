@@ -83,7 +83,11 @@ public enum YAMLPrettifier {
             return ""
         }
 
-        if options.sortKeys, containsStructuralComment(in: input) {
+        // 两个检测共享一次行拆分与遍历（各自维护独立的块标量状态机，
+        // 判定逻辑与分开扫描时逐行等价）。
+        let (hasAnchorOrAlias, hasStructuralComment) = anchorAndCommentPresence(in: input)
+
+        if options.sortKeys, hasStructuralComment {
             throw ValidationError.unsupportedCommentPreservingSort(
                 FormatDiagnostic(
                     formatName: "YAML",
@@ -93,7 +97,7 @@ public enum YAMLPrettifier {
             )
         }
 
-        if options.sortKeys, containsAnchorOrAlias(in: input) {
+        if options.sortKeys, hasAnchorOrAlias {
             throw ValidationError.unsupportedAnchorPreservingSort(
                 FormatDiagnostic(
                     formatName: "YAML",
@@ -103,7 +107,7 @@ public enum YAMLPrettifier {
             )
         }
 
-        if !options.sortKeys, containsAnchorOrAlias(in: input) {
+        if !options.sortKeys, hasAnchorOrAlias {
             // 序列化器在 compose→dump 之间会解析锚点、把别名展开成字面值：
             // `a: &x 1` + `b: *x` 会变成 `a: 1` + `b: 1`，之后锚点改动时别名
             // 不再跟随，输出与输入语义不同。带锚点/别名的输入改走逐行路径，
@@ -111,7 +115,7 @@ public enum YAMLPrettifier {
             return formatPreservingComments(input, indentWidth: options.indent)
         }
 
-        if !options.sortKeys, containsStructuralComment(in: input) {
+        if !options.sortKeys, hasStructuralComment {
             // 序列化器不保留注释，带注释的输入只能走逐行路径；但逐行路径同样要兑现
             // indent 选项，否则用户改了缩进宽度却看不到任何变化。
             return formatPreservingComments(input, indentWidth: options.indent)
@@ -415,30 +419,63 @@ public enum YAMLPrettifier {
         return BlockScalarIndicator(explicitIndent: explicitIndent)
     }
 
-    /// 输入里是否出现锚点定义（`&name`）或别名引用（`*name`）。
-    /// 序列化器路径会把它们解析展开，凡命中就应改走逐行保留路径。
-    private static func containsAnchorOrAlias(in input: String) -> Bool {
+    /// 单次遍历同时检测锚点/别名与结构性注释。两个检测原先各自拆行全量
+    /// 扫描；合并后共享一次拆分，但各自维持独立的块标量/引号状态机，
+    /// 逐行判定（含块标量内跳过）与分开扫描完全一致。
+    private static func anchorAndCommentPresence(in input: String) -> (hasAnchorOrAlias: Bool, hasStructuralComment: Bool) {
         let lines = input.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        var activeBlockScalar: BlockScalarState?
+        var anchorBlockScalar: BlockScalarState?
+        var commentBlockScalar: BlockScalarState?
+        var quoteState = CommentQuoteState()
+        var hasAnchorOrAlias = false
+        var hasStructuralComment = false
 
         for line in lines {
-            if var blockScalar = activeBlockScalar {
-                if blockScalar.contains(line) {
-                    activeBlockScalar = blockScalar
-                    continue
+            if !hasAnchorOrAlias {
+                var anchorSkipsLine = false
+                if var blockScalar = anchorBlockScalar {
+                    if blockScalar.contains(line) {
+                        anchorBlockScalar = blockScalar
+                        anchorSkipsLine = true
+                    } else {
+                        anchorBlockScalar = nil
+                    }
                 }
-                activeBlockScalar = nil
+                if !anchorSkipsLine {
+                    if lineContainsAnchorOrAliasToken(line) {
+                        hasAnchorOrAlias = true
+                    } else if let header = blockScalarHeader(in: line) {
+                        anchorBlockScalar = BlockScalarState(header: header)
+                    }
+                }
             }
 
-            if lineContainsAnchorOrAliasToken(line) {
-                return true
+            if !hasStructuralComment {
+                var commentSkipsLine = false
+                if var blockScalar = commentBlockScalar {
+                    if blockScalar.contains(line) {
+                        commentBlockScalar = blockScalar
+                        commentSkipsLine = true
+                    } else {
+                        commentBlockScalar = nil
+                    }
+                }
+                if !commentSkipsLine {
+                    if quoteState.containsCommentToken(in: line) {
+                        hasStructuralComment = true
+                    } else if !quoteState.isInsideQuotedScalar,
+                              let header = blockScalarHeader(in: line) {
+                        commentBlockScalar = BlockScalarState(header: header)
+                    }
+                }
             }
-            if let header = blockScalarHeader(in: line) {
-                activeBlockScalar = BlockScalarState(header: header)
+
+            if hasAnchorOrAlias, hasStructuralComment {
+                return (true, true)
             }
         }
 
-        return false
+        return (hasAnchorOrAlias, hasStructuralComment)
     }
 
     /// 只有 token 起始位置的 `&`/`*` 才可能是锚点/别名（前一字符是行首、空白
@@ -493,32 +530,6 @@ public enum YAMLPrettifier {
 
     private static func isAnchorNameCharacter(_ character: Character) -> Bool {
         character.isLetter || character.isNumber || character == "_" || character == "-"
-    }
-
-    private static func containsStructuralComment(in input: String) -> Bool {
-        let lines = input.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        var activeBlockScalar: BlockScalarState?
-        var quoteState = CommentQuoteState()
-
-        for line in lines {
-            if var blockScalar = activeBlockScalar {
-                if blockScalar.contains(line) {
-                    activeBlockScalar = blockScalar
-                    continue
-                }
-                activeBlockScalar = nil
-            }
-
-            if quoteState.containsCommentToken(in: line) {
-                return true
-            }
-            if !quoteState.isInsideQuotedScalar,
-               let header = blockScalarHeader(in: line) {
-                activeBlockScalar = BlockScalarState(header: header)
-            }
-        }
-
-        return false
     }
 
     private struct CommentQuoteState {
