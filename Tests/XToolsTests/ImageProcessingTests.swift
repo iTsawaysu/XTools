@@ -219,7 +219,6 @@ struct ImageProcessingTests {
         #expect(assessment.canSave == false)
         #expect(assessment.severity == .blocked)
         #expect(assessment.requiresExplicitLargerSave == false)
-        #expect(assessment.blockReason == .compressionNotSmallerThanOriginal)
         #expect(assessment.sizeDeltaPercent == 20)
     }
 
@@ -231,7 +230,6 @@ struct ImageProcessingTests {
         #expect(assessment.canSave)
         #expect(assessment.severity == .warning)
         #expect(assessment.requiresExplicitLargerSave)
-        #expect(assessment.blockReason == nil)
         #expect(assessment.sizeDeltaPercent == 25)
     }
 

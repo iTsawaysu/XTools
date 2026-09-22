@@ -13,17 +13,12 @@ public enum ImageOutputSeverity: Equatable, Sendable {
     case blocked
 }
 
-public enum ImageOutputBlockReason: Equatable, Sendable {
-    case compressionNotSmallerThanOriginal
-}
-
 public struct ImageOutputAssessment: Equatable, Sendable {
     public let workflow: ImageOutputWorkflow
     public let output: ProcessedImage
     public let canSave: Bool
     public let severity: ImageOutputSeverity
     public let requiresExplicitLargerSave: Bool
-    public let blockReason: ImageOutputBlockReason?
     public let sizeDeltaPercent: Int
 }
 
@@ -43,7 +38,6 @@ public enum ImageOutputPolicy {
                 canSave: canSave,
                 severity: canSave ? .success : .blocked,
                 requiresExplicitLargerSave: false,
-                blockReason: canSave ? nil : .compressionNotSmallerThanOriginal,
                 sizeDeltaPercent: sizeDeltaPercent
             )
         case .conversion, .watermark, .grayscale:
@@ -54,7 +48,6 @@ public enum ImageOutputPolicy {
                 canSave: true,
                 severity: isLarger ? .warning : .success,
                 requiresExplicitLargerSave: isLarger,
-                blockReason: nil,
                 sizeDeltaPercent: sizeDeltaPercent
             )
         }

@@ -64,12 +64,4 @@ final class DiffExecutionSession: ObservableObject {
         resultState = binding == DiffExecutionBinding() ? .empty : .current
         execution.invalidate()
     }
-
-    /// Compatibility alias for existing call sites and tests.
-    nonisolated static func defaultOperation(
-        _ request: DiffExecutionRequest,
-        shouldCancel: @escaping @Sendable () -> Bool
-    ) throws -> DiffExecutionBinding {
-        try DiffExecution.project(request, shouldCancel: shouldCancel)
-    }
 }

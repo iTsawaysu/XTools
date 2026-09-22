@@ -29,7 +29,7 @@ final class DiffToolWorkspaceModel: ObservableObject {
     init(
         kind: DiffExecutionKind = .text,
         debounce: Duration = .milliseconds(200),
-        operation: @escaping DiffExecutionOperation = DiffExecutionSession.defaultOperation
+        operation: @escaping DiffExecutionOperation = DiffExecution.project
     ) {
         self.kind = kind
         self.debounce = debounce

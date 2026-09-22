@@ -22,26 +22,6 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
         }
     }
 
-    enum IndentOption: Int, CaseIterable, Sendable {
-        case two = 2
-        case four = 4
-
-        var id: String { String(rawValue) }
-        var label: String { "\(rawValue) 空格" }
-    }
-
-    var indentOption: IndentOption {
-        get {
-            switch formatMode {
-            case .two: return .two
-            case .four, .compact: return .four
-            }
-        }
-        set {
-            formatMode = newValue == .two ? .two : .four
-        }
-    }
-
     @Published var input = "" {
         didSet {
             guard input != oldValue else { return }

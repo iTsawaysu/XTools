@@ -36,7 +36,7 @@ struct TextDevelopmentWorkspaceRetentionTests {
         json.execution.invalidate(
             resetTo: FormatBinding(output: "formatted", error: "error")
         )
-        json.indentOption = .four
+        json.formatMode = .four
 
         let sql = repository.model(for: SQLPrettifyToolWorkspaceModel.key)
         sql.input = "private-sql"
@@ -51,7 +51,7 @@ struct TextDevelopmentWorkspaceRetentionTests {
         #expect(relaunchedJSON.input.isEmpty)
         #expect(relaunchedJSON.output.isEmpty)
         #expect(relaunchedJSON.error == nil)
-        #expect(relaunchedJSON.indentOption == .four)
+        #expect(relaunchedJSON.formatMode == .four)
         #expect(relaunchedSQL.input.isEmpty)
         #expect(relaunchedSQL.output.isEmpty)
         #expect(relaunchedSQL.keywordCase == .lower)
@@ -62,13 +62,13 @@ struct TextDevelopmentWorkspaceRetentionTests {
         let productDefaults = Self.defaults()
         let defaultWorkspace = ToolWorkspaceRepository(defaults: productDefaults)
             .model(for: JSONFormatterToolWorkspaceModel.key)
-        #expect(defaultWorkspace.indentOption == .four)
+        #expect(defaultWorkspace.formatMode == .four)
 
         let savedDefaults = Self.defaults()
         savedDefaults.set("2", forKey: TextDevelopmentToolPreferenceKeys.jsonIndent.rawKey)
         let savedWorkspace = ToolWorkspaceRepository(defaults: savedDefaults)
             .model(for: JSONFormatterToolWorkspaceModel.key)
-        #expect(savedWorkspace.indentOption == .two)
+        #expect(savedWorkspace.formatMode == .two)
     }
 
     @MainActor
@@ -81,7 +81,7 @@ struct TextDevelopmentWorkspaceRetentionTests {
         defaults.set(0.95, forKey: "tools.workspace.json-formatter.splitRatio.v1")
 
         let repository = ToolWorkspaceRepository(defaults: defaults)
-        #expect(repository.model(for: JSONFormatterToolWorkspaceModel.key).indentOption == .four)
+        #expect(repository.model(for: JSONFormatterToolWorkspaceModel.key).formatMode == .four)
         #expect(repository.model(for: SQLPrettifyToolWorkspaceModel.key).keywordCase == .upper)
         #expect(repository.model(for: IntegerBaseToolWorkspaceModel.key).base == "10")
         #expect(repository.model(for: EmojiToolWorkspaceModel.key).toneIndex == 0)
