@@ -163,7 +163,7 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
 
     private var sourceSummary: String {
         guard let metadata = session.sourceMetadata else { return "等待原图信息" }
-        return "\(metadata.pixelWidth)×\(metadata.pixelHeight) · \(metadata.format?.displayName ?? "未知格式") · \(ByteSizeFormatter.format(bytes: metadata.byteCount))"
+        return ImageOutputPresentation.sourceSummary(metadata)
     }
 
     private var sourcePreviewAccessibilityValue: String {
@@ -241,5 +241,4 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
         }
     }
 }
-
 

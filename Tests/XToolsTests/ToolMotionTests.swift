@@ -16,16 +16,6 @@ struct ToolMotionTests {
         #expect(ToolMotion.Preset.pageArrival == ToolMotion.Curve.smoothOut(duration: ToolMotion.Duration.arrival))
     }
 
-    @Test func errorShakeEffectLandsBackAtZeroEachGeneration() {
-        // One generation = whole sine cycles, so every integer generation
-        // settles back at (floating-point) zero offset; quarter-generation
-        // peaks (0.125) reach full travel.
-        #expect(abs(ToolShakeEffect.horizontalOffset(at: 0)) < 0.001)
-        #expect(abs(ToolShakeEffect.horizontalOffset(at: 1)) < 0.001)
-        #expect(abs(ToolShakeEffect.horizontalOffset(at: 3)) < 0.001)
-        #expect(ToolShakeEffect.horizontalOffset(at: 0.125) > 0.5)
-    }
-
     @Test func motionGeometryTokensStayLightweight() {
         #expect(ToolMotion.Distance.base == 8)
         #expect(ToolMotion.Distance.large == 18)

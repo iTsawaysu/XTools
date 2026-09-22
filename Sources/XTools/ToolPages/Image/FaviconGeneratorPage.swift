@@ -84,7 +84,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
 
     private var faviconSourceSummary: String {
         guard let metadata = session.source?.metadata else { return "" }
-        return "\(metadata.pixelWidth)×\(metadata.pixelHeight) · \(metadata.format?.displayName ?? "未知格式") · \(ByteSizeFormatter.format(bytes: metadata.byteCount))"
+        return ImageOutputPresentation.sourceSummary(metadata)
     }
 
     private var faviconSourceAccessibilityValue: String {

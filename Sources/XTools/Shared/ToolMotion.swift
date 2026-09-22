@@ -126,10 +126,6 @@ enum ToolMotion {
         /// `MotionSourceContractTests`). Light crossfade that keeps the entry
         /// hot path responsive — pages never apply this preset themselves.
         static let pageArrival = Curve.smoothOut(duration: Duration.arrival)
-        /// v3: bounded horizontal validation shake. Linear because the sine
-        /// path itself provides the easing; retriggering advances a generation
-        /// instead of looping.
-        static let errorShake = Animation.linear(duration: Duration.arrival)
         static let resultPresenceAppearance = Curve.smoothOut(duration: ResultPresence.appearanceDuration)
         static let resultPresenceExit = Curve.productiveExit(duration: ResultPresence.exitDuration)
         static let diagnostic = Curve.inOut(duration: Duration.quick)
@@ -306,58 +302,6 @@ private struct ToolMotionIdentityTransitionModifier<ID: Hashable>: ViewModifier 
     }
 }
 
-/// Bounded horizontal shake driven by a monotonically advancing generation.
-/// Each trigger increments the generation once, so the sine path runs exactly
-/// one full cycle per trigger and always lands back at zero offset — no loops,
-/// no manual reset. macOS 13 compatible (no PhaseAnimator/KeyframeAnimator).
-struct ToolShakeEffect: GeometryEffect {
-    var generation: CGFloat = 0
-    var travel: CGFloat = ToolMotion.Distance.micro
-    var cyclesPerGeneration: CGFloat = 2
-
-    var animatableData: CGFloat {
-        get { generation }
-        set { generation = newValue }
-    }
-
-    /// Horizontal offset for a given generation. Whole sine cycles per
-    /// generation mean every integer generation settles back at zero.
-    static func horizontalOffset(
-        at generation: CGFloat,
-        travel: CGFloat = ToolMotion.Distance.micro,
-        cyclesPerGeneration: CGFloat = 2
-    ) -> CGFloat {
-        travel * sin(generation * .pi * 2 * cyclesPerGeneration)
-    }
-
-    func effectValue(size: CGSize) -> ProjectionTransform {
-        let offset = Self.horizontalOffset(
-            at: generation,
-            travel: travel,
-            cyclesPerGeneration: cyclesPerGeneration
-        )
-        return ProjectionTransform(CGAffineTransform(translationX: offset, y: 0))
-    }
-}
-
-private struct ToolErrorShakeModifier<Value: Equatable>: ViewModifier {
-    let trigger: Value
-    @State private var generation: CGFloat = 0
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        content
-            .modifier(ToolShakeEffect(generation: generation))
-            .onChange(of: trigger) { _ in
-                guard !reduceMotion else { return }
-                withToolAnimation(ToolMotion.Preset.errorShake) {
-                    generation += 1
-                }
-            }
-    }
-}
-
 extension View {
     func toolAnimation<Value: Equatable>(
         _ animation: Animation,
@@ -383,12 +327,6 @@ extension View {
                 animation: ToolMotion.Preset.pageArrival
             )
         )
-    }
-
-    /// Bounded validation shake. Retriggers once per change of `trigger`;
-    /// Reduce Motion leaves the content untouched.
-    func toolErrorShake<Value: Equatable>(trigger: Value) -> some View {
-        modifier(ToolErrorShakeModifier(trigger: trigger))
     }
 
     func toolMotionIconSwap<ID: Hashable>(id: ID) -> some View {
