@@ -306,6 +306,48 @@ struct XMLFormattingTests {
         }
     }
 
+    @Test func unterminatedCDATAReportsSpecificDiagnostic() throws {
+        let error = #expect(throws: (any Error).self) {
+            _ = try XMLFormatting.format("<root><![CDATA[unterminated</root>")
+        }
+
+        guard let error,
+              case XMLFormatting.FormattingError.invalidXML(let diagnostic) = error else {
+            Issue.record("Expected XML formatting diagnostic")
+            return
+        }
+
+        #expect(diagnostic.message == "CDATA 区域没有闭合")
+        #expect(diagnostic.line == 1)
+        // <root> 占 6 列，诊断应指向 CDATA 起始的 "<"（第 7 列）。
+        #expect(diagnostic.column == 7)
+        #expect(diagnostic.suggestion == "补上 CDATA 结尾的 ]]>。")
+    }
+
+    @Test func unterminatedSecondCDATAIsAttributedToItsOwnStart() throws {
+        let input = "<a><![CDATA[ok]]></a><b><![CDATA[bad</b>"
+        let error = #expect(throws: (any Error).self) {
+            _ = try XMLFormatting.format(input)
+        }
+
+        guard let error,
+              case XMLFormatting.FormattingError.invalidXML(let diagnostic) = error else {
+            Issue.record("Expected XML formatting diagnostic")
+            return
+        }
+
+        #expect(diagnostic.message == "CDATA 区域没有闭合")
+        #expect(diagnostic.line == 1)
+        // 前一个 CDATA 已闭合；诊断必须指向最后一个（未闭合的）CDATA，
+        // 而不是被第一个的 ]]> 误判为已闭合。
+        #expect(diagnostic.column == 25)
+    }
+
+    @Test func closedCDATADoesNotTriggerPrecheckDiagnostic() throws {
+        let formatted = try XMLFormatting.format("<root><![CDATA[raw & <content>]]></root>")
+        #expect(formatted.contains("<![CDATA[raw & <content>]]>"))
+    }
+
     @Test func formatsSVGWithDOCTYPEAndXMLDeclaration() throws {
         let input = """
         <?xml version="1.0" encoding="utf-8"?>

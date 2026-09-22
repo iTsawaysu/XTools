@@ -125,6 +125,21 @@ public enum XMLFormatting {
             )
         }
 
+        // 未闭合的 CDATA 只能让 libxml 报出笼统的「文档没有正确闭合」(code 5)。
+        // 解析失败后检查最后一个 CDATA 是否有配对的 ]]>：把这类输入归因到
+        // CDATA 起始处。合法文档中每个 CDATA 都必有闭合标记，该检查只在
+        // 失败路径执行，不影响成功解析的成本。
+        if let lastCDATAStart = input.range(of: "<![CDATA[", options: .backwards),
+           input.range(of: "]]>", range: lastCDATAStart.upperBound..<input.endIndex) == nil {
+            return FormatDiagnostic(
+                formatName: "XML",
+                message: "CDATA 区域没有闭合",
+                input: input,
+                index: lastCDATAStart.lowerBound,
+                suggestion: "补上 CDATA 结尾的 ]]>。"
+            )
+        }
+
         let line = max(1, parser.lineNumber)
         let column = max(1, parser.columnNumber)
         let sourceError = delegate.error ?? parser.parserError
