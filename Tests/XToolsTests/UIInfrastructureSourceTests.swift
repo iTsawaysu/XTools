@@ -31,7 +31,7 @@ struct UIInfrastructureSourceTests {
         contains(source, "textView.setSelectedRange(selection)", "Programmatic replacement requests must place the caret at the requested UTF-16 selection")
         contains(source, "caretPlacementState", "Each AppKit coordinator must consume a caret placement request once")
         contains(source, "var temporaryHighlights: IndexTextAreaTemporaryHighlights? = nil", "Shared multiline inputs must keep temporary highlighting opt-in")
-        contains(source, "IndexTextAreaTemporaryHighlightRenderer.apply(temporaryHighlights, to: textView)", "Only the measured AppKit text path must apply temporary display attributes")
+        contains(source, "context.coordinator.refreshTemporaryHighlights(temporaryHighlights, in: textView)", "Only the measured AppKit text path must apply temporary display attributes")
         contains(source, "IndexTextAreaTemporaryHighlightRenderer.clear(in: textView)", "User edits must clear stale temporary backgrounds before binding publication")
     }
 

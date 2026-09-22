@@ -105,6 +105,33 @@ struct IndexTextAreaTemporaryHighlightRendererTests {
         #expect(!hasTemporaryBackground(in: textView, range: NSRange(location: 0, length: 1)))
     }
 
+    @Test func applyReportsWhetherTargetStateWasReached() {
+        let textView = HighlightTestTextView(frame: NSRect(x: 0, y: 0, width: 480, height: 160))
+        textView.string = "abcdef"
+
+        // nil 目标 = 已清空，必然达成。
+        #expect(IndexTextAreaTemporaryHighlightRenderer.apply(nil, to: textView))
+
+        // 命中当前文本：着色完成。
+        #expect(IndexTextAreaTemporaryHighlightRenderer.apply(
+            .init(sourceText: textView.string, ranges: [NSRange(location: 0, length: 2)]),
+            to: textView
+        ))
+
+        // sourceText 漂移：已清空但未着色，未达成。
+        #expect(!IndexTextAreaTemporaryHighlightRenderer.apply(
+            .init(sourceText: "stale", ranges: [NSRange(location: 0, length: 2)]),
+            to: textView
+        ))
+
+        // 输入法 marked-text 期间：未达成，调用方需要重试。
+        textView.reportsMarkedText = true
+        #expect(!IndexTextAreaTemporaryHighlightRenderer.apply(
+            .init(sourceText: textView.string, ranges: [NSRange(location: 0, length: 2)]),
+            to: textView
+        ))
+    }
+
     @Test func userEditClearsExistingTemporaryBackgroundBeforePublishingText() {
         let textValue = MutableHighlightTestValue("abc")
         let heightValue = MutableHighlightTestHeight(0)

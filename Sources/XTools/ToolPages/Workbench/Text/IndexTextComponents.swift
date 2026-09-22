@@ -513,13 +513,17 @@ struct IndexTextAreaTemporaryHighlights: Equatable {
 
 @MainActor
 enum IndexTextAreaTemporaryHighlightRenderer {
-    static func apply(_ highlights: IndexTextAreaTemporaryHighlights?, to textView: NSTextView) {
+    /// 重涂临时背景高亮。返回值表示是否已到达目标状态（nil = 已清空；
+    /// 非 nil = 已按 range 着色）。输入法 marked-text 或文本漂移时返回 false，
+    /// 调用方应保持"未达成"状态以便下次 updateNSView 重试。
+    @discardableResult
+    static func apply(_ highlights: IndexTextAreaTemporaryHighlights?, to textView: NSTextView) -> Bool {
         clear(in: textView)
         guard let highlights,
               textView.string == highlights.sourceText,
               !textView.hasMarkedText(),
               let layoutManager = textView.layoutManager else {
-            return
+            return highlights == nil
         }
 
         let textLength = (textView.string as NSString).length
@@ -532,6 +536,7 @@ enum IndexTextAreaTemporaryHighlightRenderer {
                 forCharacterRange: range
             )
         }
+        return true
     }
 
     static func clear(in textView: NSTextView) {
@@ -1044,7 +1049,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
         if context.coordinator.placeCaretAtEndIfRequested(caretPlacementRequestToken, in: textView) {
             IndexTextAreaScrollPositioning.revealInsertionPoint(in: textView, growsWithContent: growsWithContent)
         }
-        IndexTextAreaTemporaryHighlightRenderer.apply(temporaryHighlights, to: textView)
+        context.coordinator.refreshTemporaryHighlights(temporaryHighlights, in: textView)
         context.coordinator.measure(textView)
         keepContentGrowingScrollOriginStable(in: scrollView)
     }
@@ -1116,9 +1121,29 @@ struct IndexUndoableTextView: NSViewRepresentable {
         private var didFocus = false
         private var caretPlacementState = IndexTextAreaCaretPlacementState(processedRequestToken: nil)
         private let privateUndo = IndexPrivateUndoStack()
+        private var lastAppliedTemporaryHighlights: IndexTextAreaTemporaryHighlights?
+        private var lastTemporaryHighlightApplyReachedTarget = false
 
         func refreshLineNumberGutter() {
             lineNumberGutter?.refresh()
+        }
+
+        /// updateNSView 会在焦点/滚动/测量等无关更新时反复触发；高亮未变化
+        /// 且文本未漂移时跳过全量清除+重涂，避免 TextKit 临时属性抖动。
+        func refreshTemporaryHighlights(_ highlights: IndexTextAreaTemporaryHighlights?, in textView: NSTextView) {
+            if lastTemporaryHighlightApplyReachedTarget,
+               highlights == lastAppliedTemporaryHighlights {
+                if let highlights {
+                    if textView.string == highlights.sourceText { return }
+                } else {
+                    return
+                }
+            }
+            lastTemporaryHighlightApplyReachedTarget = IndexTextAreaTemporaryHighlightRenderer.apply(
+                highlights,
+                to: textView
+            )
+            lastAppliedTemporaryHighlights = highlights
         }
 
         init(
