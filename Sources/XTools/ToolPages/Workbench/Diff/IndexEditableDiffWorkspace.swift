@@ -1486,41 +1486,49 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
 
         private func applyJSONSyntax(_ line: String, lineRange: NSRange, layoutManager: NSLayoutManager) {
             guard line.utf16.count <= 10_000 else { return }
-            for token in JSONHighlighting.tokens(in: line) {
-                guard let range = nsRange(for: token, in: line, lineRange: lineRange) else {
+            let tokens = JSONHighlighting.tokens(in: line)
+            guard !tokens.isEmpty else { return }
+
+            // tokens 按扫描顺序 start 单调递增：单次游标同时累积字符偏移与
+            // UTF-16 偏移，避免每个 token 重复 O(start) 的前缀换算（长单行
+            // JSON 高亮原为 O(n²)）。
+            var characterCursor = line.startIndex
+            var characterOffset = 0
+            var utf16Prefix = 0
+
+            func advance(to target: Int) -> Bool {
+                while characterOffset < target {
+                    guard characterCursor < line.endIndex else { return false }
+                    utf16Prefix += line[characterCursor].utf16.count
+                    characterCursor = line.index(after: characterCursor)
+                    characterOffset += 1
+                }
+                return characterOffset == target
+            }
+
+            for token in tokens {
+                guard token.length > 0, advance(to: token.start) else {
+                    continue
+                }
+
+                var tokenUTF16Length = 0
+                var endCursor = characterCursor
+                var consumed = 0
+                while consumed < token.length, endCursor < line.endIndex {
+                    tokenUTF16Length += line[endCursor].utf16.count
+                    endCursor = line.index(after: endCursor)
+                    consumed += 1
+                }
+                guard consumed == token.length, tokenUTF16Length > 0 else {
                     continue
                 }
 
                 layoutManager.addTemporaryAttribute(
                     .foregroundColor,
                     value: nsColor(for: token.kind),
-                    forCharacterRange: range
+                    forCharacterRange: NSRange(location: lineRange.location + utf16Prefix, length: tokenUTF16Length)
                 )
             }
-        }
-
-        private func nsRange(
-            for token: JSONHighlightToken,
-            in line: String,
-            lineRange: NSRange
-        ) -> NSRange? {
-            guard token.length > 0,
-                  let start = line.index(
-                    line.startIndex,
-                    offsetBy: token.start,
-                    limitedBy: line.endIndex
-                  ),
-                  let end = line.index(
-                    start,
-                    offsetBy: token.length,
-                    limitedBy: line.endIndex
-                  ) else {
-                return nil
-            }
-
-            let prefixLength = line[..<start].utf16.count
-            let tokenLength = line[start..<end].utf16.count
-            return NSRange(location: lineRange.location + prefixLength, length: tokenLength)
         }
 
         private func nsColor(for kind: JSONHighlightToken.Kind) -> NSColor {
