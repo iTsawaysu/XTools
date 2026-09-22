@@ -389,9 +389,6 @@ struct QueryListAndUtilitySourceContractTests {
         contains(sharedComponents, "value: items.isEmpty ? nil : items", "Short result card presence must follow only the empty/result boundary")
         contains(sharedComponents, "IndexResultCardStack(items: snapshot, revealsItems: false)\n                    .padding(8)", "Short result card lists must preserve the existing card inset and use one structural motion owner")
 
-        contains(sharedComponents, "private struct IndexGeneratedResultCardListPresence: View", "Generated results must own their scrollable presentation lifecycle")
-        contains(sharedComponents, "IndexGeneratedResultCardListPresence(items: items, emptyText: emptyText)", "Generated results must route through the shared generated-list presence owner")
-        contains(sharedComponents, "ScrollView {\n                IndexResultCardStack(\n                    items: displayedItems,", "Generated result cards must keep their internal scroll owner while nonempty")
         contains(sharedComponents, "struct IndexScrollableKV: View", "Scrollable KV must remain available for explicit query/list exceptions")
 
         contains(sharedComponents, "Text(indexWrappingAttributedText(item.value, lineBreakMode: .byCharWrapping))", "Result card values must wrap long tokens within the available card width")

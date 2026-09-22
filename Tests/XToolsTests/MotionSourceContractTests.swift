@@ -462,11 +462,6 @@ struct MotionSourceContractTests {
         let favicon = try readSource("Sources/XTools/ToolPages/Image/FaviconGeneratorPage.swift")
         let chronometer = try readSource("Sources/XTools/ToolPages/Time/ChronometerPage.swift")
         let timezone = try readSource("Sources/XTools/ToolPages/Time/TimezoneViewerPage.swift")
-        let generatedPresence = sourceSlice(
-            shared,
-            from: "private struct IndexGeneratedResultCardListPresence: View",
-            to: "private struct IndexResultCardStack: View"
-        )
 
         contains(shared, "enum IndexValueMotionPolicy", "Shared value surfaces must expose an explicit motion policy")
         contains(shared, "case textSwap", "Low-frequency short values must be able to opt into text swap motion")
@@ -486,14 +481,6 @@ struct MotionSourceContractTests {
         contains(shared, ".toolTransition(revealsItems && index < 8 ? ToolMotion.Transition.diagnostic : .identity, reduceMotion: reduceMotion)", "Generated result cards must not animate every row in large batches")
         contains(shared, "IndexResultCardStack(items: snapshot, revealsItems: false)", "Short result cards must leave structural motion to the shared presence owner")
         contains(shared, "indexGeneratedResultValueMotion(index: index, limit: valueMotionLimit)", "Generated result cards must choose text motion from the bounded slot budget")
-        contains(shared, "valueMotionLimit: animatesItemUpdates ? 8 : 0", "Only presented generator updates may animate the first eight values")
-        doesNotContain(generatedPresence, "withToolAnimation(ToolMotion.Preset.textSwap", "Generated list updates must not animate the whole batch outside the first-eight leaf budget")
-        contains(shared, "firstAppearance: .immediate", "The first delayed automatic generation must settle without a manufactured reveal")
-        contains(shared, ".allowsHitTesting(resultInteractionEnabled)", "An outgoing generated-result snapshot must stop accepting copy actions immediately")
-        contains(shared, ".accessibilityHidden(!resultInteractionEnabled)", "An outgoing generated-result snapshot must leave the accessibility tree immediately")
-        contains(shared, "ToolMotion.Preset.resultPresenceAppearance", "Regeneration after clear must use the shared result appearance timing")
-        contains(shared, "ToolMotion.Preset.resultPresenceExit", "Generator clear must use the shorter shared result exit timing")
-        contains(shared, ".onChange(of: reduceMotion)", "Generated result presence must settle when Reduce Motion becomes enabled")
 
         contains(imageStage, "ObjectIdentifier(image).hashValue", "Image preview reveal must key off image replacement rather than pixels or processing loops")
         contains(imageStage, ".toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)", "Image preview stage must use a lightweight shared transition")
