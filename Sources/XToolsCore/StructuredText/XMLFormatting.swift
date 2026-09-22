@@ -454,8 +454,13 @@ public enum XMLFormatting {
     ) -> String {
         let fallbackLayoutPrefix = layoutPrefixOverride ?? .spaces(level * indentWidth)
         let preserveLeadingWhitespace = inheritedSpace == .preserve && !includeLeadingIndent
+        // preserve 子树的首个子节点：Foundation 对这类节点的 xmlString 会带上
+        // 前导空白；一次序列化同时供行前缀与开标签前缀使用。
+        let preservedLeadingRaw = preserveLeadingWhitespace
+            ? rawLeadingTextBeforeFirstTag(of: node)
+            : ""
         let layoutPrefix = preserveLeadingWhitespace
-            ? leadingPreservedLinePrefix(of: node) ?? fallbackLayoutPrefix
+            ? preservedLinePrefix(after: preservedLeadingRaw) ?? fallbackLayoutPrefix
             : fallbackLayoutPrefix
         let layoutIndent = layoutPrefix.raw
         let indent = includeLeadingIndent ? layoutIndent : ""
@@ -472,7 +477,7 @@ public enum XMLFormatting {
 
         if effectiveSpace == .preserve {
             guard let name = node.name,
-                  let opening = openingTag(of: node, preservingLeadingWhitespace: preserveLeadingWhitespace) else {
+                  let opening = openingTag(of: node, leadingText: preservedLeadingRaw) else {
                 return indent + node.xmlString(options: [])
             }
 
@@ -516,7 +521,7 @@ public enum XMLFormatting {
             return indent + elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)
         }
 
-        guard let opening = openingTag(of: node, preservingLeadingWhitespace: preserveLeadingWhitespace),
+        guard let opening = openingTag(of: node, leadingText: preservedLeadingRaw),
               let name = node.name else {
             return indent + elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)
         }
@@ -545,10 +550,10 @@ public enum XMLFormatting {
         return "\(indent)\(opening)\n\(renderedChildren)\n\(layoutIndent)</\(name)>"
     }
 
-    private static func leadingPreservedLinePrefix(of node: XMLNode) -> LayoutPrefix? {
+    private static func rawLeadingTextBeforeFirstTag(of node: XMLNode) -> String {
         let raw = node.xmlString(options: [])
-        guard let elementStart = raw.firstIndex(of: "<") else { return nil }
-        return preservedLinePrefix(after: String(raw[..<elementStart]))
+        guard let elementStart = raw.firstIndex(of: "<") else { return "" }
+        return String(raw[..<elementStart])
     }
 
     private static func preservedLinePrefix(after text: String) -> LayoutPrefix? {
@@ -578,8 +583,31 @@ public enum XMLFormatting {
         }
     }
 
-    private static func openingTag(of node: XMLNode, preservingLeadingWhitespace: Bool) -> String? {
-        let compact = elementXMLString(node, preservingLeadingWhitespace: preservingLeadingWhitespace)
+    /// 直接由节点名与属性表拼开标签。原实现把整棵子树序列化后截取前缀
+    /// （O(子树)），是格式化 O(n×depth) 的主因；属性转义与引号风格仍完全
+    /// 委托 Foundation 的逐属性 xmlString，字节级输出由黄金测试锁定。
+    /// 带 xmlns 声明的节点（Foundation 把声明放 namespace 节点而非属性表）
+    /// 保留原始的序列化截取路径，保证声明顺序字节级一致。
+    /// `leadingText` 复刻 preserve 子节点 xmlString 自带的前导空白。
+    private static func openingTag(of node: XMLNode, leadingText: String) -> String? {
+        guard let element = node as? XMLElement,
+              let name = node.name else {
+            return nil
+        }
+        if let namespaces = element.namespaces, !namespaces.isEmpty {
+            let compact = elementXMLString(node, preservingLeadingWhitespace: !leadingText.isEmpty)
+            return firstUnquotedTagEnd(of: compact)
+        }
+        var tag = "\(leadingText)<\(name)"
+        for attribute in element.attributes ?? [] {
+            tag += " "
+            tag += attribute.xmlString(options: [])
+        }
+        tag += ">"
+        return tag
+    }
+
+    private static func firstUnquotedTagEnd(of compact: String) -> String? {
         var index = compact.startIndex
         var quote: Character?
 
