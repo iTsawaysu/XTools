@@ -33,8 +33,7 @@ final class IntegerBaseToolWorkspaceModel: ObservableObject {
     private let backgroundDebounce: Duration
     private let renderer: IntegerBasePreparedRenderer
     private let backgroundRenderer: IntegerBaseBackgroundRenderer
-    private var conversionTask: Task<Void, Never>?
-    private var generation = 0
+    private let workGate = AsyncWorkGate()
 
     init(
         preferences: ToolPreferenceStore,
@@ -55,18 +54,12 @@ final class IntegerBaseToolWorkspaceModel: ObservableObject {
         base = preferences.value(for: TextDevelopmentToolPreferenceKeys.integerBase)
     }
 
-    deinit {
-        conversionTask?.cancel()
-    }
-
     func clear() {
         input = ""
     }
 
     private func refresh() {
-        conversionTask?.cancel()
-        conversionTask = nil
-        generation &+= 1
+        workGate.invalidate()
 
         guard !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             conversions = nil
@@ -106,27 +99,14 @@ final class IntegerBaseToolWorkspaceModel: ObservableObject {
 
         conversions = nil
         isProcessing = true
-        let currentGeneration = generation
-        let debounce = backgroundDebounce
-        let backgroundRenderer = self.backgroundRenderer
-
-        conversionTask = Task { [weak self] in
-            do {
-                try await Task.sleep(for: debounce)
-                try Task.checkCancellation()
-                let result = await backgroundRenderer(prepared)
-                try Task.checkCancellation()
-
-                guard let self, self.generation == currentGeneration else { return }
-                self.conversionTask = nil
-                self.conversions = result
-                self.error = nil
-                self.isProcessing = false
-            } catch is CancellationError {
-                // A newer input or base selection owns the replacement state.
-            } catch {
-                // Task.sleep only throws cancellation; keep the latest stable state.
-            }
+        let token = workGate.token
+        workGate.schedule(debounce: backgroundDebounce) { [weak self] in
+            guard let self, self.workGate.isCurrent(token) else { return }
+            let result = await backgroundRenderer(prepared)
+            guard self.workGate.isCurrent(token) else { return }
+            self.conversions = result
+            self.error = nil
+            self.isProcessing = false
         }
     }
 }
