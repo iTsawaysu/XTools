@@ -26,12 +26,6 @@ enum MacDeviceInformationCollector {
         )
     }
 
-    static func decodeCStringBuffer(_ buffer: [CChar]) -> String {
-        let endIndex = buffer.firstIndex(of: 0) ?? buffer.endIndex
-        let bytes = buffer[..<endIndex].map { UInt8(bitPattern: $0) }
-        return String(decoding: bytes, as: UTF8.self)
-    }
-
     private static var architectureName: String {
         #if arch(arm64)
         return "arm64"
@@ -88,7 +82,7 @@ enum MacDeviceInformationCollector {
             return nil
         }
 
-        let string = decodeCStringBuffer(value).trimmingCharacters(in: .whitespacesAndNewlines)
+        let string = DeviceInspector.stringFromCStringBuffer(value).trimmingCharacters(in: .whitespacesAndNewlines)
         return string.isEmpty ? nil : string
     }
 }

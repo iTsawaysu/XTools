@@ -180,7 +180,7 @@ public enum DeviceInspector {
         return nil
     }
 
-    private static func stringFromCStringBuffer(_ buffer: [CChar]) -> String {
+    public static func stringFromCStringBuffer(_ buffer: [CChar]) -> String {
         let endIndex = buffer.firstIndex(of: 0) ?? buffer.endIndex
         let bytes = buffer[..<endIndex].map { UInt8(bitPattern: $0) }
         return String(decoding: bytes, as: UTF8.self)

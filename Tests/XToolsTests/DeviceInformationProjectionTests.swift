@@ -156,7 +156,7 @@ struct DeviceInformationProjectionTests {
 
     @Test @MainActor func collectorDecoderStopsAtFirstNullByte() {
         let buffer: [CChar] = [77, 97, 99, 0, 88]
-        #expect(MacDeviceInformationCollector.decodeCStringBuffer(buffer) == "Mac")
+        #expect(DeviceInspector.stringFromCStringBuffer(buffer) == "Mac")
     }
 
     private static var completeSnapshot: DeviceInformationSnapshot { snapshot() }
