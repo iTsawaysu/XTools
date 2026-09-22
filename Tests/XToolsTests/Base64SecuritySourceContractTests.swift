@@ -46,6 +46,7 @@ struct Base64SecuritySourceContractTests {
         doesNotContain(base64Source, "showsConvertButton:", "Base64 must inherit the settled no-primary-button behavior from the shared converter")
         contains(base64Source, "backfillsOutputOnModeChange: true", "Base64 must backfill the current valid output when switching direction")
         doesNotContain(base64Source, "embedsClearButtonInInputPanel", "Base64 must not pass the removed clear-placement switch")
+        contains(base64Source, "isEmptyInputForMode:", "Decode-only whitespace must resolve to the empty state instead of a Base64 parse error")
     }
 
     @Test func base64FilePageSupportsForwardConversionModes() throws {

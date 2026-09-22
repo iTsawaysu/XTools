@@ -14,6 +14,13 @@ struct IndexBase64StringPage: View {
             initialMode: "dec",
             placeholder: "在此粘贴文本或 Base64…",
             backfillsOutputOnModeChange: true,
+            // 编码方向空格是有效字符（严格空判定）；解码方向纯空白视为
+            // 空态，否则用户清空内容残留空白时会看到「不是有效的 Base64」。
+            isEmptyInputForMode: { input, mode in
+                mode == "enc"
+                    ? input.isEmpty
+                    : input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            },
             errorMessage: { error in
                 (error as? Base64Conversion.ConversionError)?.errorDescription
                     ?? "Base64 解码失败。"
