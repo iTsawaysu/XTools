@@ -11,13 +11,8 @@ struct CommandPaletteSearchTests {
             return
         }
 
-        let projection = ToolNavigationProjection(
-            registry: .default,
-            favoriteIDs: [],
-            selectedToolID: nil,
-            query: ""
-        )
-        let snapshot = CommandPaletteNavigationState.snapshot(for: projection.commandPaletteEntries)
+        let projection = ToolNavigationCommandProjection(registry: .default, query: "")
+        let snapshot = CommandPaletteNavigationState.snapshot(for: projection.entries)
         let rows = snapshot.rows
         let state = CommandPaletteNavigationState()
         let iterations = 1_000
@@ -369,16 +364,11 @@ struct CommandPaletteSearchTests {
     }
 
     @Test func keyboardRepeatDoesNotTreatRevealLagAsManualVisibleHandoff() {
-        let projection = ToolNavigationProjection(
-            registry: .default,
-            favoriteIDs: [],
-            selectedToolID: nil,
-            query: ""
-        )
-        let rows = CommandPaletteNavigationState.rows(for: projection.commandPaletteEntries)
+        let entries = ToolNavigationCommandProjection(registry: .default, query: "").entries
+        let rows = CommandPaletteNavigationState.rows(for: entries)
         var state = CommandPaletteNavigationState()
-        let hashIndex = projection.commandPaletteEntries.firstIndex { $0.title == "Hash 文本" }
-        let encryptionIndex = projection.commandPaletteEntries.firstIndex { $0.title == "文本加密" }
+        let hashIndex = entries.firstIndex { $0.title == "Hash 文本" }
+        let encryptionIndex = entries.firstIndex { $0.title == "文本加密" }
 
         #expect(hashIndex != nil)
         #expect(encryptionIndex == hashIndex.map { $0 + 1 })

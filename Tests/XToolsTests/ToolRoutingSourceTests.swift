@@ -125,9 +125,8 @@ struct ToolRoutingSourceTests {
             ]
         )
 
-        #expect(registry.matchRank(for: registry.tool(for: .searchPrefixTool)!, query: "json") == .titlePrefix)
-        #expect(registry.matchRank(for: registry.tool(for: .searchContainsTool)!, query: "json") == .titleContains)
-        #expect(registry.matchRank(for: registry.tool(for: .searchKeywordTool)!, query: "json") == .keyword)
+        // Rank priority (titlePrefix > titleContains > keyword) is locked by
+        // the ordering assertion below.
         #expect(registry.matchingTools(query: " json ").map(\.id) == [
             .searchPrefixTool,
             .searchContainsTool,

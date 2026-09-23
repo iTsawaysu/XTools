@@ -621,12 +621,6 @@ struct RootView: View {
         viewModel.toggleSidebar(reduceMotion: reduceMotion)
     }
 
-    private func setSidebarVisibility(_ visibility: SidebarVisibility) {
-        withToolAnimation(ToolMotion.Preset.shellResize, reduceMotion: reduceMotion) {
-            viewModel.sidebarVisibility = visibility
-        }
-    }
-
     private func cancelCurrentMode() {
         if viewModel.showsCommandPalette {
             closeCommandPaletteAnimated()

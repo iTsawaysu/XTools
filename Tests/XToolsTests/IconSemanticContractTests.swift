@@ -217,7 +217,7 @@ struct IconSemanticContractTests {
                 .map { ($0.id, $0.systemImage) }
         )
         let commandPaletteIcons = Dictionary(
-            uniqueKeysWithValues: projection.commandPaletteEntries
+            uniqueKeysWithValues: ToolNavigationCommandProjection(registry: registry, query: "").entries
                 .map { ($0.toolID, $0.systemImage) }
         )
 

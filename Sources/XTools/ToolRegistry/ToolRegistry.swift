@@ -77,16 +77,10 @@ struct ToolRegistry {
             .first
     }
 
-    func matchRank(for tool: RegisteredTool, query rawQuery: String) -> MatchRank? {
-        let query = Self.normalizedSearchText(rawQuery.trimmingCharacters(in: .whitespacesAndNewlines))
-        return matchRank(for: tool, normalizedQuery: query)
-    }
-
     private func matchRank(for tool: RegisteredTool, normalizedQuery query: String) -> MatchRank? {
-        let record = searchRecordByID[tool.id] ?? SearchRecord(
-            title: Self.normalizedSearchText(tool.title),
-            keywords: tool.keywords.map(Self.normalizedSearchText)
-        )
+        // Records are prebuilt for every tool in init; a miss means the tool
+        // did not come from this registry, so it simply does not match.
+        guard let record = searchRecordByID[tool.id] else { return nil }
 
         if record.title.hasPrefix(query) {
             return .titlePrefix
