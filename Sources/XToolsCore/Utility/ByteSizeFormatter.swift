@@ -30,4 +30,12 @@ public enum ByteSizeFormatter {
 
         return format(bytes: UInt64(bytes))
     }
+
+    public static func format(bytes: Int64) -> String {
+        guard bytes >= 1024 else {
+            return "\(bytes) B"
+        }
+
+        return format(bytes: UInt64(bytes))
+    }
 }

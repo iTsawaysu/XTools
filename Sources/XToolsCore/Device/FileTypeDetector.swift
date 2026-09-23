@@ -125,9 +125,7 @@ public enum FileTypeDetector {
 
     static func fileSizeText(byteCount: Int64?) -> String {
         guard let byteCount else { return "(未知)" }
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: byteCount)
+        return ByteSizeFormatter.format(bytes: byteCount)
     }
 
     static func headerBytesHex(from data: Data?) -> String {

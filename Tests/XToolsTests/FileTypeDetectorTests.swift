@@ -171,10 +171,18 @@ struct FileTypeDetectorTests {
         #expect(report.headerBytes == "00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F")
     }
 
-    @Test func fileSizeUsesFileCountStyle() {
-        let report = FileTypeDetector.inspect(fileName: "x.txt", byteCount: 1024, leadingData: Data([0x41]))
-        #expect(!report.fileSize.isEmpty)
-        #expect(report.fileSize != "(未知)")
+    @Test func fileSizeUsesByteSizeFormatterFormat() {
+        // Locks the file-size column to the project-wide ByteSizeFormatter
+        // (the former ByteCountFormatter(.file) output diverged: "512 bytes"
+        // vs "512 B", "999 KB" vs "976 KB").
+        func fileSize(_ byteCount: Int64) -> String {
+            FileTypeDetector.inspect(fileName: "x.txt", byteCount: byteCount, leadingData: Data([0x41])).fileSize
+        }
+        #expect(fileSize(0) == "0 B")
+        #expect(fileSize(512) == "512 B")
+        #expect(fileSize(1024) == "1 KB")
+        #expect(fileSize(1536) == "1.5 KB")
+        #expect(fileSize(999_424) == "976 KB")
     }
 
     @Test func fileNameIsPreserved() {
