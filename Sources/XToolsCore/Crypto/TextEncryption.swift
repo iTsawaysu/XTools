@@ -471,7 +471,7 @@ public enum TextEncryptionService {
 
         while derived.count < requiredLength {
             let digestInput = previousDigest + password + salt
-            previousDigest = Digest.md5(digestInput)
+            previousDigest = Array(Insecure.MD5.hash(data: Data(digestInput)))
             derived += previousDigest
         }
 

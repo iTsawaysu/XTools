@@ -1,4 +1,4 @@
-import CryptoSwift
+import CryptoKit
 import Foundation
 
 public enum JWTAlgorithm: String, CaseIterable, Equatable, Sendable {
@@ -16,14 +16,6 @@ public enum JWTAlgorithm: String, CaseIterable, Equatable, Sendable {
 
     init?(headerValue: String) {
         self.init(rawValue: headerValue)
-    }
-
-    fileprivate var hmacVariant: HMAC.Variant {
-        switch self {
-        case .hs256: return .sha2(.sha256)
-        case .hs384: return .sha2(.sha384)
-        case .hs512: return .sha2(.sha512)
-        }
     }
 }
 
@@ -74,7 +66,16 @@ public enum JWTSecretMaterial {
 
 enum JWTHMAC {
     static func digest(message: String, key: [UInt8], algorithm: JWTAlgorithm) throws -> [UInt8] {
-        try HMAC(key: key, variant: algorithm.hmacVariant).authenticate(Array(message.utf8))
+        let symmetricKey = SymmetricKey(data: key)
+        let messageData = Data(message.utf8)
+        switch algorithm {
+        case .hs256:
+            return Array(HMAC<SHA256>.authenticationCode(for: messageData, using: symmetricKey))
+        case .hs384:
+            return Array(HMAC<SHA384>.authenticationCode(for: messageData, using: symmetricKey))
+        case .hs512:
+            return Array(HMAC<SHA512>.authenticationCode(for: messageData, using: symmetricKey))
+        }
     }
 }
 
