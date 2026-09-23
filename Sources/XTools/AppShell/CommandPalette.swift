@@ -344,7 +344,8 @@ struct CommandPaletteView: View {
     private func paletteItemView(
         for item: CommandPaletteRowProjection,
         activeItemID: String?,
-        selectableIndex: Int?
+        selectableIndex: Int?,
+        highlightQuery: String
     ) -> some View {
         switch item {
         case .sectionTitle(let text):
@@ -353,7 +354,7 @@ struct CommandPaletteView: View {
             CommandPaletteRow(
                 id: entry.id,
                 title: entry.title,
-                highlight: sessionModel.query,
+                highlight: highlightQuery,
                 subtitle: entry.categoryTitle,
                 systemImage: entry.systemImage,
                 isActive: item.id == activeItemID,
@@ -378,7 +379,7 @@ struct CommandPaletteView: View {
             CommandPaletteRow(
                 id: entry.id.rawValue,
                 title: entry.title,
-                highlight: sessionModel.query,
+                highlight: highlightQuery,
                 subtitle: entry.subtitle,
                 systemImage: entry.systemImage,
                 isActive: item.id == activeItemID,
@@ -487,11 +488,15 @@ struct CommandPaletteView: View {
 
             ScrollView {
                 VStack(spacing: 0) {
+                    // Trimmed once per body; every row shares this value
+                    // instead of re-trimming the query in its renderer.
+                    let highlightQuery = sessionModel.query.trimmingCharacters(in: .whitespaces)
                     ForEach(snapshot.rows) { item in
                         paletteItemView(
                             for: item,
                             activeItemID: activeItemID,
-                            selectableIndex: snapshot.selectableIndex(of: item)
+                            selectableIndex: snapshot.selectableIndex(of: item),
+                            highlightQuery: highlightQuery
                         )
                             .padding(.horizontal, 9)
                             .padding(.vertical, 1)
@@ -861,10 +866,11 @@ private struct CommandPaletteRow: View {
     }
 
     /// Accent-highlight the first case-insensitive query match in the title.
+    /// `query` arrives pre-trimmed from the palette body (one trim per body,
+    /// not one per row).
     private static func highlightedTitle(_ title: String, query: String) -> AttributedString {
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty,
-              let range = title.range(of: trimmed, options: [.caseInsensitive, .diacriticInsensitive])
+        guard !query.isEmpty,
+              let range = title.range(of: query, options: [.caseInsensitive, .diacriticInsensitive])
         else {
             return AttributedString(title)
         }

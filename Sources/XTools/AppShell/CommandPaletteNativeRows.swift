@@ -153,7 +153,16 @@ final class CommandPaletteRevealRegistry: NSObject {
             entry.session = session
             entry.clipView = clipView
             if let previousClipView {
-                removeObserverIfUnused(for: previousClipView)
+                // Rows under one palette share the same clip view. Skip the
+                // O(rows) still-used sweep only when this very entry still
+                // keeps that clip view observed; a handed-over or suspended
+                // session must run the sweep so the observer comes off.
+                let entryStillDrivesClipView = previousClipView === clipView
+                    && isLive(session: session)
+                    && view.isInteractionActive(session: session)
+                if !entryStillDrivesClipView {
+                    removeObserverIfUnused(for: previousClipView)
+                }
             }
             observeIfLive(entry: entry)
             return
