@@ -96,7 +96,7 @@ public enum JSONFormatting {
         let targetSpaces = max(0, spaces)
 
         let lines = json.split(separator: "\n", omittingEmptySubsequences: false)
-        let sourceIndentWidth = lines
+        let sourceIndentWidth = lines.lazy
             .map { $0.prefix(while: { $0 == " " }).count }
             .filter { $0 > 0 }
             .min()
@@ -105,7 +105,7 @@ public enum JSONFormatting {
             return json
         }
 
-        return lines.map { line in
+        return lines.lazy.map { line in
             let leadingSpaces = line.prefix(while: { $0 == " " }).count
             let indentLevel = leadingSpaces / sourceIndentWidth
             let newIndent = String(repeating: " ", count: indentLevel * targetSpaces)
@@ -119,24 +119,40 @@ public enum JSONFormatting {
 
     public static func unescapeJSON(_ string: String) -> String {
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("\"") && trimmed.hasSuffix("\""),
-           let data = trimmed.data(using: .utf8),
-           let decoded = try? JSONDecoder().decode(String.self, from: data) {
+        if trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") && trimmed.count >= 2,
+           let decoded = try? JSONDecoder().decode(String.self, from: Data(trimmed.utf8)) {
             return decoded
         }
         let wrapped = "\"\(trimmed)\""
-        if let data = wrapped.data(using: .utf8),
-           let decoded = try? JSONDecoder().decode(String.self, from: data) {
+        if let decoded = try? JSONDecoder().decode(String.self, from: Data(wrapped.utf8)) {
             return decoded
         }
         if (try? JSONSerialization.jsonObject(with: Data(string.utf8), options: [.fragmentsAllowed])) == nil {
-            return trimmed
-                .replacingOccurrences(of: "\\\"", with: "\"")
-                .replacingOccurrences(of: "\\n", with: "\n")
-                .replacingOccurrences(of: "\\r", with: "\r")
-                .replacingOccurrences(of: "\\t", with: "\t")
-                .replacingOccurrences(of: "\\/", with: "/")
-                .replacingOccurrences(of: "\\\\", with: "\\")
+            var result = ""
+            result.reserveCapacity(trimmed.count)
+            var iterator = trimmed.makeIterator()
+            while let char = iterator.next() {
+                if char == "\\" {
+                    if let next = iterator.next() {
+                        switch next {
+                        case "\"": result.append("\"")
+                        case "n": result.append("\n")
+                        case "r": result.append("\r")
+                        case "t": result.append("\t")
+                        case "/": result.append("/")
+                        case "\\": result.append("\\")
+                        default:
+                            result.append(char)
+                            result.append(next)
+                        }
+                    } else {
+                        result.append(char)
+                    }
+                } else {
+                    result.append(char)
+                }
+            }
+            return result
         }
         return string
     }

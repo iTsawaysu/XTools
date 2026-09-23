@@ -50,6 +50,14 @@ struct TextStatisticsTests {
         #expect(stats.words == 3)
     }
 
+    @Test func countsLinesTreatingCRLFAsOneLineBreak() {
+        // Regression: components(separatedBy: .newlines) split \r\n into two
+        // separators and over-counted lines; grapheme-level counting treats
+        // \r\n as a single line break.
+        #expect(TextStatistics.analyze("line1\r\nline2").lines == 2)
+        #expect(TextStatistics.analyze("line1\r\n\r\nline2").lines == 3)
+    }
+
     @Test func countsSentences() {
         let stats = TextStatistics.analyze("Hello. How are you? Great!")
         #expect(stats.sentences == 3) // . ? !
