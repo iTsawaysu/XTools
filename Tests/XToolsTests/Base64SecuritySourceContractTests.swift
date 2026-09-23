@@ -87,7 +87,7 @@ struct Base64SecuritySourceContractTests {
         contains(filePanel, "private let panel: NSOpenPanel", "The shared AppKit backend must own the reusable open panel")
         contains(filePanel, "panel.beginSheetModal(for: window)", "File input must use an async window-attached sheet")
         contains(workflow, "Base64FileWorkflowClient", "Base64 file workflow must expose an adapter seam for pasteboard and save panels")
-        contains(workflow, "pasteboard.writeString(text)", "Base64 file workflow client must own pasteboard writes")
+        contains(workflow, "pasteboard.writeUTF8(data)", "Base64 file workflow client must own pasteboard writes")
         doesNotContain(workflow, "pasteboard.readString()", "Base64 file workflow must not keep clipboard-read plumbing after removing clipboard decode")
         doesNotContain(workflow, "func selectEncodedTextInputURL()", "Base64 save/pasteboard client must not construct encoded-text input panels")
         contains(workflow, ".isPackageKey", "Base64 workflow must check packages separately from regular files")

@@ -46,6 +46,12 @@ final class SmartPasteMonitor: ObservableObject {
     private var dismissedChangeCount = -1
     private var currentToolID: ToolID?
 
+    /// NSPasteboard is main-thread-only and has no bounded read, so a huge
+    /// clipboard still pays the fetch itself; this bound only skips building
+    /// the String. Eight UTF-8 bytes per character is far above anything the
+    /// character-level inspection limit can ever accept.
+    private static let maxInspectedBytes = SmartPasteDetector.maxInspectedLength * 8
+
     static func isWithinInspectionLimit(
         _ text: String,
         limit: Int = SmartPasteDetector.maxInspectedLength
@@ -72,7 +78,10 @@ final class SmartPasteMonitor: ObservableObject {
         suggestion = nil
 
         guard changeCount != dismissedChangeCount else { return }
-        guard let text = pasteboard.string(forType: .string),
+        guard let data = pasteboard.data(forType: .string),
+              !data.isEmpty,
+              data.count <= Self.maxInspectedBytes,
+              let text = String(data: data, encoding: .utf8),
               !text.isEmpty,
               Self.isWithinInspectionLimit(text),
               let kind = SmartPasteDetector.detect(text),

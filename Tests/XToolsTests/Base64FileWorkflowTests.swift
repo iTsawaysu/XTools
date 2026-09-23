@@ -1146,11 +1146,15 @@ private final class FakeBase64FileDialog: Base64FileWorkflowDialoging, @unchecke
 @MainActor
 private final class FakeBase64Pasteboard: Base64FilePasteboardWriting, @unchecked Sendable {
     var shouldSucceed = true
-    private(set) var strings: [String] = []
+    private(set) var payloads: [Data] = []
 
-    func writeString(_ text: String) -> Bool {
+    var strings: [String] {
+        payloads.map { String(decoding: $0, as: UTF8.self) }
+    }
+
+    func writeUTF8(_ data: Data) -> Bool {
         guard shouldSucceed else { return false }
-        strings.append(text)
+        payloads.append(data)
         return true
     }
 }

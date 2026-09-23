@@ -357,7 +357,9 @@ protocol Base64FileWorkflowDialoging: Sendable {
 
 @MainActor
 protocol Base64FilePasteboardWriting: Sendable {
-    func writeString(_ text: String) -> Bool
+    /// Takes pre-serialized UTF-8 so callers can build the payload off the
+    /// main thread; NSPasteboard itself must only be touched on main.
+    func writeUTF8(_ data: Data) -> Bool
 }
 
 @MainActor
@@ -386,8 +388,8 @@ struct Base64FileWorkflowClient: Sendable {
         Base64FileWorkflowClient(dialog: SheetBase64FileWorkflowDialog(outputPanel: outputPanel))
     }
 
-    func copyString(_ text: String) -> Bool {
-        pasteboard.writeString(text)
+    func copyUTF8(_ data: Data) -> Bool {
+        pasteboard.writeUTF8(data)
     }
 }
 
@@ -428,9 +430,9 @@ struct SheetBase64FileWorkflowDialog: Base64FileWorkflowDialoging {
 
 @MainActor
 private struct AppKitBase64FilePasteboard: Base64FilePasteboardWriting {
-    func writeString(_ text: String) -> Bool {
+    func writeUTF8(_ data: Data) -> Bool {
         NSPasteboard.general.clearContents()
-        return NSPasteboard.general.setString(text, forType: .string)
+        return NSPasteboard.general.setData(data, forType: .string)
     }
 }
 
@@ -627,7 +629,12 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
                 return
             }
 
-            if client.copyString(text) {
+            // Serialize UTF-8 off the main thread; the payload can be tens
+            // of megabytes for large files.
+            let utf8 = await Task.detached(priority: .userInitiated) {
+                Data(text.utf8)
+            }.value
+            if client.copyUTF8(utf8) {
                 mutate { $0.setFileError(nil) }
                 onSuccess()
             } else {
