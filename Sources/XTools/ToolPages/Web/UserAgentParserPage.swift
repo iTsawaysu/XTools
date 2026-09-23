@@ -8,26 +8,24 @@ final class UserAgentToolWorkspaceModel: ObservableObject {
     }
 
     @Published var input = ""
-    @Published private(set) var browser = ""
-    @Published private(set) var browserVersion = ""
-    @Published private(set) var os = ""
-    @Published private(set) var osVersion = ""
-    @Published private(set) var device = ""
+    @Published private(set) var result: UserAgentParser.Result?
     @Published private(set) var error: String?
+
+    var browser: String { result?.browser ?? "" }
+    var browserVersion: String { result?.browserVersion ?? "" }
+    var os: String { result?.os ?? "" }
+    var osVersion: String { result?.osVersion ?? "" }
+    var device: String { result?.device ?? "" }
 
     var hasAnyContent: Bool {
         !input.isEmpty
-            || !browser.isEmpty
-            || !browserVersion.isEmpty
-            || !os.isEmpty
-            || !osVersion.isEmpty
-            || !device.isEmpty
+            || result != nil
             || error != nil
     }
 
     func clear() {
         input = ""
-        clearResult()
+        result = nil
         error = nil
     }
 
@@ -36,29 +34,17 @@ final class UserAgentToolWorkspaceModel: ObservableObject {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmed.isEmpty else {
-            clearResult()
+            result = nil
             return
         }
 
-        guard let result = UserAgentParser.parse(trimmed) else {
-            clearResult()
+        guard let parsed = UserAgentParser.parse(trimmed) else {
+            result = nil
             error = userAgentErrorMessage(for: UserAgentParser.validationIssue(trimmed))
             return
         }
 
-        browser = result.browser
-        browserVersion = result.browserVersion
-        os = result.os
-        osVersion = result.osVersion
-        device = result.device
-    }
-
-    private func clearResult() {
-        browser = ""
-        browserVersion = ""
-        os = ""
-        osVersion = ""
-        device = ""
+        result = parsed
     }
 
     private func userAgentErrorMessage(for issue: UserAgentParser.ValidationIssue?) -> String {
@@ -91,16 +77,16 @@ private struct IndexUserAgentWorkspaceContent: View {
 
     private var resultProjection: ResultProjection? {
         guard !workspace.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !workspace.browser.isEmpty else {
+              let result = workspace.result else {
             return nil
         }
 
         return ResultProjection(
-            browser: workspace.browser,
-            browserVersion: workspace.browserVersion,
-            os: workspace.os,
-            osVersion: workspace.osVersion,
-            device: workspace.device
+            browser: result.browser,
+            browserVersion: result.browserVersion,
+            os: result.os,
+            osVersion: result.osVersion,
+            device: result.device
         )
     }
 
