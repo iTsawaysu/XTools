@@ -68,9 +68,6 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 showsOutputSave: true,
                 outputFileName: "markdown-output.md",
                 leadingControl: {
-                    urlInput
-                        .frame(minWidth: 90, idealWidth: 180, maxWidth: 360)
-                        .layoutPriority(1)
                     fetchButton
                         .fixedSize(horizontal: true, vertical: false)
                     IndexIconButton(
@@ -81,6 +78,12 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                         session.extractArticleOnly.toggle()
                     }
                     .fixedSize(horizontal: true, vertical: false)
+                },
+                inputHeader: {
+                    AnyView(
+                        urlInput
+                            .frame(maxWidth: .infinity)
+                    )
                 },
                 outputControl: {
                     IndexSegmentedControl(

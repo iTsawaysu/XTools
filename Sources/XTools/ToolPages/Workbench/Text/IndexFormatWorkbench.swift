@@ -43,6 +43,9 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     var showsOutputSave = false
     var outputFileName = "output.txt"
     @ViewBuilder var leadingControl: () -> LeadingControl
+    /// Optional accessory row pinned to the top of the input pane (e.g. a
+    /// URL fetch bar); the editor keeps the remaining height.
+    var inputHeader: (() -> AnyView)? = nil
     var outputControl: (() -> AnyView)? = nil
     var workspaceSemantic: IndexWorkspaceSemantic = .structuredEditorTransform
 
@@ -74,6 +77,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         showsOutputSave: Bool = false,
         outputFileName: String = "output.txt",
         @ViewBuilder leadingControl: @escaping () -> LeadingControl,
+        inputHeader: (() -> AnyView)? = nil,
         workspaceSemantic: IndexWorkspaceSemantic = .structuredEditorTransform
     ) {
         self.init(
@@ -102,6 +106,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             showsOutputSave: showsOutputSave,
             outputFileName: outputFileName,
             leadingControl: leadingControl,
+            inputHeader: inputHeader,
             outputControlWrapper: nil,
             workspaceSemantic: workspaceSemantic
         )
@@ -133,6 +138,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         showsOutputSave: Bool = false,
         outputFileName: String = "output.txt",
         @ViewBuilder leadingControl: @escaping () -> LeadingControl,
+        inputHeader: (() -> AnyView)? = nil,
         @ViewBuilder outputControl: @escaping () -> Output,
         workspaceSemantic: IndexWorkspaceSemantic = .structuredEditorTransform
     ) {
@@ -162,6 +168,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             showsOutputSave: showsOutputSave,
             outputFileName: outputFileName,
             leadingControl: leadingControl,
+            inputHeader: inputHeader,
             outputControlWrapper: { AnyView(outputControl()) },
             workspaceSemantic: workspaceSemantic
         )
@@ -193,6 +200,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         showsOutputSave: Bool,
         outputFileName: String,
         @ViewBuilder leadingControl: @escaping () -> LeadingControl,
+        inputHeader: (() -> AnyView)?,
         outputControlWrapper: (() -> AnyView)?,
         workspaceSemantic: IndexWorkspaceSemantic
     ) {
@@ -221,6 +229,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         self.showsOutputSave = showsOutputSave
         self.outputFileName = outputFileName
         self.leadingControl = leadingControl
+        self.inputHeader = inputHeader
         self.outputControl = outputControlWrapper
         self.workspaceSemantic = workspaceSemantic
     }
@@ -260,7 +269,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                 ))
             }
             HStack(spacing: ToolMetrics.Spacing.sm) {
-                inputPane
+                inputPaneWithHeader
                 outputPane
             }
             .padding(.horizontal, ToolMetrics.Spacing.md)
@@ -411,6 +420,18 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     }
 
     // MARK: Panes
+
+    private var inputPaneWithHeader: some View {
+        VStack(spacing: 0) {
+            if let inputHeader {
+                inputHeader()
+                    .padding(.horizontal, ToolMetrics.Spacing.sm)
+                    .padding(.top, ToolMetrics.Spacing.sm)
+                    .padding(.bottom, 6)
+            }
+            inputPane
+        }
+    }
 
     private var inputPane: some View {
         IndexWorkspaceTextArea(
