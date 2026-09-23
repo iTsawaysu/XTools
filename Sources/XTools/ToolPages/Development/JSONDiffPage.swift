@@ -146,7 +146,7 @@ private struct IndexJSONDiffWorkspaceContent: View {
                 clearDisabled: !workspace.hasAnyContent,
                 leadingControl: {
                     HStack(spacing: 8) {
-                        IndexOptionSwitch(title: "忽略数组顺序", style: .embeddedSwitch, isOn: $workspace.ignoreArrayOrder)
+                        IndexOptionSwitch(title: "忽略数组顺序", style: .button, isOn: $workspace.ignoreArrayOrder)
                         IndexIconButton(
                             systemImage: "chevron.up.chevron.down",
                             help: "折叠未变更行",

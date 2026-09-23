@@ -134,7 +134,7 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                             selection: formatModeSelection,
                             density: .compact
                         )
-                        IndexOptionSwitch(title: "Key 排序", style: .embeddedSwitch, isOn: $workspace.sortKeys)
+                        IndexOptionSwitch(title: "Key 排序", style: .button, isOn: $workspace.sortKeys)
                         IndexIconButton(
                             systemImage: "text.quote",
                             help: "去除转义",

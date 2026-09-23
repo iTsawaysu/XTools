@@ -75,7 +75,7 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
                 onFormat: format,
                 onClear: workspace.clear,
                 leadingControl: {
-                    IndexOptionSwitch(title: "Key 排序", style: .embeddedSwitch, isOn: $workspace.sortKeys)
+                    IndexOptionSwitch(title: "Key 排序", style: .button, isOn: $workspace.sortKeys)
                 }
             )
         }

@@ -41,8 +41,8 @@ private struct IndexTextDiffWorkspaceContent: View {
                 clearDisabled: !workspace.hasAnyContent,
                 leadingControl: {
                     HStack(spacing: 6) {
-                        IndexOptionSwitch(title: "忽略空白", style: .embeddedSwitch, isOn: $workspace.ignoreWhitespace)
-                        IndexOptionSwitch(title: "忽略大小写", style: .embeddedSwitch, isOn: $workspace.ignoreCase)
+                        IndexOptionSwitch(title: "忽略空白", style: .button, isOn: $workspace.ignoreWhitespace)
+                        IndexOptionSwitch(title: "忽略大小写", style: .button, isOn: $workspace.ignoreCase)
                         IndexIconButton(
                             systemImage: "chevron.up.chevron.down",
                             help: "折叠未变更行",
