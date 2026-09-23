@@ -319,24 +319,6 @@ struct IndexKeyboardHintLabel: View {
     }
 }
 
-// MARK: - IndexMotionLabel
-
-struct IndexMotionLabel<ID: Hashable>: View {
-    let title: String
-    let systemImage: String
-    let id: ID
-
-    var body: some View {
-        Label {
-            Text(title)
-                .toolMotionTextSwap(id: id)
-        } icon: {
-            Image(systemName: systemImage)
-                .toolMotionIconSwap(id: id)
-        }
-    }
-}
-
 struct IndexProgressMotionLabel<ID: Hashable>: View {
     let title: String
     let systemImage: String
@@ -682,7 +664,6 @@ struct IndexOptionSwitch: View {
     enum Style: Sendable {
         case switchToggle
         case embeddedSwitch
-        case button
     }
 
     let title: String
@@ -741,9 +722,6 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
 
             case .embeddedSwitch:
                 IndexEmbeddedSwitchLabel(configuration: configuration)
-
-            case .button:
-                IndexOptionButtonLabel(configuration: configuration)
             }
         }
         .buttonStyle(.plain)
@@ -818,56 +796,6 @@ private struct IndexEmbeddedSwitchLabel: View {
         .onHover { isHovering = $0 }
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: isOn)
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: hovering)
-    }
-}
-
-private struct IndexOptionButtonLabel: View {
-    let configuration: ToggleStyle.Configuration
-    @State private var isHovering = false
-    @Environment(\.isEnabled) private var isEnabled
-
-    private var isOn: Bool { configuration.isOn }
-    private var hovering: Bool { isHovering && isEnabled }
-
-    private var background: Color {
-        if isOn {
-            return hovering ? ToolTheme.accentSoft.opacity(0.85) : ToolTheme.accentSoft
-        }
-        return hovering ? ToolTheme.hoverFill : ToolTheme.editorBackground
-    }
-
-    private var border: Color {
-        if isOn {
-            return ToolTheme.accentBorder
-        }
-        return hovering ? ToolTheme.strongBorder : ToolTheme.border
-    }
-
-    private var foreground: Color {
-        if !isEnabled { return ToolTheme.textTertiary }
-        if isOn { return ToolTheme.accent }
-        return hovering ? ToolTheme.textPrimary : ToolTheme.textSecondary
-    }
-
-    var body: some View {
-        configuration.label
-            .font(ToolTypography.label)
-            .foregroundStyle(foreground)
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 8)
-            .frame(height: 26)
-            .background(
-                background,
-                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                    .strokeBorder(border, lineWidth: 1)
-            }
-            .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
-            .onHover { isHovering = $0 }
-            .toolAnimation(ToolMotion.Preset.controlFeedback, value: [hovering, isOn])
     }
 }
 
@@ -1008,6 +936,18 @@ struct IndexSlider: View {
         return min(max((value - range.lowerBound) / span, 0), 1)
     }
 
+    private var accessibilityText: String {
+        value.formatted(.number.precision(.fractionLength(0...2)))
+    }
+
+    /// Drag-only sliders (step 0) still need a usable VoiceOver increment;
+    /// fall back to a tenth of the range span.
+    private var accessibilityStep: Double {
+        if step > 0 { return step }
+        let span = range.upperBound - range.lowerBound
+        return span > 0 ? span / 10 : 0
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let usableWidth = max(geometry.size.width - knobDiameter, 1)
@@ -1041,11 +981,12 @@ struct IndexSlider: View {
         }
         .frame(height: knobDiameter)
         .accessibilityElement()
-        .accessibilityValue(Text("\(Int(value))"))
+        .accessibilityValue(Text(accessibilityText))
         .accessibilityAdjustableAction { direction in
+            guard accessibilityStep > 0 else { return }
             switch direction {
-            case .increment: setValue(value + step)
-            case .decrement: setValue(value - step)
+            case .increment: setValue(value + accessibilityStep)
+            case .decrement: setValue(value - accessibilityStep)
             @unknown default: break
             }
         }

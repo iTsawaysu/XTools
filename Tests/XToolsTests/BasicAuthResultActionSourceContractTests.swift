@@ -12,7 +12,7 @@ struct BasicAuthResultActionSourceContractTests {
         let copyButton = sourceSlice(
             controls,
             from: "struct IndexCopyButton: View",
-            to: "// MARK: - IndexMotionLabel"
+            to: "struct IndexProgressMotionLabel<ID: Hashable>: View"
         )
         let iconButton = sourceSlice(
             controls,
