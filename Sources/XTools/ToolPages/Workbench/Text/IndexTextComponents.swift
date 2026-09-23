@@ -1654,8 +1654,6 @@ struct IndexOutputSurface: View {
     let text: String
     let placeholder: String
     var minHeight: CGFloat = 220
-    var large = false
-    var centered = false
     var fillsHeight = false
     var scrollsInternally = true
     var lineBreakMode: NSLineBreakMode = .byCharWrapping
@@ -1663,7 +1661,7 @@ struct IndexOutputSurface: View {
     var colorize: ((String) -> AttributedString)? = nil
     var embedsFlat = false
 
-    private var showsGutter: Bool { lineNumbers && !large && !centered }
+    private var showsGutter: Bool { lineNumbers }
     private var effectiveMinHeight: CGFloat { fillsHeight ? 60 : minHeight }
 
     var body: some View {
@@ -1715,7 +1713,7 @@ struct IndexOutputSurface: View {
                     .padding(.trailing, 10)
             }
             Text(placeholder)
-                .font(large ? ToolTypography.statValue : ToolTypography.body)
+                .font(ToolTypography.body)
                 .foregroundStyle(ToolTheme.textTertiary)
                 .textSelection(.enabled)
                 .lineLimit(nil)
@@ -1724,14 +1722,14 @@ struct IndexOutputSurface: View {
                 .padding(.leading, showsGutter ? 13 : 0)
                 .frame(
                     maxWidth: .infinity,
-                    alignment: centered ? .center : .topLeading
+                    alignment: .topLeading
                 )
         }
         .frame(
             maxWidth: .infinity,
             minHeight: effectiveMinHeight,
             maxHeight: fillsHeight ? .infinity : nil,
-            alignment: centered ? .center : .topLeading
+            alignment: .topLeading
         )
         .padding(.vertical, 12)
         .padding(.trailing, 13)
@@ -1748,14 +1746,14 @@ struct IndexOutputSurface: View {
 
     private var plainBody: some View {
         Text(indexWrappingAttributedText(text, lineBreakMode: lineBreakMode))
-            .font(large ? ToolTypography.statValue : ToolTypography.codeBody)
-            .foregroundStyle(large ? ToolTheme.accentHover : ToolTheme.textSecondary)
+            .font(ToolTypography.codeBody)
+            .foregroundStyle(ToolTheme.textSecondary)
             .textSelection(.enabled)
             .lineLimit(nil)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             .lineSpacing(6)
-            .frame(maxWidth: .infinity, minHeight: effectiveMinHeight, alignment: centered ? .center : .topLeading)
+            .frame(maxWidth: .infinity, minHeight: effectiveMinHeight, alignment: .topLeading)
             .padding(12)
     }
 

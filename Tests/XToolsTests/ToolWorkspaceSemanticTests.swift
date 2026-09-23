@@ -329,40 +329,6 @@ struct ToolWorkspaceSemanticTests {
         #expect(IndexWorkspaceSemantic.editableDiffWorkspace.behavior.outputScrolling == .diffWorkspaceUnified)
     }
 
-    @Test @MainActor func standardIOPairDefaultsToUnmigratedSafetySemantic() {
-        let pair = IndexIOPair(
-            inputTitle: "输入",
-            outputTitle: "输出",
-            placeholder: "输入",
-            input: .constant(""),
-            output: ""
-        )
-
-        #expect(pair.workspaceSemantic == .unmigratedPageDefault)
-    }
-
-    @Test @MainActor func standardIOPairAcceptsWorkspaceSemanticsForStandardPaths() {
-        let structuredPair = IndexIOPair(
-            inputTitle: "输入",
-            outputTitle: "输出",
-            placeholder: "输入",
-            input: .constant(""),
-            output: "",
-            workspaceSemantic: .structuredOutputReading
-        )
-        let copyTransformPair = IndexIOPair(
-            inputTitle: "输入",
-            outputTitle: "输出",
-            placeholder: "输入",
-            input: .constant(""),
-            output: "",
-            workspaceSemantic: .copyTransformWorkspace
-        )
-
-        #expect(structuredPair.workspaceSemantic.behavior == IndexWorkspaceSemantic.structuredOutputReading.behavior)
-        #expect(copyTransformPair.workspaceSemantic.behavior == IndexWorkspaceSemantic.copyTransformWorkspace.behavior)
-    }
-
     @Test @MainActor func textConversionWorkbenchDefaultsToCopyTransformSemantic() {
         let workbench = IndexTextConversionWorkbench(
             inputTitle: "输入",

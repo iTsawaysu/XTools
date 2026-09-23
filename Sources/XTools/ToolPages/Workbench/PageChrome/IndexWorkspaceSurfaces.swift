@@ -53,8 +53,6 @@ struct IndexWorkspaceOutputSurface: View {
     let text: String
     let placeholder: String
     var minHeight: CGFloat = 220
-    var large = false
-    var centered = false
     var fillsHeight = false
     var lineNumbers = false
     var colorize: ((String) -> AttributedString)? = nil
@@ -72,8 +70,6 @@ struct IndexWorkspaceOutputSurface: View {
             text: text,
             placeholder: placeholder,
             minHeight: minHeight,
-            large: large,
-            centered: centered,
             fillsHeight: fillsHeight,
             scrollsInternally: behavior.outputScrollsInternally,
             lineBreakMode: behavior.semanticLineBreakMode,
@@ -113,71 +109,6 @@ private extension IndexWorkspaceBehaviorContract {
 
     var usesNaturalHeightSurface: Bool {
         fillBehavior == .naturalHeight && outputScrolling == .pageOuter
-    }
-}
-
-// MARK: - IndexIOPair
-
-struct IndexIOPair: View {
-    let inputTitle: String
-    let outputTitle: String
-    let placeholder: String
-    @Binding var input: String
-    let output: String
-    var inputError: String? = nil
-    /// Line-number gutter for multi-line code/markup output (JSON/XML/YAML/SQL);
-    /// leave off for prose or values.
-    var outputLineNumbers = false
-    var outputColorize: ((String) -> AttributedString)? = nil
-    var showsInputCount = true
-    var onClear: (() -> Void)? = nil
-    var clearDisabled: Bool? = nil
-    var autoFocus = true
-    var workspaceSemantic: IndexWorkspaceSemantic = .unmigratedPageDefault
-
-    private var isClearDisabled: Bool {
-        clearDisabled ?? (input.isEmpty && output.isEmpty && inputError == nil)
-    }
-
-    var body: some View {
-        IndexPairLayout(collapseWidth: 0, fillsHeight: true) {
-            IndexPanel(inputTitle) {
-                IndexWorkspaceTextArea(
-                    placeholder: placeholder,
-                    text: $input,
-                    fillsHeight: true,
-                    autoFocus: autoFocus,
-                    workspaceSemantic: workspaceSemantic
-                )
-                .indexWorkspaceDiagnostic(inputError, tone: .error)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            } accessory: {
-                IndexInputHeaderAccessory(
-                    count: input.count,
-                    showsInputCount: showsInputCount,
-                    clearDisabled: isClearDisabled,
-                    onClear: onClear
-                )
-            }
-            .terminal("STDIN")
-            .verticallyFilling()
-        } trailing: {
-            IndexPanel(outputTitle) {
-                IndexWorkspaceOutputSurface(
-                    text: output,
-                    placeholder: IndexEmptyStateCopy.outputWillShowHere,
-                    fillsHeight: true,
-                    lineNumbers: outputLineNumbers,
-                    colorize: outputColorize,
-                    workspaceSemantic: workspaceSemantic
-                )
-            } accessory: {
-                IndexCopyButton(text: output)
-            }
-            .terminal("STDOUT")
-            .verticallyFilling()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

@@ -63,13 +63,11 @@ struct TextWorkbenchSourceContractTests {
         let workbench = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextConversionWorkbench.swift")
 
         contains(shared, "struct IndexWorkspaceDiagnostic: View", "Shared components must provide a persistent non-displacing diagnostic")
-        contains(shared, "var inputError: String? = nil", "IndexIOPair must accept an optional input-panel error")
         contains(workbench, "var inputError: String? = nil", "Shared text conversion workbench must accept an optional input-panel error")
         contains(workbench, "private var inputDiagnosticText: String?", "Shared text conversion workbench must normalize errors and warnings into one diagnostic text")
         contains(workbench, "private var inputDiagnosticTone: ToolFeedbackTone", "Shared text conversion workbench must select a diagnostic tone from the active error/warning state")
         contains(shared, "struct IndexWorkspaceDiagnosticRegion", "Shared components must provide a safe diagnostic region outside editor text")
         contains(workbench, "IndexDiagnosticBanner(\n                    diagnostic: inputDiagnostic,\n                    message: diagnosticText,\n                    tone: inputDiagnosticTone", "Shared text conversion workbench must attach errors and warnings as the shared top diagnostic banner")
-        contains(shared, ".indexWorkspaceDiagnostic(inputError, tone: .error)", "Legacy IO pairs must attach errors as input-panel safe diagnostics")
         contains(json, "diagnostic: execution.binding.error ?? execution.binding.warning", "JSON formatter diagnostics must render inside the prototype workbench toolbar")
         contains(json, "diagnosticTone: execution.binding.error == nil ? .warning : .error", "JSON formatter must select the diagnostic tone from the active error/warning state")
         for (name, needle) in [("XML", "diagnostic: execution.binding.error"), ("YAML", "diagnostic: execution.binding.error"), ("SQL", "diagnostic: execution.binding.error")] {
@@ -477,6 +475,7 @@ struct TextWorkbenchSourceContractTests {
     @Test func copyTransformPagesKeepFixedInternalScrollAndWrapping() throws {
         let converter = try readSource("Sources/XTools/ToolPages/Workbench/Converter/IndexConverterPage.swift")
         let sharedComponents = try readSharedBagComponents()
+        let workbench = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextConversionWorkbench.swift")
         let textComponents = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextComponents.swift")
         let url = try readSource("Sources/XTools/ToolPages/Converter/URLCoderPage.swift")
         let base64 = try readSource("Sources/XTools/ToolPages/Converter/Base64StringPage.swift")
@@ -494,9 +493,8 @@ struct TextWorkbenchSourceContractTests {
         contains(sharedComponents, "var workspaceSemantic: IndexWorkspaceSemantic = .unmigratedPageDefault", "Shared IO pairs must keep unmigrated internal scrolling as the default")
         contains(sharedComponents, "var maxHeightRatio: CGFloat? = nil", "Semantic text areas must be able to express bounded mixed-workflow editors")
         contains(sharedComponents, "maxHeightRatio: maxHeightRatio", "Semantic text areas must pass bounded editor height through to the AppKit text area")
-        contains(sharedComponents, "IndexWorkspaceTextArea(\n                    placeholder: placeholder,\n                    text: $input,\n                    fillsHeight: true,\n                    autoFocus: autoFocus,\n                    workspaceSemantic: workspaceSemantic", "Copy-transform inputs must stay fixed while wrapping according to the workspace contract")
-        contains(sharedComponents, ".indexWorkspaceDiagnostic(inputError, tone: .error)", "Copy-transform input errors must stay attached to the input surface without covering editor text")
-        contains(sharedComponents, "IndexWorkspaceOutputSurface(\n                    text: output,\n                    placeholder: IndexEmptyStateCopy.outputWillShowHere,\n                    fillsHeight: true,\n                    lineNumbers: outputLineNumbers,\n                    colorize: outputColorize,\n                    workspaceSemantic: workspaceSemantic", "Copy-transform outputs must scroll internally and wrap according to the workspace contract")
+        contains(workbench, "IndexWorkspaceTextArea(\n                placeholder: placeholder,\n                text: $input,\n                fillsHeight: true,\n                autoFocus: autoFocus,", "Copy-transform inputs must stay fixed while wrapping according to the workspace contract")
+        contains(workbench, "IndexWorkspaceOutputSurface(\n                    text: output,\n                    placeholder: IndexEmptyStateCopy.outputWillShowHere,\n                    fillsHeight: true,\n                    lineNumbers: outputLineNumbers,\n                    colorize: outputColorize,\n                    workspaceSemantic: workspaceSemantic", "Copy-transform outputs must scroll internally and wrap according to the workspace contract")
         contains(textComponents, "var lineBreakMode: NSLineBreakMode = .byCharWrapping", "Output surfaces must wrap long tokens by default while still allowing caller overrides")
         contains(textComponents, "Text(indexWrappingAttributedText(text, lineBreakMode: lineBreakMode))", "Plain output must apply explicit wrapping without changing copied text")
         contains(textComponents, "Text(indexWrappingAttributedText(line.isEmpty ? AttributedString(\" \") : colorize(line), lineBreakMode: lineBreakMode))", "Line-numbered colored output must preserve syntax highlighting while applying wrapping")
