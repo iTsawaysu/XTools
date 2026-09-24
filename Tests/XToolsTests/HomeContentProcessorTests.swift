@@ -91,6 +91,25 @@ struct HomeContentProcessorTests {
         #expect(HomeContentProcessor.detect(oversized) == nil)
     }
 
+    @Test func characterLimitUsesExtendedGraphemeClusters() throws {
+        let grapheme = "👨‍👩‍👧‍👦"
+        let boundary = String(
+            repeating: grapheme,
+            count: HomeContentProcessor.maximumCharacterCount
+        )
+        #expect(try output(.urlDecode, boundary) == boundary)
+
+        let oversized = boundary + grapheme
+        #expect(
+            HomeContentProcessor.run(.urlDecode, input: oversized)
+                == .failure(
+                    .inputTooLong(
+                        maximumCharacterCount: HomeContentProcessor.maximumCharacterCount
+                    )
+                )
+        )
+    }
+
     @Test func JSONDepthGuardRejectsOnlyStructuralNesting() throws {
         let allowedDepth = HomeContentProcessor.maximumJSONNestingDepth
         let allowed = String(repeating: "[", count: allowedDepth)

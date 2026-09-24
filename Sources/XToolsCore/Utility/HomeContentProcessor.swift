@@ -45,7 +45,7 @@ public enum HomeContentProcessor {
     public static let maximumJSONNestingDepth = 32
 
     public static func detect(_ input: String) -> SmartPasteDetector.Kind? {
-        guard input.count <= maximumCharacterCount else { return nil }
+        guard isWithinCharacterLimit(input) else { return nil }
         guard hasSafeJSONNesting(input) else { return nil }
         if let detected = SmartPasteDetector.detect(input) {
             return detected
@@ -81,7 +81,7 @@ public enum HomeContentProcessor {
         guard !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .failure(.emptyInput)
         }
-        guard input.count <= maximumCharacterCount else {
+        guard isWithinCharacterLimit(input) else {
             return .failure(.inputTooLong(maximumCharacterCount: maximumCharacterCount))
         }
         guard action != .jsonFormat || hasSafeJSONNesting(input) else {
@@ -142,6 +142,10 @@ public enum HomeContentProcessor {
         }
 
         return true
+    }
+
+    private static func isWithinCharacterLimit(_ input: String) -> Bool {
+        SmartPasteDetector.isWithinCharacterLimit(input, limit: maximumCharacterCount)
     }
 
     private static let base64Alphabet = CharacterSet(

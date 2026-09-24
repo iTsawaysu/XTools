@@ -127,6 +127,22 @@ struct SmartPasteDetectorTests {
         #expect(SmartPasteDetector.detect(hugeJSON) == nil)
     }
 
+    @Test func boundedCharacterLimitPreservesGraphemeSemantics() {
+        let grapheme = "👨‍👩‍👧‍👦"
+        let maximum = SmartPasteDetector.maxInspectedLength
+
+        #expect(SmartPasteDetector.isWithinCharacterLimit(
+            String(repeating: grapheme, count: maximum),
+            limit: maximum
+        ))
+        #expect(!SmartPasteDetector.isWithinCharacterLimit(
+            String(repeating: grapheme, count: maximum + 1),
+            limit: maximum
+        ))
+        #expect(!SmartPasteDetector.isWithinCharacterLimit("a", limit: 0))
+        #expect(SmartPasteDetector.isWithinCharacterLimit("", limit: 0))
+    }
+
     @Test func ignoresEmptyAndWhitespace() {
         #expect(SmartPasteDetector.detect("") == nil)
         #expect(SmartPasteDetector.detect("   \n\t ") == nil)

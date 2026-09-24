@@ -15,7 +15,7 @@ struct SmartPasteSourceContractTests {
         doesNotContain(detector, "import SwiftUI", "Core detection must not depend on SwiftUI")
         doesNotContain(detector, "ToolID", "Core detection must not know tool identities; routing lives in the app layer")
         contains(detector, "public static let maxInspectedLength", "Detection must declare an explicit inspection bound")
-        contains(detector, "text.count <= maxInspectedLength", "Detection must refuse oversized clipboard payloads")
+        contains(detector, "isWithinCharacterLimit(text, limit: maxInspectedLength)", "Detection must refuse oversized clipboard payloads with a bounded grapheme check")
     }
 
     @Test func monitorSamplesOnActivationWithoutPolling() throws {

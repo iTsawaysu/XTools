@@ -56,15 +56,7 @@ final class SmartPasteMonitor: ObservableObject {
         _ text: String,
         limit: Int = SmartPasteDetector.maxInspectedLength
     ) -> Bool {
-        guard limit >= 0 else { return false }
-        guard let boundary = text.index(
-            text.startIndex,
-            offsetBy: limit,
-            limitedBy: text.endIndex
-        ) else {
-            return true
-        }
-        return boundary == text.endIndex
+        SmartPasteDetector.isWithinCharacterLimit(text, limit: limit)
     }
 
     /// Re-samples the pasteboard when it changed since the last sample.

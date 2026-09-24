@@ -45,7 +45,10 @@ final class HomeContentSession: ObservableObject {
     var canRun: Bool {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         return !trimmed.isEmpty
-            && input.count <= HomeContentProcessor.maximumCharacterCount
+            && SmartPasteDetector.isWithinCharacterLimit(
+                input,
+                limit: HomeContentProcessor.maximumCharacterCount
+            )
             && selectedAction != nil
             && !isDetecting
             && !isProcessing
@@ -75,7 +78,10 @@ final class HomeContentSession: ObservableObject {
         guard !snapshot.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
         }
-        guard snapshot.count <= HomeContentProcessor.maximumCharacterCount else {
+        guard SmartPasteDetector.isWithinCharacterLimit(
+            snapshot,
+            limit: HomeContentProcessor.maximumCharacterCount
+        ) else {
             failure = HomeContentFailure.inputTooLong(
                 maximumCharacterCount: HomeContentProcessor.maximumCharacterCount
             ).message
@@ -147,7 +153,10 @@ final class HomeContentSession: ObservableObject {
             failure = nil
             return
         }
-        guard snapshot.count <= HomeContentProcessor.maximumCharacterCount else {
+        guard SmartPasteDetector.isWithinCharacterLimit(
+            snapshot,
+            limit: HomeContentProcessor.maximumCharacterCount
+        ) else {
             failure = HomeContentFailure.inputTooLong(
                 maximumCharacterCount: HomeContentProcessor.maximumCharacterCount
             ).message
@@ -185,7 +194,10 @@ final class HomeContentSession: ObservableObject {
     }
 
     private func publishInputDiagnosticIfNeeded() {
-        guard input.count > HomeContentProcessor.maximumCharacterCount else { return }
+        guard !SmartPasteDetector.isWithinCharacterLimit(
+            input,
+            limit: HomeContentProcessor.maximumCharacterCount
+        ) else { return }
         failure = HomeContentFailure.inputTooLong(
             maximumCharacterCount: HomeContentProcessor.maximumCharacterCount
         ).message

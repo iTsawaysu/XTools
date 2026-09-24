@@ -29,10 +29,24 @@ public enum SmartPasteDetector {
     /// Maximum number of characters inspected. Longer input is ignored.
     public static let maxInspectedLength = 32 * 1024
 
+    /// Returns whether `text` contains at most `limit` extended grapheme
+    /// clusters without walking the whole value when it exceeds the bound.
+    public static func isWithinCharacterLimit(_ text: String, limit: Int) -> Bool {
+        guard limit >= 0 else { return false }
+        guard let boundary = text.index(
+            text.startIndex,
+            offsetBy: limit,
+            limitedBy: text.endIndex
+        ) else {
+            return true
+        }
+        return boundary == text.endIndex
+    }
+
     /// Classifies `raw`; returns `nil` when no rule matches confidently.
     public static func detect(_ raw: String) -> Kind? {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, text.count <= maxInspectedLength else { return nil }
+        guard !text.isEmpty, isWithinCharacterLimit(text, limit: maxInspectedLength) else { return nil }
 
         if let kind = detectTokenLike(text) {
             return kind
