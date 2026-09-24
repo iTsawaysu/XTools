@@ -235,43 +235,85 @@ struct CodeViewerSurfaceTests {
     }
 
     @MainActor
-    @Test func jsonFormatterPageFitsStandardWindowWidthWithoutOverflow() {
+    @Test func jsonFormatterEditorViewportsFitMinimumRootWindowDetailWidth() {
         let defaults = UserDefaults(suiteName: "CodeViewerSurfaceTests.Layout.\(UUID().uuidString)")!
         let repository = ToolWorkspaceRepository(defaults: defaults)
         let view = IndexJSONFormatterPage().environmentObject(repository)
         let hostingView = NSHostingView(rootView: view)
-        
-        // Window minWidth: 960, Sidebar: 220, Detail area: ~740 (test down to 680)
-        hostingView.frame = NSRect(x: 0, y: 0, width: 680, height: 600)
+        let rootWidth: CGFloat = 960
+        let sidebarWidth: CGFloat = 220
+        let detailWidth = rootWidth - sidebarWidth
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: rootWidth, height: 640))
+        container.addSubview(hostingView)
+        hostingView.frame = NSRect(x: sidebarWidth, y: 0, width: detailWidth, height: 640)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: rootWidth, height: 640),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = container
+        defer { window.close() }
+
+        window.orderFront(nil)
+        window.displayIfNeeded()
         hostingView.layoutSubtreeIfNeeded()
-        
-        func checkOverflows(_ v: NSView) {
-            #expect(v.frame.maxX <= 680, "View \(type(of: v)) frame \(v.frame) exceeds container width 680")
-            for sub in v.subviews {
-                checkOverflows(sub)
+
+        #expect(window.contentView?.bounds.width == rootWidth)
+        #expect(hostingView.bounds.width == detailWidth)
+
+        let textViews = Self.findAllDescendants(of: hostingView, type: NSTextView.self)
+        #expect(textViews.count >= 2, "JSON page must expose native input and output editors")
+        for textView in textViews {
+            guard let contentView = textView.enclosingScrollView?.contentView else {
+                Issue.record("JSON editor must be hosted by a native scroll view")
+                continue
             }
+            let viewport = contentView.convert(contentView.bounds, to: hostingView)
+            #expect(viewport.width > 0 && viewport.height > 0)
+            #expect(viewport.minX >= -1 && viewport.maxX <= hostingView.bounds.maxX + 1,
+                    "Editor viewport must remain inside the derived detail coordinate space")
         }
-        checkOverflows(hostingView)
     }
 
     @MainActor
-    @Test func textDiffPageFitsStandardWindowWidthWithoutOverflow() {
+    @Test func textDiffEditorViewportsFitMinimumRootWindowDetailWidth() {
         let defaults = UserDefaults(suiteName: "CodeViewerSurfaceTests.Layout.Diff.\(UUID().uuidString)")!
         let repository = ToolWorkspaceRepository(defaults: defaults)
         let view = IndexTextDiffPage().environmentObject(repository)
         let hostingView = NSHostingView(rootView: view)
-        
-        // Window minWidth: 960, Sidebar: 220, Detail area: ~740 (test down to 680)
-        hostingView.frame = NSRect(x: 0, y: 0, width: 680, height: 600)
+        let rootWidth: CGFloat = 960
+        let detailWidth: CGFloat = rootWidth - 220
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: rootWidth, height: 640))
+        container.addSubview(hostingView)
+        hostingView.frame = NSRect(x: 220, y: 0, width: detailWidth, height: 640)
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: rootWidth, height: 640),
+            styleMask: [.titled, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = container
+        defer { window.close() }
+        window.orderFront(nil)
+        window.displayIfNeeded()
         hostingView.layoutSubtreeIfNeeded()
-        
-        func checkOverflows(_ v: NSView) {
-            #expect(v.frame.maxX <= 680, "View \(type(of: v)) frame \(v.frame) exceeds container width 680")
-            for sub in v.subviews {
-                checkOverflows(sub)
+
+        #expect(window.contentView?.bounds.width == rootWidth)
+        #expect(hostingView.bounds.width == detailWidth)
+        let textViews = Self.findAllDescendants(of: hostingView, type: NSTextView.self)
+        #expect(textViews.count >= 2, "Diff page must expose at least two native editors")
+        for textView in textViews {
+            guard let contentView = textView.enclosingScrollView?.contentView else {
+                Issue.record("Diff editor must be hosted by a native scroll view")
+                continue
             }
+            let viewport = contentView.convert(contentView.bounds, to: hostingView)
+            #expect(viewport.width > 0 && viewport.height > 0)
+            #expect(viewport.minX >= -1 && viewport.maxX <= hostingView.bounds.maxX + 1)
         }
-        checkOverflows(hostingView)
     }
 
     @MainActor
