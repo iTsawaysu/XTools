@@ -314,6 +314,50 @@ struct CommandPaletteNativeBridgeTests {
         #expect(registry.debugObservedClipViewCount == 0)
     }
 
+    @Test @MainActor
+    func pruningDeadRowsRemovesMultipleUnusedClipViewObserversSafely() throws {
+        let registry = CommandPaletteRevealRegistry()
+        let tracker = CommandPalettePointerMovementTracker()
+        registry.resume(session: 1)
+
+        var views: [CommandPaletteRevealView] = []
+        var scrollViews: [NSScrollView] = []
+        for index in 0..<3 {
+            let scrollView = Self.scrollView()
+            let document = try #require(scrollView.documentView)
+            let view = CommandPaletteRevealView(frame: NSRect(x: 0, y: 40, width: 220, height: 36))
+            document.addSubview(view)
+            Self.configure(
+                view,
+                itemID: "dead-row-\(index)",
+                registry: registry,
+                tracker: tracker,
+                session: 1,
+                interactionEnabled: true
+            )
+            views.append(view)
+            scrollViews.append(scrollView)
+        }
+
+        #expect(registry.debugObservedClipViewCount == 3)
+        for index in 0..<2 {
+            Self.configure(
+                views[index],
+                itemID: "dead-row-\(index)",
+                registry: registry,
+                tracker: tracker,
+                session: 1,
+                interactionEnabled: false
+            )
+        }
+
+        _ = registry.visibleEdgeSelectableIndex(direction: 1)
+
+        #expect(registry.debugEntryCount == 3)
+        #expect(registry.debugObservedClipViewCount == 1)
+        _ = scrollViews
+    }
+
     @MainActor
     private static func configure(
         _ view: CommandPaletteRevealView,
