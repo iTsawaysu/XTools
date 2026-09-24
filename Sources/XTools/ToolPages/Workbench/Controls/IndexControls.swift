@@ -664,6 +664,7 @@ struct IndexOptionSwitch: View {
     enum Style: Sendable {
         case switchToggle
         case embeddedSwitch
+        case button
     }
 
     let title: String
@@ -722,6 +723,9 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
 
             case .embeddedSwitch:
                 IndexEmbeddedSwitchLabel(configuration: configuration)
+
+            case .button:
+                IndexOptionButtonLabel(configuration: configuration)
             }
         }
         .buttonStyle(.plain)
@@ -796,6 +800,56 @@ private struct IndexEmbeddedSwitchLabel: View {
         .onHover { isHovering = $0 }
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: isOn)
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: hovering)
+    }
+}
+
+private struct IndexOptionButtonLabel: View {
+    let configuration: ToggleStyle.Configuration
+    @State private var isHovering = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    private var isOn: Bool { configuration.isOn }
+    private var hovering: Bool { isHovering && isEnabled }
+
+    private var background: Color {
+        if isOn {
+            return hovering ? ToolTheme.accentSoft.opacity(0.85) : ToolTheme.accentSoft
+        }
+        return hovering ? ToolTheme.hoverFill : ToolTheme.editorBackground
+    }
+
+    private var border: Color {
+        if isOn {
+            return ToolTheme.accentBorder
+        }
+        return hovering ? ToolTheme.strongBorder : ToolTheme.border
+    }
+
+    private var foreground: Color {
+        if !isEnabled { return ToolTheme.textTertiary }
+        if isOn { return ToolTheme.accent }
+        return hovering ? ToolTheme.textPrimary : ToolTheme.textSecondary
+    }
+
+    var body: some View {
+        configuration.label
+            .font(ToolTypography.label)
+            .foregroundStyle(foreground)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, 8)
+            .frame(height: 26)
+            .background(
+                background,
+                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                    .strokeBorder(border, lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+            .onHover { isHovering = $0 }
+            .toolAnimation(ToolMotion.Preset.controlFeedback, value: [hovering, isOn])
     }
 }
 
