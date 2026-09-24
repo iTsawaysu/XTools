@@ -37,23 +37,57 @@ public enum TextStatistics {
     }
 
     public static func analyze(_ input: String) -> Stats {
-        Stats(
-            characters: input.count,
-            nonWhitespaceCharacters: input.lazy.filter { !$0.isWhitespace }.count,
-            words: countTokens(in: input, unit: .word),
-            lines: input.isEmpty ? 0 : input.lazy.filter(\.isNewline).count + 1,
-            sentences: countTokens(in: input, unit: .sentence),
-            bytes: input.utf8.count
+        // The non-cancelling public path cannot throw CancellationError.
+        try! analyze(input, shouldCancel: { false })
+    }
+
+    public static func analyze(
+        _ input: String,
+        shouldCancel: @escaping @Sendable () -> Bool
+    ) throws -> Stats {
+        if shouldCancel() { throw CancellationError() }
+        var characters = 0
+        var nonWhitespaceCharacters = 0
+        var lineBreaks = 0
+        for character in input {
+            if characters.isMultiple(of: 1_024), shouldCancel() { throw CancellationError() }
+            characters += 1
+            if !character.isWhitespace { nonWhitespaceCharacters += 1 }
+            if character.isNewline { lineBreaks += 1 }
+        }
+        if shouldCancel() { throw CancellationError() }
+
+        let words = try countTokens(in: input, unit: .word, shouldCancel: shouldCancel)
+        let sentences = try countTokens(in: input, unit: .sentence, shouldCancel: shouldCancel)
+        if shouldCancel() { throw CancellationError() }
+        let bytes = input.utf8.count
+        if shouldCancel() { throw CancellationError() }
+        return Stats(
+            characters: characters,
+            nonWhitespaceCharacters: nonWhitespaceCharacters,
+            words: words,
+            lines: input.isEmpty ? 0 : lineBreaks + 1,
+            sentences: sentences,
+            bytes: bytes
         )
     }
 
-    private static func countTokens(in input: String, unit: NLTokenUnit) -> Int {
+    private static func countTokens(
+        in input: String,
+        unit: NLTokenUnit,
+        shouldCancel: @escaping @Sendable () -> Bool
+    ) throws -> Int {
         let tokenizer = NLTokenizer(unit: unit)
         tokenizer.string = input
 
         let alphanumerics = CharacterSet.alphanumerics
         var count = 0
+        var cancelled = false
         tokenizer.enumerateTokens(in: input.startIndex..<input.endIndex) { range, _ in
+            if shouldCancel() {
+                cancelled = true
+                return false
+            }
             let token = input[range]
             guard token.unicodeScalars.contains(where: { alphanumerics.contains($0) }) else {
                 return true
@@ -61,6 +95,7 @@ public enum TextStatistics {
             count += 1
             return true
         }
+        if cancelled || shouldCancel() { throw CancellationError() }
         return count
     }
 }

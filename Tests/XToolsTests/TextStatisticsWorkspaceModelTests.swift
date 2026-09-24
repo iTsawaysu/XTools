@@ -8,7 +8,7 @@ struct TextStatisticsWorkspaceModelTests {
     @Test func analysisRunsOffMainThreadAfterDebounce() async throws {
         let probe = TextStatisticsAnalysisProbe()
         let workspace = TextStatisticsWorkspaceModel(
-            analysisOperation: { input in
+            analysisOperation: { input, _ in
                 probe.begin(input)
                 defer { probe.finish(input) }
                 return TextStatistics.analyze(input)
@@ -33,7 +33,7 @@ struct TextStatisticsWorkspaceModelTests {
             "latest": 0.6
         ])
         let workspace = TextStatisticsWorkspaceModel(
-            analysisOperation: { input in
+            analysisOperation: { input, _ in
                 probe.begin(input)
                 defer { probe.finish(input) }
                 return Self.syntheticStats(for: input)
@@ -59,7 +59,7 @@ struct TextStatisticsWorkspaceModelTests {
     @Test func clearingImmediatelyPublishesZeroAndRejectsRunningCompletion() async throws {
         let probe = TextStatisticsAnalysisProbe(delays: ["slow": 0.6])
         let workspace = TextStatisticsWorkspaceModel(
-            analysisOperation: { input in
+            analysisOperation: { input, _ in
                 probe.begin(input)
                 defer { probe.finish(input) }
                 return Self.syntheticStats(for: input)
@@ -82,6 +82,55 @@ struct TextStatisticsWorkspaceModelTests {
         try await Task.sleep(for: .milliseconds(400))
         #expect(workspace.stats == .zero)
         #expect(!workspace.isAnalyzing)
+        #expect(probe.maxConcurrent == 1)
+    }
+
+    @Test func supersedingCancelsActiveAnalysisBeforePublishingLatest() async throws {
+        let probe = TextStatisticsAnalysisProbe()
+        let workspace = TextStatisticsWorkspaceModel(
+            analysisOperation: { input, shouldCancel in
+                probe.begin(input)
+                defer { probe.finish(input) }
+                if input == "first" {
+                    while !shouldCancel() { Thread.sleep(forTimeInterval: 0.002) }
+                    probe.markCancelled(input)
+                    throw CancellationError()
+                }
+                return Self.syntheticStats(for: input)
+            },
+            debounce: .milliseconds(10)
+        )
+
+        workspace.text = "first"
+        try await Self.waitUntil { probe.startedInputs == ["first"] }
+        workspace.text = "latest"
+        try await Self.waitUntil {
+            probe.cancelledInputs == ["first"]
+                && workspace.stats.characters == "latest".count
+                && !workspace.isAnalyzing
+        }
+
+        #expect(probe.startedInputs == ["first", "latest"])
+        #expect(probe.maxConcurrent == 1)
+    }
+
+    @Test func releasingWorkspaceCancelsActiveAnalysis() async throws {
+        let probe = TextStatisticsAnalysisProbe()
+        var workspace: TextStatisticsWorkspaceModel? = TextStatisticsWorkspaceModel(
+            analysisOperation: { input, shouldCancel in
+                probe.begin(input)
+                defer { probe.finish(input) }
+                while !shouldCancel() { Thread.sleep(forTimeInterval: 0.002) }
+                probe.markCancelled(input)
+                throw CancellationError()
+            },
+            debounce: .milliseconds(10)
+        )
+
+        workspace?.text = "held"
+        try await Self.waitUntil { probe.startedInputs == ["held"] }
+        workspace = nil
+        try await Self.waitUntil { probe.cancelledInputs == ["held"] }
         #expect(probe.maxConcurrent == 1)
     }
 
@@ -146,6 +195,7 @@ private final class TextStatisticsAnalysisProbe: @unchecked Sendable {
     private var active = 0
     private var storedMaxConcurrent = 0
     private var storedStartedInputs: [String] = []
+    private var storedCancelledInputs: [String] = []
     private var storedRanOnMainThread = false
 
     init(delays: [String: TimeInterval] = [:]) {
@@ -158,6 +208,10 @@ private final class TextStatisticsAnalysisProbe: @unchecked Sendable {
 
     var startedInputs: [String] {
         lock.withLock { storedStartedInputs }
+    }
+
+    var cancelledInputs: [String] {
+        lock.withLock { storedCancelledInputs }
     }
 
     var ranOnMainThread: Bool {
@@ -180,5 +234,9 @@ private final class TextStatisticsAnalysisProbe: @unchecked Sendable {
         lock.withLock {
             active -= 1
         }
+    }
+
+    func markCancelled(_ input: String) {
+        lock.withLock { storedCancelledInputs.append(input) }
     }
 }

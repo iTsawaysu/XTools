@@ -97,4 +97,29 @@ struct TextStatisticsTests {
         let unicodeStats = TextStatistics.analyze("你好")
         #expect(unicodeStats.bytes == 6) // UTF-8 (3 bytes × 2 chars)
     }
+
+    @Test func cancellableAnalysisStopsDuringCharacterTraversal() {
+        let probe = StatisticsCancellationProbe(cancelAfter: 3)
+        #expect(throws: CancellationError.self) {
+            try TextStatistics.analyze(String(repeating: "a ", count: 10_000), shouldCancel: probe.shouldCancel)
+        }
+        #expect(probe.checkCount >= 3)
+    }
+}
+
+private final class StatisticsCancellationProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private let cancelAfter: Int
+    private var checks = 0
+
+    init(cancelAfter: Int) { self.cancelAfter = cancelAfter }
+
+    var checkCount: Int { lock.withLock { checks } }
+
+    func shouldCancel() -> Bool {
+        lock.withLock {
+            checks += 1
+            return checks >= cancelAfter
+        }
+    }
 }

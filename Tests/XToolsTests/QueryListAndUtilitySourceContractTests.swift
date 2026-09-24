@@ -114,9 +114,8 @@ struct QueryListAndUtilitySourceContractTests {
         doesNotContain(math, "JavaScriptCore", "Math page must not evaluate expressions through a script engine")
 
         doesNotContain(textStats, "TextStatistics.analyze(", "Text statistics View body must not run Unicode-aware analysis on the main actor")
-        contains(textStatsModel, "TextStatistics.analyze(input)", "Text statistics background model must delegate Unicode-aware counting to Core")
-        contains(textStatsModel, "Task.detached(priority: .userInitiated)", "Text statistics analysis must leave the main actor")
-        contains(textStatsModel, "private var pending: Request?", "Text statistics worker must coalesce to one latest pending request")
+        contains(textStatsModel, "TextStatistics.analyze(input, shouldCancel: shouldCancel)", "Text statistics background model must delegate cancellable Unicode-aware counting to Core")
+        contains(textStatsModel, "SupersedingExecutionSession(cancelInFlight: true)", "Text statistics analysis must use the shared serial latest-wins worker")
         contains(textStats, "workspaceSemantic: .fixedInputWorkspace", "Text statistics must preserve the fixed-input workspace semantic")
         contains(textStats, "TextStatisticsAnalysisStatus(isAnalyzing: workspace.isAnalyzing)", "Text statistics must expose analysis state in the statistics panel header")
         contains(textStats, "valueMotion: .immediate", "Text statistics values must remain immediate rather than animating each completion")
