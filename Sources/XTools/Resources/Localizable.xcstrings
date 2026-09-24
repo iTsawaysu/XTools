@@ -367,6 +367,24 @@
     "仅提取文章正文" : {
       "extractionState" : "manual"
     },
+    "仅提取正文" : {
+      "extractionState" : "manual"
+    },
+    "去转义" : {
+      "extractionState" : "manual"
+    },
+    "转义" : {
+      "extractionState" : "manual"
+    },
+    "转字符串" : {
+      "extractionState" : "manual"
+    },
+    "转义为字符串" : {
+      "extractionState" : "manual"
+    },
+    "不处理" : {
+      "extractionState" : "manual"
+    },
     "今" : {
       "extractionState" : "manual"
     },

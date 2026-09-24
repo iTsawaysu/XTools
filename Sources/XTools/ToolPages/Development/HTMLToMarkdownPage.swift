@@ -68,21 +68,20 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 showsOutputSave: true,
                 outputFileName: "markdown-output.md",
                 leadingControl: {
-                    fetchButton
-                        .fixedSize(horizontal: true, vertical: false)
-                    IndexIconButton(
-                        systemImage: "doc.plaintext",
+                    IndexOptionSwitch(
+                        title: "仅提取正文",
                         help: "仅提取文章正文",
-                        isActive: session.extractArticleOnly
-                    ) {
-                        session.extractArticleOnly.toggle()
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
+                        style: .button,
+                        isOn: $session.extractArticleOnly
+                    )
                 },
                 inputHeader: {
                     AnyView(
-                        urlInput
-                            .frame(maxWidth: .infinity)
+                        HStack(spacing: 6) {
+                            urlInput
+                            fetchButton
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
                     )
                 },
                 outputControl: {
@@ -106,30 +105,37 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
     }
 
     private var urlInput: some View {
-        IndexTextInput(
-            placeholder: "URL...",
-            text: $session.urlText,
-            height: 26,
-            trailingInset: session.urlText.isEmpty ? 11 : 28,
-            onSubmit: session.fetchURL,
-            onEscape: clearURL
-        )
-        .disabled(session.isURLProcessing)
-        .overlay(alignment: .trailing) {
-            if !session.urlText.isEmpty && !session.isURLProcessing {
-                Button {
-                    clearURL()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(ToolTypography.caption)
-                        .foregroundStyle(ToolTheme.textTertiary)
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: ToolMetrics.IconSize.small))
+                .foregroundStyle(ToolTheme.textTertiary)
+                .accessibilityHidden(true)
+            IndexTextInput(
+                placeholder: "URL...",
+                text: $session.urlText,
+                height: 26,
+                trailingInset: session.urlText.isEmpty ? 11 : 28,
+                embedsFlat: true,
+                onSubmit: session.fetchURL,
+                onEscape: clearURL
+            )
+            .overlay(alignment: .trailing) {
+                if !session.urlText.isEmpty && !session.isURLProcessing {
+                    Button {
+                        clearURL()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(ToolTypography.caption)
+                            .foregroundStyle(ToolTheme.textTertiary)
+                    }
+                    .buttonStyle(IndexBareButtonStyle())
+                    .padding(.trailing, 8)
+                    .help("清空 URL (Esc)")
+                    .accessibilityLabel("清空 URL 地址")
                 }
-                .buttonStyle(IndexBareButtonStyle())
-                .padding(.trailing, 8)
-                .help("清空 URL (Esc)")
-                .accessibilityLabel("清空 URL 地址")
             }
         }
+        .disabled(session.isURLProcessing)
     }
 
     private func clearURL() {

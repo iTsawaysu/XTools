@@ -150,6 +150,9 @@ struct IndexTextInput: View {
     var autoFocus = false
     var focusRequestToken: Int? = nil
     var selectAllOnFocus = false
+    /// Drops the field box so an owning container (e.g. the format workbench's
+    /// input header) supplies the shared surface edge.
+    var embedsFlat = false
     var onSubmit: (() -> Void)? = nil
     var onEscape: (() -> Void)? = nil
     var onFocusChange: ((Bool) -> Void)? = nil
@@ -179,10 +182,15 @@ struct IndexTextInput: View {
         .id(secure)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(height: height)
-        .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+        .background(
+            embedsFlat ? Color.clear : ToolTheme.editorBackground,
+            in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+        )
         .overlay {
-            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                .strokeBorder(isFocused ? ToolTheme.focusRing : ToolTheme.border, lineWidth: isFocused ? 1.5 : 0.5)
+            if !embedsFlat {
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                    .strokeBorder(isFocused ? ToolTheme.focusRing : ToolTheme.border, lineWidth: isFocused ? 1.5 : 0.5)
+            }
         }
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: isFocused)
     }

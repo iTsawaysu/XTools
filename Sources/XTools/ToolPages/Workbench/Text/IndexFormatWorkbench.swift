@@ -421,14 +421,29 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
 
     // MARK: Panes
 
+    @ViewBuilder
     private var inputPaneWithHeader: some View {
-        VStack(spacing: 0) {
-            if let inputHeader {
+        if let inputHeader {
+            // The header row (e.g. a URL bar) and the editor share one field
+            // surface: single border, hairline divider, embedded editor.
+            VStack(spacing: 0) {
                 inputHeader()
-                    .padding(.horizontal, ToolMetrics.Spacing.sm)
-                    .padding(.top, ToolMetrics.Spacing.sm)
-                    .padding(.bottom, 6)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 6)
+                Rectangle()
+                    .fill(ToolTheme.border)
+                    .frame(height: 0.5)
+                inputPane
             }
+            .background(
+                ToolTheme.editorBackground,
+                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                    .strokeBorder(ToolTheme.border, lineWidth: 0.5)
+            }
+        } else {
             inputPane
         }
     }
@@ -439,7 +454,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             text: $input,
             fillsHeight: true,
             autoFocus: autoFocus,
-            embedsFlat: false,
+            embedsFlat: inputHeader != nil,
             lineNumbers: true,
             onFileDrop: { content in
                 input = content
