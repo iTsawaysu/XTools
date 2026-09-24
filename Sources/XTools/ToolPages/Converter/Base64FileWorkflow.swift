@@ -57,7 +57,12 @@ enum Base64FileWorkflow {
                     return .failure(.tooLarge(fileName: url.lastPathComponent, maxBytes: maxBytes))
                 }
 
-                let data = try Data(contentsOf: url, options: .mappedIfSafe)
+                let data: Data
+                do {
+                    data = try BoundedFileReader.read(from: url, maxBytes: maxBytes)
+                } catch BoundedFileReader.ReadError.tooLarge {
+                    return .failure(.tooLarge(fileName: url.lastPathComponent, maxBytes: maxBytes))
+                }
                 return .success(
                     Base64FileSelection(
                         fileName: url.lastPathComponent,
@@ -155,8 +160,10 @@ enum Base64FileWorkflow {
                     return .failure(.externalEncodedTextTooLarge(maxBytes: maxBytes))
                 }
 
-                let data = try Data(contentsOf: url, options: .mappedIfSafe)
-                guard data.count <= maxBytes else {
+                let data: Data
+                do {
+                    data = try BoundedFileReader.read(from: url, maxBytes: maxBytes)
+                } catch BoundedFileReader.ReadError.tooLarge {
                     return .failure(.externalEncodedTextTooLarge(maxBytes: maxBytes))
                 }
                 guard let text = String(data: data, encoding: .utf8) else {
@@ -552,6 +559,10 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
                 outputGeneration: outputGeneration,
                 mode: mode
             ) else { return }
+            if Task.isCancelled {
+                mutate { $0.isReadingFile = false }
+                return
+            }
 
             switch result {
             case .success(let selection):
@@ -561,6 +572,10 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
                     outputGeneration: outputGeneration,
                     mode: mode
                 ) else { return }
+                if Task.isCancelled {
+                    mutate { $0.isReadingFile = false }
+                    return
+                }
 
                 mutate { $0.applySuccessfulFileRead(selection: selection, preview: preview) }
             case .failure(let failure):
@@ -827,6 +842,10 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
                 maxBytes: Self.externalEncodedTextByteLimit
             )
             guard state.decodeGeneration == generation else { return }
+            if Task.isCancelled {
+                finishDecodeAttempt(.encodedTextImport, generation: generation)
+                return
+            }
 
             switch inputResult {
             case .success(let input):

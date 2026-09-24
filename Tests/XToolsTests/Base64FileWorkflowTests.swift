@@ -257,6 +257,53 @@ struct Base64FileWorkflowTests {
         #expect(session.isReadingFile == false)
     }
 
+    @Test func cancelledFileReadEndsBusyStateWithoutReplacingSelection() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let suspendedRead = SuspendedTestValue<Result<Base64FileSelection, Base64FileWorkflowFailure>>()
+        processor.readSelectionHandler = { _, _ in await suspendedRead.wait() }
+
+        let task = session.readSelectedFile(
+            from: URL(fileURLWithPath: "/tmp/cancelled.bin"),
+            processor: processor
+        )
+        await suspendedRead.waitForRequest()
+        task?.cancel()
+        suspendedRead.resume(.success(Self.selection(fileName: "cancelled.bin")))
+        await task?.value
+
+        #expect(session.isReadingFile == false)
+        #expect(session.selectedFile == nil)
+        #expect(session.fileError == nil)
+    }
+
+    @Test func cancelledFilePreviewEndsBusyStateWithoutPublishingSelection() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let selection = Self.selection(fileName: "cancelled.bin")
+        let suspendedPreview = SuspendedTestValue<Base64Conversion.EncodedFileOutputPreview>()
+        processor.readSelectionResult = .success(selection)
+        processor.outputPreviewHandler = { _, _ in await suspendedPreview.wait() }
+
+        let task = session.readSelectedFile(
+            from: URL(fileURLWithPath: "/tmp/cancelled.bin"),
+            processor: processor
+        )
+        await suspendedPreview.waitForRequest()
+        task?.cancel()
+        suspendedPreview.resume(Base64Conversion.encodedOutputPreview(
+            for: selection.data,
+            mimeType: selection.mimeType,
+            mode: .dataURL
+        ))
+        await task?.value
+
+        #expect(session.isReadingFile == false)
+        #expect(session.selectedFile == nil)
+        #expect(session.outputPreview == nil)
+        #expect(session.fileError == nil)
+    }
+
     @Test func sessionDirectionChangeKeepsReadyWorkspaceAndRejectsPendingReplacement() async {
         let session = Base64FileWorkflowSession()
         let processor = FakeBase64FileWorkflowProcessor()
@@ -837,6 +884,26 @@ struct Base64FileWorkflowTests {
         await secondTask.value
         #expect(session.isDecoding == false)
         #expect(session.decodeActivity == nil)
+    }
+
+    @Test func cancelledEncodedTextReadEndsOnlyItsOwnDecodeActivity() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let suspendedRead = SuspendedTestValue<Result<Base64FileEncodedTextInput, Base64FileWorkflowFailure>>()
+        processor.readEncodedTextHandler = { _, _ in await suspendedRead.wait() }
+
+        let task = session.importEncodedTextFile(
+            from: URL(fileURLWithPath: "/tmp/cancelled.base64"),
+            processor: processor
+        )
+        await suspendedRead.waitForRequest()
+        task.cancel()
+        suspendedRead.resume(.failure(.readFailed))
+        await task.value
+
+        #expect(session.decodeActivity == nil)
+        #expect(session.reverseError == nil)
+        #expect(session.decodedPayload == nil)
     }
 
     @Test func staleEncodedTextDecodeDoesNotEndNewerImportBusyState() async {
