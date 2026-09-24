@@ -345,7 +345,7 @@ struct RootView: View {
 
             if let flight = iconFlight.flight {
                 PaletteIconGhostView(flight: flight) {
-                    iconFlight.clearFlight()
+                    iconFlight.finish(flight: flight)
                 }
                 .zIndex(4)
             }
@@ -849,6 +849,7 @@ private final class PaletteIconFlightCoordinator: ObservableObject {
     private(set) var paletteIconRects: [String: CGRect] = [:]
     @Published private(set) var flight: PaletteIconFlight?
     private var pending: PendingPaletteFlight?
+    private var nextFlightToken = 0
 
     func beginLaunch(_ pending: PendingPaletteFlight) {
         self.pending = pending
@@ -863,15 +864,22 @@ private final class PaletteIconFlightCoordinator: ObservableObject {
         pending = nil
     }
 
+    func finish(flight: PaletteIconFlight) {
+        guard self.flight?.token == flight.token else { return }
+        clearFlight()
+    }
+
     func resolve(proxy: GeometryProxy, iconAnchors: [String: Anchor<CGRect>], railAnchor: Anchor<CGRect>?) {
         CommandPaletteTrace.count(.iconAnchorResolution)
         paletteIconRects = iconAnchors.mapValues { proxy[$0] }
         guard let pending, let railRect = railAnchor.map({ proxy[$0] }) else { return }
+        nextFlightToken += 1
         flight = PaletteIconFlight(
             systemImage: pending.systemImage,
             from: pending.from,
             to: CGPoint(x: railRect.minX, y: railRect.minY),
-            id: pending.toolID.rawValue
+            id: pending.toolID.rawValue,
+            token: nextFlightToken
         )
         self.pending = nil
     }
@@ -917,6 +925,7 @@ private struct PaletteIconFlight: Equatable {
     let from: CGPoint
     let to: CGPoint
     let id: String
+    let token: Int
 }
 
 /// Transient accent ghost that carries the launched tool's icon from its
@@ -939,13 +948,23 @@ private struct PaletteIconGhostView: View {
             .animation(ToolMotion.animation(ToolMotion.Preset.settle, reduceMotion: reduceMotion), value: arrived)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
-            .task {
+            .task(id: flight.token) {
                 if !reduceMotion {
-                    try? await Task.sleep(for: .milliseconds(16))
+                    do {
+                        try await Task.sleep(for: .milliseconds(16))
+                        try Task.checkCancellation()
+                    } catch {
+                        return
+                    }
                     withToolAnimation(ToolMotion.Preset.settle) {
                         arrived = true
                     }
-                    try? await Task.sleep(for: .milliseconds(380))
+                    do {
+                        try await Task.sleep(for: .milliseconds(380))
+                        try Task.checkCancellation()
+                    } catch {
+                        return
+                    }
                 }
                 onFinished()
             }
