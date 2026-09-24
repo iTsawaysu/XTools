@@ -1181,3 +1181,53 @@ struct ImageProcessingTests {
         case encodingFailed
     }
 }
+
+struct ProcessImageOptimizerTests {
+    @Test func drainsInputAndIgnoresLargeStderr() {
+        let input = Data(repeating: 42, count: 128 * 1024)
+        let output = ProcessImageOptimizer.defaultRunProcess(
+            "/bin/sh", ["-c", "cat >/dev/null; printf '%*s' 131072 '' >&2; printf ok"],
+            input, timeout: 3
+        )
+        #expect(output == Data("ok".utf8))
+    }
+
+    @Test func boundsHungOversizedAndEarlyExitingProcesses() {
+        let input = Data(repeating: 42, count: 128 * 1024)
+        #expect(ProcessImageOptimizer.defaultRunProcess(
+            "/bin/sh", ["-c", "while :; do :; done"], input, timeout: 0.2
+        ) == nil)
+        #expect(ProcessImageOptimizer.defaultRunProcess(
+            "/bin/sh", ["-c", "exec 1>&-; while :; do :; done"], input, timeout: 0.2
+        ) == nil)
+        let partialOutputStart = ContinuousClock.now
+        #expect(ProcessImageOptimizer.defaultRunProcess(
+            "/bin/sh", ["-c", "printf ok; while :; do :; done"], input, timeout: 0.2
+        ) == nil)
+        #expect(partialOutputStart.duration(to: .now) < .seconds(1))
+        #expect(ProcessImageOptimizer.defaultRunProcess(
+            "/bin/sh", ["-c", "while :; do printf 1234567890; done"],
+            Data(repeating: 42, count: 128), timeout: 2
+        ) == nil)
+        #expect(ProcessImageOptimizer.defaultRunProcess(
+            "/bin/sh", ["-c", "exit 7"], input, timeout: 2
+        ) == nil)
+        #expect(ProcessImageOptimizer.defaultRunProcess(
+            "/bin/sh", ["-c", "exit 0"], input, timeout: 2
+        ) == nil)
+    }
+
+    @Test func cancellationStopsRunningProcess() async {
+        let input = Data(repeating: 42, count: 128 * 1024)
+        let task = Task.detached {
+            ProcessImageOptimizer.defaultRunProcess(
+                "/bin/sh", ["-c", "while :; do :; done"], input, timeout: 3
+            )
+        }
+        try? await Task.sleep(for: .milliseconds(100))
+        let cancelledAt = ContinuousClock.now
+        task.cancel()
+        #expect(await task.value == nil)
+        #expect(cancelledAt.duration(to: .now) < .seconds(1))
+    }
+}
