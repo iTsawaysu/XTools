@@ -54,14 +54,28 @@ public struct LiveHTMLToMarkdownURLFetchClient: HTMLToMarkdownURLFetchClient {
         for request: URLRequest,
         byteLimit: Int
     ) async throws -> (Data, URLResponse) {
+        guard let host = request.url?.host,
+              URLFetchHostPolicy.evaluateResolvedHost(host) == .allow else {
+            throw HTMLToMarkdownURLFetchError.privateNetworkDisallowed
+        }
+
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = request.timeoutInterval
         configuration.timeoutIntervalForResource = request.timeoutInterval
 
-        let session = URLSession(configuration: configuration)
+        let delegate = HTMLToMarkdownURLSessionDelegate()
+        let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
 
-        let (bytes, response) = try await session.bytes(for: request)
+        let (bytes, response): (URLSession.AsyncBytes, URLResponse)
+        do {
+            (bytes, response) = try await session.bytes(for: request)
+        } catch {
+            if delegate.didRejectRedirect {
+                throw HTMLToMarkdownURLFetchError.privateNetworkDisallowed
+            }
+            throw error
+        }
         var data = Data()
         data.reserveCapacity(min(byteLimit, 64 * 1024))
 
@@ -73,6 +87,41 @@ public struct LiveHTMLToMarkdownURLFetchClient: HTMLToMarkdownURLFetchClient {
         }
 
         return (data, response)
+    }
+}
+
+private final class HTMLToMarkdownURLSessionDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    private static let maximumRedirects = 5
+    private let lock = NSLock()
+    private var redirectCount = 0
+    private var rejectedRedirect = false
+
+    var didRejectRedirect: Bool {
+        lock.withLock { rejectedRedirect }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        let allowed = lock.withLock { () -> Bool in
+            redirectCount += 1
+            guard redirectCount <= Self.maximumRedirects,
+                  let url = request.url,
+                  let scheme = url.scheme?.lowercased(),
+                  (scheme == "http" || scheme == "https"),
+                  let host = url.host,
+                  URLFetchHostPolicy.evaluateResolvedHost(host) == .allow else {
+                rejectedRedirect = true
+                return false
+            }
+            return true
+        }
+
+        completionHandler(allowed ? request : nil)
     }
 }
 
@@ -107,6 +156,14 @@ public struct HTMLToMarkdownURLFetchService: Sendable {
             throw HTMLToMarkdownURLFetchError.nonHTTPResponse
         }
 
+        guard let responseURL = httpResponse.url,
+              let responseHost = responseURL.host,
+              let responseScheme = responseURL.scheme?.lowercased(),
+              (responseScheme == "http" || responseScheme == "https"),
+              URLFetchHostPolicy.evaluate(host: responseHost) == .allow else {
+            throw HTMLToMarkdownURLFetchError.privateNetworkDisallowed
+        }
+
         guard (200..<300).contains(httpResponse.statusCode) else {
             throw HTMLToMarkdownURLFetchError.unacceptableStatusCode(httpResponse.statusCode)
         }
@@ -127,7 +184,7 @@ public struct HTMLToMarkdownURLFetchService: Sendable {
             throw HTMLToMarkdownURLFetchError.undecodableText
         }
 
-        return HTMLToMarkdownFetchedDocument(html: html, responseURL: httpResponse.url ?? url)
+        return HTMLToMarkdownFetchedDocument(html: html, responseURL: responseURL)
     }
 
     public static func isValidURL(_ urlText: String) -> Bool {

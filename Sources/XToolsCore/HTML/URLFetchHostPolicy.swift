@@ -1,8 +1,9 @@
+import Darwin
 import Foundation
 
 /// Host policy for outbound URL fetches performed by Core tools.
-/// String-level only (no DNS resolution); rejects loopback, link-local,
-/// RFC1918, ULA, and well-known cloud metadata endpoints.
+/// Rejects loopback, link-local, RFC1918, ULA, and well-known cloud metadata
+/// endpoints before and after DNS resolution.
 public enum URLFetchHostPolicy: Sendable {
     public enum Decision: Equatable, Sendable {
         case allow
@@ -39,6 +40,60 @@ public enum URLFetchHostPolicy: Sendable {
         }
 
         return .allow
+    }
+
+    /// Resolves a hostname and rejects it when any returned address belongs to
+    /// a local, private, link-local, or metadata range. A failed resolution is
+    /// denied because the caller cannot prove that the destination is public.
+    static func evaluateResolvedHost(_ rawHost: String) -> Decision {
+        guard evaluate(host: rawHost) == .allow else { return .deny }
+
+        let host = rawHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !host.isEmpty else { return .deny }
+
+        var hints = addrinfo()
+        hints.ai_family = AF_UNSPEC
+        hints.ai_socktype = SOCK_STREAM
+
+        var results: UnsafeMutablePointer<addrinfo>?
+        let status = getaddrinfo(host, nil, &hints, &results)
+        guard status == 0, let first = results else { return .deny }
+        defer { freeaddrinfo(first) }
+
+        var addresses: [String] = []
+        var current: UnsafeMutablePointer<addrinfo>? = first
+        while let address = current {
+            guard let numericHost = numericHost(for: address) else { return .deny }
+            addresses.append(numericHost)
+            current = address.pointee.ai_next
+        }
+
+        return evaluateResolvedAddresses(addresses)
+    }
+
+    static func evaluateResolvedAddresses(_ addresses: [String]) -> Decision {
+        guard !addresses.isEmpty,
+              addresses.allSatisfy({ evaluate(host: $0) == .allow }) else {
+            return .deny
+        }
+        return .allow
+    }
+
+    private static func numericHost(for address: UnsafeMutablePointer<addrinfo>) -> String? {
+        guard let socketAddress = address.pointee.ai_addr else { return nil }
+        var buffer = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+        let status = getnameinfo(
+            socketAddress,
+            address.pointee.ai_addrlen,
+            &buffer,
+            socklen_t(buffer.count),
+            nil,
+            0,
+            NI_NUMERICHOST
+        )
+        guard status == 0 else { return nil }
+        let bytes = buffer.map { UInt8(bitPattern: $0) }
+        return String(decoding: bytes.prefix(while: { $0 != 0 }), as: UTF8.self)
     }
 
     private static let metadataHostNames: Set<String> = [

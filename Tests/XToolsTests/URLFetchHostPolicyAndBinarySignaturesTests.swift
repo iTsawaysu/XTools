@@ -51,6 +51,18 @@ struct URLFetchHostPolicyTests {
         #expect(URLFetchHostPolicy.evaluate(host: "::ffff:192.168.0.1") == .deny)
     }
 
+    @Test func deniesAnyPrivateAddressReturnedForAHostname() {
+        #expect(
+            URLFetchHostPolicy.evaluateResolvedAddresses(["93.184.216.34", "192.168.1.20"])
+                == .deny
+        )
+        #expect(
+            URLFetchHostPolicy.evaluateResolvedAddresses(["93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946"])
+                == .allow
+        )
+        #expect(URLFetchHostPolicy.evaluateResolvedAddresses([]) == .deny)
+    }
+
     @Test func normalizedURLRejectsPrivateHostsWithStableDiagnostic() throws {
         #expect {
             _ = try HTMLToMarkdownURLFetchService.normalizedURL(from: "http://127.0.0.1/admin")

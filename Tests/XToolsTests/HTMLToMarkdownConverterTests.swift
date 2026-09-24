@@ -648,6 +648,29 @@ struct HTMLToMarkdownURLFetchServiceTests {
             return true
         }
     }
+
+    @Test func fetchRejectsPrivateResponseURLAfterRedirect() async throws {
+        let requestedURL = try #require(URL(string: "https://example.com/redirect"))
+        let privateURL = try #require(URL(string: "http://127.0.0.1/admin"))
+        let response = try #require(HTTPURLResponse(
+            url: privateURL,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: ["Content-Type": "text/html"]
+        ))
+        let service = HTMLToMarkdownURLFetchService(
+            client: FakeHTMLToMarkdownURLFetchClient(
+                data: Data("<p>private</p>".utf8),
+                response: response
+            )
+        )
+
+        await #expect {
+            _ = try await service.fetchHTML(from: requestedURL.absoluteString)
+        } throws: { error in
+            error as? HTMLToMarkdownURLFetchError == .privateNetworkDisallowed
+        }
+    }
 }
 
 private struct FailingHTMLToMarkdownURLFetchClient: HTMLToMarkdownURLFetchClient {
