@@ -389,11 +389,7 @@ final class CommandPaletteRevealRegistry: NSObject {
                 return entry.clipView.map(ObjectIdentifier.init)
             }
         )
-        let deadClipViewIDs = observedClipViews.keys.filter { id in
-            !activeClipViewIDs.contains(id)
-        }
-        for id in deadClipViewIDs {
-            guard let clipView = observedClipViews[id] else { continue }
+        for (id, clipView) in observedClipViews where !activeClipViewIDs.contains(id) {
             NotificationCenter.default.removeObserver(
                 self,
                 name: NSView.boundsDidChangeNotification,
