@@ -2,8 +2,8 @@ import Darwin
 import Foundation
 
 /// Host policy for outbound URL fetches performed by Core tools.
-/// Rejects loopback, link-local, RFC1918, ULA, and well-known cloud metadata
-/// endpoints before and after DNS resolution.
+/// Rejects local addresses and well-known metadata hosts before a request.
+/// DNS preflight cannot pin URLSession's later connection to the checked IP.
 public enum URLFetchHostPolicy: Sendable {
     public enum Decision: Equatable, Sendable {
         case allow
@@ -31,49 +31,96 @@ public enum URLFetchHostPolicy: Sendable {
             return host
         }()
 
-        if let ipv4 = parseIPv4(unbracketed), isBlockedIPv4(ipv4) {
-            return .deny
+        if let ipv4 = parseIPv4(unbracketed) {
+            return isBlockedIPv4(ipv4) ? .deny : .allow
         }
 
-        if unbracketed.contains(":"), isBlockedIPv6Literal(unbracketed) {
-            return .deny
+        if unbracketed.contains(":") {
+            guard let ipv6 = parseIPv6(unbracketed) else { return .deny }
+            return isBlockedIPv6(ipv6) ? .deny : .allow
         }
 
         return .allow
     }
 
-    /// Resolves a hostname and rejects it when any returned address belongs to
-    /// a local, private, link-local, or metadata range. A failed resolution is
-    /// denied because the caller cannot prove that the destination is public.
-    static func evaluateResolvedHost(_ rawHost: String) -> Decision {
-        guard evaluate(host: rawHost) == .allow else { return .deny }
+    enum ResolvedHostDecision: Equatable, Sendable {
+        case allow
+        case deny
+        case unavailable
+    }
 
-        let host = rawHost.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !host.isEmpty else { return .deny }
+    typealias Resolver = @Sendable (String, TimeInterval) async -> [String]?
 
+    static func evaluateResolvedHost(
+        _ host: String,
+        timeout: TimeInterval,
+        resolver: Resolver = { host, timeout in
+            await resolveAddresses(host, timeout: timeout)
+        }
+    ) async -> ResolvedHostDecision {
+        guard evaluate(host: host) == .allow else { return .deny }
+        guard let addresses = await resolver(host, timeout) else { return .unavailable }
+        guard !addresses.isEmpty else { return .unavailable }
+        return evaluateResolvedAddresses(addresses) == .allow ? .allow : .deny
+    }
+
+    // getaddrinfo cannot be interrupted; one worker bounds stuck resolutions.
+    private static let resolverQueue = DispatchQueue(label: "XTools.URLFetchHostPolicy.DNS")
+
+    static func resolveAddresses(
+        _ host: String,
+        timeout: TimeInterval,
+        lookup: @escaping @Sendable (String) -> [String]? = { host in
+            resolveAddressesSynchronously(host)
+        }
+    ) async -> [String]? {
+        let gate = DNSResolutionGate()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                gate.install(continuation)
+                resolverQueue.async {
+                    guard !gate.isFinished else { return }
+                    gate.finish(lookup(host))
+                }
+                DispatchQueue.global().asyncAfter(deadline: .now() + max(0, timeout)) {
+                    gate.finish(nil)
+                }
+            }
+        } onCancel: {
+            gate.finish(nil)
+        }
+    }
+
+    private static func resolveAddressesSynchronously(_ host: String) -> [String]? {
         var hints = addrinfo()
         hints.ai_family = AF_UNSPEC
         hints.ai_socktype = SOCK_STREAM
 
         var results: UnsafeMutablePointer<addrinfo>?
-        let status = getaddrinfo(host, nil, &hints, &results)
-        guard status == 0, let first = results else { return .deny }
+        guard getaddrinfo(host, nil, &hints, &results) == 0,
+              let first = results else {
+            return nil
+        }
         defer { freeaddrinfo(first) }
 
         var addresses: [String] = []
         var current: UnsafeMutablePointer<addrinfo>? = first
         while let address = current {
-            guard let numericHost = numericHost(for: address) else { return .deny }
+            guard let numericHost = numericHost(for: address) else {
+                return nil
+            }
             addresses.append(numericHost)
             current = address.pointee.ai_next
         }
-
-        return evaluateResolvedAddresses(addresses)
+        return addresses
     }
 
     static func evaluateResolvedAddresses(_ addresses: [String]) -> Decision {
         guard !addresses.isEmpty,
-              addresses.allSatisfy({ evaluate(host: $0) == .allow }) else {
+              addresses.allSatisfy({ address in
+                  (parseIPv4(address) != nil || parseIPv6(address) != nil)
+                      && evaluate(host: address) == .allow
+              }) else {
             return .deny
         }
         return .allow
@@ -124,35 +171,65 @@ public enum URLFetchHostPolicy: Sendable {
         if a == 172 && (16...31).contains(b) { return true }
         if a == 192 && b == 168 { return true }
         if a == 100 && (64...127).contains(b) { return true }
+        if a == 192 && b == 0 { return true }
+        if a == 198 && (b == 18 || b == 19 || (b == 51 && ip.2 == 100)) { return true }
+        if a == 203 && b == 0 && ip.2 == 113 { return true }
+        if a >= 224 { return true }
         return false
     }
 
-    private static func isBlockedIPv6Literal(_ host: String) -> Bool {
-        var value = host
-        if let percent = value.firstIndex(of: "%") {
-            value = String(value[..<percent])
+    private static func parseIPv6(_ host: String) -> [UInt8]? {
+        var address = in6_addr()
+        guard host.withCString({ inet_pton(AF_INET6, $0, &address) }) == 1 else {
+            return nil
         }
-        let lowered = value.lowercased()
+        return withUnsafeBytes(of: address) { Array($0) }
+    }
 
-        if lowered == "::1" || lowered == "0:0:0:0:0:0:0:1" {
-            return true
+    private static func isBlockedIPv6(_ bytes: [UInt8]) -> Bool {
+        let mapped = bytes.prefix(10).allSatisfy { $0 == 0 }
+            && bytes[10] == 0xff && bytes[11] == 0xff
+        if mapped {
+            return isBlockedIPv4((bytes[12], bytes[13], bytes[14], bytes[15]))
         }
-        if lowered.hasPrefix("fe80:") {
-            return true
-        }
-        // Unique local addresses fc00::/7
-        if lowered.hasPrefix("fc") || lowered.hasPrefix("fd") {
-            return true
-        }
-        if let mapped = extractIPv4Mapped(lowered), isBlockedIPv4(mapped) {
-            return true
+        // Only global unicast is eligible. This also rejects loopback, ULA,
+        // link-local, multicast, unspecified and IPv4-compatible addresses.
+        guard bytes[0] & 0xe0 == 0x20 else { return true }
+        // Transition ranges can tunnel an IPv4 destination past this policy.
+        if bytes[0] == 0x20 && bytes[1] == 0x02 { return true } // 6to4
+        if bytes[0] == 0x20 && bytes[1] == 0x01 && bytes[2] == 0 && bytes[3] == 0 {
+            return true // Teredo
         }
         return false
     }
+}
 
-    private static func extractIPv4Mapped(_ host: String) -> (UInt8, UInt8, UInt8, UInt8)? {
-        let marker = "::ffff:"
-        guard let range = host.range(of: marker) else { return nil }
-        return parseIPv4(String(host[range.upperBound...]))
+private final class DNSResolutionGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<[String]?, Never>?
+    private var completed = false
+    private var result: [String]?
+
+    var isFinished: Bool { lock.withLock { completed } }
+
+    func install(_ continuation: CheckedContinuation<[String]?, Never>) {
+        let completedResult = lock.withLock { () -> (Bool, [String]?) in
+            if completed { return (true, result) }
+            self.continuation = continuation
+            return (false, nil)
+        }
+        if completedResult.0 { continuation.resume(returning: completedResult.1) }
+    }
+
+    func finish(_ addresses: [String]?) {
+        let pending = lock.withLock { () -> CheckedContinuation<[String]?, Never>? in
+            guard !completed else { return nil }
+            completed = true
+            result = addresses
+            let pending = continuation
+            continuation = nil
+            return pending
+        }
+        pending?.resume(returning: addresses)
     }
 }

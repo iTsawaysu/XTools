@@ -48,55 +48,105 @@ public protocol HTMLToMarkdownURLFetchClient: Sendable {
 }
 
 public struct LiveHTMLToMarkdownURLFetchClient: HTMLToMarkdownURLFetchClient {
-    public init() {}
+    private let resolver: URLFetchHostPolicy.Resolver
+    private let configurationFactory: @Sendable () -> URLSessionConfiguration
+
+    public init() {
+        resolver = { host, timeout in
+            await URLFetchHostPolicy.resolveAddresses(host, timeout: timeout)
+        }
+        configurationFactory = { URLSessionConfiguration.ephemeral }
+    }
+
+    init(
+        resolver: @escaping URLFetchHostPolicy.Resolver,
+        configurationFactory: @escaping @Sendable () -> URLSessionConfiguration
+            = { URLSessionConfiguration.ephemeral }
+    ) {
+        self.resolver = resolver
+        self.configurationFactory = configurationFactory
+    }
 
     public func fetchData(
         for request: URLRequest,
         byteLimit: Int
     ) async throws -> (Data, URLResponse) {
-        guard let host = request.url?.host,
-              URLFetchHostPolicy.evaluateResolvedHost(host) == .allow else {
-            throw HTMLToMarkdownURLFetchError.privateNetworkDisallowed
+        guard let url = request.url, let scheme = url.scheme?.lowercased(), let host = url.host else {
+            throw HTMLToMarkdownURLFetchError.invalidURL
         }
+        guard scheme == "http" || scheme == "https" else {
+            throw HTMLToMarkdownURLFetchError.unsupportedScheme(scheme)
+        }
+        try Task.checkCancellation()
+        let destination = await URLFetchHostPolicy.evaluateResolvedHost(
+            host,
+            timeout: request.timeoutInterval,
+            resolver: resolver
+        )
+        try Task.checkCancellation()
+        switch destination {
+        case .allow: break
+        case .deny: throw HTMLToMarkdownURLFetchError.privateNetworkDisallowed
+        case .unavailable: throw HTMLToMarkdownURLFetchError.requestFailed
+        }
+        try Task.checkCancellation()
 
-        let configuration = URLSessionConfiguration.ephemeral
+        let configuration = configurationFactory()
         configuration.timeoutIntervalForRequest = request.timeoutInterval
         configuration.timeoutIntervalForResource = request.timeoutInterval
 
-        let delegate = HTMLToMarkdownURLSessionDelegate()
+        let delegate = HTMLToMarkdownURLSessionDelegate(
+            resolver: resolver,
+            timeout: request.timeoutInterval
+        )
         let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
-        defer { session.finishTasksAndInvalidate() }
+        defer { session.invalidateAndCancel() }
 
-        let (bytes, response): (URLSession.AsyncBytes, URLResponse)
-        do {
-            (bytes, response) = try await session.bytes(for: request)
-        } catch {
-            if delegate.didRejectRedirect {
-                throw HTMLToMarkdownURLFetchError.privateNetworkDisallowed
+        return try await withTaskCancellationHandler {
+            let (bytes, response): (URLSession.AsyncBytes, URLResponse)
+            do {
+                (bytes, response) = try await session.bytes(for: request)
+            } catch {
+                if let rejection = delegate.rejection { throw rejection }
+                throw error
             }
-            throw error
-        }
-        var data = Data()
-        data.reserveCapacity(min(byteLimit, 64 * 1024))
-
-        for try await byte in bytes {
-            data.append(byte)
-            if data.count > byteLimit {
-                throw HTMLToMarkdownURLFetchError.responseTooLarge(byteLimit)
+            if let rejection = delegate.rejection {
+                bytes.task.cancel()
+                throw rejection
             }
-        }
+            var data = Data()
+            data.reserveCapacity(min(max(0, byteLimit), 64 * 1024))
 
-        return (data, response)
+            for try await byte in bytes {
+                if data.count >= byteLimit {
+                    bytes.task.cancel()
+                    throw HTMLToMarkdownURLFetchError.responseTooLarge(byteLimit)
+                }
+                data.append(byte)
+            }
+
+            if let rejection = delegate.rejection { throw rejection }
+            return (data, response)
+        } onCancel: {
+            session.invalidateAndCancel()
+        }
     }
 }
 
-private final class HTMLToMarkdownURLSessionDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+final class HTMLToMarkdownURLSessionDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
     private static let maximumRedirects = 5
+    private let resolver: URLFetchHostPolicy.Resolver
+    private let timeout: TimeInterval
     private let lock = NSLock()
     private var redirectCount = 0
-    private var rejectedRedirect = false
+    private var rejectedRedirect: HTMLToMarkdownURLFetchError?
 
-    var didRejectRedirect: Bool {
+    init(resolver: @escaping URLFetchHostPolicy.Resolver, timeout: TimeInterval) {
+        self.resolver = resolver
+        self.timeout = timeout
+    }
+
+    var rejection: HTMLToMarkdownURLFetchError? {
         lock.withLock { rejectedRedirect }
     }
 
@@ -104,24 +154,37 @@ private final class HTMLToMarkdownURLSessionDelegate: NSObject, URLSessionTaskDe
         _ session: URLSession,
         task: URLSessionTask,
         willPerformHTTPRedirection response: HTTPURLResponse,
-        newRequest request: URLRequest,
-        completionHandler: @escaping (URLRequest?) -> Void
-    ) {
-        let allowed = lock.withLock { () -> Bool in
+        newRequest request: URLRequest
+    ) async -> URLRequest? {
+        let withinLimit = lock.withLock { () -> Bool in
             redirectCount += 1
-            guard redirectCount <= Self.maximumRedirects,
-                  let url = request.url,
-                  let scheme = url.scheme?.lowercased(),
-                  (scheme == "http" || scheme == "https"),
-                  let host = url.host,
-                  URLFetchHostPolicy.evaluateResolvedHost(host) == .allow else {
-                rejectedRedirect = true
-                return false
-            }
-            return true
+            return redirectCount <= Self.maximumRedirects
+        }
+        guard withinLimit else {
+            return reject(.requestFailed)
+        }
+        guard let url = request.url, let scheme = url.scheme?.lowercased(), let host = url.host else {
+            return reject(.invalidURL)
+        }
+        guard scheme == "http" || scheme == "https" else {
+            return reject(.unsupportedScheme(scheme))
         }
 
-        completionHandler(allowed ? request : nil)
+        let decision = await URLFetchHostPolicy.evaluateResolvedHost(
+            host,
+            timeout: timeout,
+            resolver: resolver
+        )
+        switch decision {
+        case .allow: return request
+        case .deny: return reject(.privateNetworkDisallowed)
+        case .unavailable: return reject(.requestFailed)
+        }
+    }
+
+    private func reject(_ error: HTMLToMarkdownURLFetchError) -> URLRequest? {
+        lock.withLock { rejectedRedirect = error }
+        return nil
     }
 }
 
