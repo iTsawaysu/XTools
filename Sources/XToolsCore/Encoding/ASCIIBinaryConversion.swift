@@ -31,7 +31,7 @@ public enum ASCIIBinaryConversion {
     }
 
     public static func textToBinary(_ input: String) -> String {
-        input.utf8.map { leftPadByte(String($0, radix: 2)) }.joined(separator: " ")
+        input.utf8.map(\.binaryByteString).joined(separator: " ")
     }
 
     public static func textToASCII(_ input: String) -> String? {
@@ -116,11 +116,5 @@ public enum ASCIIBinaryConversion {
         }
 
         return bytes
-    }
-
-    private static func leftPadByte(_ bits: String) -> String {
-        let padCount = 8 - bits.count
-        guard padCount > 0 else { return bits }
-        return String(repeating: "0", count: padCount) + bits
     }
 }

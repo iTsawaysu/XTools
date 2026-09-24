@@ -21,8 +21,25 @@ public enum UnicodeEscaping {
         }
     }
 
+    private static let hexDigits: [UInt8] = Array("0123456789abcdef".utf8)
+
     public static func encode(_ input: String) -> String {
-        input.utf16.map { "\\u" + leftPadHex(String($0, radix: 16)) }.joined()
+        guard !input.isEmpty else { return "" }
+        let codeUnitCount = input.utf16.count
+        let byteCount = codeUnitCount * 6
+        return String(unsafeUninitializedCapacity: byteCount) { buffer in
+            var offset = 0
+            for codeUnit in input.utf16 {
+                buffer[offset] = UInt8(ascii: "\\")
+                buffer[offset + 1] = UInt8(ascii: "u")
+                buffer[offset + 2] = hexDigits[Int((codeUnit >> 12) & 0x0F)]
+                buffer[offset + 3] = hexDigits[Int((codeUnit >> 8) & 0x0F)]
+                buffer[offset + 4] = hexDigits[Int((codeUnit >> 4) & 0x0F)]
+                buffer[offset + 5] = hexDigits[Int(codeUnit & 0x0F)]
+                offset += 6
+            }
+            return byteCount
+        }
     }
 
     public static func decode(_ value: String) -> String {
@@ -88,7 +105,7 @@ public enum UnicodeEscaping {
 
         for _ in 0..<4 {
             guard hexStart < value.endIndex,
-                  isASCIIHexDigit(value[hexStart]) else {
+                  value[hexStart].isASCIIHexDigit else {
                 return nil
             }
             hex.append(value[hexStart])
@@ -118,7 +135,7 @@ public enum UnicodeEscaping {
                 guard cursor < value.endIndex else {
                     throw DecodingError.incompleteEscape
                 }
-                guard isASCIIHexDigit(value[cursor]) else {
+                guard value[cursor].isASCIIHexDigit else {
                     throw DecodingError.invalidHexEscape
                 }
                 hex.append(value[cursor])
@@ -142,14 +159,6 @@ public enum UnicodeEscaping {
         }
     }
 
-    private static func isASCIIHexDigit(_ character: Character) -> Bool {
-        guard character.unicodeScalars.count == 1,
-              let value = character.unicodeScalars.first?.value else {
-            return false
-        }
-        return (48...57).contains(value) || (65...70).contains(value) || (97...102).contains(value)
-    }
-
     private static func isSurrogate(_ codeUnit: UInt16) -> Bool {
         isHighSurrogate(codeUnit) || isLowSurrogate(codeUnit)
     }
@@ -160,11 +169,5 @@ public enum UnicodeEscaping {
 
     private static func isLowSurrogate(_ codeUnit: UInt16) -> Bool {
         (0xDC00...0xDFFF).contains(codeUnit)
-    }
-
-    private static func leftPadHex(_ hex: String) -> String {
-        let padCount = 4 - hex.count
-        guard padCount > 0 else { return hex }
-        return String(repeating: "0", count: padCount) + hex
     }
 }

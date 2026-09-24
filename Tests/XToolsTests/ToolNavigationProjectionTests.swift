@@ -39,16 +39,10 @@ struct ToolNavigationProjectionTests {
     }
 
     @Test func commandPaletteEntriesUseRankedSearchAndCarryCategoryTitles() {
-        let registry = Self.registry()
-        let projection = ToolNavigationProjection(
-            registry: registry,
-            favoriteIDs: [],
-            selectedToolID: nil,
-            query: "token"
-        )
+        let projection = ToolNavigationCommandProjection(registry: Self.registry(), query: "token")
 
-        #expect(projection.commandPaletteEntries.map(\.toolID) == [.jwt, .json])
-        #expect(projection.commandPaletteEntries.map(\.categoryTitle) == ["Web", "Development"])
+        #expect(projection.entries.map(\.toolID) == [.jwt, .json])
+        #expect(projection.entries.map(\.categoryTitle) == ["Web", "Development"])
     }
 
     @Test func narrowCommandProjectionPreservesEmptyQueryRegistryOrder() {

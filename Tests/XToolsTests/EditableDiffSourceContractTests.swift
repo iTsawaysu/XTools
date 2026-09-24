@@ -235,7 +235,6 @@ struct EditableDiffSourceContractTests {
         contains(source, "layer?.borderWidth = IndexDiffEditorMetrics.frameBorderWidth", "The outer diff host must own the zero-width bay border contract")
         contains(source, "appearance.performAsCurrentDrawingAppearance", "Diff AppKit surfaces must resolve the shared SwiftUI editor background under the owning view appearance")
         contains(source, "resolvedColor(ToolTheme.editorBackground, for: appearance)", "Diff panes must consume the shared SwiftUI editor background token")
-        contains(source, "resolvedColor(ToolTheme.panelBackground, for: appearance)", "The stage and fixed gap must consume the shared panel background token")
         contains(source, "let sharedColor = NSColor(color)", "Diff AppKit surfaces must share one SwiftUI-to-AppKit color resolver")
         contains(source, "sharedColor.usingColorSpace(.deviceRGB)", "Diff AppKit surfaces must return a fixed color resolved under the owning appearance")
         doesNotContain(source, "static let editorBayBackground", "Diff must not duplicate the shared editor background token")

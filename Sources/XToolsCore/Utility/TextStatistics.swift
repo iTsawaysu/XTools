@@ -39,11 +39,11 @@ public enum TextStatistics {
     public static func analyze(_ input: String) -> Stats {
         Stats(
             characters: input.count,
-            nonWhitespaceCharacters: input.filter { !$0.isWhitespace }.count,
+            nonWhitespaceCharacters: input.lazy.filter { !$0.isWhitespace }.count,
             words: countTokens(in: input, unit: .word),
-            lines: input.isEmpty ? 0 : input.components(separatedBy: .newlines).count,
+            lines: input.isEmpty ? 0 : input.lazy.filter(\.isNewline).count + 1,
             sentences: countTokens(in: input, unit: .sentence),
-            bytes: input.data(using: .utf8)?.count ?? 0
+            bytes: input.utf8.count
         )
     }
 
@@ -51,10 +51,11 @@ public enum TextStatistics {
         let tokenizer = NLTokenizer(unit: unit)
         tokenizer.string = input
 
+        let alphanumerics = CharacterSet.alphanumerics
         var count = 0
         tokenizer.enumerateTokens(in: input.startIndex..<input.endIndex) { range, _ in
-            let token = String(input[range])
-            guard token.rangeOfCharacter(from: .alphanumerics) != nil else {
+            let token = input[range]
+            guard token.unicodeScalars.contains(where: { alphanumerics.contains($0) }) else {
                 return true
             }
             count += 1

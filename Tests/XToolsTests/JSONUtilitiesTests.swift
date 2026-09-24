@@ -616,6 +616,18 @@ struct JSONFormattingTests {
         #expect(unescaped == #"{"title":"中文","symbol":"✅"}"#)
     }
 
+    @Test func unescapeFallbackScansLeftToRightSoEscapedBackslashPrecedesNLiteral() throws {
+        // Regression: the chained-replacement fallback substituted "\n"
+        // before "\\\\", so a literal backslash followed by "n" collapsed
+        // into a newline. The single-pass scan decodes "\\" first.
+        let unescaped = JSONFormatting.unescapeJSON(#"a\\n"b"#)
+        #expect(unescaped == #"a\n"b"#)
+    }
+
+    @Test func unescapeFallbackKeepsUnknownEscapePairsIntact() throws {
+        #expect(JSONFormatting.unescapeJSON(#"a\x9"#) == #"a\x9"#)
+    }
+
     private func invalidJSONDiagnostic(for input: String) throws -> FormatDiagnostic {
         let error = #expect(throws: (any Error).self) {
             _ = try JSONFormatting.format(input, sortKeys: false, indentWidth: 2)

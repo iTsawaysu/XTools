@@ -64,7 +64,6 @@ struct ToolNavigationProjection {
     let selectedTool: ToolNavigationItem?
     let selectedSection: ToolNavigationSection?
     let sidebarGroups: [ToolNavigationGroup]
-    let commandPaletteEntries: [ToolNavigationCommandEntry]
     let defaultToolID: ToolID?
 
     init(
@@ -139,16 +138,6 @@ struct ToolNavigationProjection {
             self.selectedSection = nil
             self.selectedTool = nil
         }
-
-        self.commandPaletteEntries = matchingTools
-            .map {
-                ToolNavigationCommandEntry(
-                    toolID: $0.id,
-                    title: $0.title,
-                    categoryTitle: registry.categoryTitle(for: $0.categoryID),
-                    systemImage: $0.systemImage
-                )
-            }
 
         self.defaultToolID = favoriteTools.first?.id ?? registry.firstToolIDInCategoryOrder()
     }

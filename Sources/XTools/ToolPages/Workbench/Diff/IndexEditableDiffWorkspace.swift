@@ -39,6 +39,11 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     @State private var navigationRequest: DiffDifferenceNavigationRequest?
     @State private var navigationProgress = DiffDifferenceNavigationProgress(current: nil, total: 0)
 
+    /// 一次共享的全文裁剪：诊断文案、语气与差异导航都读取这两个结论。
+    /// 它是存储属性：每次视图值重建（即每次父级 body 求值）只计算一次，
+    /// 避免对大文本的重复全量 trim。
+    let diffSummary: (isIdentical: Bool, differenceBlockCount: Int)
+
     init(
         inputTitle: String = "原始文本",
         outputTitle: String = "对比文本",
@@ -75,11 +80,26 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
         self.onClear = onClear
         self.clearDisabled = clearDisabled
         self.leadingControl = leadingControl
+        self.diffSummary = Self.computeDiffSummary(
+            left: left.wrappedValue,
+            right: right.wrappedValue,
+            rows: rows,
+            resultState: resultState,
+            syntax: syntax,
+            error: error
+        )
     }
 
     /// 一次共享的全文裁剪：body 里诊断文案、语气与差异导航都会读取这两个
     /// 结论，合并计算避免对大文本重复全量 trim。
-    private var diffSummary: (isIdentical: Bool, differenceBlockCount: Int) {
+    static func computeDiffSummary(
+        left: String,
+        right: String,
+        rows: [DiffAlignedRow],
+        resultState: DiffExecutionResultState,
+        syntax: IndexDiffSyntax,
+        error: String?
+    ) -> (isIdentical: Bool, differenceBlockCount: Int) {
         let leftNonEmpty = !left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let rightNonEmpty = !right.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
@@ -98,7 +118,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
         let inputsPresent = resultState == .current
             && error == nil
             && (leftNonEmpty || rightNonEmpty)
-        let blocks = inputsPresent ? Self.differenceBlockCount(in: rows) : 0
+        let blocks = inputsPresent ? differenceBlockCount(in: rows) : 0
 
         return (identical, blocks)
     }
@@ -1863,10 +1883,6 @@ private final class IndexDiffTextView: NSTextView, IndexAsymmetricTextContainerS
         onCompositionChange?(false)
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-    }
-
     override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
         var widened = rect
         widened.size.width = caretWidth
@@ -1935,7 +1951,7 @@ private final class IndexDiffLineNumberOverlayView: NSView {
         NSBezierPath(rect: hairline).fill()
 
         let visibleRect = scrollView.contentView.bounds
-        let lineRects = IndexDiffTextLayoutGeometry.lineBlockRects(for: textView)
+        let lineRects = IndexDiffTextLayoutGeometry.lineBlockRects(for: textView, visibleRect: visibleRect)
 
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .right
@@ -2039,10 +2055,6 @@ private enum IndexDiffNSPalette {
         resolvedColor(ToolTheme.editorBackground, for: appearance)
     }
 
-    static func panelBackground(for appearance: NSAppearance) -> NSColor {
-        resolvedColor(ToolTheme.panelBackground, for: appearance)
-    }
-
     private static func resolvedColor(_ color: Color, for appearance: NSAppearance) -> NSColor {
         var resolved = NSColor.clear
         appearance.performAsCurrentDrawingAppearance {
@@ -2050,29 +2062,5 @@ private enum IndexDiffNSPalette {
             resolved = sharedColor.usingColorSpace(.deviceRGB) ?? sharedColor
         }
         return resolved
-    }
-
-    private static func dynamicColor(
-        light: UInt32,
-        dark: UInt32,
-        alpha: CGFloat = 1,
-        darkAlpha: CGFloat? = nil
-    ) -> NSColor {
-        NSColor(name: nil) { appearance in
-            let color = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
-            let resolvedAlpha = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? (darkAlpha ?? alpha) : alpha
-            return NSColor.indexDiffHex(color, alpha: resolvedAlpha)
-        }
-    }
-}
-
-private extension NSColor {
-    static func indexDiffHex(_ hex: UInt32, alpha: CGFloat = 1) -> NSColor {
-        NSColor(
-            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
-            green: CGFloat((hex >> 8) & 0xFF) / 255,
-            blue: CGFloat(hex & 0xFF) / 255,
-            alpha: alpha
-        )
     }
 }

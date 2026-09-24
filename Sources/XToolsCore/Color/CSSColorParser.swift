@@ -175,7 +175,7 @@ public enum CSSColorParser {
 
     private static func parseHex(_ value: String) throws -> CSSParsedColor {
         let payload = String(value.dropFirst())
-        guard payload.allSatisfy(isASCIIHexDigit) else {
+        guard payload.allSatisfy(\.isASCIIHexDigit) else {
             throw CSSColorParseError("HEX 颜色只能包含 0–9 和 A–F。")
         }
         if ![3, 4, 6, 8].contains(payload.count) {
@@ -492,11 +492,6 @@ public enum CSSColorParser {
         case .ident("none"): return 0
         default: throw CSSColorParseError("color() 通道必须是数值、百分比或 none。")
         }
-    }
-
-    private static func isASCIIHexDigit(_ character: Character) -> Bool {
-        guard character.unicodeScalars.count == 1, let scalar = character.unicodeScalars.first else { return false }
-        return (48...57).contains(scalar.value) || (65...70).contains(scalar.value) || (97...102).contains(scalar.value)
     }
 }
 

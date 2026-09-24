@@ -274,11 +274,11 @@ struct SQLLexer {
 
         if peek() == "0",
            let marker = peek(offset: 1), marker == "x" || marker == "X",
-           let firstDigit = peek(offset: 2), isASCIIHexDigit(firstDigit) {
+           let firstDigit = peek(offset: 2), firstDigit.isASCIIHexDigit {
             value.append("0")
             value.append(marker)
             advance(2)
-            while let character = peek(), isASCIIHexDigit(character) {
+            while let character = peek(), character.isASCIIHexDigit {
                 value.append(character)
                 advance()
             }
@@ -323,12 +323,6 @@ struct SQLLexer {
 
     private func isASCIIDigit(_ character: Character) -> Bool {
         ("0"..."9").contains(character)
-    }
-
-    private func isASCIIHexDigit(_ character: Character) -> Bool {
-        isASCIIDigit(character)
-            || ("a"..."f").contains(character)
-            || ("A"..."F").contains(character)
     }
 
     private func isASCIIIdentifierStart(_ character: Character) -> Bool {

@@ -11,7 +11,7 @@ public enum DigestEncoding {
     public static func format(_ digest: [UInt8], mode: String) -> String {
         switch Mode(rawValue: mode) {
         case .binary:
-            return digest.map { leftPadBinary(String($0, radix: 2)) }.joined(separator: " ")
+            return digest.map(\.binaryByteString).joined(separator: " ")
         case .base64:
             return Data(digest).base64EncodedString()
         case .base64url:
@@ -19,12 +19,6 @@ public enum DigestEncoding {
         case .hex, .none:
             return digest.toHexStringLowercased()
         }
-    }
-
-    private static func leftPadBinary(_ bits: String) -> String {
-        let padCount = 8 - bits.count
-        guard padCount > 0 else { return bits }
-        return String(repeating: "0", count: padCount) + bits
     }
 }
 
