@@ -162,7 +162,30 @@ public enum SQLFormatting {
         _ tokens: ArraySlice<SQLPositionedToken>,
         input: String
     ) throws {
-        guard let selectIndex = firstTopLevelKeywordIndex("SELECT", in: tokens) else {
+        var depth = 0
+        var selectIndex: Int?
+        var fromIndices: [Int] = []
+        var orderIndices: [Int] = []
+        for index in tokens.indices {
+            let token = tokens[index].token
+            switch token {
+            case .symbol("("):
+                depth += 1
+            case .symbol(")"):
+                depth = max(0, depth - 1)
+            default:
+                guard depth == 0 else { continue }
+                if isKeyword("SELECT", token), selectIndex == nil {
+                    selectIndex = index
+                } else if isKeyword("FROM", token) {
+                    fromIndices.append(index)
+                } else if isKeyword("ORDER", token) {
+                    orderIndices.append(index)
+                }
+            }
+        }
+
+        guard let selectIndex else {
             return
         }
 
@@ -177,15 +200,16 @@ public enum SQLFormatting {
             )
         }
 
-        try validateFromClauses(in: tokens, input: input)
-        try validateOrderByClauses(in: tokens, input: input)
+        try validateFromClauses(at: fromIndices, in: tokens, input: input)
+        try validateOrderByClauses(at: orderIndices, in: tokens, input: input)
     }
 
     private static func validateFromClauses(
+        at indices: [Int],
         in tokens: ArraySlice<SQLPositionedToken>,
         input: String
     ) throws {
-        for index in tokens.indices where isTopLevelKeyword("FROM", at: index, in: tokens) {
+        for index in indices {
             guard hasTopLevelExpression(after: index, in: tokens) else {
                 throw ValidationError.incompleteStatement(
                     diagnostic(
@@ -200,10 +224,11 @@ public enum SQLFormatting {
     }
 
     private static func validateOrderByClauses(
+        at indices: [Int],
         in tokens: ArraySlice<SQLPositionedToken>,
         input: String
     ) throws {
-        for index in tokens.indices where isTopLevelKeyword("ORDER", at: index, in: tokens) {
+        for index in indices {
             guard let nextIndex = nextSignificantTopLevelIndex(after: index, in: tokens),
                   isKeyword("BY", tokens[nextIndex].token),
                   hasTopLevelExpression(after: nextIndex, in: tokens) else {
@@ -217,13 +242,6 @@ public enum SQLFormatting {
                 )
             }
         }
-    }
-
-    private static func firstTopLevelKeywordIndex(
-        _ keyword: String,
-        in tokens: ArraySlice<SQLPositionedToken>
-    ) -> ArraySlice<SQLPositionedToken>.Index? {
-        tokens.indices.first { isTopLevelKeyword(keyword, at: $0, in: tokens) }
     }
 
     private static func hasTopLevelExpression(
@@ -269,34 +287,6 @@ public enum SQLFormatting {
         return nil
     }
 
-    private static func isTopLevelKeyword(
-        _ keyword: String,
-        at index: ArraySlice<SQLPositionedToken>.Index,
-        in tokens: ArraySlice<SQLPositionedToken>
-    ) -> Bool {
-        var depth = 0
-        var current = tokens.startIndex
-
-        while current <= index {
-            switch tokens[current].token {
-            case .symbol("("):
-                depth += 1
-            case .symbol(")"):
-                depth = max(0, depth - 1)
-            default:
-                break
-            }
-
-            if current == index {
-                return depth == 0 && isKeyword(keyword, tokens[current].token)
-            }
-
-            current = tokens.index(after: current)
-        }
-
-        return false
-    }
-
     private static func isKeyword(_ keyword: String, _ token: SQLToken) -> Bool {
         guard case .word(let value) = token else { return false }
         return value.uppercased() == keyword
@@ -332,7 +322,7 @@ public enum SQLFormatting {
             return nil
         }
 
-        if isTopLevelKeyword("ORDER", at: firstIndex, in: slice),
+        if isKeyword("ORDER", slice[firstIndex].token),
            let byIndex = nextSignificantTopLevelIndex(after: firstIndex, in: slice),
            isKeyword("BY", slice[byIndex].token) {
             return diagnostic(

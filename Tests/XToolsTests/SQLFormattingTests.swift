@@ -139,6 +139,38 @@ struct SQLFormattingTests {
         }
     }
 
+    @Test func ignoresNestedFromAndReportsLaterStatementOffset() {
+        let input = "SELECT id FROM (SELECT x FROM inner_table /*inner*/ ) AS s;\nSELECT y FROM /*outer*/ ;"
+        let error = #expect(throws: (any Error).self) {
+            try SQLFormatting.validate(input)
+        }
+
+        guard let error,
+              case SQLFormatting.ValidationError.incompleteStatement(let diagnostic) = error else {
+            Issue.record("Expected incomplete FROM in the second statement")
+            return
+        }
+        #expect(diagnostic.message == "FROM 缺少表名或子查询")
+        #expect(diagnostic.line == 2)
+        #expect(diagnostic.column == 10)
+    }
+
+    @Test func selectDiagnosticPrecedesFromAndOrderInNestedStatement() {
+        let input = "SELECT FROM (SELECT x FROM t) AS s ORDER BY;"
+        let error = #expect(throws: (any Error).self) {
+            try SQLFormatting.validate(input)
+        }
+
+        guard let error,
+              case SQLFormatting.ValidationError.incompleteStatement(let diagnostic) = error else {
+            Issue.record("Expected incomplete SELECT before FROM and ORDER BY")
+            return
+        }
+        #expect(diagnostic.message == "SELECT 缺少要查询的列或表达式")
+        #expect(diagnostic.line == 1)
+        #expect(diagnostic.column == 1)
+    }
+
     @Test func reportsStandaloneOrderByAsStructureError() throws {
         let error = #expect(throws: (any Error).self) {
             _ = try SQLFormatting.format("order by;")
