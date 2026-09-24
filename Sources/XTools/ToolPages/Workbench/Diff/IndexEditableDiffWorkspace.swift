@@ -1253,6 +1253,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             let selectedRanges = textView.selectedRanges
             isApplyingProgrammaticText = true
             defer { isApplyingProgrammaticText = false }
+            (textView as? IndexDiffTextView)?.invalidateDroppedFile()
             textView.setStringWithoutUndoRegistration(text)
 
             let textLength = (text as NSString).length
@@ -1749,8 +1750,9 @@ private final class IndexDiffEditorScrollView: NSScrollView {
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        if let tv = documentView as? IndexDiffTextView, let onFileDrop = tv.onFileDrop, let content = IndexCaretTextView.extractDroppedContent(sender) {
-            onFileDrop(content)
+        if let tv = documentView as? IndexDiffTextView, tv.onFileDrop != nil,
+           let url = IndexCaretTextView.droppedFileURL(sender) {
+            tv.loadDroppedFile(from: url)
             return true
         }
         return super.performDragOperation(sender)
@@ -1836,6 +1838,7 @@ private final class IndexDiffEditorPaneView: NSView {
 }
 
 private final class IndexDiffTextView: NSTextView, IndexAsymmetricTextContainerSurface {
+    private var droppedFile: IndexDroppedTextFile?
     var leadingTextContainerInset: CGFloat {
         IndexDiffEditorMetrics.textInset.width
     }
@@ -1850,6 +1853,27 @@ private final class IndexDiffTextView: NSTextView, IndexAsymmetricTextContainerS
 
     var onCompositionChange: ((Bool) -> Void)?
     var onFileDrop: ((String) -> Void)?
+
+    override func didChangeText() {
+        droppedFile?.invalidate()
+        super.didChangeText()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { droppedFile?.invalidate() }
+    }
+
+    func loadDroppedFile(from url: URL) {
+        if droppedFile == nil { droppedFile = IndexDroppedTextFile(view: self) }
+        droppedFile?.start(url: url) { [weak self] content in
+            self?.onFileDrop?(content)
+        }
+    }
+
+    func invalidateDroppedFile() {
+        droppedFile?.invalidate()
+    }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
         if onFileDrop != nil && IndexCaretTextView.hasDroppableFile(sender) {
@@ -1866,8 +1890,8 @@ private final class IndexDiffTextView: NSTextView, IndexAsymmetricTextContainerS
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        if let onFileDrop, let content = IndexCaretTextView.extractDroppedContent(sender) {
-            onFileDrop(content)
+        if onFileDrop != nil, let url = IndexCaretTextView.droppedFileURL(sender) {
+            loadDroppedFile(from: url)
             return true
         }
         return super.performDragOperation(sender)

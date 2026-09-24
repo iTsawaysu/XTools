@@ -18,6 +18,7 @@ struct IndexWorkspaceTextArea: View {
     var embedsFlat = false
     var lineNumbers = false
     var onFileDrop: ((String) -> Void)? = nil
+    var droppedFile: IndexDroppedTextFile? = nil
     var workspaceSemantic: IndexWorkspaceSemantic = .unmigratedPageDefault
 
     private var resolution: IndexWorkspaceResolution {
@@ -44,7 +45,8 @@ struct IndexWorkspaceTextArea: View {
             inputPolicy: inputPolicy,
             embedsFlat: embedsFlat,
             lineNumbers: lineNumbers,
-            onFileDrop: onFileDrop
+            onFileDrop: onFileDrop,
+            droppedFile: droppedFile
         )
     }
 }
@@ -265,4 +267,3 @@ struct IndexInputCountLabel: View {
 }
 
 // MARK: - Value Motion Policy
-

@@ -50,6 +50,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     var workspaceSemantic: IndexWorkspaceSemantic = .structuredEditorTransform
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var droppedFile = IndexDroppedTextFile()
 
     init(
         inputTitle: String,
@@ -460,25 +461,26 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                 input = content
                 onFormat?()
             },
+            droppedFile: droppedFile,
             workspaceSemantic: workspaceSemantic
         )
         .onDrop(of: [.fileURL, .text], isTargeted: nil) { providers in
-            guard let provider = providers.first else { return false }
-            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
-                _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                    guard let url else { return }
-                    if let data = try? Data(contentsOf: url),
-                       let content = String(data: data, encoding: .utf8) ?? String(data: data, encoding: .utf16) {
-                        Task { @MainActor in
-                            input = content
-                            onFormat?()
-                        }
+            guard let provider = providers.first,
+                  provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) else { return false }
+            let token = droppedFile.invalidate()
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                Task { @MainActor in
+                    guard let url, droppedFile.isCurrent(token) else { return }
+                    droppedFile.start(url: url) { content in
+                        input = content
+                        onFormat?()
                     }
                 }
-                return true
             }
-            return false
+            return true
         }
+        .onChange(of: input) { _ in droppedFile.invalidate() }
+        .onDisappear { droppedFile.invalidate() }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .accessibilityLabel(inputTitle)
     }

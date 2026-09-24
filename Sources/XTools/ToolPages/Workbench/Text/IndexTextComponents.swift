@@ -1,9 +1,19 @@
 import AppKit
 import SwiftUI
+import XToolsCore
 
 // MARK: - Caret
 
 final class IndexCaretTextView: NSTextView, IndexAsymmetricTextContainerSurface {
+    private var droppedFile: IndexDroppedTextFile?
+    var sharedDroppedFile: IndexDroppedTextFile? {
+        didSet {
+            if oldValue !== sharedDroppedFile { oldValue?.invalidate(ownedBy: self) }
+            sharedDroppedFile?.attach(to: self)
+        }
+    }
+
+    private var activeDroppedFile: IndexDroppedTextFile? { sharedDroppedFile ?? droppedFile }
     var leadingTextContainerInset: CGFloat {
         textContainerInset.width
     }
@@ -44,6 +54,16 @@ final class IndexCaretTextView: NSTextView, IndexAsymmetricTextContainerSurface 
 
     var onFileDrop: ((String) -> Void)?
 
+    override func didChangeText() {
+        activeDroppedFile?.invalidate(ownedBy: self)
+        super.didChangeText()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { activeDroppedFile?.invalidate(ownedBy: self) }
+    }
+
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
         if onFileDrop != nil && Self.hasDroppableFile(sender) {
             return .copy
@@ -59,11 +79,22 @@ final class IndexCaretTextView: NSTextView, IndexAsymmetricTextContainerSurface 
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        if let onFileDrop, let content = Self.extractDroppedContent(sender) {
-            onFileDrop(content)
-            return true
+        guard onFileDrop != nil, let url = Self.droppedFileURL(sender) else {
+            return super.performDragOperation(sender)
         }
-        return super.performDragOperation(sender)
+        loadDroppedFile(from: url)
+        return true
+    }
+
+    func loadDroppedFile(from url: URL) {
+        if activeDroppedFile == nil { droppedFile = IndexDroppedTextFile(view: self) }
+        activeDroppedFile?.start(url: url) { [weak self] content in
+            self?.onFileDrop?(content)
+        }
+    }
+
+    func invalidateDroppedFile() {
+        activeDroppedFile?.invalidate(ownedBy: self)
     }
 
     static func hasDroppableFile(_ sender: any NSDraggingInfo) -> Bool {
@@ -73,35 +104,86 @@ final class IndexCaretTextView: NSTextView, IndexAsymmetricTextContainerSurface 
             || types.contains(NSPasteboard.PasteboardType("NSFilenamesPboardType"))
     }
 
-    static func extractDroppedContent(_ sender: any NSDraggingInfo) -> String? {
-        var targetURL: URL?
+    static func droppedFileURL(_ sender: any NSDraggingInfo) -> URL? {
         if let fileURLs = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
            let first = fileURLs.first {
-            targetURL = first
+            return first
         } else if let filenames = sender.draggingPasteboard.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String],
                   let first = filenames.first {
-            targetURL = URL(fileURLWithPath: first)
-        }
-
-        guard let url = targetURL else { return nil }
-        var isDir: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), !isDir.boolValue else {
-            return nil
-        }
-        if let values = try? url.resourceValues(forKeys: [.fileSizeKey]),
-           let fileSize = values.fileSize, fileSize > 15_000_000 {
-            return nil
-        }
-        guard let data = try? Data(contentsOf: url) else {
-            return nil
-        }
-        if let str = String(data: data, encoding: .utf8) {
-            return str
-        }
-        if let str = String(data: data, encoding: .utf16) {
-            return str
+            return URL(fileURLWithPath: first)
         }
         return nil
+    }
+
+    nonisolated static func readDroppedContent(from url: URL) -> String? {
+        let scopedOriginal = url.startAccessingSecurityScopedResource()
+        let resolvedURL = url.resolvingSymlinksInPath()
+        let scopedResolved = resolvedURL != url
+            ? resolvedURL.startAccessingSecurityScopedResource()
+            : false
+        defer {
+            if scopedResolved { resolvedURL.stopAccessingSecurityScopedResource() }
+            if scopedOriginal { url.stopAccessingSecurityScopedResource() }
+        }
+        guard let values = try? resolvedURL.resourceValues(
+            forKeys: [.isRegularFileKey, .fileSizeKey]
+        ), values.isRegularFile == true else {
+            return nil
+        }
+        if let fileSize = values.fileSize, fileSize > 15_000_000 {
+            return nil
+        }
+        guard let data = try? BoundedFileReader.read(from: resolvedURL, maxBytes: 15_000_000) else {
+            return nil
+        }
+        return decodeDroppedContent(data)
+    }
+
+    nonisolated static func decodeDroppedContent(_ data: Data) -> String? {
+        return String(data: data, encoding: .utf8) ?? String(data: data, encoding: .utf16)
+    }
+}
+
+@MainActor
+final class IndexDroppedTextFile {
+    private weak var view: NSTextView?
+    private let gate = AsyncWorkGate()
+    private let reader: @Sendable (URL) async -> String?
+
+    init(
+        view: NSTextView? = nil,
+        reader: @escaping @Sendable (URL) async -> String? = { IndexCaretTextView.readDroppedContent(from: $0) }
+    ) {
+        self.view = view
+        self.reader = reader
+    }
+
+    func attach(to view: NSTextView) {
+        if self.view !== view {
+            gate.invalidate()
+            self.view = view
+        }
+    }
+
+    @discardableResult
+    func invalidate() -> Int { gate.invalidate() }
+
+    func invalidate(ownedBy view: NSTextView) {
+        if self.view === view { gate.invalidate() }
+    }
+
+    func isCurrent(_ token: Int) -> Bool { gate.isCurrent(token) }
+
+    func start(url: URL, publish: @escaping @MainActor (String) -> Void) {
+        guard let view, view.window != nil else { return }
+        gate.invalidate()
+        let reader = reader
+        gate.runDetached {
+            await reader(url)
+        } publish: { [weak view] content in
+            guard let view, view.window != nil, let content else { return }
+            publish(content)
+        }
     }
 }
 
@@ -597,6 +679,7 @@ struct IndexTextArea: View {
     /// the TextKit 2 viewport path ignores it.
     var lineNumbers = false
     var onFileDrop: ((String) -> Void)? = nil
+    var droppedFile: IndexDroppedTextFile? = nil
 
     @Environment(\.pageAvailableHeight) private var pageAvailableHeight
     @State private var isComposing = false
@@ -636,7 +719,8 @@ struct IndexTextArea: View {
                         caretPlacementRequestToken: caretPlacementRequestToken,
                         inputPolicy: inputPolicy,
                         onCompositionChange: { isComposing = $0 },
-                        onFileDrop: onFileDrop
+                        onFileDrop: onFileDrop,
+                        droppedFile: droppedFile
                     )
                 } else {
                     IndexUndoableTextView(
@@ -651,7 +735,8 @@ struct IndexTextArea: View {
                         embedsFlat: embedsFlat,
                         lineNumbers: lineNumbers,
                         onCompositionChange: { isComposing = $0 },
-                        onFileDrop: onFileDrop
+                        onFileDrop: onFileDrop,
+                        droppedFile: droppedFile
                     )
                 }
             }
@@ -711,6 +796,7 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
     var inputPolicy: IndexTextAreaInputPolicy? = nil
     var onCompositionChange: ((Bool) -> Void)? = nil
     var onFileDrop: ((String) -> Void)? = nil
+    var droppedFile: IndexDroppedTextFile? = nil
 
     static func makeTextView() -> IndexCaretTextView {
         let textView = IndexCaretTextView(usingTextLayoutManager: true)
@@ -726,6 +812,7 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
         let textView = Self.makeTextView()
         textView.onCompositionChange = onCompositionChange
         textView.onFileDrop = onFileDrop
+        textView.sharedDroppedFile = droppedFile
 
         let scrollView = IndexTextKit2ViewportScrollView(frame: .zero)
         scrollView.contentView = IndexLeadingLockedClipView(frame: .zero)
@@ -766,9 +853,11 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
         configure(textView)
         (textView as? IndexCaretTextView)?.onCompositionChange = onCompositionChange
         (textView as? IndexCaretTextView)?.onFileDrop = onFileDrop
+        (textView as? IndexCaretTextView)?.sharedDroppedFile = droppedFile
 
         // Do not rewrite marked text during Chinese IME composition. The
         if textView.string != text && !textView.hasMarkedText() {
+            (textView as? IndexCaretTextView)?.invalidateDroppedFile()
             let selectedRanges = textView.selectedRanges
             textView.setStringWithoutUndoRegistration(text)
             let stringLength = (text as NSString).length
@@ -976,6 +1065,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
     var lineNumbers = false
     var onCompositionChange: ((Bool) -> Void)? = nil
     var onFileDrop: ((String) -> Void)? = nil
+    var droppedFile: IndexDroppedTextFile? = nil
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -990,6 +1080,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
         let textView = IndexCaretTextView(frame: .zero)
         textView.onCompositionChange = onCompositionChange
         textView.onFileDrop = onFileDrop
+        textView.sharedDroppedFile = droppedFile
         let scrollView = IndexTextAreaScrollView(frame: .zero)
         scrollView.contentView = IndexLeadingLockedClipView(frame: .zero)
         scrollView.growsWithContent = growsWithContent
@@ -1038,6 +1129,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
         }
         (textView as? IndexCaretTextView)?.onCompositionChange = onCompositionChange
         (textView as? IndexCaretTextView)?.onFileDrop = onFileDrop
+        (textView as? IndexCaretTextView)?.sharedDroppedFile = droppedFile
         scrollView.hasVerticalScroller = !growsWithContent
         scrollView.autohidesScrollers = !growsWithContent
         scrollView.verticalScrollElasticity = growsWithContent ? .none : .automatic
@@ -1046,6 +1138,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
         // `textView.string` already contains the marked (组字) text but `text`
         // back would wipe the marked text and abort the composition (Chinese
         if textView.string != text && !textView.hasMarkedText() {
+            (textView as? IndexCaretTextView)?.invalidateDroppedFile()
             let selectedRanges = textView.selectedRanges
             textView.setStringWithoutUndoRegistration(text)
             let stringLength = (text as NSString).length
