@@ -347,6 +347,7 @@ struct RootView: View {
                 PaletteIconGhostView(flight: flight) {
                     iconFlight.finish(flight: flight)
                 }
+                .id(flight.token)
                 .zIndex(4)
             }
 
@@ -845,7 +846,7 @@ private struct CommandPaletteScrim: View {
 /// resolution, and the pending→active handoff when the new page's title rail
 /// publishes its geometry.
 @MainActor
-private final class PaletteIconFlightCoordinator: ObservableObject {
+final class PaletteIconFlightCoordinator: ObservableObject {
     private(set) var paletteIconRects: [String: CGRect] = [:]
     @Published private(set) var flight: PaletteIconFlight?
     private var pending: PendingPaletteFlight?
@@ -859,25 +860,25 @@ private final class PaletteIconFlightCoordinator: ObservableObject {
         pending = nil
     }
 
-    func clearFlight() {
-        flight = nil
-        pending = nil
-    }
-
     func finish(flight: PaletteIconFlight) {
         guard self.flight?.token == flight.token else { return }
-        clearFlight()
+        self.flight = nil
     }
 
     func resolve(proxy: GeometryProxy, iconAnchors: [String: Anchor<CGRect>], railAnchor: Anchor<CGRect>?) {
         CommandPaletteTrace.count(.iconAnchorResolution)
         paletteIconRects = iconAnchors.mapValues { proxy[$0] }
-        guard let pending, let railRect = railAnchor.map({ proxy[$0] }) else { return }
+        guard let railRect = railAnchor.map({ proxy[$0] }) else { return }
+        resolvePendingFlight(to: CGPoint(x: railRect.minX, y: railRect.minY))
+    }
+
+    func resolvePendingFlight(to destination: CGPoint) {
+        guard let pending else { return }
         nextFlightToken += 1
         flight = PaletteIconFlight(
             systemImage: pending.systemImage,
             from: pending.from,
-            to: CGPoint(x: railRect.minX, y: railRect.minY),
+            to: destination,
             id: pending.toolID.rawValue,
             token: nextFlightToken
         )
@@ -914,13 +915,13 @@ private struct FlightGeometryResolver: ViewModifier {
 
 /// Pending takeoff captured at palette-row activation, waiting for the new
 /// page's title rail geometry to arrive.
-private struct PendingPaletteFlight: Equatable {
+struct PendingPaletteFlight: Equatable {
     let toolID: ToolID
     let systemImage: String
     let from: CGPoint
 }
 
-private struct PaletteIconFlight: Equatable {
+struct PaletteIconFlight: Equatable {
     let systemImage: String
     let from: CGPoint
     let to: CGPoint
