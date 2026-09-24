@@ -129,11 +129,15 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     }
 
     private var diagnosticText: String? {
+        // Running/stale notes only make sense once there is something to
+        // compare; toggling options on empty panes must stay visually quiet.
+        let hasInput = !left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !right.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if resultState == .running {
-            return "正在对比…"
+            return hasInput ? "正在对比…" : nil
         }
         if resultState == .stale {
-            return "正在更新对比结果…"
+            return hasInput ? "正在更新对比结果…" : nil
         }
         guard resultState == .current else {
             return nil

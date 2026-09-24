@@ -134,22 +134,24 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                             selection: formatModeSelection,
                             density: .compact
                         )
-                        IndexOptionSwitch(title: "Key 排序", style: .button, isOn: $workspace.sortKeys)
-                        IndexIconButton(
-                            systemImage: "text.quote",
+                        IndexOptionSwitch(
+                            title: "去转义",
                             help: "去除转义",
-                            isActive: workspace.unescape
-                        ) {
-                            workspace.unescape.toggle()
-                        }
-                        IndexIconButton(
-                            systemImage: "quote.opening",
+                            style: .button,
+                            isOn: unescapeSelection
+                        )
+                        IndexOptionSwitch(
+                            title: "转义",
                             help: "转义为字符串",
-                            isActive: workspace.escape
-                        ) {
-                            workspace.escape.toggle()
-                        }
+                            style: .button,
+                            isOn: escapeSelection
+                        )
                     }
+                },
+                outputControl: {
+                    // Key 排序作用于输出结果，放输出侧；也为输入侧工具栏
+                    // 留出 680pt 标准宽度预算。
+                    IndexOptionSwitch(title: "Key 排序", style: .button, isOn: $workspace.sortKeys)
                 }
             )
         }
@@ -179,6 +181,29 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                 if !execution.binding.output.isEmpty {
                     format()
                 }
+            }
+        )
+    }
+
+    /// 去除转义与转义为字符串语义互斥：两个联动开关，点亮一个自动熄灭
+    /// 另一个，再次点按可取消回到「不处理」。互斥由 UI 层保证，底层两
+    /// 个布尔值与格式化管线保持不变。
+    private var unescapeSelection: Binding<Bool> {
+        Binding(
+            get: { workspace.unescape },
+            set: { on in
+                workspace.unescape = on
+                if on { workspace.escape = false }
+            }
+        )
+    }
+
+    private var escapeSelection: Binding<Bool> {
+        Binding(
+            get: { workspace.escape },
+            set: { on in
+                workspace.escape = on
+                if on { workspace.unescape = false }
             }
         )
     }
