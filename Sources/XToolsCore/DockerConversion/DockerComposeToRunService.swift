@@ -566,7 +566,7 @@ public enum DockerComposeToRunService {
         }
         if string.isEmpty { return [""] }
         do {
-            return try DockerRunToDockerComposeService.tokenize(string)
+            return try DockerRunToDockerComposeService.tokenize(string, composeShellwords: true)
         } catch {
             skipped.append("\(path)(结构无法映射)")
             return nil

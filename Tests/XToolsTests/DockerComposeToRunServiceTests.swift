@@ -456,6 +456,44 @@ struct DockerComposeToRunServiceTests {
         #expect(semantics.command == ["printf", "", " "])
     }
 
+    @Test func scalarCommandUsesComposeBackslashEscaping() throws {
+        let result = try DockerComposeToRunService.convert("""
+        services:
+          app:
+            image: busybox
+            command: 'echo foo\\bar'
+        """)
+
+        let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
+        #expect(semantics.command == ["echo", "foobar"])
+    }
+
+    @Test func scalarCommandUsesComposeDoubleQuoteEscaping() throws {
+        let result = try DockerComposeToRunService.convert(#"""
+        services:
+          app:
+            image: busybox
+            command: '"echo a\qb"'
+        """#)
+
+        let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
+        #expect(semantics.command == ["echo aqb"])
+    }
+
+    @Test func scalarCommandConsumesEscapedQuote() throws {
+        for scalar in [#"'echo a\"b'"#, #"'echo "a\"b"'"#] {
+            let result = try DockerComposeToRunService.convert("""
+            services:
+              app:
+                image: busybox
+                command: \(scalar)
+            """)
+
+            let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
+            #expect(semantics.command == ["echo", "a\"b"])
+        }
+    }
+
     @Test func scalarCommandKeepsCombiningMarkAfterQuotes() throws {
         let scalar = "\"\"\u{0301}"
         let result = try DockerComposeToRunService.convert("""
@@ -467,6 +505,26 @@ struct DockerComposeToRunServiceTests {
 
         let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
         #expect(semantics.command == ["\u{0301}"])
+    }
+
+    @Test func scalarCommandKeepsNonbreakingSpaceInsideArgument() throws {
+        let result = try DockerComposeToRunService.convert("""
+        services:
+          app:
+            image: busybox
+            command: 'echo a\u{00A0}b'
+        """)
+
+        let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
+        #expect(semantics.command == ["echo", "a\u{00A0}b"])
+    }
+
+    @Test func scalarCommandKeepsEscapedNewline() throws {
+        let yaml = "services:\n  app:\n    image: busybox\n    command: |-\n      echo foo\\\n      bar"
+        let result = try DockerComposeToRunService.convert(yaml)
+
+        let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
+        #expect(semantics.command == ["echo", "foo\nbar"])
     }
 
     @Test func listCommandKeepsExistingArgumentBoundary() throws {
@@ -731,6 +789,7 @@ struct DockerComposeToRunServiceTests {
         let warning = try #require(malformed.warnings.first { $0.contains("服务 app 未映射字段") })
         #expect(warning.contains("entrypoint(结构无法映射)"))
         #expect(warning.contains("command(结构无法映射)"))
+        #expect(try DockerInvocationSemantics(command).entrypoint.isEmpty)
         #expect(!command.contains("private-entrypoint"))
         #expect(!command.contains("private-command"))
     }

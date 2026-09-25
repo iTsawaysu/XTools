@@ -1,7 +1,9 @@
 import Foundation
 
 extension DockerRunToDockerComposeService {
-    static func tokenize(_ command: String) throws -> [String] {
+    /// Compose scalar commands use shellwords escaping; pasted docker run text
+    /// keeps its existing Windows-path-friendly backslash behavior by default.
+    static func tokenize(_ command: String, composeShellwords: Bool = false) throws -> [String] {
         let chars = Array(command.unicodeScalars)
         var tokens: [String] = []
         var current = ""
@@ -17,6 +19,11 @@ extension DockerRunToDockerComposeService {
                     quote = nil
                 } else if activeQuote == "\"", character == "\\" {
                     let next = index + 1 < chars.count ? chars[index + 1] : nil
+                    if composeShellwords, let next {
+                        current.unicodeScalars.append(next)
+                        index += 2
+                        continue
+                    }
                     // In double quotes, POSIX shells only consume a backslash
                     // before $, `, ", \\, or a line continuation. Other
                     // backslashes are literal command data.
@@ -40,6 +47,13 @@ extension DockerRunToDockerComposeService {
             if character == "\\" {
                 tokenStarted = true
                 let next = index + 1 < chars.count ? chars[index + 1] : nil
+
+                if composeShellwords {
+                    guard let next else { throw DockerRunToDockerComposeError.unterminatedQuote }
+                    current.unicodeScalars.append(next)
+                    index += 2
+                    continue
+                }
 
                 // An unquoted escaped newline is a line continuation.
                 if next == "\n" {
@@ -66,7 +80,10 @@ extension DockerRunToDockerComposeService {
                 continue
             }
 
-            if Character(character).isWhitespace {
+            let isSeparator = composeShellwords
+                ? (character == " " || character == "\t" || character == "\n" || character == "\r")
+                : Character(character).isWhitespace
+            if isSeparator {
                 if tokenStarted {
                     tokens.append(current)
                     current = ""
