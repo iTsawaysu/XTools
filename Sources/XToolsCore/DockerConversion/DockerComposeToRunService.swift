@@ -231,13 +231,13 @@ public enum DockerComposeToRunService {
             flag(domainname, "--domainname")
         }
         let entrypointSpecified = service["entrypoint"] != nil
-        let entrypoint = strictStringList(service["entrypoint"], path: "entrypoint", skipped: &skipped) ?? []
+        let entrypoint = commandWords(service["entrypoint"], path: "entrypoint", skipped: &skipped) ?? []
         if entrypointSpecified, entrypoint.isEmpty {
             flag("", "--entrypoint")
         } else if let executable = entrypoint.first {
             flag(executable, "--entrypoint")
         }
-        let command = strictStringList(service["command"], path: "command", skipped: &skipped) ?? []
+        let command = commandWords(service["command"], path: "command", skipped: &skipped) ?? []
         if let user = scalarString(service["user"]) {
             flag(user, "-u")
         }
@@ -554,6 +554,23 @@ public enum DockerComposeToRunService {
             return nil
         }
         return items
+    }
+
+    private static func commandWords(
+        _ value: Any?,
+        path: String,
+        skipped: inout [String]
+    ) -> [String]? {
+        guard let string = value as? String else {
+            return strictStringList(value, path: path, skipped: &skipped)
+        }
+        if string.isEmpty { return [""] }
+        do {
+            return try DockerRunToDockerComposeService.tokenize(string)
+        } catch {
+            skipped.append("\(path)(结构无法映射)")
+            return nil
+        }
     }
 
     private static func environmentPairs(_ value: Any?, skipped: inout [String]) -> [String] {

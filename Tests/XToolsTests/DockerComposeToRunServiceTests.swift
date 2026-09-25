@@ -418,6 +418,69 @@ struct DockerComposeToRunServiceTests {
         #expect(command.contains("busybox echo 'hello world'"))
     }
 
+    @Test func scalarCommandUsesComposeShellwordsSemantics() throws {
+        let result = try DockerComposeToRunService.convert("""
+        services:
+          app:
+            image: busybox
+            command: echo hi
+        """)
+
+        let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
+        #expect(semantics.command == ["echo", "hi"])
+    }
+
+    @Test func scalarEntrypointAndCommandBecomeSeparateArgvWords() throws {
+        let result = try DockerComposeToRunService.convert("""
+        services:
+          app:
+            image: busybox
+            entrypoint: /bin/sh -c
+            command: echo hi
+        """)
+
+        let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
+        #expect(semantics.entrypoint == ["/bin/sh"])
+        #expect(semantics.command == ["-c", "echo", "hi"])
+    }
+
+    @Test func scalarCommandPreservesQuotedEmptyArguments() throws {
+        let result = try DockerComposeToRunService.convert("""
+        services:
+          app:
+            image: busybox
+            command: 'printf "" " "'
+        """)
+
+        let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
+        #expect(semantics.command == ["printf", "", " "])
+    }
+
+    @Test func listCommandKeepsExistingArgumentBoundary() throws {
+        let result = try DockerComposeToRunService.convert("""
+        services:
+          app:
+            image: busybox
+            command: [echo, "hello world", ""]
+        """)
+
+        let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
+        #expect(semantics.command == ["echo", "hello world", ""])
+    }
+
+    @Test func invalidScalarCommandQuoteProducesWarningInsteadOfDroppingText() throws {
+        let result = try DockerComposeToRunService.convert("""
+        services:
+          app:
+            image: busybox
+            command: >-
+              echo 'unterminated
+        """)
+
+        let warning = try #require(result.warnings.first { $0.contains("服务 app 未映射字段") })
+        #expect(warning.contains("command(结构无法映射)"))
+    }
+
     // MARK: - Error paths
 
     @Test func invalidYAMLThrows() {
