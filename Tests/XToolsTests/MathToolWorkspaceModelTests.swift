@@ -12,22 +12,22 @@ struct MathToolWorkspaceModelTests {
             backgroundEvaluation: { input, shouldCancel in
                 try probe.evaluate(input, shouldCancel: shouldCancel)
             },
-            debounce: .zero,
             synchronousUTF8ByteLimit: 4
         )
 
         workspace.expression = "2+3"
         #expect(workspace.evaluation == .valid("5"))
-        #expect(!workspace.isEvaluating)
+        #expect(probe.callCount == 0)
+
+        workspace.expression = " 2 "
+        #expect(workspace.evaluation == .valid("2"))
         #expect(probe.callCount == 0)
 
         workspace.expression = "latest-long-input"
         #expect(workspace.evaluation == .empty)
-        #expect(workspace.isEvaluating)
         #expect(await Self.wait(for: workspace, until: .valid("latest")))
 
         #expect(workspace.evaluation == .valid("latest"))
-        #expect(!workspace.isEvaluating)
         #expect(!probe.ranOnMainThread)
     }
 
@@ -37,7 +37,6 @@ struct MathToolWorkspaceModelTests {
             backgroundEvaluation: { input, shouldCancel in
                 try probe.evaluate(input, shouldCancel: shouldCancel)
             },
-            debounce: .zero,
             synchronousUTF8ByteLimit: 4
         )
 
@@ -47,14 +46,12 @@ struct MathToolWorkspaceModelTests {
         #expect(await Self.wait(for: probe.firstCancelled))
         #expect(await Self.wait(for: workspace, until: .valid("latest")))
         #expect(workspace.evaluation == .valid("latest"))
-        #expect(!workspace.isEvaluating)
 
         workspace.expression = "clear-long-input"
         #expect(await Self.wait(for: probe.clearStarted))
         workspace.clear()
         #expect(workspace.expression.isEmpty)
         #expect(workspace.evaluation == .empty)
-        #expect(!workspace.isEvaluating)
         #expect(await Self.wait(for: probe.clearCancelled))
         #expect(workspace.evaluation == .empty)
         #expect(!probe.ranOnMainThread)

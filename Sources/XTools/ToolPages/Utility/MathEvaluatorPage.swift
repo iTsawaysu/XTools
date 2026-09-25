@@ -21,11 +21,9 @@ final class MathToolWorkspaceModel: ObservableObject {
         }
     }
     @Published var evaluation = MathExpressionEvaluator.LiveEvaluation.empty
-    @Published private(set) var isEvaluating = false
 
     private let execution = SupersedingExecutionSession(cancelInFlight: true)
     private let backgroundEvaluation: MathBackgroundEvaluation
-    private let debounce: Duration
     private let synchronousUTF8ByteLimit: Int
 
     convenience init() {
@@ -33,18 +31,15 @@ final class MathToolWorkspaceModel: ObservableObject {
             backgroundEvaluation: { input, shouldCancel in
                 try MathExpressionEvaluator.evaluateLiveInput(input, shouldCancel: shouldCancel)
             },
-            debounce: .milliseconds(120),
             synchronousUTF8ByteLimit: Self.synchronousUTF8ByteLimit
         )
     }
 
     init(
         backgroundEvaluation: @escaping MathBackgroundEvaluation,
-        debounce: Duration,
         synchronousUTF8ByteLimit: Int
     ) {
         self.backgroundEvaluation = backgroundEvaluation
-        self.debounce = debounce
         self.synchronousUTF8ByteLimit = max(0, synchronousUTF8ByteLimit)
     }
 
@@ -61,28 +56,23 @@ final class MathToolWorkspaceModel: ObservableObject {
     func clear() {
         expression = ""
         evaluation = .empty
-        isEvaluating = false
     }
 
     private func refreshEvaluation() {
         let input = expression
         guard input.utf8.prefix(synchronousUTF8ByteLimit + 1).count > synchronousUTF8ByteLimit else {
             execution.invalidate()
-            isEvaluating = false
-            let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-            evaluation = MathExpressionEvaluator.evaluateLiveInput(trimmed)
+            evaluation = MathExpressionEvaluator.evaluateLiveInput(input)
             return
         }
 
         evaluation = .empty
-        isEvaluating = true
         let backgroundEvaluation = self.backgroundEvaluation
-        execution.schedule(debounce: debounce, operation: { shouldCancel in
+        execution.schedule(operation: { shouldCancel in
             try backgroundEvaluation(input, shouldCancel)
         }) { [weak self] _, result in
             guard let self else { return }
             self.evaluation = result
-            self.isEvaluating = false
         }
     }
 }
