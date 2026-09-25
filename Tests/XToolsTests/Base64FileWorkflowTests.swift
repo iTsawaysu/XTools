@@ -505,6 +505,116 @@ struct Base64FileWorkflowTests {
         #expect(session.fileError == nil)
     }
 
+    @Test func sessionModeChangeDuringCopySerializationDoesNotWritePasteboard() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let pasteboard = FakeBase64Pasteboard()
+        let serialization = SuspendedTestValue<Data>()
+        let client = Base64FileWorkflowClient(dialog: FakeBase64FileDialog(), pasteboard: pasteboard)
+        processor.readSelectionResult = .success(Self.selection())
+        processor.serializeUTF8Handler = { _ in await serialization.wait() }
+
+        await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/source.bin"), processor: processor)?.value
+        let copyTask = session.copyFullOutput(client: client, processor: processor)
+        await serialization.waitForRequest()
+        await session.changeOutputMode(to: .base64, processor: processor)?.value
+        serialization.resume(Data("stale-output".utf8))
+        await copyTask?.value
+
+        #expect(pasteboard.strings.isEmpty)
+        #expect(session.fileError == nil)
+    }
+
+    @Test func sessionReplacementDuringCopySerializationDoesNotWritePasteboard() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let pasteboard = FakeBase64Pasteboard()
+        let serialization = SuspendedTestValue<Data>()
+        let client = Base64FileWorkflowClient(dialog: FakeBase64FileDialog(), pasteboard: pasteboard)
+        processor.readSelectionResult = .success(Self.selection())
+        processor.serializeUTF8Handler = { _ in await serialization.wait() }
+
+        await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/source.bin"), processor: processor)?.value
+        let copyTask = session.copyFullOutput(client: client, processor: processor)
+        await serialization.waitForRequest()
+        let replacement = Base64FileSelection(
+            fileName: "replacement.bin",
+            data: Data("replacement".utf8),
+            mimeType: "application/octet-stream"
+        )
+        processor.readSelectionResult = .success(replacement)
+        await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/replacement.bin"), processor: processor)?.value
+        serialization.resume(Data("stale-output".utf8))
+        await copyTask?.value
+
+        #expect(session.selectedFile == replacement)
+        #expect(pasteboard.strings.isEmpty)
+        #expect(session.fileError == nil)
+    }
+
+    @Test func sessionStaleCopyCannotClearNewCopyBusyState() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let oldSerialization = SuspendedTestValue<Data>()
+        let newSerialization = SuspendedTestValue<Data>()
+        let pasteboard = FakeBase64Pasteboard()
+        let client = Base64FileWorkflowClient(dialog: FakeBase64FileDialog(), pasteboard: pasteboard)
+        processor.readSelectionResult = .success(Self.selection())
+        processor.serializeUTF8Handler = { text in
+            if text == "old-output" { return await oldSerialization.wait() }
+            return await newSerialization.wait()
+        }
+        processor.fullOutputText = "old-output"
+
+        await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/source.bin"), processor: processor)?.value
+        let oldCopy = session.copyFullOutput(client: client, processor: processor)
+        await oldSerialization.waitForRequest()
+        session.clearSelection()
+
+        let replacement = Base64FileSelection(
+            fileName: "replacement.bin",
+            data: Data("replacement".utf8),
+            mimeType: "application/octet-stream"
+        )
+        processor.readSelectionResult = .success(replacement)
+        processor.fullOutputText = "new-output"
+        await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/replacement.bin"), processor: processor)?.value
+        let newCopy = session.copyFullOutput(client: client, processor: processor)
+        await newSerialization.waitForRequest()
+        #expect(session.outputAction == .copying)
+
+        oldSerialization.resume(Data("old-output".utf8))
+        await oldCopy?.value
+        #expect(session.outputAction == .copying)
+        #expect(pasteboard.strings.isEmpty)
+
+        newSerialization.resume(Data("new-output".utf8))
+        await newCopy?.value
+        #expect(pasteboard.strings == ["new-output"])
+        #expect(session.outputAction == nil)
+    }
+
+    @Test func sessionCancelledCopyDoesNotWritePasteboard() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let serialization = SuspendedTestValue<Data>()
+        let pasteboard = FakeBase64Pasteboard()
+        let client = Base64FileWorkflowClient(dialog: FakeBase64FileDialog(), pasteboard: pasteboard)
+        processor.readSelectionResult = .success(Self.selection())
+        processor.serializeUTF8Handler = { _ in await serialization.wait() }
+
+        await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/source.bin"), processor: processor)?.value
+        let copyTask = session.copyFullOutput(client: client, processor: processor)
+        await serialization.waitForRequest()
+        copyTask?.cancel()
+        serialization.resume(Data("cancelled-output".utf8))
+        await copyTask?.value
+
+        #expect(pasteboard.strings.isEmpty)
+        #expect(session.outputAction == nil)
+        #expect(session.fileError == nil)
+    }
+
     @Test func sessionEncodedSaveHandlesCancelSuccessFailureAndStaleResult() async {
         let session = Base64FileWorkflowSession()
         let processor = FakeBase64FileWorkflowProcessor()
@@ -543,6 +653,89 @@ struct Base64FileWorkflowTests {
 
         #expect(processor.textWrites.count == writeCountBeforeStale)
         #expect(session.outputAction == nil)
+    }
+
+    @Test func sessionOldSavePanelCancelCannotClearNewCopyBusyState() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let dialog = FakeBase64FileDialog()
+        let panel = SuspendedTestValue<URL?>()
+        let newSerialization = SuspendedTestValue<Data>()
+        let pasteboard = FakeBase64Pasteboard()
+        let client = Base64FileWorkflowClient(dialog: dialog, pasteboard: pasteboard)
+        dialog.encodedURLHandler = { _ in await panel.wait() }
+        processor.readSelectionResult = .success(Self.selection())
+        processor.serializeUTF8Handler = { _ in await newSerialization.wait() }
+
+        await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/source.bin"), processor: processor)?.value
+        let oldSave = session.saveEncodedOutput(client: client, processor: processor)
+        await panel.waitForRequest()
+        session.clearSelection()
+        let replacement = Base64FileSelection(
+            fileName: "replacement.bin",
+            data: Data("replacement".utf8),
+            mimeType: "application/octet-stream"
+        )
+        processor.readSelectionResult = .success(replacement)
+        await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/replacement.bin"), processor: processor)?.value
+        let newCopy = session.copyFullOutput(client: client, processor: processor)
+        await newSerialization.waitForRequest()
+
+        panel.resume(nil)
+        await oldSave?.value
+        #expect(session.outputAction == .copying)
+        #expect(processor.textWrites.isEmpty)
+
+        newSerialization.resume(Data("new-output".utf8))
+        await newCopy?.value
+        #expect(session.outputAction == nil)
+    }
+
+    @Test func sessionCancelledSaveDoesNotStartDiskWrite() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let dialog = FakeBase64FileDialog()
+        let panel = SuspendedTestValue<URL?>()
+        let client = Base64FileWorkflowClient(dialog: dialog, pasteboard: FakeBase64Pasteboard())
+        dialog.encodedURLHandler = { _ in await panel.wait() }
+        processor.readSelectionResult = .success(Self.selection())
+
+        await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/source.bin"), processor: processor)?.value
+        let saveTask = session.saveEncodedOutput(client: client, processor: processor)
+        await panel.waitForRequest()
+        saveTask?.cancel()
+        panel.resume(URL(fileURLWithPath: "/tmp/output.txt"))
+        await saveTask?.value
+
+        #expect(processor.textWrites.isEmpty)
+        #expect(session.outputAction == nil)
+        #expect(session.fileError == nil)
+    }
+
+    @Test func sessionCancellationAfterSaveWriteStartsDoesNotReportSuccess() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let dialog = FakeBase64FileDialog()
+        let writeResult = SuspendedTestValue<Result<Void, Base64FileWorkflowFailure>>()
+        let client = Base64FileWorkflowClient(dialog: dialog, pasteboard: FakeBase64Pasteboard())
+        dialog.encodedURL = URL(fileURLWithPath: "/tmp/output.txt")
+        processor.readSelectionResult = .success(Self.selection())
+        processor.writeTextHandler = { _, _ in await writeResult.wait() }
+        var successCount = 0
+
+        await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/source.bin"), processor: processor)?.value
+        let saveTask = session.saveEncodedOutput(client: client, processor: processor) {
+            successCount += 1
+        }
+        await writeResult.waitForRequest()
+        saveTask?.cancel()
+        writeResult.resume(.success(()))
+        await saveTask?.value
+
+        #expect(processor.textWrites.count == 1)
+        #expect(successCount == 0)
+        #expect(session.outputAction == nil)
+        #expect(session.fileError == nil)
     }
 
     @Test func sessionDecodeHandlesDirtyStateFailureSuccessAndStaleResult() async {
@@ -750,6 +943,67 @@ struct Base64FileWorkflowTests {
         #expect(session.decodedPayload == payload)
         #expect(session.decodeActivity == nil)
         _ = observation
+    }
+
+    @Test func sessionModeChangeInvalidatesPendingSendWithoutClearingNewCopy() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let suspendedPayload = SuspendedTestValue<Base64Conversion.FilePayload>()
+        let newSerialization = SuspendedTestValue<Data>()
+        let pasteboard = FakeBase64Pasteboard()
+        let client = Base64FileWorkflowClient(dialog: FakeBase64FileDialog(), pasteboard: pasteboard)
+        let selection = Self.selection()
+        processor.readSelectionResult = .success(selection)
+        processor.decodedPayloadHandler = { _ in await suspendedPayload.wait() }
+        processor.serializeUTF8Handler = { _ in await newSerialization.wait() }
+
+        await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/source.bin"), processor: processor)?.value
+        let oldSend = session.sendCurrentOutputToDecodeResult(processor: processor)
+        await suspendedPayload.waitForRequest()
+        await session.changeOutputMode(to: .base64, processor: processor)?.value
+        #expect(session.outputAction == nil)
+        #expect(session.decodeActivity == nil)
+        let newCopy = session.copyFullOutput(client: client, processor: processor)
+        await newSerialization.waitForRequest()
+
+        suspendedPayload.resume(Base64Conversion.FilePayload(
+            data: selection.data,
+            mimeType: selection.mimeType,
+            fileExtension: "bin"
+        ))
+        await oldSend?.value
+        #expect(session.direction == .encode)
+        #expect(session.decodedPayload == nil)
+        #expect(session.outputAction == .copying)
+
+        newSerialization.resume(Data("new-output".utf8))
+        await newCopy?.value
+        #expect(session.outputAction == nil)
+    }
+
+    @Test func sessionCancelledSendDoesNotPublishDecodedResult() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let suspendedPayload = SuspendedTestValue<Base64Conversion.FilePayload>()
+        let selection = Self.selection()
+        processor.readSelectionResult = .success(selection)
+        processor.decodedPayloadHandler = { _ in await suspendedPayload.wait() }
+
+        await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/source.bin"), processor: processor)?.value
+        let sendTask = session.sendCurrentOutputToDecodeResult(processor: processor)
+        await suspendedPayload.waitForRequest()
+        sendTask?.cancel()
+        suspendedPayload.resume(Base64Conversion.FilePayload(
+            data: selection.data,
+            mimeType: selection.mimeType,
+            fileExtension: "bin"
+        ))
+        await sendTask?.value
+
+        #expect(session.direction == .encode)
+        #expect(session.decodedPayload == nil)
+        #expect(session.outputAction == nil)
+        #expect(session.decodeActivity == nil)
     }
 
     @Test func sessionEncodedTextFileImportReadsThroughProcessorAndUsesSourceBasename() async {
@@ -1030,6 +1284,83 @@ struct Base64FileWorkflowTests {
         #expect(session.isSavingDecoded == false)
     }
 
+    @Test func sessionOldDecodedWriteCannotClearNewSaveBusyState() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let dialog = FakeBase64FileDialog()
+        let client = Base64FileWorkflowClient(dialog: dialog, pasteboard: FakeBase64Pasteboard())
+        let oldWrite = SuspendedTestValue<Result<Void, Base64FileWorkflowFailure>>()
+        let newWrite = SuspendedTestValue<Result<Void, Base64FileWorkflowFailure>>()
+        let oldPayload = Base64Conversion.FilePayload(
+            data: Data("old".utf8), mimeType: "text/plain", fileExtension: "txt"
+        )
+        let newPayload = Base64Conversion.FilePayload(
+            data: Data("new".utf8), mimeType: "text/plain", fileExtension: "txt"
+        )
+        dialog.decodedURL = URL(fileURLWithPath: "/tmp/download.txt")
+        processor.writeDataHandler = { data, _ in
+            if data == oldPayload.data { return await oldWrite.wait() }
+            return await newWrite.wait()
+        }
+        session.changeDirection(to: .decode)
+        session.updateReverseInput("b2xk")
+        processor.decodeResult = .success(oldPayload)
+        await session.decodeReverseInput(processor: processor)?.value
+        let oldSave = session.saveDecodedPayload(client: client, processor: processor)
+        await oldWrite.waitForRequest()
+
+        session.changeDirection(to: .encode)
+        session.changeDirection(to: .decode)
+        session.updateReverseInput("bmV3")
+        processor.decodeResult = .success(newPayload)
+        await session.decodeReverseInput(processor: processor)?.value
+        let newSave = session.saveDecodedPayload(client: client, processor: processor)
+        await newWrite.waitForRequest()
+        #expect(session.isSavingDecoded)
+
+        oldWrite.resume(.success(()))
+        await oldSave?.value
+        #expect(session.isSavingDecoded)
+        #expect(session.decodedPayload == newPayload)
+        #expect(session.reverseError == nil)
+
+        newWrite.resume(.success(()))
+        await newSave?.value
+        #expect(!session.isSavingDecoded)
+        #expect(processor.dataWrites.map(\.data) == [oldPayload.data, newPayload.data])
+    }
+
+    @Test func sessionCancelledDecodedSaveDoesNotPublishWriteCompletion() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let dialog = FakeBase64FileDialog()
+        let client = Base64FileWorkflowClient(dialog: dialog, pasteboard: FakeBase64Pasteboard())
+        let writeResult = SuspendedTestValue<Result<Void, Base64FileWorkflowFailure>>()
+        let payload = Base64Conversion.FilePayload(
+            data: Data("saved".utf8), mimeType: "text/plain", fileExtension: "txt"
+        )
+        dialog.decodedURL = URL(fileURLWithPath: "/tmp/download.txt")
+        processor.decodeResult = .success(payload)
+        processor.writeDataHandler = { _, _ in await writeResult.wait() }
+        var successCount = 0
+
+        session.changeDirection(to: .decode)
+        session.updateReverseInput("c2F2ZWQ=")
+        await session.decodeReverseInput(processor: processor)?.value
+        let saveTask = session.saveDecodedPayload(client: client, processor: processor) {
+            successCount += 1
+        }
+        await writeResult.waitForRequest()
+        saveTask?.cancel()
+        writeResult.resume(.success(()))
+        await saveTask?.value
+
+        #expect(processor.dataWrites.map(\.data) == [payload.data])
+        #expect(successCount == 0)
+        #expect(!session.isSavingDecoded)
+        #expect(session.reverseError == nil)
+    }
+
     @Test func everyWorkflowFailureUsesFactualMessageWithoutSystemPayload() {
         let sensitiveFileName = "/Users/example/private/token-output.txt"
         let failures: [Base64FileWorkflowFailure] = [
@@ -1076,6 +1407,7 @@ private final class FakeBase64FileWorkflowProcessor: Base64FileWorkflowProcessin
     var outputPreviewHandler: ((Base64FileSelection, Base64Conversion.FileOutputMode) async -> Base64Conversion.EncodedFileOutputPreview)?
     var fullOutputText = "full-output"
     var fullOutputHandler: ((Base64FileSelection, Base64Conversion.FileOutputMode) async -> String)?
+    var serializeUTF8Handler: ((String) async -> Data)?
     var decodeResult: Result<Base64Conversion.FilePayload, Base64FileWorkflowFailure>?
     var decodeHandler: ((String) async -> Result<Base64Conversion.FilePayload, Base64FileWorkflowFailure>)?
     var decodedPayloadHandler: ((Base64FileSelection) async -> Base64Conversion.FilePayload)?
@@ -1127,6 +1459,13 @@ private final class FakeBase64FileWorkflowProcessor: Base64FileWorkflowProcessin
             return await fullOutputHandler(selection, mode)
         }
         return fullOutputText
+    }
+
+    func serializeUTF8(_ text: String) async -> Data {
+        if let serializeUTF8Handler {
+            return await serializeUTF8Handler(text)
+        }
+        return Data(text.utf8)
     }
 
     func decodePayload(_ input: String) async -> Result<Base64Conversion.FilePayload, Base64FileWorkflowFailure> {
@@ -1195,12 +1534,16 @@ private final class FakeBase64FileWorkflowProcessor: Base64FileWorkflowProcessin
 @MainActor
 private final class FakeBase64FileDialog: Base64FileWorkflowDialoging, @unchecked Sendable {
     var encodedURL: URL?
+    var encodedURLHandler: ((String) async -> URL?)?
     var decodedURL: URL?
     private(set) var encodedSaveNames: [String] = []
     private(set) var decodedSaveNames: [String] = []
 
     func selectEncodedOutputURL(defaultFilename: String) async -> URL? {
         encodedSaveNames.append(defaultFilename)
+        if let encodedURLHandler {
+            return await encodedURLHandler(defaultFilename)
+        }
         return encodedURL
     }
 

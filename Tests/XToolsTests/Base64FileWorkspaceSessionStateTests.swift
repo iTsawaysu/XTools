@@ -57,4 +57,19 @@ struct Base64FileWorkspaceSessionStateTests {
         #expect(state.defaultOutputFileName == "note")
         #expect(state.outputFileName == "note")
     }
+
+    @Test func fileReadAndSelectionClearInvalidateDecodedSaveBusyState() {
+        var state = Base64FileWorkspaceSessionState()
+        state.beginSavingDecoded()
+        let firstGeneration = state.decodeGeneration
+        state.beginFileRead()
+        #expect(state.decodeGeneration != firstGeneration)
+        #expect(!state.isSavingDecoded)
+
+        state.beginSavingDecoded()
+        let secondGeneration = state.decodeGeneration
+        state.clearSelection()
+        #expect(state.decodeGeneration != secondGeneration)
+        #expect(!state.isSavingDecoded)
+    }
 }

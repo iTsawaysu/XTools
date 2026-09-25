@@ -104,6 +104,7 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
         isPreparingOutput = false
         outputAction = nil
         decodeActivity = nil
+        isSavingDecoded = false
         fileError = nil
     }
 
@@ -123,6 +124,7 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
         reverseInput = newValue
         decodeGeneration += 1
         decodeActivity = nil
+        if outputAction == .sending { outputAction = nil }
         isSavingDecoded = false
         decodedPayload = nil
         decodedResultSource = nil
@@ -133,6 +135,7 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
     public mutating func rejectReverseInputLimit(message: String) {
         decodeGeneration += 1
         decodeActivity = nil
+        if outputAction == .sending { outputAction = nil }
         isSavingDecoded = false
         decodedPayload = nil
         decodedResultSource = nil
@@ -148,12 +151,14 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
         reverseError = nil
         reverseInputDirty = false
         decodeActivity = nil
+        if outputAction == .sending { outputAction = nil }
         isSavingDecoded = false
     }
 
     @discardableResult
     public mutating func beginDecodeAttempt(_ activity: Base64FileDecodeActivity) -> Int {
         decodeGeneration += 1
+        if outputAction == .sending { outputAction = nil }
         decodeActivity = activity
         isSavingDecoded = false
         decodedPayload = nil
@@ -176,12 +181,15 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
         isPreparingOutput = false
         outputAction = nil
         decodeActivity = nil
+        isSavingDecoded = false
         fileError = nil
     }
 
     public mutating func beginOutputPreviewRefresh() {
         outputGeneration += 1
         isPreparingOutput = true
+        outputAction = nil
+        if decodeActivity == .encodedOutputPreview { decodeActivity = nil }
     }
 
     public mutating func applyOutputPreview(
@@ -255,7 +263,8 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
         outputAction = .sending
     }
 
-    public mutating func clearOutputAction() {
+    public mutating func clearOutputAction(_ action: Base64FileOutputAction, generation: Int) {
+        guard outputGeneration == generation, outputAction == action else { return }
         outputAction = nil
     }
 
@@ -272,7 +281,8 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
         reverseError = nil
     }
 
-    public mutating func endSavingDecoded(error message: String? = nil) {
+    public mutating func endSavingDecoded(generation: Int, error message: String? = nil) {
+        guard decodeGeneration == generation, isSavingDecoded else { return }
         isSavingDecoded = false
         if let message {
             reverseError = message

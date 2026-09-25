@@ -288,6 +288,8 @@ protocol Base64FileWorkflowProcessing: Sendable {
         mode: Base64Conversion.FileOutputMode
     ) async -> String
 
+    func serializeUTF8(_ text: String) async -> Data
+
     func decodePayload(_ input: String) async -> Result<Base64Conversion.FilePayload, Base64FileWorkflowFailure>
 
     func decodedPayload(for selection: Base64FileSelection) async -> Base64Conversion.FilePayload
@@ -324,6 +326,12 @@ extension Base64FileWorkflowProcessing {
         mode: Base64Conversion.FileOutputMode
     ) async -> String {
         await Base64FileWorkflow.fullOutput(for: selection, mode: mode)
+    }
+
+    func serializeUTF8(_ text: String) async -> Data {
+        await Task.detached(priority: .userInitiated) {
+            Data(text.utf8)
+        }.value
     }
 
     func decodePayload(_ input: String) async -> Result<Base64Conversion.FilePayload, Base64FileWorkflowFailure> {
@@ -631,7 +639,8 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
         processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive(),
         onSuccess: @escaping @MainActor () -> Void = {}
     ) -> Task<Void, Never>? {
-        guard let selectedFile else { return nil }
+        guard direction == .encode, outputAction == nil, !isReadingFile, !isPreparingOutput,
+              let selectedFile else { return nil }
 
         let mode = outputMode
         let generation = state.outputGeneration
@@ -639,16 +648,20 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
 
         return Task {
             let text = await processor.fullOutput(for: selectedFile, mode: mode)
-            guard isCurrentEncodedOutput(selection: selectedFile, mode: mode, generation: generation) else {
-                mutate { $0.clearOutputAction() }
+            guard isCurrentOutputAction(.copying, selection: selectedFile, mode: mode, generation: generation),
+                  !Task.isCancelled else {
+                finishOutputAction(.copying, generation: generation)
                 return
             }
 
             // Serialize UTF-8 off the main thread; the payload can be tens
             // of megabytes for large files.
-            let utf8 = await Task.detached(priority: .userInitiated) {
-                Data(text.utf8)
-            }.value
+            let utf8 = await processor.serializeUTF8(text)
+            guard isCurrentOutputAction(.copying, selection: selectedFile, mode: mode, generation: generation),
+                  !Task.isCancelled else {
+                finishOutputAction(.copying, generation: generation)
+                return
+            }
             if client.copyUTF8(utf8) {
                 mutate { $0.setFileError(nil) }
                 onSuccess()
@@ -659,7 +672,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
                     )
                 }
             }
-            mutate { $0.clearOutputAction() }
+            finishOutputAction(.copying, generation: generation)
         }
     }
 
@@ -669,7 +682,8 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
         processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive(),
         onSuccess: @escaping @MainActor () -> Void = {}
     ) -> Task<Void, Never>? {
-        guard let selectedFile else { return nil }
+        guard direction == .encode, outputAction == nil, !isReadingFile, !isPreparingOutput,
+              let selectedFile else { return nil }
 
         let mode = outputMode
         let generation = state.outputGeneration
@@ -680,19 +694,27 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
         return Task {
             // Sheet selection suspends here; a cancelled panel ends the busy state.
             guard let url = await client.selectEncodedOutputURL(defaultFilename: defaultFilename) else {
-                mutate { $0.clearOutputAction() }
+                finishOutputAction(.saving, generation: generation)
+                return
+            }
+
+            guard isCurrentOutputAction(.saving, selection: selectedFile, mode: mode, generation: generation),
+                  !Task.isCancelled else {
+                finishOutputAction(.saving, generation: generation)
                 return
             }
 
             let text = await processor.fullOutput(for: selectedFile, mode: mode)
-            guard isCurrentEncodedOutput(selection: selectedFile, mode: mode, generation: generation) else {
-                mutate { $0.clearOutputAction() }
+            guard isCurrentOutputAction(.saving, selection: selectedFile, mode: mode, generation: generation),
+                  !Task.isCancelled else {
+                finishOutputAction(.saving, generation: generation)
                 return
             }
 
             let result = await processor.write(text, to: url)
-            guard isCurrentEncodedOutput(selection: selectedFile, mode: mode, generation: generation) else {
-                mutate { $0.clearOutputAction() }
+            guard isCurrentOutputAction(.saving, selection: selectedFile, mode: mode, generation: generation),
+                  !Task.isCancelled else {
+                finishOutputAction(.saving, generation: generation)
                 return
             }
 
@@ -703,7 +725,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
             case .failure(let failure):
                 mutate { $0.setFileError(failure.errorDescription ?? "无法保存文件。") }
             }
-            mutate { $0.clearOutputAction() }
+            finishOutputAction(.saving, generation: generation)
         }
     }
 
@@ -778,15 +800,33 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
     func sendCurrentOutputToDecodeResult(
         processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive()
     ) -> Task<Void, Never>? {
-        guard let selectedFile else { return nil }
+        guard direction == .encode, outputAction == nil, !isReadingFile, !isPreparingOutput,
+              let selectedFile else { return nil }
 
         let generation = beginDecodeAttempt(.encodedOutputPreview)
+        let outputGeneration = state.outputGeneration
+        let mode = outputMode
         mutate { $0.beginSendToDecodeAction() }
 
         return Task {
             let payload = await processor.decodedPayload(for: selectedFile)
+            guard isCurrentOutputAction(.sending, selection: selectedFile, mode: mode, generation: outputGeneration),
+                  state.decodeGeneration == generation, !Task.isCancelled else {
+                if state.decodeGeneration == generation {
+                    finishOutputAction(.sending, generation: outputGeneration)
+                }
+                finishDecodeAttempt(.encodedOutputPreview, generation: generation)
+                return
+            }
             let decodedPreview = await processor.previewImage(for: payload)
-            guard selectedFile.id == self.selectedFile?.id, state.decodeGeneration == generation else { return }
+            guard isCurrentOutputAction(.sending, selection: selectedFile, mode: mode, generation: outputGeneration),
+                  state.decodeGeneration == generation, !Task.isCancelled else {
+                if state.decodeGeneration == generation {
+                    finishOutputAction(.sending, generation: outputGeneration)
+                }
+                finishDecodeAttempt(.encodedOutputPreview, generation: generation)
+                return
+            }
 
             mutate {
                 $0.reverseInputDirty = !$0.reverseInput
@@ -801,7 +841,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
             )
             mutate {
                 $0.direction = .decode
-                $0.clearOutputAction()
+                $0.clearOutputAction(.sending, generation: outputGeneration)
             }
             finishDecodeAttempt(.encodedOutputPreview, generation: generation)
         }
@@ -871,7 +911,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
         processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive(),
         onSuccess: @escaping @MainActor () -> Void = {}
     ) -> Task<Void, Never>? {
-        guard let payload = decodedPayload else { return nil }
+        guard !isSavingDecoded, let payload = decodedPayload else { return nil }
 
         let generation = state.decodeGeneration
         let defaultFilename = Base64Conversion.normalizedFileName(outputFileName, fileExtension: payload.fileExtension)
@@ -884,18 +924,20 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
                 defaultFilename: defaultFilename,
                 fileExtension: payload.fileExtension
             ) else {
-                mutate { $0.endSavingDecoded() }
+                finishDecodedSave(generation: generation)
                 return
             }
 
-            guard isCurrentDecodedPayload(payload, generation: generation) else {
-                mutate { $0.endSavingDecoded() }
+            guard isSavingDecoded, isCurrentDecodedPayload(payload, generation: generation),
+                  !Task.isCancelled else {
+                finishDecodedSave(generation: generation)
                 return
             }
 
             let result = await processor.write(payload.data, to: url)
-            guard isCurrentDecodedPayload(payload, generation: generation) else {
-                mutate { $0.endSavingDecoded() }
+            guard isSavingDecoded, isCurrentDecodedPayload(payload, generation: generation),
+                  !Task.isCancelled else {
+                finishDecodedSave(generation: generation)
                 return
             }
 
@@ -904,11 +946,13 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
                 mutate { $0.setReverseError(nil) }
                 onSuccess()
             case .failure(let failure):
-                mutate {
-                    $0.endSavingDecoded(error: failure.errorDescription ?? "无法保存文件。")
-                }
+                finishDecodedSave(
+                    generation: generation,
+                    error: failure.errorDescription ?? "无法保存文件。"
+                )
+                return
             }
-            mutate { $0.endSavingDecoded() }
+            finishDecodedSave(generation: generation)
         }
     }
 
@@ -1040,6 +1084,24 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
             mode: mode,
             generation: generation
         )
+    }
+
+    private func isCurrentOutputAction(
+        _ action: Base64FileOutputAction,
+        selection: Base64FileSelection,
+        mode: Base64Conversion.FileOutputMode,
+        generation: Int
+    ) -> Bool {
+        outputAction == action
+            && isCurrentEncodedOutput(selection: selection, mode: mode, generation: generation)
+    }
+
+    private func finishOutputAction(_ action: Base64FileOutputAction, generation: Int) {
+        mutate { $0.clearOutputAction(action, generation: generation) }
+    }
+
+    private func finishDecodedSave(generation: Int, error: String? = nil) {
+        mutate { $0.endSavingDecoded(generation: generation, error: error) }
     }
 
     private func isCurrentFileRead(
