@@ -2,10 +2,10 @@ import Foundation
 
 extension DockerRunToDockerComposeService {
     static func tokenize(_ command: String) throws -> [String] {
-        let chars = Array(command)
+        let chars = Array(command.unicodeScalars)
         var tokens: [String] = []
         var current = ""
-        var quote: Character?
+        var quote: Unicode.Scalar?
         var tokenStarted = false
         var index = 0
 
@@ -21,7 +21,7 @@ extension DockerRunToDockerComposeService {
                     // before $, `, ", \\, or a line continuation. Other
                     // backslashes are literal command data.
                     if let next, next == "$" || next == "`" || next == "\"" || next == "\\" {
-                        current.append(next)
+                        current.unicodeScalars.append(next)
                         index += 2
                         continue
                     }
@@ -29,9 +29,9 @@ extension DockerRunToDockerComposeService {
                         index += 2
                         continue
                     }
-                    current.append(character)
+                    current.unicodeScalars.append(character)
                 } else {
-                    current.append(character)
+                    current.unicodeScalars.append(character)
                 }
                 index += 1
                 continue
@@ -49,12 +49,12 @@ extension DockerRunToDockerComposeService {
                 // Preserve ordinary backslashes in unquoted Windows paths.
                 // Only shell separators and quote delimiters consume the
                 // backslash in this lightweight command-input grammar.
-                if let next, next == "\"" || next == "'" || next == "\\" || next.isWhitespace {
-                    current.append(next)
+                if let next, next == "\"" || next == "'" || next == "\\" || Character(next).isWhitespace {
+                    current.unicodeScalars.append(next)
                     index += 2
                     continue
                 }
-                current.append(character)
+                current.unicodeScalars.append(character)
                 index += 1
                 continue
             }
@@ -66,7 +66,7 @@ extension DockerRunToDockerComposeService {
                 continue
             }
 
-            if character.isWhitespace {
+            if Character(character).isWhitespace {
                 if tokenStarted {
                     tokens.append(current)
                     current = ""
@@ -76,7 +76,7 @@ extension DockerRunToDockerComposeService {
                 continue
             }
 
-            current.append(character)
+            current.unicodeScalars.append(character)
             tokenStarted = true
             index += 1
         }

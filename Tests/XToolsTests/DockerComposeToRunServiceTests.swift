@@ -456,6 +456,19 @@ struct DockerComposeToRunServiceTests {
         #expect(semantics.command == ["printf", "", " "])
     }
 
+    @Test func scalarCommandKeepsCombiningMarkAfterQuotes() throws {
+        let scalar = "\"\"\u{0301}"
+        let result = try DockerComposeToRunService.convert("""
+        services:
+          app:
+            image: busybox
+            command: '\(scalar)'
+        """)
+
+        let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
+        #expect(semantics.command == ["\u{0301}"])
+    }
+
     @Test func listCommandKeepsExistingArgumentBoundary() throws {
         let result = try DockerComposeToRunService.convert("""
         services:
