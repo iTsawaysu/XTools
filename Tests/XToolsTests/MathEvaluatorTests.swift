@@ -1,4 +1,5 @@
 import XToolsCore
+import Foundation
 import Testing
 
 struct MathEvaluatorTests {
@@ -62,6 +63,31 @@ struct MathEvaluatorTests {
         let incomplete = String(repeating: "(", count: 1_000) + "1"
         #expect(MathExpressionEvaluator.evaluateLiveInput(incomplete) == .invalid(.expressionTooDeep))
         #expect(MathExpressionEvaluator.evaluateLiveInput(String(repeating: "(", count: 1_000)) == .invalid(.expressionTooDeep))
+    }
+
+    @Test func cancellableEvaluationStopsDuringLongScansAndCompletionProbe() {
+        let scans = [
+            "1" + String(repeating: " ", count: 10_000) + "2",
+            String(repeating: "1", count: 10_000),
+            String(repeating: "a", count: 10_000)
+        ]
+        for expression in scans {
+            let cancellation = MathCancellationAfterChecks(3)
+            #expect(throws: CancellationError.self) {
+                _ = try MathExpressionEvaluator.evaluate(expression, shouldCancel: { cancellation.check() })
+            }
+        }
+
+        let completionCancellation = MathCancellationAfterChecks(3)
+        #expect(throws: CancellationError.self) {
+            _ = try MathExpressionEvaluator.evaluateLiveInput("1+", shouldCancel: { completionCancellation.check() })
+        }
+
+        let parserCancellation = MathCancellationAfterChecks(10)
+        let flatExpression = String(repeating: "1+", count: 2_000) + "1"
+        #expect(throws: CancellationError.self) {
+            _ = try MathExpressionEvaluator.evaluate(flatExpression, shouldCancel: { parserCancellation.check() })
+        }
     }
 
     @Test func divisionByZero() throws {
@@ -338,6 +364,23 @@ struct MathEvaluatorTests {
 
     @Test func singleArgumentFunctionRejectsExtraArguments() throws {
         expectWrongArgumentCount { try MathExpressionEvaluator.evaluate("sqrt(4, 9)") }
+    }
+}
+
+private final class MathCancellationAfterChecks: @unchecked Sendable {
+    private let lock = NSLock()
+    private let limit: Int
+    private var checks = 0
+
+    init(_ limit: Int) {
+        self.limit = limit
+    }
+
+    func check() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        checks += 1
+        return checks >= limit
     }
 }
 

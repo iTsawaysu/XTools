@@ -1,7 +1,7 @@
 import Foundation
 
 public enum MathExpressionEvaluator {
-    public enum LiveEvaluation: Equatable {
+    public enum LiveEvaluation: Equatable, Sendable {
         case empty
         case incomplete
         case valid(String)
@@ -9,14 +9,24 @@ public enum MathExpressionEvaluator {
     }
 
     public static func evaluate(_ expression: String) throws -> String {
+        try evaluate(expression, shouldCancel: { false })
+    }
+
+    public static func evaluate(
+        _ expression: String,
+        shouldCancel: @escaping @Sendable () -> Bool
+    ) throws -> String {
+        try checkCancellation(shouldCancel)
         let trimmed = expression.trimmingCharacters(in: .whitespacesAndNewlines)
+        try checkCancellation(shouldCancel)
         guard !trimmed.isEmpty else {
             throw MathError.emptyExpression
         }
 
-        let tokens = try Lexer.tokenize(trimmed)
-        var parser = TokenParser(tokens: tokens)
+        let tokens = try Lexer.tokenize(trimmed, shouldCancel: shouldCancel)
+        var parser = TokenParser(tokens: tokens, shouldCancel: shouldCancel)
         let value = try parser.parse()
+        try checkCancellation(shouldCancel)
         guard value.isFinite else {
             throw MathError.nonFiniteResult
         }
@@ -67,19 +77,30 @@ public enum MathExpressionEvaluator {
     }
 
     public static func evaluateLiveInput(_ expression: String) -> LiveEvaluation {
+        (try? evaluateLiveInput(expression, shouldCancel: { false })) ?? .invalid(.unexpectedToken)
+    }
+
+    public static func evaluateLiveInput(
+        _ expression: String,
+        shouldCancel: @escaping @Sendable () -> Bool
+    ) throws -> LiveEvaluation {
+        try checkCancellation(shouldCancel)
         let trimmed = expression.trimmingCharacters(in: .whitespacesAndNewlines)
+        try checkCancellation(shouldCancel)
         guard !trimmed.isEmpty else {
             return .empty
         }
 
-        if isStructurallyIncomplete(trimmed) {
+        if try isStructurallyIncomplete(trimmed, shouldCancel: shouldCancel) {
             return .incomplete
         }
 
         do {
-            return .valid(try evaluate(trimmed))
+            return .valid(try evaluate(trimmed, shouldCancel: shouldCancel))
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let error as MathError {
-            if isLiveInputIncomplete(error, expression: trimmed) {
+            if try isLiveInputIncomplete(error, expression: trimmed, shouldCancel: shouldCancel) {
                 return .incomplete
             }
             return .invalid(error)
@@ -88,7 +109,7 @@ public enum MathExpressionEvaluator {
         }
     }
 
-    public enum MathError: LocalizedError, Equatable {
+    public enum MathError: LocalizedError, Equatable, Sendable {
         case unexpectedCharacter(Character)
         case invalidNumber(String)
         case unknownIdentifier(String)
@@ -150,19 +171,36 @@ public enum MathExpressionEvaluator {
         }
     }
 
-    private static func isStructurallyIncomplete(_ expression: String) -> Bool {
+    private static func checkCancellation(_ shouldCancel: @Sendable () -> Bool) throws {
+        if shouldCancel() { throw CancellationError() }
+    }
+
+    private static func isStructurallyIncomplete(
+        _ expression: String,
+        shouldCancel: @escaping @Sendable () -> Bool
+    ) throws -> Bool {
         guard let last = expression.last else { return false }
         guard "+-*/%^,(".contains(last) else { return false }
 
-        guard let completedExpression = completionProbe(for: expression) else {
+        guard let completedExpression = try completionProbe(for: expression, shouldCancel: shouldCancel) else {
             return false
         }
 
-        return (try? evaluate(completedExpression)) != nil
+        do {
+            _ = try evaluate(completedExpression, shouldCancel: shouldCancel)
+            return true
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            return false
+        }
     }
 
-    private static func completionProbe(for expression: String) -> String? {
-        let balance = parenthesisBalance(expression)
+    private static func completionProbe(
+        for expression: String,
+        shouldCancel: @escaping @Sendable () -> Bool
+    ) throws -> String? {
+        let balance = try parenthesisBalance(expression, shouldCancel: shouldCancel)
         guard balance >= 0 else { return nil }
 
         let probe: String
@@ -173,15 +211,20 @@ public enum MathExpressionEvaluator {
             return nil
         }
 
+        if shouldCancel() { throw CancellationError() }
         return probe + String(repeating: ")", count: balance)
     }
 
-    private static func isLiveInputIncomplete(_ error: MathError, expression: String) -> Bool {
+    private static func isLiveInputIncomplete(
+        _ error: MathError,
+        expression: String,
+        shouldCancel: @escaping @Sendable () -> Bool
+    ) throws -> Bool {
         switch error {
         case .unexpectedEnd:
             return true
         case .mismatchedParentheses:
-            return parenthesisBalance(expression) > 0
+            return try parenthesisBalance(expression, shouldCancel: shouldCancel) > 0
         case .invalidNumber(let value):
             return expression.hasSuffix(value) && isIncompleteNumber(value)
         case .unknownIdentifier(let value):
@@ -198,14 +241,23 @@ public enum MathExpressionEvaluator {
         }
     }
 
-    private static func parenthesisBalance(_ expression: String) -> Int {
-        expression.reduce(into: 0) { balance, character in
+    private static func parenthesisBalance(
+        _ expression: String,
+        shouldCancel: @Sendable () -> Bool
+    ) throws -> Int {
+        var balance = 0
+        var scanned = 0
+        for character in expression {
+            scanned += 1
+            if scanned.isMultiple(of: 1_024) { try checkCancellation(shouldCancel) }
             if character == "(" {
                 balance += 1
             } else if character == ")" {
                 balance -= 1
             }
         }
+        try checkCancellation(shouldCancel)
+        return balance
     }
 
     private static func isIncompleteNumber(_ value: String) -> Bool {
@@ -272,11 +324,17 @@ private enum Lexer {
         "phi": (1 + sqrt(5.0)) / 2
     ]
 
-    static func tokenize(_ input: String) throws -> [Token] {
+    static func tokenize(
+        _ input: String,
+        shouldCancel: @escaping @Sendable () -> Bool
+    ) throws -> [Token] {
         var tokens: [Token] = []
         var index = input.startIndex
+        var scanned = 0
 
         while index < input.endIndex {
+            scanned += 1
+            if scanned.isMultiple(of: 1_024), shouldCancel() { throw CancellationError() }
             let character = input[index]
 
             if character.isWhitespace {
@@ -285,7 +343,7 @@ private enum Lexer {
             }
 
             if character.isNumber || character == "." {
-                let numberText = try scanNumber(in: input, from: &index)
+                let numberText = try scanNumber(in: input, from: &index, shouldCancel: shouldCancel)
                 guard let value = Double(numberText) else {
                     throw MathExpressionEvaluator.MathError.invalidNumber(numberText)
                 }
@@ -298,6 +356,8 @@ private enum Lexer {
                 while index < input.endIndex, input[index].isLetter || input[index].isNumber || input[index] == "_" {
                     name.append(input[index])
                     index = input.index(after: index)
+                    scanned += 1
+                    if scanned.isMultiple(of: 1_024), shouldCancel() { throw CancellationError() }
                 }
                 let lowercased = name.lowercased()
                 if constants[lowercased] != nil {
@@ -326,15 +386,23 @@ private enum Lexer {
             index = input.index(after: index)
         }
 
+        if shouldCancel() { throw CancellationError() }
         return tokens
     }
 
-    private static func scanNumber(in input: String, from index: inout String.Index) throws -> String {
+    private static func scanNumber(
+        in input: String,
+        from index: inout String.Index,
+        shouldCancel: @Sendable () -> Bool
+    ) throws -> String {
         var numberText = ""
         var sawDigit = false
         var sawDecimalPoint = false
+        var scanned = 0
 
         while index < input.endIndex {
+            scanned += 1
+            if scanned.isMultiple(of: 1_024), shouldCancel() { throw CancellationError() }
             let character = input[index]
             if character.isNumber {
                 sawDigit = true
@@ -364,6 +432,8 @@ private enum Lexer {
 
             var sawExponentDigit = false
             while index < input.endIndex, input[index].isNumber {
+                scanned += 1
+                if scanned.isMultiple(of: 1_024), shouldCancel() { throw CancellationError() }
                 sawExponentDigit = true
                 numberText.append(input[index])
                 index = input.index(after: index)
@@ -384,16 +454,21 @@ private struct TokenParser {
     let tokens: [Token]
     private var position = 0
     private var recursiveCalls = 0
+    private var steps = 0
+    private let shouldCancel: @Sendable () -> Bool
 
-    init(tokens: [Token]) {
+    init(tokens: [Token], shouldCancel: @escaping @Sendable () -> Bool) {
         self.tokens = tokens
+        self.shouldCancel = shouldCancel
     }
 
     mutating func parse() throws -> Double {
+        if shouldCancel() { throw CancellationError() }
         guard !tokens.isEmpty else {
             throw MathExpressionEvaluator.MathError.emptyExpression
         }
         let value = try parseExpression()
+        if shouldCancel() { throw CancellationError() }
         guard position == tokens.count else {
             // 多出来的若是右括号，「括号不匹配」比笼统的「分隔符位置无效」准确，
             // 也与 `(1+2` 的诊断保持一致。
@@ -411,6 +486,7 @@ private struct TokenParser {
         var value = try parseTerm()
 
         while position < tokens.count {
+            try checkpoint()
             if case .plus = tokens[position] {
                 position += 1
                 value += try parseTerm()
@@ -429,6 +505,7 @@ private struct TokenParser {
         var value = try parseUnary()
 
         while position < tokens.count {
+            try checkpoint()
             if case .multiply = tokens[position] {
                 position += 1
                 value *= try parseUnary()
@@ -488,7 +565,15 @@ private struct TokenParser {
         guard recursiveCalls < Self.maximumRecursiveCalls else {
             throw MathExpressionEvaluator.MathError.expressionTooDeep
         }
+        try checkpoint()
         recursiveCalls += 1
+    }
+
+    private mutating func checkpoint() throws {
+        steps += 1
+        if steps.isMultiple(of: 256), shouldCancel() {
+            throw CancellationError()
+        }
     }
 
     private mutating func parsePrimary() throws -> Double {
@@ -533,6 +618,7 @@ private struct TokenParser {
         } else {
             args.append(try parseExpression())
             while position < tokens.count, case .comma = tokens[position] {
+                try checkpoint()
                 position += 1
                 args.append(try parseExpression())
             }

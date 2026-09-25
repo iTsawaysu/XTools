@@ -1,14 +1,52 @@
 import XToolsCore
 import SwiftUI
 
+typealias MathBackgroundEvaluation = @Sendable (
+    _ expression: String,
+    _ shouldCancel: @escaping @Sendable () -> Bool
+) throws -> MathExpressionEvaluator.LiveEvaluation
+
 @MainActor
 final class MathToolWorkspaceModel: ObservableObject {
+    static let synchronousUTF8ByteLimit = 4 * 1_024
+
     static let key = ToolWorkspaceKey<MathToolWorkspaceModel>(toolID: "math-evaluator") { _ in
         MathToolWorkspaceModel()
     }
 
-    @Published var expression = ""
+    @Published var expression = "" {
+        didSet {
+            guard expression != oldValue else { return }
+            refreshEvaluation()
+        }
+    }
     @Published var evaluation = MathExpressionEvaluator.LiveEvaluation.empty
+    @Published private(set) var isEvaluating = false
+
+    private let execution = SupersedingExecutionSession(cancelInFlight: true)
+    private let backgroundEvaluation: MathBackgroundEvaluation
+    private let debounce: Duration
+    private let synchronousUTF8ByteLimit: Int
+
+    convenience init() {
+        self.init(
+            backgroundEvaluation: { input, shouldCancel in
+                try MathExpressionEvaluator.evaluateLiveInput(input, shouldCancel: shouldCancel)
+            },
+            debounce: .milliseconds(120),
+            synchronousUTF8ByteLimit: Self.synchronousUTF8ByteLimit
+        )
+    }
+
+    init(
+        backgroundEvaluation: @escaping MathBackgroundEvaluation,
+        debounce: Duration,
+        synchronousUTF8ByteLimit: Int
+    ) {
+        self.backgroundEvaluation = backgroundEvaluation
+        self.debounce = debounce
+        self.synchronousUTF8ByteLimit = max(0, synchronousUTF8ByteLimit)
+    }
 
     var hasAnyContent: Bool {
         if !expression.isEmpty {
@@ -23,6 +61,29 @@ final class MathToolWorkspaceModel: ObservableObject {
     func clear() {
         expression = ""
         evaluation = .empty
+        isEvaluating = false
+    }
+
+    private func refreshEvaluation() {
+        let input = expression
+        guard input.utf8.prefix(synchronousUTF8ByteLimit + 1).count > synchronousUTF8ByteLimit else {
+            execution.invalidate()
+            isEvaluating = false
+            let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+            evaluation = MathExpressionEvaluator.evaluateLiveInput(trimmed)
+            return
+        }
+
+        evaluation = .empty
+        isEvaluating = true
+        let backgroundEvaluation = self.backgroundEvaluation
+        execution.schedule(debounce: debounce, operation: { shouldCancel in
+            try backgroundEvaluation(input, shouldCancel)
+        }) { [weak self] _, result in
+            guard let self else { return }
+            self.evaluation = result
+            self.isEvaluating = false
+        }
     }
 }
 
@@ -41,7 +102,6 @@ private struct IndexMathWorkspaceContent: View {
         IndexPage("数学计算", subtitle: "输入数学表达式即时求值。", workspaceSemantic: .naturalHeightShortResultPanel) {
             IndexPanel("表达式") {
                 IndexTextInput(placeholder: "例如 (3 + 4) * 2 / sqrt(16)", text: $workspace.expression, height: 42, autoFocus: true)
-                    .onChange(of: workspace.expression) { _ in evaluate() }
                     .indexWorkspaceDiagnostic(diagnosticText)
             } accessory: {
                 IndexClearButton(
@@ -90,10 +150,5 @@ private struct IndexMathWorkspaceContent: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func evaluate() {
-        let trimmed = workspace.expression.trimmingCharacters(in: .whitespacesAndNewlines)
-        workspace.evaluation = MathExpressionEvaluator.evaluateLiveInput(trimmed)
     }
 }
