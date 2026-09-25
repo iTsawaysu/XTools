@@ -101,6 +101,7 @@ public enum MathExpressionEvaluator {
         case minimumArgumentCount(String, Int)
         case domainError(DomainIssue)
         case nonFiniteResult
+        case expressionTooDeep
 
         public enum DomainIssue: Equatable, Sendable {
             case nonNegative(String)
@@ -143,6 +144,8 @@ public enum MathExpressionEvaluator {
                 }
             case .nonFiniteResult:
                 return "计算结果超出可表示的有限数值范围。"
+            case .expressionTooDeep:
+                return "表达式嵌套层数超过安全限制。"
             }
         }
     }
@@ -189,7 +192,8 @@ public enum MathExpressionEvaluator {
             }
             return Lexer.supportedFunctions.contains(identifier)
         case .emptyExpression, .unexpectedCharacter, .divisionByZero,
-             .wrongArgumentCount, .minimumArgumentCount, .domainError, .nonFiniteResult:
+             .wrongArgumentCount, .minimumArgumentCount, .domainError, .nonFiniteResult,
+             .expressionTooDeep:
             return false
         }
     }
@@ -375,8 +379,11 @@ private enum Lexer {
 }
 
 private struct TokenParser {
+    private static let maximumRecursiveCalls = 128
+
     let tokens: [Token]
     private var position = 0
+    private var recursiveCalls = 0
 
     init(tokens: [Token]) {
         self.tokens = tokens
@@ -399,6 +406,8 @@ private struct TokenParser {
     }
 
     private mutating func parseExpression() throws -> Double {
+        try enterRecursiveCall()
+        defer { recursiveCalls -= 1 }
         var value = try parseTerm()
 
         while position < tokens.count {
@@ -446,6 +455,8 @@ private struct TokenParser {
     }
 
     private mutating func parsePower() throws -> Double {
+        try enterRecursiveCall()
+        defer { recursiveCalls -= 1 }
         let base = try parsePrimary()
 
         if position < tokens.count, case .power = tokens[position] {
@@ -458,6 +469,8 @@ private struct TokenParser {
     }
 
     private mutating func parseUnary() throws -> Double {
+        try enterRecursiveCall()
+        defer { recursiveCalls -= 1 }
         if position < tokens.count {
             if case .plus = tokens[position] {
                 position += 1
@@ -469,6 +482,13 @@ private struct TokenParser {
         }
 
         return try parsePower()
+    }
+
+    private mutating func enterRecursiveCall() throws {
+        guard recursiveCalls < Self.maximumRecursiveCalls else {
+            throw MathExpressionEvaluator.MathError.expressionTooDeep
+        }
+        recursiveCalls += 1
     }
 
     private mutating func parsePrimary() throws -> Double {

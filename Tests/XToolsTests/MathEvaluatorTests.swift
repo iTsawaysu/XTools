@@ -33,6 +33,37 @@ struct MathEvaluatorTests {
         #expect(try MathExpressionEvaluator.evaluate("2 * (3 + 4)") == "14") // right-side parentheses
     }
 
+    @Test func recursiveParserAcceptsExpressionWithinSafeBoundary() throws {
+        let expressions = [
+            String(repeating: "(", count: 41) + "1" + String(repeating: ")", count: 41),
+            String(repeating: "sqrt(", count: 41) + "1" + String(repeating: ")", count: 41),
+            String(repeating: "-", count: 124) + "1",
+            String(repeating: "1^", count: 62) + "1"
+        ]
+        for expression in expressions {
+            #expect(try MathExpressionEvaluator.evaluate(expression) == "1")
+        }
+    }
+
+    @Test func recursiveParserRejectsDeepChainsWithFactualDiagnostic() {
+        let expressions = [
+            String(repeating: "(", count: 1_000) + "1" + String(repeating: ")", count: 1_000),
+            String(repeating: "sqrt(", count: 1_000) + "1" + String(repeating: ")", count: 1_000),
+            String(repeating: "-", count: 1_000) + "1",
+            String(repeating: "1^", count: 1_000) + "1"
+        ]
+
+        for expression in expressions {
+            #expect(throws: MathExpressionEvaluator.MathError.expressionTooDeep) {
+                _ = try MathExpressionEvaluator.evaluate(expression)
+            }
+        }
+
+        let incomplete = String(repeating: "(", count: 1_000) + "1"
+        #expect(MathExpressionEvaluator.evaluateLiveInput(incomplete) == .invalid(.expressionTooDeep))
+        #expect(MathExpressionEvaluator.evaluateLiveInput(String(repeating: "(", count: 1_000)) == .invalid(.expressionTooDeep))
+    }
+
     @Test func divisionByZero() throws {
         #expect(throws: (any Error).self) {
             _ = try MathExpressionEvaluator.evaluate("10 / 0")
@@ -151,7 +182,8 @@ struct MathEvaluatorTests {
             .domainError(.nonNegative("sqrt")),
             .domainError(.unitInterval("asin")),
             .domainError(.positive("log")),
-            .nonFiniteResult
+            .nonFiniteResult,
+            .expressionTooDeep
         ]
 
         for error in errors {
