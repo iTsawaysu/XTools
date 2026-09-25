@@ -443,6 +443,42 @@ struct HTMLToMarkdownConverterTests {
         )
     }
 
+    @Test func DOMAtDepthLimitStillRenders() {
+        let html = String(repeating: "<div>", count: 64)
+            + "x"
+            + String(repeating: "</div>", count: 64)
+
+        let result = HTMLToMarkdownConverter.convert(html, options: .manual)
+
+        #expect(result.markdown == "x")
+        #expect(result.error == nil)
+    }
+
+    @Test func deepDOMReturnsTypedErrorAcrossRenderingPaths() {
+        let cases = [
+            String(repeating: "<div>", count: 65) + "x" + String(repeating: "</div>", count: 65),
+            String(repeating: "<blockquote><strong>", count: 33)
+                + "x" + String(repeating: "</strong></blockquote>", count: 33),
+            String(repeating: "<ul><li>", count: 33)
+                + "x" + String(repeating: "</li></ul>", count: 33),
+            "<pre>" + String(repeating: "<span>", count: 64)
+                + "x" + String(repeating: "</span>", count: 64) + "</pre>"
+        ]
+
+        for html in cases {
+            let result = HTMLToMarkdownConverter.convert(html, options: .manual)
+            #expect(result.markdown.isEmpty)
+            #expect(result.warnings.isEmpty)
+            #expect(result.error == .domDepthExceeded(64))
+        }
+
+        #expect {
+            _ = try HTMLToMarkdownConverter.convert(cases[0], shouldCancel: { false })
+        } throws: { error in
+            error as? HTMLToMarkdownConversionError == .domDepthExceeded(64)
+        }
+    }
+
     @Test func returnsWarningsForDroppedAndFlattenedHTML() {
         let result = HTMLToMarkdownConverter.convert(
             "<script>alert(1)</script><table><tr><th colspan=\"2\">A</th></tr></table>",

@@ -8,6 +8,8 @@ private enum HTMLToMarkdownRenderContext {
 }
 
 final class HTMLToMarkdownDOMRenderer {
+    // ponytail: 64-level stack budget; use iterative rendering if deeper HTML is needed.
+    private static let maximumRenderDepth = 64
     private let options: HTMLToMarkdownOptions
     private let cancellation: DiffCancellationChecker
     private var warnings: [HTMLToMarkdownWarning] = []
@@ -39,8 +41,9 @@ final class HTMLToMarkdownDOMRenderer {
             let baseURI = options.baseURL?.absoluteString ?? ""
             let document = try SwiftSoup.parseHTML(trimmed, baseURI)
             try cancellation.check()
-            try recordDroppedUnsafeElements(in: document)
             let root: Node = document.body() ?? document
+            try validateRenderDepth(of: root)
+            try recordDroppedUnsafeElements(in: document)
             let rendered = escapeLineStartMarkers(
                 in: try renderChildren(of: root, context: .normal)
             )
@@ -59,10 +62,26 @@ final class HTMLToMarkdownDOMRenderer {
             return HTMLToMarkdownConversionResult(markdown: markdown, warnings: warnings)
         } catch is CancellationError {
             throw CancellationError()
+        } catch let conversionError as HTMLToMarkdownConversionError {
+            throw conversionError
         } catch {
             let fallback = escapeMarkdownText(trimmed, context: .normal)
             appendWarning(.unsupportedElement("HTML 解析失败，已按纯文本降级。"))
             return HTMLToMarkdownConversionResult(markdown: fallback, warnings: warnings)
+        }
+    }
+
+    private func validateRenderDepth(of root: Node) throws {
+        var pending: [(node: Node, depth: Int)] = [(root, 0)]
+        while let (node, depth) = pending.popLast() {
+            try cancellation.check()
+            let children = node.getChildNodes()
+            guard children.isEmpty || depth <= Self.maximumRenderDepth else {
+                throw HTMLToMarkdownConversionError.domDepthExceeded(Self.maximumRenderDepth)
+            }
+            for child in children {
+                pending.append((child, depth + 1))
+            }
         }
     }
 

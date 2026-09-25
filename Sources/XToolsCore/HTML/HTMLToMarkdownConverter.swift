@@ -56,6 +56,7 @@ public struct HTMLToMarkdownInputBudget: Equatable, Sendable {
 
 public enum HTMLToMarkdownConversionError: Error, Equatable, Sendable {
     case inputExceedsPreParseByteLimit(Int)
+    case domDepthExceeded(Int)
 }
 
 public enum HTMLToMarkdownWarning: Equatable, Sendable {

@@ -6,6 +6,12 @@ struct HTMLToMarkdownDiagnosticsTests {
         #expect(HTMLToMarkdownDiagnostics.conversionWarningMessage(for: []) == nil)
     }
 
+    @Test func deepDOMErrorUsesStableChineseMessage() {
+        let message = HTMLToMarkdownDiagnostics.conversionErrorMessage(for: .domDepthExceeded(64))
+        #expect(message == "HTML 嵌套超过 64 层，未进行转换。")
+        ToolDiagnosticContract.expectFactual(message)
+    }
+
     @Test func singleUnsupportedElementWarning() {
         let message = HTMLToMarkdownDiagnostics.conversionWarningMessage(
             for: [.unsupportedElement("canvas")]
