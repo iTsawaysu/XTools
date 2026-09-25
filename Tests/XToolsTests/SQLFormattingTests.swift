@@ -377,6 +377,64 @@ struct SQLFormattingTests {
         #expect(output.contains(#"`tick``name`"#))
     }
 
+    @Test func preservesCombiningMarksAtQuotedBoundariesInBothModes() throws {
+        let sql = "SELECT '\u{0301}', \"\u{0301}\", cafe\u{0301} FROM users"
+
+        for minify in [false, true] {
+            let output = try SQLFormatting.format(sql, options: .init(minify: minify))
+            #expect(output.contains("'\u{0301}'"))
+            #expect(output.contains("\"\u{0301}\""))
+            #expect(output.contains("cafe\u{0301}"))
+            if minify {
+                #expect(Array(output.utf8) == Array(sql.utf8))
+            }
+        }
+    }
+
+    @Test func preservesGraphemeSymbolsAndJoinerIdentifiers() throws {
+        let samples = [
+            (sql: "SELECT 👩‍💻 FROM users", formatted: "SELECT\n  👩‍💻\nFROM\n  users"),
+            (sql: "SELECT a\u{200D}b FROM users", formatted: "SELECT\n  a\u{200D}b\nFROM\n  users")
+        ]
+
+        for sample in samples {
+            #expect(try SQLFormatting.format(sample.sql) == sample.formatted)
+            #expect(try SQLFormatting.format(sample.sql, options: .init(minify: true)) == sample.sql)
+        }
+    }
+
+    @Test func scalarLexerKeepsGraphemeDiagnosticColumns() throws {
+        let input = "SELECT 👩‍💻 ("
+        let error = #expect(throws: SQLFormatting.ValidationError.self) {
+            try SQLFormatting.validate(input)
+        }
+
+        guard let error, case .unbalancedParentheses(let diagnostic) = error else {
+            Issue.record("Expected unmatched opening parenthesis")
+            return
+        }
+        #expect(diagnostic.line == 1)
+        #expect(diagnostic.column == 10)
+
+        let decomposed = #expect(throws: SQLFormatting.ValidationError.self) {
+            try SQLFormatting.validate("SELECT 'a\u{0301}' (")
+        }
+        guard let decomposed, case .unbalancedParentheses(let decomposedDiagnostic) = decomposed else {
+            Issue.record("Expected unmatched opening parenthesis after decomposed text")
+            return
+        }
+        #expect(decomposedDiagnostic.column == 12)
+
+        let unterminated = #expect(throws: SQLFormatting.ValidationError.self) {
+            _ = try SQLFormatting.format("SELECT 👩‍💻 'bad")
+        }
+        guard let unterminated, case .unterminatedString(let stringDiagnostic) = unterminated else {
+            Issue.record("Expected unterminated string after emoji")
+            return
+        }
+        #expect(stringDiagnostic.column == 10)
+    }
+
     @Test func preservesPostgresJSONOperators() throws {
         let output = try SQLFormatting.format(
             #"select payload->>'tool' as tool_name from audit_logs where payload @> '{"success": true}'::jsonb;"#

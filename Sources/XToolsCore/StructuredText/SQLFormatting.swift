@@ -304,8 +304,9 @@ public enum SQLFormatting {
     }
 
     private static func diagnostic(input: String, offset: Int, message: String, suggestion: String?) -> FormatDiagnostic {
-        let boundedOffset = max(0, min(offset, input.count))
-        let stringIndex = input.index(input.startIndex, offsetBy: boundedOffset)
+        let scalars = input.unicodeScalars
+        let boundedOffset = max(0, min(offset, scalars.count))
+        let stringIndex = scalars.index(scalars.startIndex, offsetBy: boundedOffset)
 
         return FormatDiagnostic(
             formatName: "SQL",
@@ -367,7 +368,9 @@ public enum SQLFormatting {
     }
 
     private static func firstNonWhitespaceOffset(in input: String) -> Int {
-        input.firstIndex(where: { !$0.isWhitespace }).map { input.distance(from: input.startIndex, to: $0) } ?? 0
+        let scalars = input.unicodeScalars
+        return scalars.firstIndex(where: { !Character($0).isWhitespace })
+            .map { scalars.distance(from: scalars.startIndex, to: $0) } ?? 0
     }
 
     private static let statementKeywords: Set<String> = [

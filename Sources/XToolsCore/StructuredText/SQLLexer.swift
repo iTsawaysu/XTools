@@ -22,12 +22,14 @@ struct SQLPositionedToken: Equatable {
 
 struct SQLLexer {
     private let input: String
-    private let characters: [Character]
+    private let characters: [Unicode.Scalar]
     private var index = 0
+    private var stringIndex: String.Index
 
     init(_ input: String) {
         self.input = input
-        self.characters = Array(input)
+        self.characters = Array(input.unicodeScalars)
+        self.stringIndex = input.startIndex
     }
 
     mutating func tokenize() throws -> [SQLToken] {
@@ -40,7 +42,7 @@ struct SQLLexer {
         while let character = peek() {
             let startOffset = index
 
-            if character.isWhitespace {
+            if Character(character).isWhitespace {
                 advance()
             } else if character == "'" || character == "\"" || character == "`" {
                 tokens.append(SQLPositionedToken(token: .stringLiteral(try readQuoted(until: character)), offset: startOffset))
@@ -64,7 +66,7 @@ struct SQLLexer {
                 tokens.append(SQLPositionedToken(token: .comment(try readBlockComment()), offset: startOffset))
             } else if startsPrefixedQuotedLiteral() {
                 tokens.append(SQLPositionedToken(token: .stringLiteral(try readPrefixedQuotedLiteral()), offset: startOffset))
-            } else if character.isLetter || character == "_" || startsAtPrefixedWord() {
+            } else if Character(character).isLetter || character == "_" || startsAtPrefixedWord() {
                 tokens.append(SQLPositionedToken(token: .word(readWord()), offset: startOffset))
             } else if isASCIIDigit(character) {
                 tokens.append(SQLPositionedToken(token: .number(readNumber()), offset: startOffset))
@@ -96,17 +98,18 @@ struct SQLLexer {
         return peek(offset: cursor) == "$"
     }
 
-    private func isDollarQuoteTagStart(_ character: Character) -> Bool {
-        character.isLetter || character == "_"
+    private func isDollarQuoteTagStart(_ character: Unicode.Scalar) -> Bool {
+        Character(character).isLetter || character == "_"
     }
 
-    private func isDollarQuoteTagContinuation(_ character: Character) -> Bool {
-        character.isLetter || character.isNumber || character == "_"
+    private func isDollarQuoteTagContinuation(_ character: Unicode.Scalar) -> Bool {
+        let value = Character(character)
+        return value.isLetter || value.isNumber || CharacterSet.nonBaseCharacters.contains(character) || character == "_"
     }
 
     private func startsAtPrefixedWord() -> Bool {
         guard peek() == "@", let next = peek(offset: 1) else { return false }
-        return next.isLetter || next.isNumber || next == "_" || next == "@"
+        return Character(next).isLetter || Character(next).isNumber || next == "_" || next == "@"
     }
 
     private func startsPositionalParameter() -> Bool {
@@ -126,7 +129,7 @@ struct SQLLexer {
             || prefix == "x" || prefix == "X"
     }
 
-    private func peek(offset: Int = 0) -> Character? {
+    private func peek(offset: Int = 0) -> Unicode.Scalar? {
         let position = index + offset
         guard characters.indices.contains(position) else { return nil }
         return characters[position]
@@ -134,20 +137,21 @@ struct SQLLexer {
 
     private mutating func advance(_ amount: Int = 1) {
         index += amount
+        stringIndex = input.unicodeScalars.index(stringIndex, offsetBy: amount)
     }
 
-    private mutating func readQuoted(until quote: Character) throws -> String {
+    private mutating func readQuoted(until quote: Unicode.Scalar) throws -> String {
         let startOffset = index
         var value = String(quote)
         advance()
 
         while let character = peek() {
-            value.append(character)
+            value.unicodeScalars.append(character)
             advance()
 
             if character == quote {
                 if peek() == quote {
-                    value.append(quote)
+                    value.unicodeScalars.append(quote)
                     advance()
                     continue
                 }
@@ -155,7 +159,7 @@ struct SQLLexer {
             }
 
             if character == "\\", let escaped = peek() {
-                value.append(escaped)
+                value.unicodeScalars.append(escaped)
                 advance()
             }
         }
@@ -181,7 +185,7 @@ struct SQLLexer {
         advance()
 
         while let character = peek() {
-            value.append(character)
+            value.unicodeScalars.append(character)
             advance()
 
             if character == "]" {
@@ -205,11 +209,8 @@ struct SQLLexer {
 
     private mutating func readLineComment() -> String {
         var value = ""
-        // 必须用 isNewline 而不是逐个比较 "\n"/"\r"：Swift 里 `\r\n` 是**单个**
-        // Character（一个字素簇），它既不等于 "\n" 也不等于 "\r"，于是 CRLF 输入
-        // 下注释会一路吞到输入结尾——整条语句都被当成注释。
-        while let character = peek(), !character.isNewline {
-            value.append(character)
+        while let character = peek(), !Character(character).isNewline {
+            value.unicodeScalars.append(character)
             advance()
         }
         return value
@@ -227,7 +228,7 @@ struct SQLLexer {
                 return value
             }
 
-            value.append(character)
+            value.unicodeScalars.append(character)
             advance()
         }
 
@@ -242,18 +243,25 @@ struct SQLLexer {
 
     private mutating func readWord() -> String {
         var value = ""
-        while let character = peek(), character.isLetter || character.isNumber || character == "_" || character == "$" || character == "@" {
-            value.append(character)
+        while let character = peek(), isWordContinuation(character) {
+            value.unicodeScalars.append(character)
             advance()
         }
         return value
+    }
+
+    private func isWordContinuation(_ character: Unicode.Scalar) -> Bool {
+        let value = Character(character)
+        return value.isLetter || value.isNumber || CharacterSet.nonBaseCharacters.contains(character)
+            || character == "_" || character == "$" || character == "@"
+            || stringIndex.samePosition(in: input) == nil
     }
 
     private mutating func readPositionalParameter() -> String {
         var value = "$"
         advance()
         while let character = peek(), isASCIIDigit(character) {
-            value.append(character)
+            value.unicodeScalars.append(character)
             advance()
         }
         return value
@@ -263,7 +271,7 @@ struct SQLLexer {
         var value = ":"
         advance()
         while let character = peek(), isASCIIIdentifierContinuation(character) {
-            value.append(character)
+            value.unicodeScalars.append(character)
             advance()
         }
         return value
@@ -274,32 +282,32 @@ struct SQLLexer {
 
         if peek() == "0",
            let marker = peek(offset: 1), marker == "x" || marker == "X",
-           let firstDigit = peek(offset: 2), firstDigit.isASCIIHexDigit {
+           let firstDigit = peek(offset: 2), Character(firstDigit).isASCIIHexDigit {
             value.append("0")
-            value.append(marker)
+            value.unicodeScalars.append(marker)
             advance(2)
-            while let character = peek(), character.isASCIIHexDigit {
-                value.append(character)
+            while let character = peek(), Character(character).isASCIIHexDigit {
+                value.unicodeScalars.append(character)
                 advance()
             }
             return value
         }
 
         while let character = peek(), isASCIIDigit(character) || character == "." {
-            value.append(character)
+            value.unicodeScalars.append(character)
             advance()
         }
 
         if let exponent = peek(), exponent == "e" || exponent == "E",
            hasValidExponent(at: index) {
-            value.append(exponent)
+            value.unicodeScalars.append(exponent)
             advance()
             if let sign = peek(), sign == "+" || sign == "-" {
-                value.append(sign)
+                value.unicodeScalars.append(sign)
                 advance()
             }
             while let character = peek(), isASCIIDigit(character) {
-                value.append(character)
+                value.unicodeScalars.append(character)
                 advance()
             }
         }
@@ -316,22 +324,22 @@ struct SQLLexer {
         return isASCIIDigit(digit)
     }
 
-    private func character(at position: Int) -> Character? {
+    private func character(at position: Int) -> Unicode.Scalar? {
         guard characters.indices.contains(position) else { return nil }
         return characters[position]
     }
 
-    private func isASCIIDigit(_ character: Character) -> Bool {
+    private func isASCIIDigit(_ character: Unicode.Scalar) -> Bool {
         ("0"..."9").contains(character)
     }
 
-    private func isASCIIIdentifierStart(_ character: Character) -> Bool {
+    private func isASCIIIdentifierStart(_ character: Unicode.Scalar) -> Bool {
         ("a"..."z").contains(character)
             || ("A"..."Z").contains(character)
             || character == "_"
     }
 
-    private func isASCIIIdentifierContinuation(_ character: Character) -> Bool {
+    private func isASCIIIdentifierContinuation(_ character: Unicode.Scalar) -> Bool {
         isASCIIIdentifierStart(character) || isASCIIDigit(character)
     }
 
@@ -357,14 +365,15 @@ struct SQLLexer {
             }
         }
 
-        let value = String(peek() ?? " ")
-        advance()
+        let value = String(input[stringIndex...].first ?? " ")
+        advance(value.unicodeScalars.count)
         return value
     }
 
     private func diagnostic(message: String, offset: Int, suggestion: String?) -> FormatDiagnostic {
-        let boundedOffset = max(0, min(offset, input.count))
-        let stringIndex = input.index(input.startIndex, offsetBy: boundedOffset)
+        let scalars = input.unicodeScalars
+        let boundedOffset = max(0, min(offset, scalars.count))
+        let stringIndex = scalars.index(scalars.startIndex, offsetBy: boundedOffset)
 
         return FormatDiagnostic(
             formatName: "SQL",
