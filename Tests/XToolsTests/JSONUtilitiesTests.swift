@@ -227,6 +227,36 @@ struct JSONFormattingTests {
         }
     }
 
+    @Test func formatsJSONWithCRLFWhitespace() throws {
+        let input = "{\r\n  \"a\": 1,\r\n  \"b\": [true,\r\n    false]\r\n}"
+        let expected = """
+        {
+          "a": 1,
+          "b": [
+            true,
+            false
+          ]
+        }
+        """
+
+        #expect(try JSONFormatting.format(input, sortKeys: false, indentWidth: 2) == expected)
+    }
+
+    @Test func rejectsNonJSONUnicodeWhitespace() throws {
+        let input = "{\u{00A0}\"a\": 1}"
+
+        #expect {
+            _ = try JSONFormatting.format(input, sortKeys: false, indentWidth: 2)
+        } throws: { error in
+            guard case JSONFormatting.FormattingError.invalidJSON(let diagnostic) = error else {
+                return false
+            }
+            return diagnostic.line == 1
+                && diagnostic.column == 2
+                && diagnostic.message.contains("对象键必须使用双引号包裹")
+        }
+    }
+
     @Test func invalidJSONReportsLineColumnSnippetAndFactualMessage() throws {
         let error = #expect(throws: (any Error).self) {
             _ = try JSONFormatting.format(#"{"json": "test", "a": b }"#, sortKeys: false, indentWidth: 2)

@@ -813,7 +813,8 @@ private struct OrderedJSONParser {
     }
 
     private mutating func skipWhitespace() {
-        while let char = peek(), char == " " || char == "\n" || char == "\r" || char == "\t" {
+        while let char = peek(),
+              char == " " || char == "\n" || char == "\r" || char == "\t" || char == "\r\n" {
             _ = advance()
         }
     }

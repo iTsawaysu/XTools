@@ -82,25 +82,16 @@ extension FormatDiagnostic {
         var line = 1
         var column = 1
         var cursor = text.startIndex
-        var previousWasCarriageReturn = false
         let boundedIndex = min(index, text.endIndex)
 
         while cursor < boundedIndex {
             let character = text[cursor]
 
-            if character == "\n" {
-                if !previousWasCarriageReturn {
-                    line += 1
-                }
-                column = 1
-                previousWasCarriageReturn = false
-            } else if character == "\r" {
+            if character.isNewline {
                 line += 1
                 column = 1
-                previousWasCarriageReturn = true
             } else {
                 column += 1
-                previousWasCarriageReturn = false
             }
 
             cursor = text.index(after: cursor)
@@ -112,7 +103,7 @@ extension FormatDiagnostic {
     static func lineExcerpt(in text: String, line: Int, column: Int, maxCharacters: Int = 90) -> String? {
         guard line > 0 else { return nil }
 
-        let lines = text.components(separatedBy: .newlines)
+        let lines = text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline).map(String.init)
         let lineIndex: Int
         if lines.indices.contains(line - 1) {
             lineIndex = line - 1
