@@ -83,8 +83,8 @@ public enum JSONHighlighting {
             }
 
             if character == "t" || character == "f" || character == "n" {
-                let rest = String(characters[index...])
-                if let keyword = ["true", "false", "null"].first(where: { rest.hasPrefix($0) }) {
+                let rest = characters[index...]
+                if let keyword = ["true", "false", "null"].first(where: { rest.starts(with: $0) }) {
                     append(.literal, start: index, end: index + keyword.count)
                     index += keyword.count
                     continue
