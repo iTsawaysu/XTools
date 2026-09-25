@@ -527,6 +527,52 @@ struct DockerComposeToRunServiceTests {
         #expect(semantics.command == ["echo", "foo\nbar"])
     }
 
+    @Test func nullEntrypointAndCommandInheritImageDefaults() throws {
+        let result = try DockerComposeToRunService.convert("""
+        services:
+          app:
+            image: busybox
+            entrypoint: null
+            command: null
+        """)
+
+        #expect(result.warnings.isEmpty)
+        let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
+        #expect(semantics.entrypoint.isEmpty)
+        #expect(semantics.command.isEmpty)
+    }
+
+    @Test func emptyComposeCommandWarnsWhenImageDefaultCannotBeCleared() throws {
+        for command in ["''", "[]"] {
+            let result = try DockerComposeToRunService.convert("""
+            services:
+              app:
+                image: busybox
+                command: \(command)
+            """)
+
+            let warning = try #require(result.warnings.first)
+            #expect(warning.contains("command(无法映射空命令)"))
+            let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
+            #expect(semantics.command.isEmpty)
+        }
+    }
+
+    @Test func explicitEntrypointCanClearImageDefaultCommand() throws {
+        let result = try DockerComposeToRunService.convert("""
+        services:
+          app:
+            image: busybox
+            entrypoint: ["/bin/sh"]
+            command: []
+        """)
+
+        #expect(result.warnings.isEmpty)
+        let semantics = try DockerInvocationSemantics(try #require(result.commands.first))
+        #expect(semantics.entrypoint == ["/bin/sh"])
+        #expect(semantics.command.isEmpty)
+    }
+
     @Test func listCommandKeepsExistingArgumentBoundary() throws {
         let result = try DockerComposeToRunService.convert("""
         services:

@@ -230,14 +230,18 @@ public enum DockerComposeToRunService {
         if let domainname = scalarString(service["domainname"]) {
             flag(domainname, "--domainname")
         }
-        let entrypointSpecified = service["entrypoint"] != nil
-        let entrypoint = commandWords(service["entrypoint"], path: "entrypoint", skipped: &skipped) ?? []
-        if entrypointSpecified, entrypoint.isEmpty {
+        let parsedEntrypoint = commandWords(service["entrypoint"], path: "entrypoint", skipped: &skipped)
+        let entrypoint = parsedEntrypoint ?? []
+        if let parsedEntrypoint, parsedEntrypoint.isEmpty {
             flag("", "--entrypoint")
         } else if let executable = entrypoint.first {
             flag(executable, "--entrypoint")
         }
-        let command = commandWords(service["command"], path: "command", skipped: &skipped) ?? []
+        let parsedCommand = commandWords(service["command"], path: "command", skipped: &skipped)
+        let command = parsedCommand ?? []
+        if let parsedCommand, parsedCommand.isEmpty, parsedEntrypoint == nil {
+            skipped.append("command(无法映射空命令)")
+        }
         if let user = scalarString(service["user"]) {
             flag(user, "-u")
         }
@@ -561,10 +565,10 @@ public enum DockerComposeToRunService {
         path: String,
         skipped: inout [String]
     ) -> [String]? {
+        if value is NSNull { return nil }
         guard let string = value as? String else {
             return strictStringList(value, path: path, skipped: &skipped)
         }
-        if string.isEmpty { return [""] }
         do {
             return try DockerRunToDockerComposeService.tokenize(string, composeShellwords: true)
         } catch {
