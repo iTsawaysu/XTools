@@ -2,6 +2,26 @@ import XToolsCore
 import Testing
 
 struct JSONHighlightingTests {
+    @Test func tokensHighlightCombiningMarkAfterRootQuote() {
+        let line = "\"\u{0301}\""
+
+        #expect(JSONHighlighting.tokens(in: line) == [
+            JSONHighlightToken(kind: .string, start: 0, length: 2)
+        ])
+    }
+
+    @Test func tokensHighlightCombiningMarkAfterKeyQuote() {
+        let line = "{\"\u{0301}\": 1}"
+
+        #expect(JSONHighlighting.tokens(in: line) == [
+            JSONHighlightToken(kind: .punctuation, start: 0, length: 1),
+            JSONHighlightToken(kind: .key, start: 1, length: 2),
+            JSONHighlightToken(kind: .punctuation, start: 3, length: 1),
+            JSONHighlightToken(kind: .number, start: 5, length: 1),
+            JSONHighlightToken(kind: .punctuation, start: 6, length: 1)
+        ])
+    }
+
     @Test func tokensDistinguishObjectKeysFromStringValues() {
         let line = #"  "name": "Ada""#
 

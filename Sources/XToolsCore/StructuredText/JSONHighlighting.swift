@@ -37,7 +37,7 @@ public enum JSONHighlighting {
         while index < characters.count {
             let character = characters[index]
 
-            if character == "\"" {
+            if character.unicodeScalars.first?.value == 0x22 {
                 var end = index + 1
                 var escaped = false
                 while end < characters.count {
@@ -46,7 +46,7 @@ public enum JSONHighlighting {
                         escaped = false
                     } else if current == "\\" {
                         escaped = true
-                    } else if current == "\"" {
+                    } else if current.unicodeScalars.first?.value == 0x22 {
                         break
                     }
                     end += 1
