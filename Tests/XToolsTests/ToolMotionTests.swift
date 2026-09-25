@@ -7,7 +7,7 @@ struct ToolMotionTests {
         #expect(ToolMotion.Duration.stagger == 0.04)
         #expect(ToolMotion.Duration.micro == 0.12)
         #expect(ToolMotion.Duration.quick == 0.15)
-        #expect(ToolMotion.Duration.arrival == 0.2)
+        #expect(ToolMotion.Duration.arrival == 0.24)
         #expect(ToolMotion.Duration.fast == 0.25)
         #expect(ToolMotion.Duration.medium == 0.35)
     }

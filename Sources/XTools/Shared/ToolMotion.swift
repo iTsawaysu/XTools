@@ -12,9 +12,13 @@ enum ToolMotion {
         static let stagger: TimeInterval = 0.04
         static let micro: TimeInterval = 0.12
         static let quick: TimeInterval = 0.15
-        static let arrival: TimeInterval = 0.2
+        static let arrival: TimeInterval = 0.24
         static let fast: TimeInterval = 0.25
         static let medium: TimeInterval = 0.35
+        /// Page-header letter arrival: delay added per title character.
+        static let letterStagger: TimeInterval = 0.032
+        /// Subtitle follow-up beat after the letter choreography starts.
+        static let headerFollowDelay: TimeInterval = 0.16
     }
 
     enum Distance {
@@ -23,6 +27,10 @@ enum ToolMotion {
         static let base: CGFloat = 8
         static let medium: CGFloat = 12
         static let large: CGFloat = 18
+        /// Page-header arrival: per-letter rise (≈0.6em of the 18pt page title)
+        /// and the subtitle follow-up offset.
+        static let letterRise: CGFloat = 11
+        static let headerFollow: CGFloat = 4
     }
 
     enum Scale {
@@ -30,6 +38,8 @@ enum ToolMotion {
         static let pressed: CGFloat = 0.98
         static let iconInserted: CGFloat = 0.98
         static let iconRemoved: CGFloat = 1.02
+        /// Page-arrival depth: incoming tool pages settle from 99.5% scale.
+        static let pageArrivalSink: CGFloat = 0.995
     }
 
     enum ResultPresence {
@@ -126,6 +136,18 @@ enum ToolMotion {
         /// `MotionSourceContractTests`). Light crossfade that keeps the entry
         /// hot path responsive — pages never apply this preset themselves.
         static let pageArrival = Curve.smoothOut(duration: Duration.arrival)
+        /// Page-header letter choreography: each title character rises with
+        /// the shared container spring, one stagger step apart. Consumed by
+        /// `IndexPageHeader` only; tool pages never apply it themselves.
+        static func letterArrival(index: Int) -> Animation {
+            Curve.gentleSpring().delay(letterArrivalDelay(index: index))
+        }
+
+        static func letterArrivalDelay(index: Int) -> TimeInterval {
+            Double(index) * Duration.letterStagger
+        }
+        /// Subtitle follow-up beat after the letter choreography starts.
+        static let headerFollow = Curve.smoothOut(duration: Duration.arrival)
         static let resultPresenceAppearance = Curve.smoothOut(duration: ResultPresence.appearanceDuration)
         static let resultPresenceExit = Curve.productiveExit(duration: ResultPresence.exitDuration)
         static let diagnostic = Curve.inOut(duration: Duration.quick)
@@ -160,12 +182,15 @@ enum ToolMotion {
             .opacity
         }
 
-        /// v3: tool-switch arrival — outgoing page fades, incoming page rises
-        /// by one small step. Host-owned; Reduce Motion collapses to identity
+        /// v3: tool-switch arrival — outgoing page fades, incoming page sinks
+        /// by one base step while settling from 99.5% scale (depth without a
+        /// visible zoom). Host-owned; Reduce Motion collapses to identity
         /// through the shared transition helper.
         static var pageArrival: AnyTransition {
             AnyTransition.asymmetric(
-                insertion: .opacity.combined(with: .offset(y: Distance.small)),
+                insertion: .opacity
+                    .combined(with: .offset(y: Distance.base))
+                    .combined(with: .scale(scale: Scale.pageArrivalSink)),
                 removal: .opacity
             )
         }
