@@ -103,7 +103,8 @@ struct QueryListAndUtilitySourceContractTests {
         let fileType = try readSource("Sources/XTools/ToolPages/Utility/FileTypeDetectorPage.swift")
         let fileTypeSession = try readSource("Sources/XTools/ToolPages/Utility/FileTypeDetectorSession.swift")
 
-        contains(math, "MathExpressionEvaluator.evaluateLiveInput(trimmed)", "Math page must delegate live expression classification to Core")
+        contains(math, "MathExpressionEvaluator.evaluateLiveInput(input)", "Math page must delegate short live expression classification to Core")
+        contains(math, "MathExpressionEvaluator.evaluateLiveInput(input, shouldCancel: shouldCancel)", "Math page must delegate long live expression classification to cancellable Core evaluation")
         contains(math, ".indexWorkspaceDiagnostic(diagnosticText)", "Math page diagnostics must use the shared non-displacing workspace anchor")
         doesNotContain(math, "mathDiagnosticAccessory", "Math page must not hand-build title-accessory diagnostics that squeeze the header")
         doesNotContain(math, "ToolFeedbackTone.error.systemImage", "Math page must not hand-build persistent error labels")
@@ -154,7 +155,7 @@ struct QueryListAndUtilitySourceContractTests {
         let userAgent = try readSource("Sources/XTools/ToolPages/Web/UserAgentParserPage.swift")
         let basicAuth = try readSource("Sources/XTools/ToolPages/Web/BasicAuthGeneratorPage.swift")
 
-        contains(math, "MathExpressionEvaluator.evaluateLiveInput(trimmed)", "Math live validation must stay in Core")
+        contains(math, "MathExpressionEvaluator.evaluateLiveInput(input)", "Math live validation must stay in Core")
         contains(math, ".indexWorkspaceDiagnostic(diagnosticText)", "Math invalid-expression diagnostics must use the non-displacing workspace anchor")
 
         contains(color, "@Published private(set) var state = CSSColorWorkspaceState()", "Color page must retain one canonical draft/result snapshot")
