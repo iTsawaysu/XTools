@@ -241,9 +241,44 @@ struct HTMLToMarkdownConverterTests {
         #expect(block == "```\n*[]#|\\\\\n```")
     }
 
+    @Test func preservesConsecutiveBlankLinesInsideFencedCodeBlocks() {
+        let html = "<pre><code>a\n\n\nb</code></pre>"
+
+        #expect(HTMLToMarkdownConverter.convert(html) == "```\na\n\n\nb\n```")
+    }
+
+    @Test func preservesCodeBlankLinesWhenSurroundedByBlocks() {
+        let html = "<ul><li>before</li></ul><blockquote><pre><code>a\n \n\nb</code></pre></blockquote><ul><li>after</li></ul><pre><code>x\n\n\ny</code></pre>"
+        let markdown = HTMLToMarkdownConverter.convert(html)
+
+        #expect(markdown.contains("> ```\n> a\n>  \n>\n> b\n> ```"), Comment(rawValue: markdown))
+        #expect(markdown.contains("```\nx\n\n\ny\n```"), Comment(rawValue: markdown))
+    }
+
+    @Test func keepsTwoOuterAndThreeInnerCodeNewlines() {
+        let html = "<p>before</p><pre><code>a\n\n\nb</code></pre><p>after</p>"
+
+        #expect(HTMLToMarkdownConverter.convert(html) == "before\n\n```\na\n\n\nb\n```\n\nafter")
+    }
+
+    @Test func preservesCodeBlankLinesInsideListItems() {
+        let html = "<ul><li><pre><code>a\n\n\nb</code></pre></li></ul>"
+
+        #expect(HTMLToMarkdownConverter.convert(html) == "+ ```\n  a\n  \n  \n  b\n  ```")
+    }
+
+    @Test func choosesFenceLongerThanBacktickRunsInsideCode() {
+        let html = "<pre><code>a\n`````\n\n\nb</code></pre>"
+
+        #expect(HTMLToMarkdownConverter.convert(html) == "``````\na\n`````\n\n\nb\n``````")
+    }
+
     @Test func preservesFenceLanguageHints() {
         let html = #"<pre><code class="language-swift">let x = 1</code></pre>"#
         #expect(HTMLToMarkdownConverter.convert(html) == "```swift\nlet x = 1\n```")
+
+        let cPlusPlus = "<pre><code class=\"language-c++\">int main() {\n\n\n}</code></pre>"
+        #expect(HTMLToMarkdownConverter.convert(cPlusPlus) == "```c++\nint main() {\n\n\n}\n```")
     }
 
     // MARK: - Lists

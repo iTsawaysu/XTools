@@ -295,12 +295,12 @@ final class HTMLToMarkdownDOMRenderer {
             mainFragments.append(try renderNode(child, context: .normal))
         }
 
-        var main = collapseInlineWhitespace(mainFragments.joined())
+        var main = collapseInlineWhitespacePreservingFences(mainFragments.joined())
         if let taskMarker, !main.hasPrefix("[ ] ") && !main.hasPrefix("[x] ") {
             main = taskMarker + main
         }
 
-        let mainLines = splitNonEmptyLines(main.isEmpty ? "" : main)
+        let mainLines = splitListItemLines(main)
         var outputLines: [String] = []
 
         if mainLines.isEmpty {
@@ -482,37 +482,152 @@ final class HTMLToMarkdownDOMRenderer {
     }
 
     private func normalizeDocumentMarkdown(_ markdown: String) -> String {
-        var result = markdown.replacingOccurrences(of: "\r\n", with: "\n")
+        let lines = markdown.replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
             .components(separatedBy: "\n")
-            .map { line in
-                line.trimmingCharacters(in: .whitespaces).isEmpty ? "" : line
-            }
-            .joined(separator: "\n")
+        var normalized: [(line: String, protected: Bool)] = []
+        normalized.reserveCapacity(lines.count)
+        var fenceLength: Int?
 
-        // Collapse runs of 3+ newlines to exactly 2 in a single pass.
-        var collapsed = ""
-        collapsed.reserveCapacity(result.utf8.count)
-        var newlineRun = 0
-        for character in result {
-            if character == "\n" {
-                newlineRun += 1
-                if newlineRun <= 2 {
-                    collapsed.append(character)
+        for line in lines {
+            if let activeLength = fenceLength {
+                normalized.append((line, true))
+                if closingFenceLength(line) >= activeLength {
+                    fenceLength = nil
                 }
+                continue
+            }
+
+            if let openingLength = fenceLengthLineLength(line), openingLength >= 3 {
+                fenceLength = openingLength
+                normalized.append((line, true))
             } else {
-                newlineRun = 0
-                collapsed.append(character)
+                normalized.append((
+                    line.trimmingCharacters(in: .whitespaces).isEmpty ? "" : line,
+                    false
+                ))
             }
         }
-        result = collapsed
+
+        var result = ""
+        result.reserveCapacity(markdown.utf8.count)
+        var newlineRun = 0
+        for index in normalized.indices {
+            result.append(contentsOf: normalized[index].line)
+            guard index < normalized.index(before: normalized.endIndex) else { continue }
+
+            let preserveSeparator = normalized[index].protected
+            if preserveSeparator {
+                result.append("\n")
+                newlineRun = normalized[index + 1].protected ? 0 : 1
+            } else if !normalized[index].line.isEmpty {
+                result.append("\n")
+                newlineRun = 1
+            } else {
+                newlineRun += 1
+                if newlineRun <= 2 {
+                    result.append("\n")
+                }
+            }
+        }
 
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func fenceLengthLineLength(_ line: String) -> Int? {
+        let content = fenceContent(in: line)
+        guard content.first == "`" else { return nil }
+        let length = content.prefix { $0 == "`" }.count
+        guard length >= 3 else { return nil }
+        let suffix = content.dropFirst(length)
+        guard !suffix.contains("`") else {
+            return nil
+        }
+        return length
+    }
+
+    private func closingFenceLength(_ line: String) -> Int {
+        let content = fenceContent(in: line)
+        guard content.first == "`" else { return 0 }
+        let length = content.prefix { $0 == "`" }.count
+        guard content.dropFirst(length).allSatisfy({ $0 == " " || $0 == "\t" }) else { return 0 }
+        return length
+    }
+
+    private func fenceContent(in line: String) -> Substring {
+        var content = line[...]
+        while true {
+            content = content.drop { $0 == " " || $0 == "\t" }
+            if content.first == ">" {
+                content = content.dropFirst()
+                continue
+            }
+
+            if let first = content.first, first == "+" || first == "-" || first == "*",
+               content.dropFirst().first == " " {
+                content = content.dropFirst(2)
+                continue
+            }
+
+            var digitCount = 0
+            for character in content {
+                guard character.isNumber else { break }
+                digitCount += 1
+            }
+            if digitCount > 0 {
+                let afterDigits = content.dropFirst(digitCount)
+                if (afterDigits.first == "." || afterDigits.first == ")") && afterDigits.dropFirst().first == " " {
+                    content = afterDigits.dropFirst(2)
+                    continue
+                }
+            }
+            return content
+        }
     }
 
     private func collapseInlineWhitespace(_ markdown: String) -> String {
         collapseWhitespaceRuns(markdown)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func collapseInlineWhitespacePreservingFences(_ markdown: String) -> String {
+        let lines = markdown.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .components(separatedBy: "\n")
+        var output: [String] = []
+        var inlineParts: [String] = []
+        var fenceLength: Int?
+
+        func flushInline() {
+            let text = collapseInlineWhitespace(inlineParts.joined(separator: " "))
+            if !text.isEmpty { output.append(text) }
+            inlineParts.removeAll(keepingCapacity: true)
+        }
+
+        for line in lines {
+            if fenceLength == nil {
+                if let openingLength = fenceLengthLineLength(line) {
+                    flushInline()
+                    fenceLength = openingLength
+                    output.append(line)
+                } else {
+                    inlineParts.append(line)
+                }
+            } else {
+                output.append(line)
+                if closingFenceLength(line) >= fenceLength! {
+                    fenceLength = nil
+                }
+            }
+        }
+
+        flushInline()
+        return output.joined(separator: "\n")
+    }
+
+    private func splitListItemLines(_ markdown: String) -> [String] {
+        guard !markdown.isEmpty else { return [] }
+        return markdown.components(separatedBy: .newlines)
     }
 
     private func collapseWhitespaceRuns(_ text: String) -> String {
@@ -645,12 +760,6 @@ final class HTMLToMarkdownDOMRenderer {
             }
         }
         return longest
-    }
-
-    private func splitNonEmptyLines(_ text: String) -> [String] {
-        text.components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
     }
 
     private func indentBlock(_ block: String, by width: Int) -> String {
