@@ -372,7 +372,7 @@ private enum JSONNumberIssue {
     case hexLiteral
     case missingIntegerAfterMinus
     case nonASCIIDigit(JSONNumberComponent)
-    case invalidTrailingCharacter(Character)
+    case invalidTrailingCharacter(Unicode.Scalar)
     case missingFractionDigit
     case missingExponentDigit
 }
@@ -396,7 +396,7 @@ private enum ContainerKind {
 
 private struct OpenContainer {
     let kind: ContainerKind
-    let startIndex: String.Index
+    let startIndex: Int
     let key: String?
 }
 
@@ -419,14 +419,15 @@ private enum JSONParseIssue {
     case invalidNumber(JSONNumberIssue)
     case invalidString(JSONStringIssue)
     case incompleteLiteral(String)
-    case unexpectedCharacter(Character)
+    case unexpectedCharacter(Unicode.Scalar)
     case exceededMaxDepth
-    case containerNotClosed(kind: ContainerKind, startIndex: String.Index, key: String?)
+    case containerNotClosed(kind: ContainerKind, startIndex: Int, key: String?)
 }
 
 private struct OrderedJSONParser {
     private let text: String
-    private var index: String.Index
+    private let scalars: [Unicode.Scalar]
+    private var index: Int
     private var duplicateKeys: [String] = []
     private var openContainers: [OpenContainer] = []
     private var depth: Int = 0
@@ -434,14 +435,15 @@ private struct OrderedJSONParser {
 
     init(_ text: String) {
         self.text = text
-        self.index = text.startIndex
+        self.scalars = Array(text.unicodeScalars)
+        self.index = 0
     }
 
     mutating func parse() throws -> OrderedJSONDocument {
         skipWhitespace()
         let value = try parseValue()
         skipWhitespace()
-        guard index == text.endIndex else {
+        guard index == scalars.count else {
             throw error(.trailingContent)
         }
         return OrderedJSONDocument(value: value, duplicateKeys: duplicateKeys)
@@ -636,10 +638,10 @@ private struct OrderedJSONParser {
             case "\\":
                 result += try parseEscapedCharacter()
             default:
-                guard !char.unicodeScalars.contains(where: { $0.value < 0x20 }) else {
+                guard char.value >= 0x20 else {
                     throw error(.invalidString(.unescapedControlCharacter))
                 }
-                result.append(char)
+                result.unicodeScalars.append(char)
             }
         }
 
@@ -706,7 +708,7 @@ private struct OrderedJSONParser {
             guard let char = peek(), isJSONHexDigit(char) else {
                 throw error(.invalidString(.invalidUnicodeEscape))
             }
-            hex.append(advance()!)
+            hex.unicodeScalars.append(advance()!)
         }
 
         guard let value = Int(hex, radix: 16) else {
@@ -734,7 +736,7 @@ private struct OrderedJSONParser {
         }
 
         if first == "0" {
-            result.append(advance()!)
+            result.unicodeScalars.append(advance()!)
             if let next = peek() {
                 if isJSONDigit(next) {
                     throw error(.invalidNumber(.leadingZero))
@@ -748,7 +750,7 @@ private struct OrderedJSONParser {
             }
         } else if isJSONNonZeroDigit(first) {
             while let char = peek(), isJSONDigit(char) {
-                result.append(advance()!)
+                result.unicodeScalars.append(advance()!)
             }
             if let next = peek(), isNonASCIIDecimalDigit(next) {
                 throw error(.invalidNumber(.nonASCIIDigit(.integer)))
@@ -770,7 +772,7 @@ private struct OrderedJSONParser {
                 throw error(.invalidNumber(.missingFractionDigit))
             }
             while let char = peek(), isJSONDigit(char) {
-                result.append(advance()!)
+                result.unicodeScalars.append(advance()!)
             }
             if let next = peek(), isNonASCIIDecimalDigit(next) {
                 throw error(.invalidNumber(.nonASCIIDigit(.fraction)))
@@ -778,9 +780,9 @@ private struct OrderedJSONParser {
         }
 
         if let char = peek(), char == "e" || char == "E" {
-            result.append(advance()!)
+            result.unicodeScalars.append(advance()!)
             if let sign = peek(), sign == "+" || sign == "-" {
-                result.append(advance()!)
+            result.unicodeScalars.append(advance()!)
             }
             if let next = peek(), isNonASCIIDecimalDigit(next) {
                 throw error(.invalidNumber(.nonASCIIDigit(.exponent)))
@@ -789,7 +791,7 @@ private struct OrderedJSONParser {
                 throw error(.invalidNumber(.missingExponentDigit))
             }
             while let char = peek(), isJSONDigit(char) {
-                result.append(advance()!)
+                result.unicodeScalars.append(advance()!)
             }
             if let next = peek(), isNonASCIIDecimalDigit(next) {
                 throw error(.invalidNumber(.nonASCIIDigit(.exponent)))
@@ -804,7 +806,7 @@ private struct OrderedJSONParser {
     }
 
     private mutating func consumeLiteral(_ literal: String) throws {
-        for expected in literal {
+        for expected in literal.unicodeScalars {
             guard peek() == expected else {
                 throw error(.incompleteLiteral(literal))
             }
@@ -814,29 +816,29 @@ private struct OrderedJSONParser {
 
     private mutating func skipWhitespace() {
         while let char = peek(),
-              char == " " || char == "\n" || char == "\r" || char == "\t" || char == "\r\n" {
+              char == " " || char == "\n" || char == "\r" || char == "\t" {
             _ = advance()
         }
     }
 
-    private func peek() -> Character? {
-        guard index < text.endIndex else {
+    private func peek() -> Unicode.Scalar? {
+        guard index < scalars.count else {
             return nil
         }
-        return text[index]
+        return scalars[index]
     }
 
     @discardableResult
-    private mutating func advance() -> Character? {
-        guard index < text.endIndex else {
+    private mutating func advance() -> Unicode.Scalar? {
+        guard index < scalars.count else {
             return nil
         }
-        let char = text[index]
-        index = text.index(after: index)
+        let char = scalars[index]
+        index += 1
         return char
     }
 
-    private mutating func consume(_ expected: Character) throws {
+    private mutating func consume(_ expected: Unicode.Scalar) throws {
         guard peek() == expected else {
             switch expected {
             case "{":
@@ -852,7 +854,7 @@ private struct OrderedJSONParser {
         _ = advance()
     }
 
-    private mutating func consumeIfPresent(_ expected: Character) -> Bool {
+    private mutating func consumeIfPresent(_ expected: Unicode.Scalar) -> Bool {
         guard peek() == expected else {
             return false
         }
@@ -860,7 +862,7 @@ private struct OrderedJSONParser {
         return true
     }
 
-    private func objectMemberStartIssue(for character: Character, afterComma: Bool) -> JSONParseIssue {
+    private func objectMemberStartIssue(for character: Unicode.Scalar, afterComma: Bool) -> JSONParseIssue {
         switch character {
         case "}":
             return afterComma ? .objectTrailingComma : .objectNotClosed
@@ -880,7 +882,7 @@ private struct OrderedJSONParser {
     }
 
     private func startsIdentifier(_ identifier: String) -> Bool {
-        for (offset, character) in identifier.enumerated() {
+        for (offset, character) in identifier.unicodeScalars.enumerated() {
             guard peek(offset: offset) == character else {
                 return false
             }
@@ -897,48 +899,48 @@ private struct OrderedJSONParser {
         return nil
     }
 
-    private func isJSONDigit(_ character: Character) -> Bool {
+    private func isJSONDigit(_ character: Unicode.Scalar) -> Bool {
         ("0"..."9").contains(character)
     }
 
-    private func isJSONNonZeroDigit(_ character: Character) -> Bool {
+    private func isJSONNonZeroDigit(_ character: Unicode.Scalar) -> Bool {
         ("1"..."9").contains(character)
     }
 
-    private func isJSONHexDigit(_ character: Character) -> Bool {
+    private func isJSONHexDigit(_ character: Unicode.Scalar) -> Bool {
         ("0"..."9").contains(character)
             || ("a"..."f").contains(character)
             || ("A"..."F").contains(character)
     }
 
-    private func isUnicodeDecimalDigit(_ character: Character) -> Bool {
-        character.unicodeScalars.allSatisfy { CharacterSet.decimalDigits.contains($0) }
+    private func isUnicodeDecimalDigit(_ character: Unicode.Scalar) -> Bool {
+        CharacterSet.decimalDigits.contains(character)
     }
 
-    private func isNonASCIIDecimalDigit(_ character: Character) -> Bool {
+    private func isNonASCIIDecimalDigit(_ character: Unicode.Scalar) -> Bool {
         isUnicodeDecimalDigit(character) && !isJSONDigit(character)
     }
 
-    private func isInvalidNumberTrailingCharacter(_ character: Character) -> Bool {
+    private func isInvalidNumberTrailingCharacter(_ character: Unicode.Scalar) -> Bool {
         if isJSONDigit(character) || isNonASCIIDecimalDigit(character) {
             return true
         }
 
-        return character.isLetter || character == "_" || character == "."
+        return character.properties.isAlphabetic || character == "_" || character == "."
     }
 
-    private func peek(offset: Int) -> Character? {
+    private func peek(offset: Int) -> Unicode.Scalar? {
         var cursor = index
         for _ in 0..<offset {
-            guard cursor < text.endIndex else {
+            guard cursor < scalars.count else {
                 return nil
             }
-            cursor = text.index(after: cursor)
+            cursor += 1
         }
-        guard cursor < text.endIndex else {
+        guard cursor < scalars.count else {
             return nil
         }
-        return text[cursor]
+        return scalars[cursor]
     }
 
     private func error(_ issue: JSONParseIssue) -> JSONFormatting.FormattingError {
@@ -946,13 +948,17 @@ private struct OrderedJSONParser {
     }
 
     private func diagnostic(for issue: JSONParseIssue) -> FormatDiagnostic {
-        let diagnosticIndex: String.Index
+        let scalarOffset: Int
         switch issue {
         case .containerNotClosed(_, let startIndex, _):
-            diagnosticIndex = startIndex
+            scalarOffset = startIndex
         default:
-            diagnosticIndex = index
+            scalarOffset = index
         }
+        let diagnosticIndex = text.unicodeScalars.index(
+            text.unicodeScalars.startIndex,
+            offsetBy: min(scalarOffset, text.unicodeScalars.count)
+        )
         return FormatDiagnostic(
             formatName: "JSON",
             message: mappedJSONMessage(issue),
@@ -1048,7 +1054,7 @@ private struct OrderedJSONParser {
             return "字符串中包含未转义的控制字符"
         case .unexpectedCharacter(let character):
             let value = String(character)
-            if character.isLetter || character == "_" || character == "$" {
+            if character.properties.isAlphabetic || character == "_" || character == "$" {
                 return "值不能是未加引号的标识符 \(value)"
             }
             return "遇到不能作为 JSON 值开头的字符 \(value)"

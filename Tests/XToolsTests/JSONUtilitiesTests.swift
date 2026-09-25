@@ -404,6 +404,17 @@ struct JSONFormattingTests {
         #expect(output.contains("😀"))
     }
 
+    @Test func acceptsCombiningMarkImmediatelyInsideJSONString() throws {
+        // Swift groups a leading combining mark with the opening quote as one
+        // extended grapheme; JSON syntax still treats the ASCII quote boundary
+        // separately and must accept this valid scalar sequence.
+        let input = "\"\u{0301}\""
+
+        #expect(try JSONFormatting.minify(input) == input)
+        let objectInput = "{\"value\":\(input)}"
+        #expect(try JSONFormatting.minify(objectInput) == objectInput)
+    }
+
     // MARK: - Number and literal fidelity
 
     @Test func formatPreservesNumberAndBooleanAndNullLiterals() throws {
