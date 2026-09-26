@@ -162,6 +162,16 @@ enum ToolTheme {
         static let textSecondary = dynamicNSColor(light: 0x6B645C, dark: 0x8A847C)
     }
 
+    /// AppKit twin of the sidebar selection tokens for the flat navigation
+    /// renderer's sliding indicator (see `SidebarSelectionIndicatorView`).
+    /// Same values as `selectionFill` / `accent`; SwiftUI `Color` tokens cannot
+    /// be wrapped back into appearance-tracking `NSColor` without duplicating
+    /// the provider, mirroring the SynNSColor convention above.
+    enum SelectionNSColor {
+        static let fill = dynamicNSColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)
+        static let rail = dynamicNSColor(light: 0xC15F3C, dark: 0xD97757)
+    }
+
     static func dynamicNSColor(
         light: UInt32,
         dark: UInt32,

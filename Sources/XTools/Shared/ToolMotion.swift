@@ -175,6 +175,23 @@ enum ToolMotion {
                 )
             )
         }
+
+        /// Spring-matched slide for the sidebar selection indicator. Mirrors
+        /// `Curve.gentleSpring()` (response 0.3 / damping 0.85) through the
+        /// standard SwiftUI→CASpringAnimation parameter mapping, so AppKit
+        /// layer motion and SwiftUI containers stay in one spring family.
+        /// Duration self-reports from `settlingDuration`; consumers retarget
+        /// mid-flight by reading the presentation layer.
+        static func selectionSlide() -> CASpringAnimation {
+            let response = 0.3
+            let dampingFraction = 0.85
+            let spring = CASpringAnimation(keyPath: "position.y")
+            spring.mass = 1
+            spring.stiffness = pow(2 * .pi / response, 2)
+            spring.damping = 4 * .pi * dampingFraction / response
+            spring.duration = max(spring.settlingDuration, Duration.quick)
+            return spring
+        }
     }
 
     enum Transition {

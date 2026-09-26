@@ -182,6 +182,164 @@ struct SidebarNavigationListTests {
         #expect(coordinator.debugTrackState(for: "tool.list-beta")?.isHovered == false)
     }
 
+    @Test @MainActor func selectionIndicatorSlidesToNewRowOnPureToolSwitch() throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = coordinator.makeScrollView()
+        let entries = Self.entries(
+            groups: [Self.group(section: .category(.development), items: [Self.alpha, Self.beta])]
+        )
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: .alpha,
+                selectedSection: .category(.development),
+                reduceMotion: false
+            )
+        )
+        var indicator = coordinator.debugSelectionIndicatorState
+        #expect(indicator.isVisible)
+        #expect(indicator.frame == Self.frame(of: "tool.list-alpha", in: entries))
+
+        // Pure tool switch on an unchanged plan: contentOnly — the chrome
+        // springs to the incoming row while track identity stays stable.
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: .beta,
+                selectedSection: .category(.development),
+                reduceMotion: false
+            )
+        )
+        indicator = coordinator.debugSelectionIndicatorState
+        #expect(indicator.isVisible)
+        #expect(indicator.frame == Self.frame(of: "tool.list-beta", in: entries))
+
+        // Reduce Motion lands the same frame without any slide choreography.
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: .alpha,
+                selectedSection: .category(.development),
+                reduceMotion: true
+            )
+        )
+        indicator = coordinator.debugSelectionIndicatorState
+        #expect(indicator.isVisible)
+        #expect(indicator.frame == Self.frame(of: "tool.list-alpha", in: entries))
+    }
+
+    @Test @MainActor func selectionIndicatorHidesWhenActiveSectionCollapsesAndReturnsOnExpand() async throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = coordinator.makeScrollView()
+        let devGroup = Self.group(section: .category(.development), items: [Self.alpha, Self.beta])
+        let webGroup = Self.group(section: .category(.web), items: [Self.gamma])
+        let expanded = SidebarNavigationEntryProjection.entries(
+            groups: [devGroup, webGroup],
+            isSearchActive: false,
+            isSectionExpanded: { _ in true }
+        )
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: expanded,
+                selectedToolID: .alpha,
+                selectedSection: .category(.development),
+                reduceMotion: false
+            )
+        )
+        #expect(coordinator.debugSelectionIndicatorState.isVisible)
+
+        // Collapsing the section that owns the selection runs the disclosure
+        // accordion; the chrome must end hidden (its row's height is 0).
+        let collapsed = SidebarNavigationEntryProjection.entries(
+            groups: [devGroup, webGroup],
+            isSearchActive: false,
+            isSectionExpanded: { $0 != .category(.development) }
+        )
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: collapsed,
+                selectedToolID: .alpha,
+                selectedSection: .category(.development),
+                reduceMotion: false
+            )
+        )
+        try await Self.waitUntil { !coordinator.debugSelectionIndicatorState.isVisible }
+
+        // Re-expanding returns the chrome to the selected row's final frame.
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: expanded,
+                selectedToolID: .alpha,
+                selectedSection: .category(.development),
+                reduceMotion: false
+            )
+        )
+        try await Self.waitUntil { coordinator.debugSelectionIndicatorState.isVisible }
+        #expect(
+            coordinator.debugSelectionIndicatorState.frame
+                == Self.frame(of: "tool.list-alpha", in: expanded)
+        )
+    }
+
+    @Test @MainActor func selectionIndicatorHidesUnderSearchFilterAndWithoutSelection() throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = coordinator.makeScrollView()
+        let devGroup = Self.group(section: .category(.development), items: [Self.alpha, Self.beta])
+        let entries = Self.entries(groups: [devGroup])
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: .alpha,
+                selectedSection: .category(.development),
+                reduceMotion: false
+            )
+        )
+        #expect(coordinator.debugSelectionIndicatorState.isVisible)
+
+        // Search rebuild drops the selected row from the filtered entries:
+        // immediate mode must hide the chrome at once.
+        let searchEntries = SidebarNavigationEntryProjection.entries(
+            groups: [Self.group(section: .category(.development), items: [Self.beta])],
+            isSearchActive: true,
+            isSectionExpanded: { _ in true }
+        )
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: searchEntries,
+                selectedToolID: .alpha,
+                selectedSection: .category(.development),
+                isSearchActive: true,
+                reduceMotion: false
+            )
+        )
+        #expect(!coordinator.debugSelectionIndicatorState.isVisible)
+
+        // No selection (workspace focus): chrome stays hidden even though
+        // rows are visible again.
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: nil,
+                selectedSection: nil,
+                isSearchActive: false,
+                reduceMotion: false
+            )
+        )
+        #expect(!coordinator.debugSelectionIndicatorState.isVisible)
+    }
+
     @Test @MainActor func collapsedOrInactiveTracksCannotRetainHover() throws {
         let pointer = SidebarPointerLocationBox()
         let coordinator = SidebarNavigationListCoordinator(
@@ -783,6 +941,10 @@ struct SidebarNavigationListTests {
         item(.beta, isFavorite: false, section: .category(.development))
     }
 
+    private static var gamma: ToolNavigationItem {
+        item(.gamma, isFavorite: false, section: .category(.web))
+    }
+
     private static var favoriteBeta: ToolNavigationItem {
         item(.beta, isFavorite: true, section: .favorites)
     }
@@ -947,4 +1109,5 @@ private final class SidebarPointerLocationBox {
 private extension ToolID {
     static let alpha = ToolID(rawValue: "list-alpha")
     static let beta = ToolID(rawValue: "list-beta")
+    static let gamma = ToolID(rawValue: "list-gamma")
 }

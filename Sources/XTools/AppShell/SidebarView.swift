@@ -564,33 +564,21 @@ struct SidebarToolRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: SidebarMetrics.expandedRowHeight)
+        // Selection chrome (the selection-level pill + accent rail) is owned
+        // by the flat renderer's sliding indicator
+        // (SidebarSelectionIndicatorView); the row keeps only its text/icon
+        // color states, which flip instantly while the indicator springs
+        // between rows.
         .background(rowBackground, in: RoundedRectangle(cornerRadius: SidebarMetrics.rowCornerRadius, style: .continuous))
-        .overlay(alignment: .leading) {
-            if shouldHighlight {
-                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-                    .fill(ToolTheme.accent)
-                    .frame(width: 3, height: 17)
-                    .offset(x: -SidebarMetrics.toolRowHorizontalPadding)
-            }
-        }
         .contentShape(RoundedRectangle(cornerRadius: SidebarMetrics.rowCornerRadius, style: .continuous))
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: hoverState.isHovered)
-        .toolAnimation(ToolMotion.Preset.controlFeedback, value: isSelected)
         .contextMenu {
             Button(isFavorite ? "取消收藏" : "加入收藏", action: onToggleFavorite)
         }
     }
 
     private var rowBackground: Color {
-        if shouldHighlight {
-            return ToolTheme.selectionFill
-        }
-
-        if hoverState.isHovered {
-            return ToolTheme.hoverFill
-        }
-
-        return .clear
+        hoverState.isHovered ? ToolTheme.hoverFill : .clear
     }
 }
 

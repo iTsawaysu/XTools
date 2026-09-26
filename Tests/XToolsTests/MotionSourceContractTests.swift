@@ -30,6 +30,7 @@ struct MotionSourceContractTests {
         contains(motion, "static let accordion = Curve.smoothOut(duration: Duration.medium)", "Disclosure accordions must use a slightly longer smooth-out curve instead of a symmetric ease that feels sticky on collapse")
         contains(motion, "static let navigationReorder = accordion", "Navigation reordering must stay synchronized with disclosure movement")
         contains(motion, "static var accordion: AppKitMotion", "The AppKit sidebar renderer must consume the shared accordion token")
+        contains(motion, "static func selectionSlide() -> CASpringAnimation", "The sidebar selection chrome must spring through a ToolMotion-owned CASpringAnimation factory")
         contains(motion, "smoothOutControlPoints", "SwiftUI and AppKit disclosure motion must share one curve definition")
         doesNotContain(root, ".toolAnimation(ToolMotion.Preset.navigationReorder, value: favorites.favoriteIDs)", "Root must not own sidebar item layout animation outside the real identity container")
         contains(root, "favoriteOrder: favorites.favoriteIDs", "Root must pass favorite order as a narrow sidebar animation trigger")

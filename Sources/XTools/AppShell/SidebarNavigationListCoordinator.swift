@@ -38,6 +38,10 @@ final class SidebarNavigationListCoordinator {
     private let pointerLocationProvider: SidebarNavigationPointerLocationProvider
     private var hoveredTrackID: String?
     private weak var scrollView: NSScrollView?
+    /// Sliding selection chrome below every track (v3). Owns the selection
+    /// pill + rail so tool switches can spring it between rows; the hosted
+    /// rows keep only their text/icon color states.
+    private let selectionIndicator = SidebarSelectionIndicatorView()
 
     var activeTrackIDs: [String] {
         currentPlan?.targets.map(\.id) ?? []
@@ -90,6 +94,9 @@ final class SidebarNavigationListCoordinator {
         documentView.wantsLayer = true
         documentView.layerContentsRedrawPolicy = .onSetNeedsDisplay
         documentView.frame = CGRect(x: 0, y: 0, width: SidebarView.idealWidth, height: 0)
+        // Below every track: reordering cycles only touch tracks, so the
+        // indicator keeps its backmost slot through the list's lifetime.
+        documentView.addSubview(selectionIndicator, positioned: .below, relativeTo: nil)
         scrollView.onViewportSizeChange = { [weak self] size in
             self?.resizeViewport(to: size)
         }
@@ -116,6 +123,7 @@ final class SidebarNavigationListCoordinator {
 
         let mode = updateMode(configuration: configuration, plan: plan)
         let previousActiveIDs = Set(currentPlan?.targets.map(\.id) ?? [])
+        let previousSelectedToolID = currentConfiguration?.selectedToolID
 
         if mode != .contentOnly {
             beginScrollAnchorIfNeeded(configuration: configuration, plan: plan)
@@ -133,12 +141,59 @@ final class SidebarNavigationListCoordinator {
         case .immediate:
             applyImmediate(plan: plan, configuration: configuration)
         case .animated:
-            applyAnimated(plan: plan)
+            applyAnimated(plan: plan, configuration: configuration)
         case .contentOnly:
             applyWidth(plan: plan)
             currentPlan = plan
+            // Pure tool switch on an unchanged plan: the only path that
+            // springs the selection chrome between rows.
+            positionSelectionIndicator(
+                configuration: configuration,
+                plan: plan,
+                slide: previousSelectedToolID != configuration.selectedToolID
+            )
             reconcilePointerLocation()
         }
+    }
+
+    /// Resolves the frame the sliding selection chrome should occupy, or nil
+    /// when the selected tool is absent from the plan (search filtering,
+    /// workspace focus) or its section is not the active one — the exact
+    /// `shouldHighlight` parity the row-level fill used to own.
+    private func selectionIndicatorFrame(
+        configuration: SidebarNavigationListConfiguration,
+        plan: SidebarNavigationLayoutPlan
+    ) -> CGRect? {
+        guard let selectedToolID = configuration.selectedToolID else { return nil }
+        guard let target = plan.targets.first(where: { target in
+            if case .tool(selectedToolID) = target.kind { return true }
+            return false
+        }), let entry = configuration.entries.first(where: { $0.id == target.id }),
+            case .item(_, let section) = entry.content,
+            section == configuration.selectedSection,
+            target.frame.height > 0.5
+        else { return nil }
+        return target.frame
+    }
+
+    /// Lays the sliding selection chrome. `slide` is reserved for pure tool
+    /// switches; every structural path (immediate relayout, disclosure
+    /// accordion, resize) lands or rides without its own spring.
+    private func positionSelectionIndicator(
+        configuration: SidebarNavigationListConfiguration,
+        plan: SidebarNavigationLayoutPlan,
+        slide: Bool
+    ) {
+        selectionIndicator.updateColors()
+        guard let frame = selectionIndicatorFrame(configuration: configuration, plan: plan) else {
+            selectionIndicator.setHidden(true)
+            return
+        }
+        selectionIndicator.setSelectionFrame(
+            frame,
+            slide: slide,
+            reduceMotion: configuration.reduceMotion
+        )
     }
 
     private func shouldSkipPresentationUpdate(
@@ -167,6 +222,15 @@ final class SidebarNavigationListCoordinator {
 
     func debugTrackState(for trackID: String) -> SidebarNavigationTrackDebugState? {
         tracksByID[trackID]?.debugState
+    }
+
+    /// Test-support: resolved sliding-selection chrome state, mirroring
+    /// `debugTrackState` for the indicator lane.
+    var debugSelectionIndicatorState: (frame: CGRect, isVisible: Bool) {
+        (
+            selectionIndicator.frame,
+            selectionIndicator.alphaValue > 0.5
+        )
     }
 
     @discardableResult
@@ -576,11 +640,15 @@ final class SidebarNavigationListCoordinator {
 
         hideInactiveTracks(activeIDs: activeIDs)
         currentPlan = plan
+        positionSelectionIndicator(configuration: configuration, plan: plan, slide: false)
         finishScrollAnchor()
         reconcilePointerLocation()
     }
 
-    private func applyAnimated(plan: SidebarNavigationLayoutPlan) {
+    private func applyAnimated(
+        plan: SidebarNavigationLayoutPlan,
+        configuration: SidebarNavigationListConfiguration
+    ) {
         let token = animationGate.request(
             target: SidebarNavigationAnimationTarget(plan: plan)
         )
@@ -614,6 +682,21 @@ final class SidebarNavigationListCoordinator {
                 frame.size.height = 0
                 track.animator().frame = frame
                 track.animator().alphaValue = 0.0
+            }
+            // Selection chrome rides the same disclosure motion as the rows —
+            // never its own spring during structural changes.
+            selectionIndicator.updateColors()
+            selectionIndicator.prepareForStructuralMotion()
+            if let frame = selectionIndicatorFrame(configuration: configuration, plan: plan) {
+                if selectionIndicator.alphaValue < 0.01 {
+                    selectionIndicator.frame = frame
+                    selectionIndicator.layoutSubtreeIfNeeded()
+                    selectionIndicator.alphaValue = 1
+                } else {
+                    selectionIndicator.animator().frame = frame
+                }
+            } else {
+                selectionIndicator.animator().alphaValue = 0
             }
             documentView.animator().frame = documentFrame(
                 width: resolvedDocumentWidth(for: scrollView),
@@ -724,6 +807,8 @@ final class SidebarNavigationListCoordinator {
         guard plan != currentPlan else { return }
         applyWidth(plan: plan)
         currentPlan = plan
+        // Width-only relayout: keep the chrome glued to the (resized) row.
+        positionSelectionIndicator(configuration: configuration, plan: plan, slide: false)
         reconcilePointerLocation()
     }
 

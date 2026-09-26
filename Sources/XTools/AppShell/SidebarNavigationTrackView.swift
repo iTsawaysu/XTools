@@ -291,8 +291,7 @@ final class SidebarNavigationDocumentView: NSView {
 }
 
 @MainActor
-final class SidebarNavigationScrollView: NSScrollView {
-    var onViewportSizeChange: ((CGSize) -> Void)?
+final class SidebarNavigationScrollView: NSScrollView {    var onViewportSizeChange: ((CGSize) -> Void)?
     var onViewportBoundsChange: (() -> Void)?
     private var lastViewportSize = CGSize.zero
     private(set) var isLiveScrolling = false
@@ -347,5 +346,129 @@ final class SidebarNavigationScrollView: NSScrollView {
         super.reflectScrolledClipView(cView)
         guard !isLiveScrolling else { return }
         onViewportBoundsChange?()
+    }
+}
+
+/// Sliding selection chrome for the flat sidebar document.
+///
+/// Owns the selection syntax the tool row used to paint itself — the
+/// `selectionFill` pill and the 3×17pt accent rail — as one layer-backed view
+/// living *below* every track. A tool switch springs it from the outgoing row
+/// to the incoming row (`ToolMotion.AppKitPreset.selectionSlide`) while the
+/// hosted row text colors flip instantly; disclosure accordion and structural
+/// relayouts (expand/collapse, search, favorite reorder, resize) reposition it
+/// without its own spring. Reduce Motion always lands frames directly.
+@MainActor
+final class SidebarSelectionIndicatorView: NSView {
+    override var isFlipped: Bool { true }
+
+    private enum Layout {
+        static let pillCornerRadius: CGFloat = SidebarMetrics.rowCornerRadius
+        static let railWidth: CGFloat = 3
+        static let railHeight: CGFloat = 17
+        static let railCornerRadius: CGFloat = ToolMetrics.CornerRadius.nestedControl
+        /// The rail sits at the row pill's left edge minus the row's horizontal
+        /// padding, i.e. at the sidebar gutter (document x = 1) — same place
+        /// the row-level overlay painted it before the indicator took over.
+        static let railLeadingOffset: CGFloat = -SidebarMetrics.toolRowHorizontalPadding
+    }
+
+    private static let slideAnimationKey = "sidebar.selection.slide"
+
+    private let pillLayer = CALayer()
+    private let railLayer = CALayer()
+
+    init() {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layerContentsRedrawPolicy = .onSetNeedsDisplay
+        pillLayer.cornerRadius = Layout.pillCornerRadius
+        railLayer.cornerRadius = Layout.railCornerRadius
+        layer?.addSublayer(pillLayer)
+        layer?.addSublayer(railLayer)
+        alphaValue = 0
+        updateColors()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError()
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        pillLayer.frame = CGRect(origin: .zero, size: bounds.size)
+        railLayer.frame = CGRect(
+            x: Layout.railLeadingOffset,
+            y: (bounds.height - Layout.railHeight) / 2,
+            width: Layout.railWidth,
+            height: Layout.railHeight
+        )
+        CATransaction.commit()
+    }
+
+    /// The indicator is presentation-only chrome; it never intercepts hits.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    /// Refreshes layer colors for the current appearance (light/dark).
+    func updateColors() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        pillLayer.backgroundColor = ToolTheme.SelectionNSColor.fill.cgColor
+        railLayer.backgroundColor = ToolTheme.SelectionNSColor.rail.cgColor
+        CATransaction.commit()
+    }
+
+    /// Positions the indicator over the selected row's track frame.
+    ///
+    /// - `slide`: spring the move (pure tool switch); the model frame still
+    ///   lands immediately, the layer presentation springs and can retarget
+    ///   mid-flight from its presentation value.
+    /// - Size changes (resize) and Reduce Motion always land directly.
+    func setSelectionFrame(_ frame: CGRect, slide: Bool, reduceMotion: Bool) {
+        let wasHidden = alphaValue < 0.01
+        let sizeChanged = bounds.size != frame.size
+        self.frame = frame
+        layoutSubtreeIfNeeded()
+
+        if wasHidden {
+            removeSlideAnimation()
+            alphaValue = 1
+            return
+        }
+        guard slide, !reduceMotion, !sizeChanged else {
+            removeSlideAnimation()
+            return
+        }
+        springSlide()
+    }
+
+    func setHidden(_ hidden: Bool) {
+        removeSlideAnimation()
+        alphaValue = hidden ? 0 : 1
+    }
+
+    /// Drops any in-flight selection spring so structural motion (accordion,
+    /// animator-driven frames) becomes the sole geometry owner.
+    func prepareForStructuralMotion() {
+        removeSlideAnimation()
+    }
+
+    private func springSlide() {
+        guard let layer else { return }
+        let fromY = layer.presentation()?.position.y ?? layer.position.y
+        removeSlideAnimation()
+        let toY = layer.position.y
+        guard abs(fromY - toY) > 0.5 else { return }
+        let spring = ToolMotion.AppKitPreset.selectionSlide()
+        spring.fromValue = fromY
+        spring.toValue = toY
+        layer.add(spring, forKey: Self.slideAnimationKey)
+    }
+
+    private func removeSlideAnimation() {
+        layer?.removeAnimation(forKey: Self.slideAnimationKey)
     }
 }
