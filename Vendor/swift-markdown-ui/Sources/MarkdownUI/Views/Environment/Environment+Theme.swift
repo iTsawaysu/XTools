@@ -24,7 +24,7 @@ extension View {
   ///   - body: A view builder that returns the customized block.
   public func markdownBlockStyle<Body: View>(
     _ keyPath: WritableKeyPath<Theme, BlockStyle<Void>>,
-    @ViewBuilder body: @escaping () -> Body
+    @ViewBuilder body: @escaping @MainActor () -> Body
   ) -> some View {
     self.environment((\EnvironmentValues.theme).appending(path: keyPath), .init(body: body))
   }
@@ -35,7 +35,7 @@ extension View {
   ///   - body: A view builder that receives the block configuration and returns the customized block.
   public func markdownBlockStyle<Configuration, Body: View>(
     _ keyPath: WritableKeyPath<Theme, BlockStyle<Configuration>>,
-    @ViewBuilder body: @escaping (_ configuration: Configuration) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ configuration: Configuration) -> Body
   ) -> some View {
     self.environment((\EnvironmentValues.theme).appending(path: keyPath), .init(body: body))
   }

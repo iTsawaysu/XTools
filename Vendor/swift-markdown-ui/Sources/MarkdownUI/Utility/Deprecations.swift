@@ -25,7 +25,7 @@ extension BlockStyle where Configuration == BlockConfiguration {
     message: "Use the initializer that takes a closure receiving a 'Configuration' value."
   )
   public init<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) {
     self.init { configuration in
       body(configuration.label)
@@ -53,7 +53,7 @@ extension View {
   )
   public func markdownBlockStyle<Body: View>(
     _ keyPath: WritableKeyPath<Theme, BlockStyle<BlockConfiguration>>,
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> some View {
     self.environment((\EnvironmentValues.theme).appending(path: keyPath), .init(body: body))
   }
@@ -68,7 +68,7 @@ extension View {
   )
   public func markdownBlockStyle<Body: View>(
     _ keyPath: WritableKeyPath<Theme, BlockStyle<CodeBlockConfiguration>>,
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> some View {
     self.environment(
       (\EnvironmentValues.theme).appending(path: keyPath),
@@ -89,7 +89,7 @@ extension Theme {
       """
   )
   public func heading1<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> Theme {
     var theme = self
     theme.heading1 = .init(body: body)
@@ -105,7 +105,7 @@ extension Theme {
       """
   )
   public func heading2<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> Theme {
     var theme = self
     theme.heading2 = .init(body: body)
@@ -121,7 +121,7 @@ extension Theme {
       """
   )
   public func heading3<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> Theme {
     var theme = self
     theme.heading3 = .init(body: body)
@@ -137,7 +137,7 @@ extension Theme {
       """
   )
   public func heading4<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> Theme {
     var theme = self
     theme.heading4 = .init(body: body)
@@ -153,7 +153,7 @@ extension Theme {
       """
   )
   public func heading5<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> Theme {
     var theme = self
     theme.heading5 = .init(body: body)
@@ -169,7 +169,7 @@ extension Theme {
       """
   )
   public func heading6<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> Theme {
     var theme = self
     theme.heading6 = .init(body: body)
@@ -185,7 +185,7 @@ extension Theme {
       """
   )
   public func paragraph<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> Theme {
     var theme = self
     theme.paragraph = .init(body: body)
@@ -201,7 +201,7 @@ extension Theme {
       """
   )
   public func blockquote<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> Theme {
     var theme = self
     theme.blockquote = .init(body: body)
@@ -217,7 +217,7 @@ extension Theme {
       """
   )
   public func codeBlock<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> Theme {
     var theme = self
     theme.codeBlock = .init { configuration in
@@ -235,7 +235,7 @@ extension Theme {
       """
   )
   public func image<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> Theme {
     var theme = self
     theme.image = .init(body: body)
@@ -251,7 +251,7 @@ extension Theme {
       """
   )
   public func list<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> Theme {
     var theme = self
     theme.list = .init(body: body)
@@ -267,7 +267,7 @@ extension Theme {
       """
   )
   public func listItem<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> Theme {
     var theme = self
     theme.listItem = .init(body: body)
@@ -283,7 +283,7 @@ extension Theme {
       """
   )
   public func table<Body: View>(
-    @ViewBuilder body: @escaping (_ label: BlockConfiguration.Label) -> Body
+    @ViewBuilder body: @escaping @MainActor (_ label: BlockConfiguration.Label) -> Body
   ) -> Theme {
     var theme = self
     theme.table = .init(body: body)
