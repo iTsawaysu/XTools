@@ -27,7 +27,10 @@ struct FileInputPanelTests {
         let sourceTask = Task { @MainActor in
             try await coordinator.selectFile(sourceRequest)
         }
-        await backend.waitForPresentation(count: 1)
+        guard await backend.waitForPresentation(count: 1) else {
+            sourceTask.cancel()
+            return
+        }
         let sourceURL = URL(fileURLWithPath: "/tmp/source.bin")
         backend.completeLatest(with: .selected(sourceURL))
 
@@ -43,7 +46,10 @@ struct FileInputPanelTests {
         let encodedTextTask = Task { @MainActor in
             try await coordinator.selectFile(encodedTextRequest)
         }
-        await backend.waitForPresentation(count: 2)
+        guard await backend.waitForPresentation(count: 2) else {
+            encodedTextTask.cancel()
+            return
+        }
         backend.completeLatest(with: .cancelled)
 
         #expect(try await encodedTextTask.value == nil)
@@ -88,7 +94,10 @@ struct FileInputPanelTests {
         let firstTask = Task { @MainActor in
             try await coordinator.selectFile(FileInputPanelRequest(allowedContentTypes: [.data]))
         }
-        await backend.waitForPresentation(count: 1)
+        guard await backend.waitForPresentation(count: 1) else {
+            firstTask.cancel()
+            return
+        }
 
         do {
             _ = try await coordinator.selectFile(FileInputPanelRequest(allowedContentTypes: [.plainText]))
@@ -115,7 +124,10 @@ struct FileInputPanelTests {
         let task = Task { @MainActor in
             try await coordinator.selectFile(FileInputPanelRequest(allowedContentTypes: [.data]))
         }
-        await backend.waitForPresentation(count: 1)
+        guard await backend.waitForPresentation(count: 1) else {
+            task.cancel()
+            return
+        }
         task.cancel()
 
         do {
@@ -133,7 +145,10 @@ struct FileInputPanelTests {
         let nextTask = Task { @MainActor in
             try await coordinator.selectFile(FileInputPanelRequest(allowedContentTypes: [.plainText]))
         }
-        await backend.waitForPresentation(count: 2)
+        guard await backend.waitForPresentation(count: 2) else {
+            nextTask.cancel()
+            return
+        }
         backend.completeLatest(with: .cancelled)
         #expect((try? await nextTask.value) == nil)
     }
@@ -147,7 +162,10 @@ struct FileInputPanelTests {
         let task = Task { @MainActor in
             try await coordinator.selectFile(FileInputPanelRequest(allowedContentTypes: [.data]))
         }
-        await backend.waitForPresentation(count: 1)
+        guard await backend.waitForPresentation(count: 1) else {
+            task.cancel()
+            return
+        }
         backend.completeLatest(with: .selected(nil))
 
         do {
@@ -171,7 +189,10 @@ struct FileInputPanelTests {
         let firstTask = Task { @MainActor in
             try await coordinator.selectFile(FileInputPanelRequest(allowedContentTypes: [.data]))
         }
-        await backend.waitForPresentation(count: 1)
+        guard await backend.waitForPresentation(count: 1) else {
+            firstTask.cancel()
+            return
+        }
         coordinator.attach(to: secondWindow)
 
         do {
@@ -189,7 +210,10 @@ struct FileInputPanelTests {
         let secondTask = Task { @MainActor in
             try await coordinator.selectFile(FileInputPanelRequest(allowedContentTypes: [.plainText]))
         }
-        await backend.waitForPresentation(count: 2)
+        guard await backend.waitForPresentation(count: 2) else {
+            secondTask.cancel()
+            return
+        }
         backend.completeLatest(with: .cancelled)
         #expect((try? await secondTask.value) == nil)
     }
@@ -287,9 +311,15 @@ private final class FakeFileInputPanelBackend: FileInputPanelBackend {
         completion(result)
     }
 
-    func waitForPresentation(count: Int) async {
-        while presentationCount < count {
+    func waitForPresentation(count: Int, timeout: Duration = .seconds(20)) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while presentationCount < count, ContinuousClock.now < deadline {
             await Task.yield()
         }
+        guard presentationCount >= count else {
+            Issue.record("Timed out waiting for file panel presentation \(count)")
+            return false
+        }
+        return true
     }
 }

@@ -1,4 +1,5 @@
 import Testing
+import Yams
 @testable import XToolsCore
 
 struct DockerRunToDockerComposeServiceTests {
@@ -44,6 +45,130 @@ struct DockerRunToDockerComposeServiceTests {
         #expect(result.yaml.contains("- bash"))
     }
 
+    @Test func explicitInteractiveAndTTYValuesFollowLastOccurrence() throws {
+        let cases: [(String, Bool, Bool)] = [
+            ("--interactive --tty", true, true),
+            ("-i -t", true, true),
+            ("--interactive=false --tty=false", false, false),
+            ("-i=false -t=false", false, false),
+            ("--interactive=true --tty=true", true, true),
+            ("-i=true -t=true", true, true),
+            ("-i=0 -t=1", false, true),
+            ("-it=false", true, false),
+            ("-dit=false", true, false),
+            ("-ti=false", false, true),
+            ("-it -i=false --tty=false", false, false),
+            ("-i=false --interactive -t=false --tty", true, true)
+        ]
+
+        for (options, stdinOpen, tty) in cases {
+            let result = try DockerRunToDockerComposeService.convert("docker run \(options) alpine")
+            #expect(result.yaml.contains("image: alpine"))
+            #expect(result.yaml.contains("stdin_open: true") == stdinOpen, Comment(rawValue: options))
+            #expect(result.yaml.contains("tty: true") == tty, Comment(rawValue: options))
+            #expect(result.unknownFlags.isEmpty)
+        }
+    }
+
+    @Test func shortBooleanClustersDoNotRewriteOptionValuesOrContainerArguments() throws {
+        let command = try DockerRunToDockerComposeService.convert(
+            "docker run alpine echo -- -it=false"
+        )
+        #expect(command.yaml.contains("      - --"))
+        #expect(command.yaml.contains("      - -it=false"))
+        #expect(!command.yaml.contains("stdin_open:"))
+        #expect(!command.yaml.contains("tty:"))
+
+        let value = try DockerRunToDockerComposeService.convert(
+            "docker run --health-cmd -it=false alpine"
+        )
+        #expect(value.yaml.contains("-it=false"))
+        #expect(!value.yaml.contains("stdin_open:"))
+        #expect(!value.yaml.contains("tty:"))
+
+        let afterSeparator = try DockerRunToDockerComposeService.convert(
+            "docker run -- alpine -it=false"
+        )
+        #expect(afterSeparator.yaml.contains("      - -it=false"))
+        #expect(!afterSeparator.yaml.contains("stdin_open:"))
+        #expect(!afterSeparator.yaml.contains("tty:"))
+    }
+
+    @Test func otherMappedBooleanOptionsHonorExplicitValues() throws {
+        let enabled = try DockerRunToDockerComposeService.convert(
+            "docker run --privileged --read-only --init --oom-kill-disable --no-healthcheck alpine"
+        )
+        for field in ["privileged: true", "read_only: true", "init: true", "oom_kill_disable: true", "disable: true"] {
+            #expect(enabled.yaml.contains(field), Comment(rawValue: field))
+        }
+
+        let disabled = try DockerRunToDockerComposeService.convert(
+            "docker run --privileged=false --read-only=false --init=false --oom-kill-disable=false --no-healthcheck=false alpine"
+        )
+        #expect(disabled.yaml.contains("privileged: false"))
+        for field in ["read_only: true", "init: true", "oom_kill_disable: true", "disable: true"] {
+            #expect(!disabled.yaml.contains(field), Comment(rawValue: field))
+        }
+
+        let repeated = try DockerRunToDockerComposeService.convert(
+            "docker run --privileged --privileged=false --init --init=false alpine"
+        )
+        #expect(repeated.yaml.contains("privileged: false"))
+        #expect(!repeated.yaml.contains("init: true"))
+    }
+
+    @Test func invalidExplicitBooleanValueIsRejectedWithoutEchoingInput() {
+        let invalid = "private-token-value"
+        for option in ["--interactive", "-t", "-it", "--privileged", "--read-only", "--init", "--oom-kill-disable", "--no-healthcheck", "--rm"] {
+            #expect {
+                _ = try DockerRunToDockerComposeService.convert("docker run \(option)=\(invalid) alpine")
+            } throws: { error in
+                guard case DockerRunToDockerComposeError.invalidBooleanValue(let reportedOption) = error else { return false }
+                let message = (error as? DockerRunToDockerComposeError)?.errorDescription ?? ""
+                let expectedOption = option == "-it" ? "-t" : option
+                return reportedOption == expectedOption && !message.contains(invalid)
+            }
+        }
+    }
+
+    @Test func healthcheckSettingsFollowFinalBooleanAndRejectConflicts() throws {
+        let restored = try DockerRunToDockerComposeService.convert(
+            "docker run --health-cmd='echo ok' --no-healthcheck --no-healthcheck=false alpine"
+        )
+        #expect(restored.yaml.contains("CMD-SHELL"))
+        #expect(restored.yaml.contains("echo ok"))
+        #expect(!restored.yaml.contains("disable: true"))
+
+        let restoredAfterFalse = try DockerRunToDockerComposeService.convert(
+            "docker run --no-healthcheck --no-healthcheck=false --health-cmd='echo ok' alpine"
+        )
+        #expect(restoredAfterFalse.yaml.contains("echo ok"))
+        #expect(!restoredAfterFalse.yaml.contains("disable: true"))
+
+        for setting in [
+            "--health-cmd='echo ok'",
+            "--health-interval=1s",
+            "--health-timeout=1s",
+            "--health-retries=1",
+            "--health-start-period=1s",
+            "--health-start-interval=1s"
+        ] {
+            for options in ["\(setting) --no-healthcheck", "--no-healthcheck \(setting)"] {
+                #expect {
+                    _ = try DockerRunToDockerComposeService.convert("docker run \(options) alpine")
+                } throws: { error in
+                    guard case DockerRunToDockerComposeError.conflictingHealthcheckOptions = error else { return false }
+                    return true
+                }
+            }
+        }
+
+        let zeroDefault = try DockerRunToDockerComposeService.convert(
+            "docker run --health-interval=0s --health-retries=0 --no-healthcheck alpine"
+        )
+        #expect(zeroDefault.yaml.contains("disable: true"))
+    }
+
     @Test func inlineLongOptions() throws {
         let result = try DockerRunToDockerComposeService.convert(
             "docker run --name=web --restart=unless-stopped --network=host nginx"
@@ -74,6 +199,17 @@ struct DockerRunToDockerComposeServiceTests {
         #expect(sticky.yaml.contains("user: \"1000:1000\""))
         #expect(separated.unknownFlags.isEmpty)
         #expect(sticky.unknownFlags.isEmpty)
+    }
+
+    @Test func valueShortOptionsKeepBooleanLookingStickyValues() throws {
+        let separated = try DockerRunToDockerComposeService.convert("docker run -u it -w it alpine")
+        let sticky = try DockerRunToDockerComposeService.convert("docker run -uit -wit alpine")
+        let single = try DockerRunToDockerComposeService.convert("docker run -ud alpine")
+
+        #expect(sticky.yaml == separated.yaml)
+        #expect(sticky.unknownFlags.isEmpty)
+        #expect(single.yaml.contains("user: d"))
+        #expect(single.unknownFlags.isEmpty)
     }
 
     @Test func unsupportedValueFlagDoesNotConsumeImage() throws {
@@ -154,6 +290,8 @@ struct DockerRunToDockerComposeServiceTests {
         #expect(DockerRunToDockerComposeError.multipleCommands.errorDescription == "一次只能转换一条 docker run 命令。")
         #expect(DockerRunToDockerComposeError.missingImage.errorDescription == "docker run 命令缺少镜像名称。")
         #expect(DockerRunToDockerComposeError.missingOptionValue("--name").errorDescription == "选项 `--name` 缺少参数值。")
+        #expect(DockerRunToDockerComposeError.invalidBooleanValue("--tty").errorDescription == "选项 `--tty` 的布尔值无效。")
+        #expect(DockerRunToDockerComposeError.conflictingHealthcheckOptions.errorDescription == "禁用健康检查不能与健康检查设置同时使用。")
         #expect(DockerRunToDockerComposeError.unterminatedQuote.errorDescription == "命令包含未闭合的引号。")
         #expect(DockerRunToDockerComposeDiagnostics.inputTooLongMessage(maxCharacters: 200_000) == "输入内容过长，最多支持 200000 个字符。")
         #expect(DockerRunToDockerComposeDiagnostics.emptyOutputMessage == "命令未包含可转换的服务配置。")
@@ -258,6 +396,50 @@ struct DockerRunToDockerComposeServiceTests {
             "docker run alpine echo \"docker run inside a string\""
         )
         #expect(result.yaml.contains("image: alpine"))
+    }
+
+    @Test func dockerRunPrefixInsideCommandWordsIsNotAnotherCommand() throws {
+        for word in ["runner", "runaway"] {
+            let command = "docker run alpine echo docker \(word)"
+            #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: command) == 1)
+            let result = try DockerRunToDockerComposeService.convert(command)
+            #expect(result.yaml.contains("- \(word)"))
+        }
+    }
+
+    @Test func escapedDoubleQuoteKeepsDockerRunInsideArgument() throws {
+        let command = #"docker run alpine echo "say \"docker run\"""#
+        #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: command) == 1)
+        #expect(try DockerRunToDockerComposeService.tokenize(command).last == "say \"docker run\"")
+        let result = try DockerRunToDockerComposeService.convert(command)
+        #expect(result.yaml.contains(#"say \"docker run\""#))
+    }
+
+    @Test func dockerRunScannerMatchesTokenizerQuoteAndBackslashBoundaries() throws {
+        // In single quotes a backslash is literal, so the next apostrophe closes
+        // the argument and exposes the second command.
+        let quotedSingleBackslash = #"docker run alpine echo 'say \ docker run'"#
+        let singleQuoted = #"docker run alpine echo 'literal\' docker run --rm alpine"#
+        #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: quotedSingleBackslash) == 1)
+        #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: singleQuoted) == 2)
+
+        // An odd number of backslashes escapes a double quote; an even number
+        // leaves it structural. The same distinction applies outside quotes.
+        let oddBackslashes = #"docker run alpine echo "say \\\"docker run\"""#
+        let evenBackslashes = #"docker run alpine echo "say \\" docker run --rm alpine"#
+        let bareEscapedQuote = #"docker run alpine echo \" docker run --rm alpine"#
+        #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: oddBackslashes) == 1)
+        #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: evenBackslashes) == 2)
+        #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: bareEscapedQuote) == 2)
+
+        for command in [singleQuoted, evenBackslashes, bareEscapedQuote] {
+            #expect {
+                _ = try DockerRunToDockerComposeService.convert(command)
+            } throws: { error in
+                guard case DockerRunToDockerComposeError.multipleCommands = error else { return false }
+                return true
+            }
+        }
     }
 
     @Test func deploySectionsAreMergedForResourcesRestartPolicyAndGpu() throws {
@@ -393,6 +575,34 @@ struct DockerRunToDockerComposeServiceTests {
 
         #expect(result.yaml.contains("weight: 300"))
         #expect(!result.yaml.contains("weight: \"300\""))
+    }
+
+    @Test func ulimitsNormalizeValidInt64ValuesBeforeYAMLParsing() throws {
+        let leadingZeroPair = try #require(
+            parsedNofileUlimit("010:020") as? [String: Any]
+        )
+        #expect(leadingZeroPair["soft"] as? Int == 10)
+        #expect(leadingZeroPair["hard"] as? Int == 20)
+
+        #expect(try parsedNofileUlimit("00042") as? Int == 42)
+
+        let signedPair = try #require(
+            parsedNofileUlimit("+0007:-0001") as? [String: Any]
+        )
+        #expect(signedPair["soft"] as? Int == 7)
+        #expect(signedPair["hard"] as? Int == -1)
+
+        let boundaries = try #require(
+            parsedNofileUlimit("\(Int64.max):\(Int64.min)") as? [String: Any]
+        )
+        #expect(boundaries["soft"] as? Int == Int.max)
+        #expect(boundaries["hard"] as? Int == Int.min)
+
+        let invalidPair = try #require(
+            parsedNofileUlimit("unlimited:invalid") as? [String: Any]
+        )
+        #expect(invalidPair["soft"] as? String == "unlimited")
+        #expect(invalidPair["hard"] as? String == "invalid")
     }
 
     // MARK: - Unknown / boolean flags
@@ -561,5 +771,17 @@ struct DockerRunToDockerComposeServiceTests {
 
         let second = try DockerRunToDockerComposeService.convert(rerun)
         #expect(second.yaml == first.yaml, Comment(rawValue: "第一轮:\(first.yaml)\n第二轮:\(second.yaml)"))
+    }
+
+    private func parsedNofileUlimit(_ value: String) throws -> Any {
+        let result = try DockerRunToDockerComposeService.convert(
+            "docker run --ulimit nofile=\(value) alpine"
+        )
+        let document = try Yams.load(yaml: result.yaml)
+        let root = try #require(document as? [String: Any])
+        let services = try #require(root["services"] as? [String: Any])
+        let service = try #require(services["alpine"] as? [String: Any])
+        let ulimits = try #require(service["ulimits"] as? [String: Any])
+        return try #require(ulimits["nofile"])
     }
 }

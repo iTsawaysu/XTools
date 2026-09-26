@@ -409,6 +409,46 @@ struct ImageWorkflowClientTests {
         ).errorDescription == "图片文件大小上限为 50 MB，所选文件已超出。")
     }
 
+    @Test func foundationReaderBoundsRealFileWhenMetadataIsMissingOrStale() async throws {
+        let maxBytes = 8
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("xtools-image-reader-budget-\(UUID().uuidString).bin")
+        let retainedDirectory = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Downloads/tmp", isDirectory: true)
+        let retainedURL = retainedDirectory.appendingPathComponent(url.lastPathComponent)
+        try FileManager.default.createDirectory(at: retainedDirectory, withIntermediateDirectories: true)
+        try Data(repeating: 0xA5, count: maxBytes + 1).write(to: url)
+        defer { try? FileManager.default.moveItem(at: url, to: retainedURL) }
+
+        let reportedByteCounts: [Int?] = [nil, 1]
+        for reportedByteCount in reportedByteCounts {
+            let reader = FoundationImageWorkflowReaderWithMetadataOverride(
+                reportedByteCount: reportedByteCount,
+                maxBytes: maxBytes
+            )
+            let client = ImageWorkflowClient(
+                dialog: FakeImageWorkflowDialog(),
+                reader: reader,
+                writer: FakeImageWorkflowWriter()
+            )
+
+            do {
+                _ = try await client.prepareSelectionInBackground(
+                    from: url,
+                    allowedContentTypes: [.png]
+                )
+                Issue.record("Expected the bounded Foundation reader to reject the file")
+            } catch let processorError as ImageProcessorError {
+                #expect(processorError == .inputFileTooLarge(
+                    actualBytes: maxBytes + 1,
+                    maxBytes: maxBytes
+                ))
+            } catch {
+                Issue.record("Unexpected failure: \(error)")
+            }
+        }
+    }
+
     @Test func saveProcessedImageBlocksLargerCompressionOutputBeforeShowingSavePanel() async throws {
         let saveURL = URL(fileURLWithPath: "/tmp/compressed.jpg")
         let dialog = FakeImageWorkflowDialog(saveURL: saveURL)
@@ -2022,6 +2062,24 @@ private final class FakeImageWorkflowReader: ImageWorkflowFileReading, @unchecke
             Thread.sleep(forTimeInterval: delay)
         }
         return dataByURL[url] ?? Data()
+    }
+}
+
+private struct FoundationImageWorkflowReaderWithMetadataOverride: ImageWorkflowFileReading {
+    let reportedByteCount: Int?
+    let maxBytes: Int
+    private let foundationReader = FoundationImageWorkflowFileReader()
+
+    func isRegularFile(at url: URL) throws -> Bool {
+        try foundationReader.isRegularFile(at: url)
+    }
+
+    func byteCount(for url: URL) throws -> Int? {
+        reportedByteCount
+    }
+
+    func readData(from url: URL) throws -> Data {
+        try foundationReader.readData(from: url, maxBytes: maxBytes)
     }
 }
 

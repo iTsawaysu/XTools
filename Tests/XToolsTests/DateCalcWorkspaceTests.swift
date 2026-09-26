@@ -146,7 +146,7 @@ struct DateCalcWorkspaceTests {
         session.applyPreset(.next30Days)
         let expectedEnd = session.cal.date(byAdding: .day, value: 30, to: session.start) ?? session.start
         #expect(session.end == expectedEnd)
-        #expect(session.totals.days == 30 || abs(session.totals.days) == 30)
+        #expect(session.totals.days == 30)
     }
 
     @Test func presetThisMonth() {

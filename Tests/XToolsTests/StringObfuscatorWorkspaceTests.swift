@@ -204,9 +204,13 @@ private actor StringMaskingRenderGate {
         }
     }
 
-    func waitForRequest(_ input: String) async {
-        while !requests.contains(input) {
+    func waitForRequest(_ input: String, timeout: Duration = .seconds(20)) async {
+        let deadline = ContinuousClock.now + timeout
+        while !requests.contains(input), ContinuousClock.now < deadline {
             await Task.yield()
+        }
+        if !requests.contains(input) {
+            Issue.record("Timed out waiting for string masking request: \(input)")
         }
     }
 

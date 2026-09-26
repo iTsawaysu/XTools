@@ -449,9 +449,13 @@ private actor IndexConverterExecutionGate {
         }
     }
 
-    func waitForRequest(_ request: IndexConverterRequest) async {
-        while requestCounts[request, default: 0] < 1 {
+    func waitForRequest(_ request: IndexConverterRequest, timeout: Duration = .seconds(20)) async {
+        let deadline = ContinuousClock.now + timeout
+        while requestCounts[request, default: 0] < 1, ContinuousClock.now < deadline {
             await Task.yield()
+        }
+        if requestCounts[request, default: 0] < 1 {
+            Issue.record("Timed out waiting for index converter request: \(request)")
         }
     }
 

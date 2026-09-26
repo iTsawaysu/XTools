@@ -824,16 +824,29 @@ public enum DockerComposeToRunService {
                 skipped.append(contentsOf: unsupportedPaths)
                 continue
             }
-            guard let source = scalarString(long["source"]) else {
-                skipped.append("volumes.\(type).source")
+            let source: String?
+            if let rawSource = long["source"] {
+                guard let value = scalarString(rawSource), !value.isEmpty else {
+                    skipped.append("volumes.\(type).source")
+                    continue
+                }
+                source = value
+            } else if type == "bind" {
+                skipped.append("volumes.bind.source")
                 continue
+            } else {
+                source = nil
             }
             guard long["read_only"] == nil || long["read_only"] is Bool else {
                 skipped.append("volumes.\(type).read_only(结构无法映射)")
                 continue
             }
             let readOnly = long["read_only"] as? Bool == true
-            var mount = "type=\(type),source=\(source),target=\(target)"
+            var mount = "type=\(type)"
+            if let source {
+                mount += ",source=\(source)"
+            }
+            mount += ",target=\(target)"
             if readOnly {
                 mount += ",readonly"
             }

@@ -166,8 +166,10 @@ struct TextEncryptionServiceTests {
         #expect(plaintext == "plain")
     }
 
-    @Test func wrongPasswordThrowsDecryptionFailed() throws {
-        let ciphertext = try TextEncryptionService.encrypt("plain", password: "secret", algorithm: .aes)
+    @Test func legacyVectorWithWrongPasswordReportsDecryptionFailed() throws {
+        // Legacy CBC has no authentication: other ciphertexts may yield valid
+        // padding and UTF-8 under a wrong password. This fixed vector rejects it.
+        let ciphertext = "U2FsdGVkX18xMjM0NTY3OL6cbdLbc08RGJjKnfIc+Ik="
 
         #expect(throws: TextEncryptionService.Error.decryptionFailed) {
             _ = try TextEncryptionService.decrypt(ciphertext, password: "wrong", algorithm: .aes)

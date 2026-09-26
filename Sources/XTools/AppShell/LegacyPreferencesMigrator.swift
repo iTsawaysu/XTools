@@ -33,7 +33,7 @@ struct LegacyPreferencesMigrator {
         }
     }
 
-    let source: UserDefaults
+    private let readSourceValues: () -> [String: Any]
     let destination: UserDefaults
     let migrationFlagKey: String
     let keyPrefixes: [String]
@@ -44,7 +44,19 @@ struct LegacyPreferencesMigrator {
         migrationFlagKey: String = Self.migrationFlagKey,
         keyPrefixes: [String] = Self.preferredKeyPrefixes
     ) {
-        self.source = source
+        readSourceValues = { source.dictionaryRepresentation() }
+        self.destination = destination
+        self.migrationFlagKey = migrationFlagKey
+        self.keyPrefixes = keyPrefixes
+    }
+
+    private init(
+        sourceValues: @escaping () -> [String: Any],
+        destination: UserDefaults,
+        migrationFlagKey: String = Self.migrationFlagKey,
+        keyPrefixes: [String] = Self.preferredKeyPrefixes
+    ) {
+        readSourceValues = sourceValues
         self.destination = destination
         self.migrationFlagKey = migrationFlagKey
         self.keyPrefixes = keyPrefixes
@@ -62,7 +74,7 @@ struct LegacyPreferencesMigrator {
         var skippedExistingKeys: [String] = []
 
         let sourceValues = Self.appOwnedValues(
-            from: source.dictionaryRepresentation(),
+            from: readSourceValues(),
             keyPrefixes: keyPrefixes,
             excluding: migrationFlagKey
         )
@@ -92,16 +104,22 @@ struct LegacyPreferencesMigrator {
     /// launches skip suite/plist I/O and never create a temporary bridge suite.
     @discardableResult
     static func migrateFromLegacyDomainIfNeeded(
-        destination: UserDefaults = .standard
+        destination: UserDefaults = .standard,
+        sourceValuesReader: (() throws -> [String: Any])? = nil
     ) -> Result? {
         if destination.bool(forKey: migrationFlagKey) {
             return Result(status: .alreadyMigrated, copiedKeys: [], skippedExistingKeys: [])
         }
 
         do {
-            let source = try openLegacySourceDefaults()
+            let sourceValues: [String: Any]
+            if let sourceValuesReader {
+                sourceValues = try sourceValuesReader()
+            } else {
+                sourceValues = try loadLegacySourceValues()
+            }
             return LegacyPreferencesMigrator(
-                source: source,
+                sourceValues: { sourceValues },
                 destination: destination
             ).migrateIfNeeded()
         } catch {
@@ -111,42 +129,37 @@ struct LegacyPreferencesMigrator {
         }
     }
 
-    /// Opens `UserDefaults(suiteName:)` for the old bundle id. When the suite has
-    /// no app-owned keys, falls back to loading `~/Library/Preferences/com.sun.tools.plist`
-    /// into a temporary suite so domain data remains readable after the rename.
-    static func openLegacySourceDefaults(
+    /// Reads the old preference domain. When CFPreferences does not expose any
+    /// app-owned values, falls back to the on-disk plist without creating a new
+    /// persistent UserDefaults bridge domain.
+    static func loadLegacySourceValues(
         suiteName: String = legacyBundleIdentifier,
-        fileManager: FileManager = .default
-    ) throws -> UserDefaults {
+        fileManager: FileManager = .default,
+        legacyPlistURL: URL? = nil
+    ) throws -> [String: Any] {
         guard let suite = UserDefaults(suiteName: suiteName) else {
             throw MigrationError.unableToOpenSuite(suiteName)
         }
 
+        let suiteDictionary = suite.dictionaryRepresentation()
         let suiteValues = appOwnedValues(
-            from: suite.dictionaryRepresentation(),
+            from: suiteDictionary,
             keyPrefixes: preferredKeyPrefixes,
             excluding: migrationFlagKey
         )
         if !suiteValues.isEmpty {
-            return suite
+            return suiteDictionary
         }
 
         if let plistValues = loadLegacyPlistValues(
             suiteName: suiteName,
-            fileManager: fileManager
+            fileManager: fileManager,
+            legacyPlistURL: legacyPlistURL
         ), !plistValues.isEmpty {
-            let bridgeSuiteName = "xtools.legacy-preferences-bridge.\(UUID().uuidString)"
-            guard let bridge = UserDefaults(suiteName: bridgeSuiteName) else {
-                throw MigrationError.unableToOpenSuite(bridgeSuiteName)
-            }
-            bridge.removePersistentDomain(forName: bridgeSuiteName)
-            for (key, value) in plistValues {
-                bridge.set(value, forKey: key)
-            }
-            return bridge
+            return plistValues
         }
 
-        return suite
+        return suiteDictionary
     }
 
     private static func appOwnedValues(
@@ -162,9 +175,10 @@ struct LegacyPreferencesMigrator {
 
     private static func loadLegacyPlistValues(
         suiteName: String,
-        fileManager: FileManager
+        fileManager: FileManager,
+        legacyPlistURL: URL?
     ) -> [String: Any]? {
-        let url = fileManager.homeDirectoryForCurrentUser
+        let url = legacyPlistURL ?? fileManager.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Preferences/\(suiteName).plist")
         guard fileManager.fileExists(atPath: url.path) else {
             return nil

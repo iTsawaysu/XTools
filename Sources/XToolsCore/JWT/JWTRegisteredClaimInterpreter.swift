@@ -141,7 +141,7 @@ public enum JWTRegisteredClaimInterpreter {
         now: Date,
         dateFormatter: DateFormatter
     ) -> JWTRegisteredClaimInsight {
-        guard let timestamp = numericDate(value) else {
+        guard let timestamp = JWTNumericDate.timestamp(value) else {
             return JWTRegisteredClaimInsight(
                 kind: kind,
                 displayValue: "类型不符合注册声明定义",
@@ -186,14 +186,6 @@ public enum JWTRegisteredClaimInterpreter {
             explanation: "\(kind.rawValue) 应为\(expectedType)；未按应用上下文检查。",
             status: .warning
         )
-    }
-
-    private static func numericDate(_ value: Any) -> TimeInterval? {
-        guard !(value is Bool), let number = value as? NSNumber else {
-            return nil
-        }
-        let timestamp = number.doubleValue
-        return timestamp.isFinite ? timestamp : nil
     }
 
     private static func makeDateFormatter(timeZone: TimeZone) -> DateFormatter {

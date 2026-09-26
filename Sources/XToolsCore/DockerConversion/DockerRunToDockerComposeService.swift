@@ -42,21 +42,6 @@ public enum DockerRunToDockerComposeService {
             throw DockerRunToDockerComposeError.multipleCommands
         }
 
-        var expandedTokens: [String] = []
-        for token in tokens {
-            if token.hasPrefix("-") && !token.hasPrefix("--") && token.count > 2 && !token.contains("=") {
-                let flagPart = String(token.dropFirst())
-                let knownBooleanShorts: Set<Character> = ["d", "i", "t"]
-                if flagPart.allSatisfy({ knownBooleanShorts.contains($0) }) {
-                    for char in flagPart {
-                        expandedTokens.append("-\(char)")
-                    }
-                    continue
-                }
-            }
-            expandedTokens.append(token)
-        }
-
         var service = ComposeService()
         var pendingNetworkAttachment = NetworkAttachment(name: "")
         let notTranslatable: [String] = []
@@ -65,14 +50,20 @@ public enum DockerRunToDockerComposeService {
         var index = 2
         var imageFound = false
 
-        while index < expandedTokens.count {
-            let token = expandedTokens[index]
+        while index < tokens.count {
+            let token = tokens[index]
+
+            if imageFound {
+                service.command.append(token)
+                index += 1
+                continue
+            }
 
             if token == "--" {
                 // `--` 终止选项解析。按 docker 语义，其后的第一个 token 是镜像，
                 // 其余才是命令；此前把整段都当成 command，导致 `docker run -- alpine echo hi`
                 // 报「缺少镜像名称」。
-                let remaining = expandedTokens[(index + 1)...]
+                let remaining = tokens[(index + 1)...]
                 if let image = remaining.first {
                     service.image = image
                     service.name = sanitizedServiceName(from: service.containerName ?? image)
@@ -80,12 +71,6 @@ public enum DockerRunToDockerComposeService {
                     service.command.append(contentsOf: remaining.dropFirst())
                 }
                 break
-            }
-
-            if imageFound {
-                service.command.append(token)
-                index += 1
-                continue
             }
 
             if !token.hasPrefix("-") {
@@ -104,16 +89,42 @@ public enum DockerRunToDockerComposeService {
                     index += 1
                     return inlineValue
                 }
-                return try requireValue(after: token, in: expandedTokens, index: &index)
+                return try requireValue(after: token, in: tokens, index: &index)
             }
 
             func skipFlag(_ hasValue: Bool) {
                 if inlineValue != nil {
                     index += 1
-                } else if hasValue && index + 1 < expandedTokens.count && !expandedTokens[index + 1].hasPrefix("-") {
+                } else if hasValue && index + 1 < tokens.count && !tokens[index + 1].hasPrefix("-") {
                     index += 2
                 } else {
                     index += 1
+                }
+            }
+
+            func booleanValue() throws -> Bool {
+                try Self.parseBooleanValue(inlineValue, flag: flag)
+            }
+
+            if rawFlag.hasPrefix("-"), !rawFlag.hasPrefix("--") {
+                let shorthand = String(rawFlag.dropFirst())
+                let booleanShorts: Set<Character> = ["d", "i", "t"]
+                if shorthand.count > 1 && shorthand.allSatisfy({ booleanShorts.contains($0) }) {
+                    let lastOffset = shorthand.count - 1
+                    for (offset, char) in shorthand.enumerated() {
+                        let shortFlag = "-\(char)"
+                        let value = try Self.parseBooleanValue(
+                            offset == lastOffset ? inlineValue : nil,
+                            flag: shortFlag
+                        )
+                        switch char {
+                        case "i": service.stdinOpen = value
+                        case "t": service.tty = value
+                        default: break // -d has no Compose field.
+                        }
+                    }
+                    index += 1
+                    continue
                 }
             }
 
@@ -210,12 +221,10 @@ public enum DockerRunToDockerComposeService {
             case "--security-opt":
                 service.securityOpt.append(try takeValue())
             case "--privileged":
-                let value = inlineValue ?? "true"
-                service.privileged = (value != "false")
+                service.privileged = try booleanValue()
                 index += 1
             case "--read-only":
-                let value = inlineValue ?? "true"
-                service.readOnly = (value != "false")
+                service.readOnly = try booleanValue()
                 index += 1
             case "--userns":
                 service.userns = try takeValue()
@@ -295,34 +304,19 @@ public enum DockerRunToDockerComposeService {
                 service.ipc = try takeValue()
 
             case "--health-cmd":
-                service.healthcheckDisabled = false
                 service.healthCmd = try takeValue()
             case "--health-interval":
-                service.healthcheckDisabled = false
                 service.healthInterval = try takeValue()
             case "--health-timeout":
-                service.healthcheckDisabled = false
                 service.healthTimeout = try takeValue()
             case "--health-retries":
-                service.healthcheckDisabled = false
                 service.healthRetries = try takeValue()
             case "--health-start-period":
-                service.healthcheckDisabled = false
                 service.healthStartPeriod = try takeValue()
             case "--health-start-interval":
-                service.healthcheckDisabled = false
                 service.healthStartInterval = try takeValue()
             case "--no-healthcheck":
-                let value = inlineValue ?? "true"
-                let disabled = (value != "false")
-                service.healthcheckDisabled = disabled
-                if disabled {
-                    service.healthCmd = nil
-                    service.healthInterval = nil
-                    service.healthTimeout = nil
-                    service.healthRetries = nil
-                    service.healthStartPeriod = nil
-                }
+                service.healthcheckDisabled = try booleanValue()
                 index += 1
 
             case "--log-driver":
@@ -342,26 +336,26 @@ public enum DockerRunToDockerComposeService {
                 service.gpus = try takeValue()
 
             case "-i", "--interactive":
-                service.stdinOpen = true
+                service.stdinOpen = try booleanValue()
                 index += 1
             case "-t", "--tty":
-                service.tty = true
+                service.tty = try booleanValue()
                 index += 1
 
             case "-d", "--detach", "--rm", "-a", "--attach", "--sig-proxy":
+                if Self.booleanFlags.contains(flag) { _ = try booleanValue() }
                 skipFlag(flagTakesValue(flag))
 
             case "--init":
-                let value = inlineValue ?? "true"
-                service.`init` = (value != "false")
+                service.`init` = try booleanValue()
                 index += 1
 
             case "--oom-kill-disable":
-                let value = inlineValue ?? "true"
-                service.oomKillDisable = (value != "false")
+                service.oomKillDisable = try booleanValue()
                 index += 1
 
             case let flag where Self.booleanFlags.contains(flag):
+                _ = try booleanValue()
                 notImplemented.append(token)
                 index += 1
             case let flag where unsupportedValueFlags.contains(flag):
@@ -373,15 +367,19 @@ public enum DockerRunToDockerComposeService {
                 // 未知标志是否带值不可知。若它后面只剩一个 token，吞掉就会让整条
                 // 命令找不到镜像（`-P nginx` 报「缺少镜像名称」就是这么来的），
                 // 因此这种情况下按布尔标志处理，把该 token 留给镜像判定。
-                let hasTokenAfterNext = index + 2 < expandedTokens.count
-                let nextLooksLikeValue = index + 1 < expandedTokens.count
-                    && !expandedTokens[index + 1].hasPrefix("-")
+                let hasTokenAfterNext = index + 2 < tokens.count
+                let nextLooksLikeValue = index + 1 < tokens.count
+                    && !tokens[index + 1].hasPrefix("-")
                 skipFlag(nextLooksLikeValue && hasTokenAfterNext)
             }
         }
 
         guard imageFound, !service.image.isEmpty else {
             throw DockerRunToDockerComposeError.missingImage
+        }
+
+        if service.healthcheckDisabled == true && Self.hasEffectiveHealthSettings(service) {
+            throw DockerRunToDockerComposeError.conflictingHealthcheckOptions
         }
 
         if pendingNetworkAttachment.ipv4Address != nil {
@@ -406,6 +404,30 @@ public enum DockerRunToDockerComposeService {
                 unknownFlags: unknownFlags
             )
         )
+    }
+
+    private static func hasEffectiveHealthSettings(_ service: ComposeService) -> Bool {
+        if let command = service.healthCmd, !command.isEmpty { return true }
+        if let retries = service.healthRetries, Int(retries) != 0 { return true }
+        return [service.healthInterval, service.healthTimeout, service.healthStartPeriod, service.healthStartInterval]
+            .compactMap { $0 }
+            .contains { !isZeroDuration($0) }
+    }
+
+    private static func parseBooleanValue(_ inlineValue: String?, flag: String) throws -> Bool {
+        guard let inlineValue else { return true }
+        switch inlineValue {
+        case "1", "t", "T", "TRUE", "true", "True": return true
+        case "0", "f", "F", "FALSE", "false", "False": return false
+        default: throw DockerRunToDockerComposeError.invalidBooleanValue(flag)
+        }
+    }
+
+    private static func isZeroDuration(_ value: String) -> Bool {
+        if value == "0" { return true }
+        // Go durations may combine zero-valued units, for example 0h0m0s.
+        let zeroDuration = #"^(?:[+-]?(?:0+(?:\.0*)?|\.0+)(?:ns|us|µs|μs|ms|s|m|h))+$"#
+        return value.range(of: zeroDuration, options: .regularExpression) != nil
     }
 
     private static func warnings(

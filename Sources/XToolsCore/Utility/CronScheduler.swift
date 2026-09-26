@@ -69,8 +69,7 @@ public enum CronScheduler {
         // 未识别的 @ 预设不能再报「需要 5 个字段」——那会把宏当成字段数错误。
         // resolveExpression 对无法识别的宏原样返回，据此判断。
         if trimmed.hasPrefix("@"), resolved == trimmed {
-            let macro = String(trimmed.prefix(16))
-            return "不支持的 @ 预设「\(macro)」；可用 @yearly、@monthly、@weekly、@daily、@hourly、@reboot。"
+            return "不支持的 @ 预设；可用 @yearly、@annually、@monthly、@weekly、@daily、@midnight、@hourly、@reboot。"
         }
 
         let parts = resolved.split(whereSeparator: \.isWhitespace).map(String.init)
@@ -146,11 +145,9 @@ public enum CronScheduler {
         guard !resolved.isEmpty else { return [] }
         guard let fields = parseFields(resolved) else { return [] }
 
-        let nowComps = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: after)
-        let nowWhole = calendar.date(from: nowComps) ?? after
-        var cursor = calendar.date(byAdding: .second, value: 1, to: nowWhole) ?? nowWhole
-        let s = calendar.component(.second, from: cursor)
-        cursor = calendar.date(byAdding: .second, value: (60 - s) % 60, to: cursor) ?? cursor
+        // Keep the absolute position in a repeated hour and always advance past
+        // the minute containing `after`, including when it has fractional seconds.
+        guard var cursor = calendar.dateInterval(of: .minute, for: after)?.end else { return [] }
 
         // Map cron weekdays (0=Sun...6=Sat, 7=Sun) to Calendar's (1=Sun...7=Sat)
         let normalizedWeekdays = Set(fields.weekdays.map { ($0 == 0 || $0 == 7) ? 1 : $0 + 1 })
@@ -166,7 +163,14 @@ public enum CronScheduler {
         let horizon = calendar.date(byAdding: .year, value: 5, to: after) ?? after
 
         while results.count < count, cursor < horizon {
-            let comps = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second, .weekday], from: cursor)
+            // Adding one calendar day to a 01:00 start on a missing-midnight
+            // day can land at 01:00 tomorrow. The day interval ends at the
+            // actual next local-day boundary, which may be 00:00 tomorrow.
+            guard let dayInterval = calendar.dateInterval(of: .day, for: cursor),
+                  dayInterval.end > cursor else { break }
+            let dayStart = dayInterval.start
+            let nextDay = dayInterval.end
+            let comps = calendar.dateComponents([.year, .month, .day, .weekday], from: dayStart)
             guard let month = comps.month, let day = comps.day, let weekday = comps.weekday else { break }
 
             let dayMatches: Bool
@@ -181,8 +185,44 @@ public enum CronScheduler {
             }
 
             if !fields.months.contains(month) || !dayMatches {
-                guard let nd = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: cursor)) else { break }
-                cursor = nd
+                cursor = nextDay
+                continue
+            }
+
+            let offsetAtStart = calendar.timeZone.secondsFromGMT(for: dayStart)
+            let offsetAtEnd = calendar.timeZone.secondsFromGMT(for: nextDay.addingTimeInterval(-1))
+            let offsetChange = abs(offsetAtEnd - offsetAtStart)
+
+            // A repeated local hour is not ordered by its wall-clock fields:
+            // first 01:45 precedes second 01:30. Collect both occurrences on
+            // offset-change days, then order them by their absolute Date values.
+            if offsetChange != 0 {
+                var candidates: Set<Date> = []
+                for hour in sortedHours {
+                    for minute in sortedMinutes {
+                        var slot = comps
+                        slot.hour = hour
+                        slot.minute = minute
+                        slot.second = 0
+                        guard let date = calendar.date(from: slot) else { continue }
+
+                        for occurrence in [
+                            date,
+                            date.addingTimeInterval(TimeInterval(offsetChange)),
+                            date.addingTimeInterval(-TimeInterval(offsetChange))
+                        ] where occurrence >= cursor && occurrence < nextDay && occurrence < horizon {
+                            if matchesLocalSlot(occurrence, hour: hour, minute: minute, calendar: calendar) {
+                                candidates.insert(occurrence)
+                            }
+                        }
+                    }
+                }
+
+                for date in candidates.sorted() {
+                    results.append(date)
+                    if results.count == count { break }
+                }
+                cursor = nextDay
                 continue
             }
 
@@ -194,9 +234,10 @@ public enum CronScheduler {
                     slot.minute = minute
                     slot.second = 0
                     guard let date = calendar.date(from: slot) else { continue }
-                    if date >= cursor {
+                    if date >= cursor, date < nextDay, date < horizon,
+                       matchesLocalSlot(date, hour: hour, minute: minute, calendar: calendar) {
                         results.append(date)
-                        cursor = calendar.date(byAdding: .minute, value: 1, to: date) ?? date
+                        cursor = date.addingTimeInterval(60)
                         advanced = true
                         break outer
                     }
@@ -204,12 +245,16 @@ public enum CronScheduler {
             }
 
             if !advanced {
-                guard let nd = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: cursor)) else { break }
-                cursor = nd
+                cursor = nextDay
             }
         }
 
         return results
+    }
+
+    private static func matchesLocalSlot(_ date: Date, hour: Int, minute: Int, calendar: Calendar) -> Bool {
+        let actual = calendar.dateComponents([.hour, .minute, .second], from: date)
+        return actual.hour == hour && actual.minute == minute && actual.second == 0
     }
 
     // MARK: - Field explanation
@@ -349,7 +394,11 @@ public enum CronScheduler {
             }
             guard rs >= min, re <= max, rs <= re else { return nil }
             var c = rs
-            while c <= re { values.insert(c); c += step }
+            while c <= re {
+                values.insert(c)
+                guard step <= re - c else { break }
+                c += step
+            }
         }
         return values.isEmpty ? nil : values
     }

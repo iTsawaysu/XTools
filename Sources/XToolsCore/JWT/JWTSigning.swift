@@ -291,9 +291,7 @@ public enum JWTSigner {
 
         for name in ["exp", "nbf", "iat"] {
             guard let value = parsed.object[name] else { continue }
-            guard !(value is Bool),
-                  let number = value as? NSNumber,
-                  number.doubleValue.isFinite else {
+            guard JWTNumericDate.timestamp(value) != nil else {
                 throw SigningError.invalidNumericDate(name)
             }
         }

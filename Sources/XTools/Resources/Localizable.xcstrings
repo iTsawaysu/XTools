@@ -2857,6 +2857,9 @@
     "部分命令行参数在 Docker Compose 中没有直接对应的单一指令，已被忽略；建议在生成的 Compose 文件中手动完善相应配置。" : {
       "extractionState" : "manual"
     },
+    "部分命令行参数未能转换，请检查原命令与生成的 Compose 配置。" : {
+      "extractionState" : "manual"
+    },
     "部署文件" : {
       "extractionState" : "manual"
     },

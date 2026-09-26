@@ -221,6 +221,138 @@ struct AppKitSearchFieldLifecycleTests {
         #expect(window.makeFirstResponderRequestCount == 0)
     }
 
+    @Test(arguments: [false, true])
+    @MainActor func successfulFieldEditorFocusDoesNotReclaimFocusAfterUserHandoff(observed: Bool) async throws {
+        let window = FocusRequestTrackingWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 120),
+            styleMask: [.titled], backing: .buffered, defer: false
+        )
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 120))
+        let search = NSTextField(frame: NSRect(x: 20, y: 70, width: 260, height: 28))
+        let other = NSTextField(frame: NSRect(x: 20, y: 20, width: 260, height: 28))
+        content.addSubview(search)
+        content.addSubview(other)
+        window.contentView = content
+        window.makeKeyAndOrderFront(nil)
+        defer { window.orderOut(nil) }
+        var attempts: [AppKitSearchFieldFocusAttempt] = []
+        let requestsBeforeFocus = window.makeFirstResponderRequestCount
+
+        if observed {
+            AppKitSearchFieldLifecycle.requestFocus(
+                search, delayedRetries: [0.05, 0.15], isValid: { true },
+                observer: { attempts.append($0) }
+            )
+        } else {
+            AppKitSearchFieldLifecycle.requestFocus(
+                search, delayedRetries: [0.05, 0.15], isValid: { true }
+            )
+        }
+        let deadline = Date(timeIntervalSinceNow: 1)
+        while Date() < deadline {
+            if window.makeFirstResponderRequestCount > requestsBeforeFocus,
+               let editor = search.currentEditor(), window.firstResponder === editor { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+
+        let searchEditor = try #require(search.currentEditor())
+        #expect(window.makeFirstResponderRequestCount > requestsBeforeFocus)
+        #expect(window.firstResponder === searchEditor)
+        if observed {
+            let immediate = try #require(attempts.first)
+            #expect(immediate.source == .immediate)
+            #expect(immediate.makeFirstResponderResult == true)
+            #expect(immediate.firstResponderIsFieldEditor)
+        }
+
+        #expect(window.makeFirstResponder(other))
+        let otherEditor = try #require(other.currentEditor())
+        #expect(search.currentEditor() == nil)
+        #expect(window.firstResponder === otherEditor)
+        let requestsAfterHandoff = window.makeFirstResponderRequestCount
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                continuation.resume()
+            }
+        }
+
+        #expect(search.currentEditor() == nil)
+        let currentOtherEditor = try #require(other.currentEditor())
+        #expect(window.firstResponder === currentOtherEditor)
+        #expect(window.makeFirstResponderRequestCount == requestsAfterHandoff)
+        if observed {
+            #expect(attempts.map(\.source) == [.immediate])
+        }
+    }
+
+    @Test @MainActor func detachedFieldRetriesAfterWindowAttachment() async throws {
+        let field = NSTextField(frame: NSRect(x: 20, y: 40, width: 260, height: 28))
+        let window = FocusRequestTrackingWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 120),
+            styleMask: [.titled], backing: .buffered, defer: false
+        )
+        let content = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: 120))
+        window.contentView = content
+        window.makeKeyAndOrderFront(nil)
+        defer { window.orderOut(nil) }
+        var attempts: [AppKitSearchFieldFocusAttempt] = []
+
+        AppKitSearchFieldLifecycle.requestFocus(
+            field, delayedRetries: [0.05], isValid: { true },
+            observer: { attempts.append($0) }
+        )
+        let immediateDeadline = Date(timeIntervalSinceNow: 1)
+        while attempts.isEmpty, Date() < immediateDeadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        let immediate = try #require(attempts.first)
+        #expect(immediate.source == .immediate)
+        #expect(!immediate.hasWindow)
+        #expect(!immediate.firstResponderIsFieldEditor)
+
+        content.addSubview(field)
+        #expect(field.currentEditor() == nil)
+        let retryDeadline = Date(timeIntervalSinceNow: 1)
+        while attempts.count < 2, Date() < retryDeadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        let retry = try #require(attempts.last)
+        let editor = try #require(field.currentEditor())
+        #expect(attempts.count == 2)
+        #expect(retry.source == .delayed(0.05))
+        #expect(retry.hasWindow)
+        #expect(retry.makeFirstResponderResult == true)
+        #expect(retry.firstResponderIsFieldEditor)
+        #expect(window.firstResponder === editor)
+    }
+
+    @Test @MainActor func successfulResponderReturnWithoutFieldEditorStillRetries() async throws {
+        let field = NSTextField(frame: NSRect(x: 20, y: 40, width: 260, height: 28))
+        field.isEditable = false
+        let window = FocusRequestTrackingWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 120),
+            styleMask: [.titled], backing: .buffered, defer: false
+        )
+        window.contentView = field
+        window.makeKeyAndOrderFront(nil)
+        defer { window.orderOut(nil) }
+        var attempts: [AppKitSearchFieldFocusAttempt] = []
+
+        AppKitSearchFieldLifecycle.requestFocus(
+            field, delayedRetries: [0.05], isValid: { true },
+            observer: { attempts.append($0) }
+        )
+        let deadline = Date(timeIntervalSinceNow: 1)
+        while attempts.count < 2, Date() < deadline {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+
+        #expect(attempts.map(\.source) == [.immediate, .delayed(0.05)])
+        #expect(attempts.first?.makeFirstResponderResult == true)
+        #expect(attempts.allSatisfy { !$0.firstResponderIsFieldEditor })
+        #expect(window.makeFirstResponderRequestCount >= 2)
+    }
+
     @Test @MainActor func optionalCommandHandlerOwnsPaletteSpecificCommands() {
         let state = TestState(text: "")
         let coordinator = AppKitSearchFieldCoordinator(

@@ -235,4 +235,42 @@ struct JWTSignerTests {
             ))
         }
     }
+
+    @Test func acceptsZeroAndOneForEveryNumericDateClaim() throws {
+        let secret = String(repeating: "a", count: 32)
+
+        for name in ["exp", "nbf", "iat"] {
+            for numeric in [0, 1] {
+                let result = try JWTSigner.sign(config: .init(
+                    algorithm: .hs256,
+                    payloadJSON: "{\"\(name)\":\(numeric)}",
+                    advancedHeaderJSON: "",
+                    secret: secret,
+                    secretEncoding: .utf8
+                ))
+                let parsed = try JWTParser.parse(result.token)
+                let payload = try #require(JSONSerialization.jsonObject(with: Data(parsed.payload.utf8)) as? [String: Any])
+                let value = try #require(payload[name] as? NSNumber)
+                #expect(value.intValue == numeric)
+            }
+        }
+    }
+
+    @Test func rejectsBooleanValuesForEveryNumericDateClaim() {
+        let secret = String(repeating: "a", count: 32)
+
+        for name in ["exp", "nbf", "iat"] {
+            for literal in ["true", "false"] {
+                #expect(throws: JWTSigner.SigningError.invalidNumericDate(name)) {
+                    _ = try JWTSigner.sign(config: .init(
+                        algorithm: .hs256,
+                        payloadJSON: "{\"\(name)\":\(literal)}",
+                        advancedHeaderJSON: "",
+                        secret: secret,
+                        secretEncoding: .utf8
+                    ))
+                }
+            }
+        }
+    }
 }

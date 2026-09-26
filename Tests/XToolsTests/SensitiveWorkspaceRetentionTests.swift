@@ -192,7 +192,7 @@ struct CryptoTransformWorkspaceRetentionTests {
     }
 
     @MainActor
-    @Test func textEncryptionRetainsWorkInMemoryButReturnsToSafeRelaunchDefaults() throws {
+    @Test func textEncryptionRetainsWorkInMemoryButReturnsToSafeRelaunchDefaults() async throws {
         let defaults = Self.defaults()
         let repository = ToolWorkspaceRepository(defaults: defaults)
         let encryption = repository.model(for: TextEncryptionToolWorkspaceModel.key)
@@ -200,6 +200,11 @@ struct CryptoTransformWorkspaceRetentionTests {
         encryption.password = "session-only-key"
         encryption.input = "session-only-plaintext"
         encryption.run()
+        let clock = ContinuousClock()
+        let deadline = clock.now.advanced(by: .seconds(5))
+        while encryption.output.isEmpty && clock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
         #expect(!encryption.output.isEmpty)
 
         let restored = repository.model(for: TextEncryptionToolWorkspaceModel.key)

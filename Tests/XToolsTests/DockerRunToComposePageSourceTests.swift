@@ -1,7 +1,22 @@
 import Foundation
 import Testing
+@testable import XTools
 
 struct DockerRunToComposePageSourceTests {
+    @Test func warningDetailDoesNotExposeUnknownOptionValues() {
+        let secret = "private-secret-value"
+        let result = IndexDockerWorkspaceContent.binding(for: .init(
+            input: "docker run --token=\(secret) alpine",
+            direction: .runToCompose
+        ))
+
+        #expect(result.output.contains("image: alpine"))
+        #expect(result.warning == "部分 Docker 选项无法转换。")
+        #expect(result.diagnostic?.suggestion == "部分命令行参数未能转换，请检查原命令与生成的 Compose 配置。")
+        #expect(result.diagnostic?.suggestion?.contains(secret) == false)
+        #expect(result.diagnostic?.message.contains(secret) == false)
+    }
+
     @Test func dockerPageRoutesConversionWarningsAndTypedErrorsIntoWorkbenchDiagnostics() throws {
         let source = try String(
             contentsOfFile: "Sources/XTools/ToolPages/Development/DockerRunToComposePage.swift",

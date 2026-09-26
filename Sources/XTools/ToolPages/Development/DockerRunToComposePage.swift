@@ -65,7 +65,7 @@ struct IndexDockerPage: View {
     }
 }
 
-private struct IndexDockerWorkspaceContent: View {
+struct IndexDockerWorkspaceContent: View {
     nonisolated private static let maxInputCharacters = 200_000
 
     @ObservedObject var workspace: DockerConversionToolWorkspaceModel
@@ -136,12 +136,12 @@ private struct IndexDockerWorkspaceContent: View {
         }
     }
 
-    private struct Snapshot: Sendable {
+    struct Snapshot: Sendable {
         let input: String
         let direction: DockerConversionToolWorkspaceModel.Direction
     }
 
-    nonisolated private static func binding(for snapshot: Snapshot) -> FormatBinding {
+    nonisolated static func binding(for snapshot: Snapshot) -> FormatBinding {
         let trimmed = snapshot.input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return FormatBinding()
@@ -178,14 +178,10 @@ private struct IndexDockerWorkspaceContent: View {
                     suggestion: "检查命令是否包含有效的容器参数和镜像名称。"
                 )
             } else if let warningText {
-                let unmapped = result.warnings.map { $0.option }.filter { !$0.isEmpty }.joined(separator: ", ")
-                let detailSuggestion = unmapped.isEmpty
-                    ? "部分命令行参数在 Docker Compose 中没有直接对应的单一指令，已被忽略；建议在生成的 Compose 文件中手动完善相应配置。"
-                    : "未支持或未映射的选项（\(unmapped)）已被忽略；建议在生成的 Compose 文件中手动配置对应字段，或检查参数拼写。"
                 diagnostic = FormatDiagnostic(
                     formatName: "Docker 转换",
                     message: warningText,
-                    suggestion: detailSuggestion
+                    suggestion: "部分命令行参数未能转换，请检查原命令与生成的 Compose 配置。"
                 )
             } else {
                 diagnostic = nil

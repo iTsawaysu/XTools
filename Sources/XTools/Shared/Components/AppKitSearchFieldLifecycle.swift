@@ -127,6 +127,10 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
 enum AppKitSearchFieldLifecycle {
     typealias FocusAttemptObserver = @MainActor @Sendable (AppKitSearchFieldFocusAttempt) -> Void
 
+    private final class FocusRequestState {
+        var succeeded = false
+    }
+
     static func makeTextField(
         configuration: AppKitSearchFieldConfiguration,
         text: Binding<String>,
@@ -195,8 +199,10 @@ enum AppKitSearchFieldLifecycle {
         isValid: @escaping AppKitSearchFieldCoordinator.FocusRequestValidity,
         observer: FocusAttemptObserver?
     ) {
+        let state = FocusRequestState()
         DispatchQueue.main.async { [weak textField] in
-            performFocusAttempt(
+            guard !state.succeeded else { return }
+            state.succeeded = performFocusAttempt(
                 textField,
                 source: .immediate,
                 isValid: isValid,
@@ -205,7 +211,8 @@ enum AppKitSearchFieldLifecycle {
         }
         for delay in delayedRetries {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak textField] in
-                performFocusAttempt(
+                guard !state.succeeded else { return }
+                state.succeeded = performFocusAttempt(
                     textField,
                     source: .delayed(delay),
                     isValid: isValid,
@@ -220,11 +227,12 @@ enum AppKitSearchFieldLifecycle {
         source: AppKitSearchFieldFocusAttemptSource,
         isValid: AppKitSearchFieldCoordinator.FocusRequestValidity,
         observer: FocusAttemptObserver?
-    ) {
+    ) -> Bool {
         guard let observer else {
-            guard isValid() else { return }
-            textField?.window?.makeFirstResponder(textField)
-            return
+            guard isValid(), let textField, let window = textField.window,
+                  window.makeFirstResponder(textField),
+                  let editor = textField.currentEditor() else { return false }
+            return window.firstResponder === editor
         }
 
         let isRequestValid = isValid()
@@ -241,7 +249,7 @@ enum AppKitSearchFieldLifecycle {
                     firstResponderIsFieldEditor: false
                 )
             )
-            return
+            return false
         }
 
         let window = textField.window
@@ -275,6 +283,7 @@ enum AppKitSearchFieldLifecycle {
                 firstResponderIsFieldEditor: firstResponderIsFieldEditor
             )
         )
+        return makeFirstResponderResult == true && firstResponderIsFieldEditor
     }
 
     /// Accept the complete proposed height for hit testing instead of the

@@ -20,6 +20,58 @@ struct IndexSyntaxToken: Equatable {
     let kind: Kind
 }
 
+/// Converts grapheme-cluster token offsets into the UTF-16 ranges AppKit uses.
+/// Build one map per logical line, then reuse it for every token on that line.
+struct IndexSyntaxUTF16RangeMap {
+    private let utf16Offsets: [Int]
+
+    init(line: String) {
+        var offsets = [0]
+        var utf16Offset = 0
+        for character in line {
+            let (nextOffset, overflow) = utf16Offset.addingReportingOverflow(character.utf16.count)
+            guard !overflow else {
+                utf16Offsets = []
+                return
+            }
+            offsets.append(nextOffset)
+            utf16Offset = nextOffset
+        }
+        utf16Offsets = offsets
+    }
+
+    func range(for token: IndexSyntaxToken, in lineRange: NSRange) -> NSRange? {
+        guard !utf16Offsets.isEmpty,
+              lineRange.location >= 0,
+              lineRange.location != NSNotFound,
+              lineRange.length >= 0,
+              token.start >= 0,
+              token.length > 0 else {
+            return nil
+        }
+        let (_, lineRangeOverflow) = lineRange.location.addingReportingOverflow(lineRange.length)
+        guard !lineRangeOverflow else { return nil }
+
+        let characterCount = utf16Offsets.count - 1
+        guard token.start <= characterCount,
+              token.length <= characterCount - token.start else {
+            return nil
+        }
+
+        let localLocation = utf16Offsets[token.start]
+        let localEnd = utf16Offsets[token.start + token.length]
+        let localLength = localEnd - localLocation
+        guard localLocation <= lineRange.length,
+              localLength <= lineRange.length - localLocation else {
+            return nil
+        }
+
+        let (location, overflow) = lineRange.location.addingReportingOverflow(localLocation)
+        guard !overflow, location != NSNotFound else { return nil }
+        return NSRange(location: location, length: localLength)
+    }
+}
+
 /// Languages the shared code viewer can colorize viewport-lazily. Scanning is
 /// stateless per line, so any visible window can be colored independently
 /// without cross-line parser state.
@@ -82,17 +134,30 @@ enum IndexViewportHighlightMath {
             return clampedSpan(0, 0, lineRanges.count, margin)
         }
 
-        var first = lineRanges.count - 1
-        for (index, range) in lineRanges.enumerated() where characterRange.location < NSMaxRange(range) {
-            first = index
-            break
+        var lower = 0
+        var upper = lineRanges.count
+        while lower < upper {
+            let middle = lower + (upper - lower) / 2
+            if characterRange.location < NSMaxRange(lineRanges[middle]) {
+                upper = middle
+            } else {
+                lower = middle + 1
+            }
         }
+        let first = min(lower, lineRanges.count - 1)
 
-        var last = 0
         let upperBound = max(characterRange.location, characterRange.location + characterRange.length - 1)
-        for (index, range) in lineRanges.enumerated() where upperBound >= range.location {
-            last = index
+        lower = 0
+        upper = lineRanges.count
+        while lower < upper {
+            let middle = lower + (upper - lower) / 2
+            if upperBound >= lineRanges[middle].location {
+                lower = middle + 1
+            } else {
+                upper = middle
+            }
         }
+        let last = max(0, lower - 1)
 
         return clampedSpan(first, last, lineRanges.count, margin)
     }

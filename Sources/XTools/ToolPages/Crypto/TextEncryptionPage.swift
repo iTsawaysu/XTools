@@ -1,20 +1,50 @@
 import XToolsCore
 import SwiftUI
 
+struct TextEncryptionRequest: Sendable {
+    let input: String
+    let password: String
+    let mode: String
+    let algorithm: String
+}
+
+struct TextEncryptionOutcome: Sendable {
+    let output: String
+    let error: String?
+}
+
+typealias TextEncryptionOperation = @Sendable (TextEncryptionRequest) -> TextEncryptionOutcome
+
 @MainActor
 final class TextEncryptionToolWorkspaceModel: ObservableObject {
     static let key = ToolWorkspaceKey<TextEncryptionToolWorkspaceModel>(toolID: "text-encryption") { _ in
         TextEncryptionToolWorkspaceModel()
     }
 
-    @Published var mode = "enc"
-    @Published var algorithm = TextEncryptionService.Algorithm.aesGCM.rawValue
-    @Published var password = ""
-    @Published var input = ""
+    @Published var mode = "enc" {
+        didSet { if mode != oldValue { clearResult() } }
+    }
+    @Published var algorithm = TextEncryptionService.Algorithm.aesGCM.rawValue {
+        didSet { if algorithm != oldValue { clearResult() } }
+    }
+    @Published var password = "" {
+        didSet { if !password.utf8.elementsEqual(oldValue.utf8) { clearResult() } }
+    }
+    @Published var input = "" {
+        didSet { if !input.utf8.elementsEqual(oldValue.utf8) { clearResult() } }
+    }
     @Published var output = ""
     @Published var error: String?
-    private var selectedAlgorithm: TextEncryptionService.Algorithm {
-        TextEncryptionService.Algorithm(rawValue: algorithm) ?? .aesGCM
+
+    private let execution = SupersedingExecutionSession(cancelInFlight: true)
+    private let operation: TextEncryptionOperation
+
+    convenience init() {
+        self.init(operation: Self.defaultOperation)
+    }
+
+    init(operation: @escaping TextEncryptionOperation) {
+        self.operation = operation
     }
 
     func changeMode(to newMode: String) {
@@ -27,7 +57,6 @@ final class TextEncryptionToolWorkspaceModel: ObservableObject {
         if let nextInput {
             input = nextInput
         }
-        clearResult()
     }
 
     func changeAlgorithm(to newAlgorithm: String) {
@@ -36,17 +65,16 @@ final class TextEncryptionToolWorkspaceModel: ObservableObject {
         }
 
         algorithm = newAlgorithm
-        clearResult()
     }
 
     func clearSensitiveState() {
+        clearResult()
         input = ""
-        output = ""
-        error = nil
         password = ""
     }
 
     func clearResult() {
+        execution.invalidate()
         output = ""
         error = nil
     }
@@ -56,21 +84,35 @@ final class TextEncryptionToolWorkspaceModel: ObservableObject {
     /// salt each call, so recomputing on every re-render would make the displayed
     /// (and copied) ciphertext change unpredictably between frames.
     func run() {
-        guard !input.isEmpty else { output = ""; error = nil; return }
-        guard !password.isEmpty else { output = ""; error = "加密口令不能为空。"; return }
+        guard !input.isEmpty else { clearResult(); return }
+        guard !password.isEmpty else { clearResult(); error = "加密口令不能为空。"; return }
 
+        let request = TextEncryptionRequest(input: input, password: password, mode: mode, algorithm: algorithm)
+        let operation = self.operation
+        output = ""
+        error = nil
+        execution.schedule(operation: { _ in operation(request) }) { [weak self] _, outcome in
+            guard let self else { return }
+            self.output = outcome.output
+            self.error = outcome.error
+        }
+    }
+
+    nonisolated private static let defaultOperation: TextEncryptionOperation = { request in
+        let algorithm = TextEncryptionService.Algorithm(rawValue: request.algorithm) ?? .aesGCM
         do {
-            output = mode == "enc"
-                ? try TextEncryptionService.encrypt(input, password: password, algorithm: selectedAlgorithm)
-                : try TextEncryptionService.decrypt(input, password: password, algorithm: selectedAlgorithm)
-            error = nil
+            let output = request.mode == "enc"
+                ? try TextEncryptionService.encrypt(request.input, password: request.password, algorithm: algorithm)
+                : try TextEncryptionService.decrypt(request.input, password: request.password, algorithm: algorithm)
+            return TextEncryptionOutcome(output: output, error: nil)
         } catch let err as TextEncryptionService.Error {
-            output = ""
-            error = err.errorDescription ?? (mode == "enc" ? "加密操作失败。" : "解密操作失败。")
+            return TextEncryptionOutcome(
+                output: "",
+                error: err.errorDescription ?? (request.mode == "enc" ? "加密操作失败。" : "解密操作失败。")
+            )
         } catch {
             DiagnosticFallbackLog.record(error, context: "TextEncryptionPage.convert")
-            output = ""
-            self.error = mode == "enc" ? "加密操作失败。" : "解密操作失败。"
+            return TextEncryptionOutcome(output: "", error: request.mode == "enc" ? "加密操作失败。" : "解密操作失败。")
         }
     }
 }
@@ -158,8 +200,6 @@ private struct IndexTextEncryptionWorkspaceContent: View {
                 clearDisabled: input.isEmpty && output.isEmpty && error == nil && password.isEmpty,
                 workspaceSemantic: .securityTransformWorkspace
             )
-                .onChange(of: input) { _ in clearResult() }
-                .onChange(of: password) { _ in clearResult() }
         }
         .onChange(of: weakAlgorithmDiagnostic) { diagnostic in
             if let announcement = weakAlgorithmPresentation.update(to: diagnostic) {
@@ -255,10 +295,6 @@ private struct IndexTextEncryptionWorkspaceContent: View {
     private func clearSensitiveState() {
         workspace.clearSensitiveState()
         showsPassword = false
-    }
-
-    private func clearResult() {
-        workspace.clearResult()
     }
 
     private func run() {

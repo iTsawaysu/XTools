@@ -293,7 +293,7 @@ public enum JWTVerifier {
         let now = Date().timeIntervalSince1970
 
         if let expValue = payload["exp"] {
-            guard let exp = numericDate(expValue) else {
+            guard let exp = JWTNumericDate.timestamp(expValue) else {
                 details.append(invalidNumericDateItem(name: "过期时间 (exp)", category: .expiration))
                 return (false, details)
             }
@@ -313,7 +313,7 @@ public enum JWTVerifier {
         }
 
         if let nbfValue = payload["nbf"] {
-            guard let nbf = numericDate(nbfValue) else {
+            guard let nbf = JWTNumericDate.timestamp(nbfValue) else {
                 details.append(invalidNumericDateItem(name: "生效时间 (nbf)", category: .expiration))
                 return (false, details)
             }
@@ -333,7 +333,7 @@ public enum JWTVerifier {
         }
 
         if let iatValue = payload["iat"] {
-            guard let iat = numericDate(iatValue) else {
+            guard let iat = JWTNumericDate.timestamp(iatValue) else {
                 details.append(invalidNumericDateItem(name: "签发时间 (iat)", category: .claims))
                 return (false, details)
             }
@@ -346,17 +346,6 @@ public enum JWTVerifier {
         }
 
         return (isValid, details)
-    }
-
-    private static func numericDate(_ value: Any) -> TimeInterval? {
-        if value is Bool {
-            return nil
-        }
-        if let number = value as? NSNumber {
-            let timestamp = number.doubleValue
-            return timestamp.isFinite ? timestamp : nil
-        }
-        return nil
     }
 
     private static func invalidNumericDateItem(
