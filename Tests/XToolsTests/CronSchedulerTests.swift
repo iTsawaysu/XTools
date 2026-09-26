@@ -188,6 +188,129 @@ struct CronSchedulerTests {
         ])
     }
 
+    @Test func nextRunsStartAfterWholeAndFractionalMinute() {
+        let calendar = gregorianUTC()
+        let midnight = date(calendar, 2026, 1, 1, 0, 0)
+        let nextMinute = date(calendar, 2026, 1, 1, 0, 1)
+
+        for after in [midnight, midnight.addingTimeInterval(0.5), midnight.addingTimeInterval(59.5)] {
+            let runs = CronScheduler.nextRuns("* * * * *", count: 2, after: after, calendar: calendar)
+            #expect(runs == [nextMinute, date(calendar, 2026, 1, 1, 0, 2)])
+        }
+        #expect(CronScheduler.nextRuns("* * * * *", count: 1, after: nextMinute, calendar: calendar)
+            == [date(calendar, 2026, 1, 1, 0, 2)])
+    }
+
+    @Test func fallBackSecondHourStaysAfterAbsoluteAnchor() {
+        let calendar = gregorian("America/Los_Angeles")
+        let after = utc("2024-11-03T09:40:00Z") // second 01:40
+        let runs = CronScheduler.nextRuns("* * * * *", count: 3, after: after, calendar: calendar)
+
+        #expect(runs == [
+            utc("2024-11-03T09:41:00Z"),
+            utc("2024-11-03T09:42:00Z"),
+            utc("2024-11-03T09:43:00Z")
+        ])
+        #expect(runs.allSatisfy { $0 > after })
+    }
+
+    @Test func fallBackOrdersFirstAndSecondOccurrencesByAbsoluteTime() {
+        let calendar = gregorian("America/Los_Angeles")
+        let runs = CronScheduler.nextRuns(
+            "30,45 1 * * *", count: 4,
+            after: utc("2024-11-03T08:20:00Z"), calendar: calendar
+        )
+
+        #expect(runs == [
+            utc("2024-11-03T08:30:00Z"), // first 01:30
+            utc("2024-11-03T08:45:00Z"), // first 01:45
+            utc("2024-11-03T09:30:00Z"), // second 01:30
+            utc("2024-11-03T09:45:00Z")  // second 01:45
+        ])
+    }
+
+    @Test func springForwardSkipsMissingHourInsteadOfNormalizing() {
+        let calendar = gregorian("America/Los_Angeles")
+        let runs = CronScheduler.nextRuns(
+            "30 2 * * *", count: 2,
+            after: utc("2024-03-10T08:00:00Z"), calendar: calendar
+        )
+
+        #expect(runs == [utc("2024-03-11T09:30:00Z"), utc("2024-03-12T09:30:00Z")])
+        #expect(runs.allSatisfy {
+            calendar.component(.hour, from: $0) == 2 && calendar.component(.minute, from: $0) == 30
+        })
+    }
+
+    @Test func halfHourDSTTransitionsPreserveCronFieldsAndOrder() {
+        let calendar = gregorian("Australia/Lord_Howe")
+        let repeated = CronScheduler.nextRuns(
+            "30,45 1 * * *", count: 4,
+            after: utc("2024-04-06T14:20:00Z"), calendar: calendar
+        )
+        #expect(repeated == [
+            utc("2024-04-06T14:30:00Z"),
+            utc("2024-04-06T14:45:00Z"),
+            utc("2024-04-06T15:00:00Z"),
+            utc("2024-04-06T15:15:00Z")
+        ])
+
+        let missing = CronScheduler.nextRuns(
+            "15 2 * * *", count: 2,
+            after: utc("2024-10-05T14:00:00Z"), calendar: calendar
+        )
+        #expect(missing == [utc("2024-10-06T15:15:00Z"), utc("2024-10-07T15:15:00Z")])
+        #expect(missing.allSatisfy {
+            calendar.component(.hour, from: $0) == 2 && calendar.component(.minute, from: $0) == 15
+        })
+    }
+
+    @Test func missingMidnightDoesNotSkipEarlyMinuteNextDay() {
+        let calendar = gregorian("America/Santiago")
+        let runs = CronScheduler.nextRuns(
+            "30 0 * * *", count: 2,
+            after: utc("2024-09-08T12:00:00Z"), calendar: calendar
+        )
+
+        #expect(runs == [utc("2024-09-09T03:30:00Z"), utc("2024-09-10T03:30:00Z")])
+        #expect(runs.allSatisfy {
+            calendar.component(.hour, from: $0) == 0 && calendar.component(.minute, from: $0) == 30
+        })
+    }
+
+    @Test func midnightFallBackIncludesBothOccurrencesAcrossLocalDayBoundary() {
+        let santiago = gregorian("America/Santiago")
+        let santiagoRuns = CronScheduler.nextRuns(
+            "30 23 * * *", count: 3,
+            after: utc("2024-04-07T02:20:00Z"), calendar: santiago
+        )
+        #expect(santiagoRuns == [
+            utc("2024-04-07T02:30:00Z"),
+            utc("2024-04-07T03:30:00Z"),
+            utc("2024-04-08T03:30:00Z")
+        ])
+
+        let havana = gregorian("America/Havana")
+        let havanaRuns = CronScheduler.nextRuns(
+            "30 0 * * *", count: 3,
+            after: utc("2024-11-03T04:20:00Z"), calendar: havana
+        )
+        #expect(havanaRuns == [
+            utc("2024-11-03T04:30:00Z"),
+            utc("2024-11-03T05:30:00Z"),
+            utc("2024-11-04T05:30:00Z")
+        ])
+    }
+
+    @Test func sparseScheduleKeepsFiveYearSearchHorizon() {
+        let calendar = gregorianUTC()
+        let after = date(calendar, 2024, 2, 29, 0, 0)
+        let runs = CronScheduler.nextRuns("0 0 29 2 *", count: 2, after: after, calendar: calendar)
+
+        #expect(runs == [date(calendar, 2028, 2, 29, 0, 0)])
+        #expect(CronScheduler.nextRuns("0 0 31 2 *", count: 1, after: after, calendar: calendar).isEmpty)
+    }
+
     @Test func returnsEmptyForInvalidExpression() {
         let calendar = gregorianUTC()
         let after = date(calendar, 2026, 1, 1, 12, 0)
@@ -260,6 +383,16 @@ struct CronSchedulerTests {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         return calendar
+    }
+
+    private func gregorian(_ timeZone: String) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: timeZone)!
+        return calendar
+    }
+
+    private func utc(_ value: String) -> Date {
+        ISO8601DateFormatter().date(from: value)!
     }
 
     private func date(_ calendar: Calendar, _ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {
