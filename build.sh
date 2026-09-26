@@ -216,8 +216,16 @@ stop_existing_app() {
 
 write_info_plist_if_needed() {
   if [[ -f "$INFO_PLIST" ]]; then
-    # Already packaged once — avoid rewriting (and re-invalidating codesign metadata
-    # more than necessary) on the hot path.
+    local current_bundle_id
+    if current_bundle_id="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$INFO_PLIST" 2>/dev/null)"; then
+      # Keep the hot path byte-for-byte stable when the requested identity is unchanged.
+      if [[ "$current_bundle_id" == "$BUNDLE_ID" ]]; then
+        return 0
+      fi
+      /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$INFO_PLIST"
+    else
+      /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $BUNDLE_ID" "$INFO_PLIST"
+    fi
     return 0
   fi
 
