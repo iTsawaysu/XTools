@@ -176,7 +176,19 @@ struct FoundationImageWorkflowFileReader: ImageWorkflowFileReading {
     }
 
     func readData(from url: URL) throws -> Data {
-        try Data(contentsOf: url)
+        try readData(from: url, maxBytes: ImageProcessingBudget.maxInputBytes)
+    }
+
+    func readData(from url: URL, maxBytes: Int) throws -> Data {
+        do {
+            return try BoundedFileReader.read(from: url, maxBytes: maxBytes)
+        } catch BoundedFileReader.ReadError.tooLarge {
+            let actualBytes = maxBytes == Int.max ? Int.max : maxBytes + 1
+            throw ImageProcessorError.inputFileTooLarge(
+                actualBytes: actualBytes,
+                maxBytes: maxBytes
+            )
+        }
     }
 }
 
