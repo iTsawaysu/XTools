@@ -285,6 +285,42 @@ struct JWTVerifierTests {
         #expect(!result.isValid)
     }
 
+    @Test func zeroAndOneAreNumericDatesForEveryClaim() throws {
+        for numeric in [0, 1] {
+            let token = Self.makeToken(
+                header: #"{"alg":"HS256","typ":"JWT"}"#,
+                payload: "{\"exp\":\(numeric),\"nbf\":\(numeric),\"iat\":\(numeric)}"
+            )
+            let result = try JWTVerifier.verify(token: token, config: .init(secret: nil))
+            let exp = try #require(result.details.first { $0.name.contains("exp") })
+            let nbf = try #require(result.details.first { $0.name.contains("nbf") })
+            let iat = try #require(result.details.first { $0.name.contains("iat") })
+
+            #expect(exp.status == .failed)
+            #expect(exp.message.contains("已过期"))
+            #expect(nbf.status == .passed)
+            #expect(nbf.message == "已生效")
+            #expect(iat.status == .informational)
+            #expect(!iat.message.contains("NumericDate"))
+        }
+    }
+
+    @Test func booleansAreNotNumericDatesForEveryClaim() throws {
+        for name in ["exp", "nbf", "iat"] {
+            for literal in ["true", "false"] {
+                let token = Self.makeToken(
+                    header: #"{"alg":"HS256","typ":"JWT"}"#,
+                    payload: "{\"\(name)\":\(literal)}"
+                )
+                let result = try JWTVerifier.verify(token: token, config: .init(secret: nil))
+                let item = try #require(result.details.first { $0.name.contains(name) })
+                #expect(item.status == .failed)
+                #expect(item.message.contains("NumericDate"))
+                #expect(result.summary == .failed)
+            }
+        }
+    }
+
     // MARK: - Structural errors
 
     @Test func wrongSegmentCountThrowsParseError() throws {

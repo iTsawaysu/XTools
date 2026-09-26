@@ -49,6 +49,50 @@ struct JWTRegisteredClaimInterpreterTests {
         #expect(insights.first { $0.kind == .issuedAt }?.status == .informational)
     }
 
+    @Test func zeroAndOneAreNumericDatesForEveryClaim() throws {
+        for numeric in [0, 1] {
+            let insights = try JWTRegisteredClaimInterpreter.interpret(
+                payloadJSON: "{\"exp\":\(numeric),\"nbf\":\(numeric),\"iat\":\(numeric)}",
+                now: now,
+                timeZone: utc
+            )
+
+            let exp = try #require(insights.first { $0.kind == .expiration })
+            let nbf = try #require(insights.first { $0.kind == .notBefore })
+            let iat = try #require(insights.first { $0.kind == .issuedAt })
+            let display = "1970-01-01 00:00:0\(numeric)（本机时区）"
+
+            #expect(exp.status == .failed)
+            #expect(exp.explanation == "已过期")
+            #expect(exp.displayValue == display)
+            #expect(nbf.status == .passed)
+            #expect(nbf.explanation == "已生效")
+            #expect(nbf.displayValue == display)
+            #expect(iat.status == .informational)
+            #expect(iat.displayValue == display)
+        }
+    }
+
+    @Test func booleansAreNotNumericDatesForEveryClaim() throws {
+        for literal in ["true", "false"] {
+            let insights = try JWTRegisteredClaimInterpreter.interpret(
+                payloadJSON: "{\"exp\":\(literal),\"nbf\":\(literal),\"iat\":\(literal)}",
+                now: now,
+                timeZone: utc
+            )
+
+            for kind in [
+                JWTRegisteredClaimInsight.Kind.expiration,
+                .notBefore,
+                .issuedAt
+            ] {
+                let insight = try #require(insights.first { $0.kind == kind })
+                #expect(insight.status == .failed)
+                #expect(insight.explanation.contains("NumericDate"))
+            }
+        }
+    }
+
     @Test func acceptsAudienceStringAndStringArray() throws {
         let scalar = try JWTRegisteredClaimInterpreter.interpret(
             payloadJSON: #"{"aud":"api://single"}"#,
