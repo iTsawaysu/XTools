@@ -28,11 +28,11 @@ extension DockerRunToDockerComposeService {
                         let softHard = limits.split(separator: ":")
                         if softHard.count == 2 {
                             lines.append("      \(name):")
-                            lines.append("        soft: \(softHard[0])")
-                            lines.append("        hard: \(softHard[1])")
+                            lines.append("        soft: \(normalizedUlimitScalar(String(softHard[0])))")
+                            lines.append("        hard: \(normalizedUlimitScalar(String(softHard[1])))")
                         }
                     } else {
-                        lines.append("      \(name): \(limits)")
+                        lines.append("      \(name): \(normalizedUlimitScalar(limits))")
                     }
                 }
             }
@@ -159,6 +159,11 @@ extension DockerRunToDockerComposeService {
         if let gpus = service.gpus {
             appendGPUReservation(count: gpus, to: &lines)
         }
+    }
+
+    private static func normalizedUlimitScalar(_ value: String) -> String {
+        guard let parsed = Int64(value) else { return value }
+        return String(parsed)
     }
 
     private static func appendDeployRestartPolicy(

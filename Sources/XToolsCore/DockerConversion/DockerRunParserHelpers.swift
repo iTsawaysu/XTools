@@ -11,9 +11,29 @@ extension DockerRunToDockerComposeService {
             let character = chars[index]
 
             if let activeQuote = quote {
+                if activeQuote == "\"", character == "\\", index + 1 < chars.count {
+                    let next = chars[index + 1]
+                    // Match tokenize's double-quoted escapes; an escaped quote
+                    // cannot expose a `docker run` phrase inside this argument.
+                    if next == "$" || next == "`" || next == "\"" || next == "\\" || next == "\n" {
+                        index += 2
+                        continue
+                    }
+                }
+                // Backslashes are literal inside single quotes.
                 if character == activeQuote { quote = nil }
                 index += 1
                 continue
+            }
+
+            if character == "\\", index + 1 < chars.count {
+                let next = chars[index + 1]
+                // Outside quotes, tokenize consumes a backslash before quote
+                // delimiters, backslashes, whitespace and continued newlines.
+                if next == "\"" || next == "'" || next == "\\" || next.isWhitespace {
+                    index += 2
+                    continue
+                }
             }
 
             if character == "\"" || character == "'" {
@@ -55,7 +75,8 @@ extension DockerRunToDockerComposeService {
         for offset in 0..<run.count where chars[cursor + offset] != run[offset] {
             return false
         }
-        return true
+        let afterRun = cursor + run.count
+        return afterRun == chars.count || chars[afterRun].isWhitespace
     }
 
     static func requireValue(after option: String, in tokens: [String], index: inout Int) throws -> String {
@@ -272,7 +293,10 @@ extension DockerRunToDockerComposeService {
             unsupported.append("target")
             return (nil, unsupported)
         }
-        if mountType != .tmpfs, source?.isEmpty != false {
+        // Anonymous volumes have no source; bind mounts still require one.
+        // An explicitly empty source is not the omitted-source form.
+        if (mountType == .bind && source?.isEmpty != false) ||
+            (mountType == .volume && source?.isEmpty == true) {
             unsupported.append("source")
         }
         if mountType != .tmpfs, tmpfsSize != nil || tmpfsMode != nil {

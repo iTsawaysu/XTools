@@ -1,4 +1,5 @@
 import Testing
+import Yams
 @testable import XToolsCore
 
 struct DockerRunToDockerComposeServiceTests {
@@ -260,6 +261,50 @@ struct DockerRunToDockerComposeServiceTests {
         #expect(result.yaml.contains("image: alpine"))
     }
 
+    @Test func dockerRunPrefixInsideCommandWordsIsNotAnotherCommand() throws {
+        for word in ["runner", "runaway"] {
+            let command = "docker run alpine echo docker \(word)"
+            #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: command) == 1)
+            let result = try DockerRunToDockerComposeService.convert(command)
+            #expect(result.yaml.contains("- \(word)"))
+        }
+    }
+
+    @Test func escapedDoubleQuoteKeepsDockerRunInsideArgument() throws {
+        let command = #"docker run alpine echo "say \"docker run\"""#
+        #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: command) == 1)
+        #expect(try DockerRunToDockerComposeService.tokenize(command).last == "say \"docker run\"")
+        let result = try DockerRunToDockerComposeService.convert(command)
+        #expect(result.yaml.contains(#"say \"docker run\""#))
+    }
+
+    @Test func dockerRunScannerMatchesTokenizerQuoteAndBackslashBoundaries() throws {
+        // In single quotes a backslash is literal, so the next apostrophe closes
+        // the argument and exposes the second command.
+        let quotedSingleBackslash = #"docker run alpine echo 'say \ docker run'"#
+        let singleQuoted = #"docker run alpine echo 'literal\' docker run --rm alpine"#
+        #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: quotedSingleBackslash) == 1)
+        #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: singleQuoted) == 2)
+
+        // An odd number of backslashes escapes a double quote; an even number
+        // leaves it structural. The same distinction applies outside quotes.
+        let oddBackslashes = #"docker run alpine echo "say \\\"docker run\"""#
+        let evenBackslashes = #"docker run alpine echo "say \\" docker run --rm alpine"#
+        let bareEscapedQuote = #"docker run alpine echo \" docker run --rm alpine"#
+        #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: oddBackslashes) == 1)
+        #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: evenBackslashes) == 2)
+        #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: bareEscapedQuote) == 2)
+
+        for command in [singleQuoted, evenBackslashes, bareEscapedQuote] {
+            #expect {
+                _ = try DockerRunToDockerComposeService.convert(command)
+            } throws: { error in
+                guard case DockerRunToDockerComposeError.multipleCommands = error else { return false }
+                return true
+            }
+        }
+    }
+
     @Test func deploySectionsAreMergedForResourcesRestartPolicyAndGpu() throws {
         let result = try DockerRunToDockerComposeService.convert(
             "docker run --cpus=0.5 --memory=256m --restart on-failure:3 --gpus all nginx"
@@ -393,6 +438,34 @@ struct DockerRunToDockerComposeServiceTests {
 
         #expect(result.yaml.contains("weight: 300"))
         #expect(!result.yaml.contains("weight: \"300\""))
+    }
+
+    @Test func ulimitsNormalizeValidInt64ValuesBeforeYAMLParsing() throws {
+        let leadingZeroPair = try #require(
+            parsedNofileUlimit("010:020") as? [String: Any]
+        )
+        #expect(leadingZeroPair["soft"] as? Int == 10)
+        #expect(leadingZeroPair["hard"] as? Int == 20)
+
+        #expect(try parsedNofileUlimit("00042") as? Int == 42)
+
+        let signedPair = try #require(
+            parsedNofileUlimit("+0007:-0001") as? [String: Any]
+        )
+        #expect(signedPair["soft"] as? Int == 7)
+        #expect(signedPair["hard"] as? Int == -1)
+
+        let boundaries = try #require(
+            parsedNofileUlimit("\(Int64.max):\(Int64.min)") as? [String: Any]
+        )
+        #expect(boundaries["soft"] as? Int == Int.max)
+        #expect(boundaries["hard"] as? Int == Int.min)
+
+        let invalidPair = try #require(
+            parsedNofileUlimit("unlimited:invalid") as? [String: Any]
+        )
+        #expect(invalidPair["soft"] as? String == "unlimited")
+        #expect(invalidPair["hard"] as? String == "invalid")
     }
 
     // MARK: - Unknown / boolean flags
@@ -561,5 +634,17 @@ struct DockerRunToDockerComposeServiceTests {
 
         let second = try DockerRunToDockerComposeService.convert(rerun)
         #expect(second.yaml == first.yaml, Comment(rawValue: "第一轮:\(first.yaml)\n第二轮:\(second.yaml)"))
+    }
+
+    private func parsedNofileUlimit(_ value: String) throws -> Any {
+        let result = try DockerRunToDockerComposeService.convert(
+            "docker run --ulimit nofile=\(value) alpine"
+        )
+        let document = try Yams.load(yaml: result.yaml)
+        let root = try #require(document as? [String: Any])
+        let services = try #require(root["services"] as? [String: Any])
+        let service = try #require(services["alpine"] as? [String: Any])
+        let ulimits = try #require(service["ulimits"] as? [String: Any])
+        return try #require(ulimits["nofile"])
     }
 }
