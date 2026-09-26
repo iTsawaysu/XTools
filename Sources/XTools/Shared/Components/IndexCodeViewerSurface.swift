@@ -410,8 +410,11 @@ final class IndexViewportHighlighting {
 
             let contentRange = NSRange(location: fullRange.location, length: contentLength)
             let line = nsText.substring(with: contentRange)
-            for token in syntax.tokens(line: line) {
-                guard let tokenRange = utf16Range(for: token, in: line, lineRange: contentRange) else {
+            let tokens = syntax.tokens(line: line)
+            guard !tokens.isEmpty else { continue }
+            let utf16Ranges = IndexSyntaxUTF16RangeMap(line: line)
+            for token in tokens {
+                guard let tokenRange = utf16Ranges.range(for: token, in: contentRange) else {
                     continue
                 }
                 textStorage.addAttribute(
@@ -421,23 +424,5 @@ final class IndexViewportHighlighting {
                 )
             }
         }
-    }
-
-    /// Token offsets count characters; NSTextStorage wants UTF-16. Mirrors the
-    /// diff editor's proven conversion pattern.
-    private func utf16Range(
-        for token: IndexSyntaxToken,
-        in line: String,
-        lineRange: NSRange
-    ) -> NSRange? {
-        guard token.length > 0,
-              let start = line.index(line.startIndex, offsetBy: token.start, limitedBy: line.endIndex),
-              let end = line.index(start, offsetBy: token.length, limitedBy: line.endIndex) else {
-            return nil
-        }
-
-        let prefixLength = line[..<start].utf16.count
-        let tokenLength = line[start..<end].utf16.count
-        return NSRange(location: lineRange.location + prefixLength, length: tokenLength)
     }
 }
