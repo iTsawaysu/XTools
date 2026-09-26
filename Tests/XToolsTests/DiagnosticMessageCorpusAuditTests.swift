@@ -904,7 +904,7 @@ struct DiagnosticMessageCorpusAuditTests {
 
     static let cronCorpus: [String] = [
         "", "   ", "* * * * *", "0 0 * * *", "*/5 * * * *", "0 0 1 1 *",
-        "@daily", "@reboot", "@yearly", "@unknown",
+        "@daily", "@reboot", "@yearly", "@unknown", "@private-token12",
         "* * * *", "* * * * * *", "60 * * * *", "* 24 * * *",
         "*/0 * * * *", "*/-1 * * * *", "1-5 * * * *", "1-5/2 * * * *",
         "abc * * * *", "* * abc * *", "5-1 * * * *", "1,2,3 * * * *",

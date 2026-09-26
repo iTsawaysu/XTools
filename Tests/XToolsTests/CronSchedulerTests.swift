@@ -42,6 +42,53 @@ struct CronSchedulerTests {
         #expect(ranged?.hours == Set([9]))
     }
 
+    @Test func acceptsLargePositiveStepsWithoutOverflow() {
+        let largestStep = String(Int.max)
+        let cases: [(expression: String, minutes: Set<Int>)] = [
+            ("*/\(largestStep) * * * *", [0]),
+            ("0/\(largestStep) * * * *", [0]),
+            ("1/\(largestStep) * * * *", [1]),
+            ("1-59/\(largestStep) * * * *", [1]),
+            ("1/\(largestStep),5 * * * *", [1, 5]),
+        ]
+
+        for testCase in cases {
+            #expect(CronScheduler.validationMessage(testCase.expression) == nil)
+            #expect(CronScheduler.parseFields(testCase.expression)?.minutes == testCase.minutes)
+        }
+
+        let calendar = gregorianUTC()
+        let after = date(calendar, 2026, 1, 1, 0, 0)
+        let runs = CronScheduler.nextRuns(cases[2].expression, count: 2, after: after, calendar: calendar)
+        #expect(runs == [
+            date(calendar, 2026, 1, 1, 0, 1),
+            date(calendar, 2026, 1, 1, 1, 1),
+        ])
+    }
+
+    @Test func acceptsIntMaxStepsInEveryFieldAtBoundaries() {
+        let boundaries: [(minimum: Int, maximum: Int)] = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 7)]
+        let step = String(Int.max)
+
+        for (fieldIndex, boundary) in boundaries.enumerated() {
+            let cases: [(token: String, expected: Set<Int>)] = [
+                ("1/\(step)", [1]),
+                ("\(boundary.maximum)/\(step)", [boundary.maximum]),
+                ("*/\(step)", [boundary.minimum]),
+            ]
+            for testCase in cases {
+                var fields = Array(repeating: "*", count: 5)
+                fields[fieldIndex] = testCase.token
+                let expression = fields.joined(separator: " ")
+                #expect(CronScheduler.validationMessage(expression) == nil)
+
+                let parsed = CronScheduler.parseFields(expression)
+                let expanded = [parsed?.minutes, parsed?.hours, parsed?.daysOfMonth, parsed?.months, parsed?.weekdays]
+                #expect(expanded[fieldIndex] == testCase.expected)
+            }
+        }
+    }
+
     @Test func parsesListFields() {
         let listed = CronScheduler.parseFields("0 0,12 * * *")
         #expect(listed?.hours == Set([0, 12]))
@@ -75,6 +122,7 @@ struct CronSchedulerTests {
         #expect(CronScheduler.parseFields("*/0 * * * *") == nil) // zero step
         #expect(CronScheduler.parseFields("5-2 * * * *") == nil) // reversed range
         #expect(CronScheduler.parseFields("0 9 ? * 1") == nil) // Quartz-only wildcard
+        #expect(CronScheduler.parseFields("*/\(Int.max)0 * * * *") == nil) // step exceeds Int
     }
 
     @Test func validationMessagesNameTheInvalidField() {
@@ -88,6 +136,18 @@ struct CronSchedulerTests {
         #expect(CronScheduler.validationMessage("5-2 * * * *") == "分钟字段的范围起点不能大于终点。")
         #expect(CronScheduler.validationMessage("abc * * * *") == "分钟字段格式无效；支持 0-59、*、列表、范围或 */步长。")
         #expect(CronScheduler.validationMessage("0 9 ? * 1") == "日字段格式无效；支持 1-31、*、列表、范围或 */步长。")
+
+        let sensitiveMacro = "@private-token12"
+        #expect(sensitiveMacro.count == 16)
+        let macroMessage = CronScheduler.validationMessage(sensitiveMacro) ?? ""
+        #expect(macroMessage.contains("不支持的 @ 预设"))
+        #expect(macroMessage.contains("@yearly"))
+        #expect(macroMessage.contains("@reboot"))
+        #expect(!macroMessage.contains(sensitiveMacro))
+        ToolDiagnosticContract.expectFactual(macroMessage, sensitiveInputs: [sensitiveMacro])
+        for keyword in ["@yearly", "@annually", "@monthly", "@weekly", "@daily", "@midnight", "@hourly", "@reboot"] {
+            #expect(CronScheduler.validationMessage(keyword) == nil)
+        }
 
         for expression in ["60 * * * *", "*/0 * * * *", "5-2 * * * *", "abc * * * *"] {
             ToolDiagnosticContract.expectFactual(CronScheduler.validationMessage(expression) ?? "")

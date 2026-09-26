@@ -69,8 +69,7 @@ public enum CronScheduler {
         // 未识别的 @ 预设不能再报「需要 5 个字段」——那会把宏当成字段数错误。
         // resolveExpression 对无法识别的宏原样返回，据此判断。
         if trimmed.hasPrefix("@"), resolved == trimmed {
-            let macro = String(trimmed.prefix(16))
-            return "不支持的 @ 预设「\(macro)」；可用 @yearly、@monthly、@weekly、@daily、@hourly、@reboot。"
+            return "不支持的 @ 预设；可用 @yearly、@annually、@monthly、@weekly、@daily、@midnight、@hourly、@reboot。"
         }
 
         let parts = resolved.split(whereSeparator: \.isWhitespace).map(String.init)
@@ -395,7 +394,11 @@ public enum CronScheduler {
             }
             guard rs >= min, re <= max, rs <= re else { return nil }
             var c = rs
-            while c <= re { values.insert(c); c += step }
+            while c <= re {
+                values.insert(c)
+                guard step <= re - c else { break }
+                c += step
+            }
         }
         return values.isEmpty ? nil : values
     }
