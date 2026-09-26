@@ -237,13 +237,60 @@ struct HTMLToMarkdownPreviewWorkspaceTests {
         hostingView.frame = NSRect(x: 0, y: 0, width: 680, height: 600)
         hostingView.layoutSubtreeIfNeeded()
 
-        func checkOverflows(_ v: NSView) {
-            #expect(v.frame.maxX <= 680, "View \(type(of: v)) frame \(v.frame) exceeds container width 680")
-            for sub in v.subviews {
-                checkOverflows(sub)
+        let overflowing = Self.horizontallyOverflowingViews(in: hostingView)
+        #expect(overflowing.isEmpty, Comment(rawValue: overflowing.map {
+            "View \(type(of: $0)) bounds \($0.convert($0.bounds, to: hostingView)) exceed hosting width \(hostingView.bounds.width)"
+        }.joined(separator: "\n")))
+    }
+
+    @MainActor
+    @Test func overflowAuditCatchesNestedOffsetButAllowsClippedScrollDocuments() {
+        let hostingRoot = NSView(frame: NSRect(x: 0, y: 0, width: 680, height: 400))
+        let parent = NSView(frame: NSRect(x: 500, y: 0, width: 180, height: 100))
+        let child = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 100))
+        hostingRoot.addSubview(parent)
+        parent.addSubview(child)
+
+        // 两个局部 frame 都满足旧断言，但子视图在根坐标的右边界是 800。
+        #expect(parent.frame.maxX <= hostingRoot.bounds.maxX)
+        #expect(child.frame.maxX <= hostingRoot.bounds.maxX)
+        #expect(child.convert(child.bounds, to: hostingRoot).maxX == 800)
+        #expect(Self.horizontallyOverflowingViews(in: hostingRoot).contains { $0 === child })
+
+        let clipView = NSClipView(frame: NSRect(x: 20, y: 120, width: 100, height: 100))
+        let document = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 100))
+        hostingRoot.addSubview(clipView)
+        clipView.documentView = document
+        let overflowing = Self.horizontallyOverflowingViews(in: hostingRoot)
+        #expect(overflowing.count == 1 && overflowing[0] === child)
+    }
+
+    @MainActor
+    private static func horizontallyOverflowingViews(in hostingRoot: NSView) -> [NSView] {
+        let rootBounds = hostingRoot.bounds
+        let tolerance: CGFloat = 1
+        var overflowing: [NSView] = []
+
+        func inspect(_ view: NSView) {
+            let frameInRoot = view.convert(view.bounds, to: hostingRoot)
+            if frameInRoot.minX < rootBounds.minX - tolerance ||
+                frameInRoot.maxX > rootBounds.maxX + tolerance {
+                overflowing.append(view)
+            }
+            for child in view.subviews {
+                // Scroll documents may legitimately exceed their clip viewport; the
+                // clip view itself still has to fit inside the hosting root.
+                if let clipView = view as? NSClipView,
+                   let documentView = clipView.documentView,
+                   child === documentView {
+                    continue
+                }
+                inspect(child)
             }
         }
-        checkOverflows(hostingView)
+
+        inspect(hostingRoot)
+        return overflowing
     }
 }
 

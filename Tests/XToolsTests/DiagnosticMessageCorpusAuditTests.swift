@@ -18,7 +18,8 @@ struct DiagnosticMessageCorpusAuditTests {
     struct Observation: Sendable {
         let tool: String
         let channel: String
-        let input: String
+        let rawInputs: [String]
+        let displayInput: String
         let message: String
         let suggestion: String?
         let position: String
@@ -57,6 +58,8 @@ struct DiagnosticMessageCorpusAuditTests {
         _ ledger: Ledger,
         tool: String,
         input: String,
+        displayInput: String? = nil,
+        additionalSensitiveInputs: [String] = [],
         channel: String,
         diagnostic: FormatDiagnostic
     ) -> Observation {
@@ -69,7 +72,8 @@ struct DiagnosticMessageCorpusAuditTests {
         let row = Observation(
             tool: tool,
             channel: channel,
-            input: describe(input),
+            rawInputs: [input] + additionalSensitiveInputs,
+            displayInput: displayInput ?? describe(input),
             message: diagnostic.message,
             suggestion: diagnostic.suggestion,
             position: position
@@ -83,6 +87,8 @@ struct DiagnosticMessageCorpusAuditTests {
         _ ledger: Ledger,
         tool: String,
         input: String,
+        displayInput: String? = nil,
+        additionalSensitiveInputs: [String] = [],
         channel: String,
         message: String,
         suggestion: String? = nil,
@@ -91,7 +97,8 @@ struct DiagnosticMessageCorpusAuditTests {
         let row = Observation(
             tool: tool,
             channel: channel,
-            input: describe(input),
+            rawInputs: [input] + additionalSensitiveInputs,
+            displayInput: displayInput ?? describe(input),
             message: message,
             suggestion: suggestion,
             position: position
@@ -106,6 +113,8 @@ struct DiagnosticMessageCorpusAuditTests {
         _ ledger: Ledger,
         tool: String,
         input: String,
+        displayInput: String? = nil,
+        additionalSensitiveInputs: [String] = [],
         channel: String = "error",
         _ body: () throws -> T
     ) -> T? {
@@ -116,6 +125,8 @@ struct DiagnosticMessageCorpusAuditTests {
                 ledger,
                 tool: tool,
                 input: input,
+                displayInput: displayInput,
+                additionalSensitiveInputs: additionalSensitiveInputs,
                 channel: channel,
                 message: error.localizedDescription
             )
@@ -129,35 +140,72 @@ struct DiagnosticMessageCorpusAuditTests {
         let rows = ledger.snapshot()
         print(Self.render(rows))
 
-        var offenders: [String] = []
-        for row in rows where row.channel != "silent" {
-            // 只有足够长的输入才具备「回显敏感内容」的判定意义；
-            // 短输入（如 "docker run"）会与正常文案用词天然重合。
-            let sensitive = row.input.count >= 16 ? [row.input] : []
-            let violations = ToolDiagnosticContract.violations(in: row.message, sensitiveInputs: sensitive)
-            if !violations.isEmpty {
-                offenders.append(
-                    "[\(row.tool)] \(violations.joined(separator: " / ")) ←「\(row.message)」"
-                )
-            }
-            if let suggestion = row.suggestion {
-                let suggestionViolations = ToolDiagnosticContract.violations(
-                    in: suggestion,
-                    sensitiveInputs: sensitive
-                )
-                if !suggestionViolations.isEmpty {
-                    offenders.append(
-                        "[\(row.tool)/建议] \(suggestionViolations.joined(separator: " / ")) ←「\(suggestion)」"
-                    )
-                }
-            }
-        }
+        let offenders = rows.flatMap { Self.violations(for: $0) }
 
         print("\n=== \(section) 契约违例 \(offenders.count) 条 ===")
         for offender in offenders { print(offender) }
 
         #expect(!rows.isEmpty, "语料审计没有采集到任何观测")
         #expect(offenders.isEmpty, Comment(rawValue: offenders.joined(separator: "\n")))
+    }
+
+    static func violations(for row: Observation) -> [String] {
+        guard row.channel != "silent" else { return [] }
+        // 短输入容易与正常文案用词重合；原文必须保持未裁短、未转义。
+        let sensitive = row.rawInputs.filter { $0.count >= 16 }
+        var offenders: [String] = []
+        let messageViolations = ToolDiagnosticContract.violations(
+            in: row.message,
+            sensitiveInputs: sensitive
+        )
+        if !messageViolations.isEmpty {
+            offenders.append(
+                "[\(row.tool)] \(messageViolations.joined(separator: " / ")) ←「\(row.message)」"
+            )
+        }
+        if let suggestion = row.suggestion {
+            let suggestionViolations = ToolDiagnosticContract.violations(
+                in: suggestion,
+                sensitiveInputs: sensitive
+            )
+            if !suggestionViolations.isEmpty {
+                offenders.append(
+                    "[\(row.tool)/建议] \(suggestionViolations.joined(separator: " / ")) ←「\(suggestion)」"
+                )
+            }
+        }
+        return offenders
+    }
+
+    @Test func auditChecksUnmodifiedSensitiveInputsRatherThanReportSummaries() {
+        let ledger = Ledger()
+        let longInput = String(repeating: "A", count: 60)
+        let longEcho = Self.collectMessage(
+            ledger, tool: "long", input: longInput, channel: "error", message: "无效：\(longInput)"
+        )
+        #expect(longEcho.displayInput == String(repeating: "A", count: 56) + "…")
+        #expect(Self.violations(for: longEcho).contains { $0.contains("诊断回显了原始或敏感输入") })
+
+        let multilineInput = "header\nsensitive-payload-abcdefghijklmnop\nfooter"
+        let lineEcho = Self.collectMessage(
+            ledger, tool: "newline", input: multilineInput, channel: "error",
+            message: "无效：sensitive-payload-abcdefghijklmnop"
+        )
+        #expect(lineEcho.displayInput.contains("⏎"))
+        #expect(Self.violations(for: lineEcho).contains { $0.contains("诊断回显了原始或敏感输入") })
+
+        let tabbedInput = "alpha-token\tbeta-secret\tgamma-value"
+        let tabEcho = Self.collectMessage(
+            ledger, tool: "tab", input: tabbedInput, channel: "error",
+            message: "无效：alpha-token beta-secret gamma-value"
+        )
+        #expect(tabEcho.displayInput.contains("⇥"))
+        #expect(Self.violations(for: tabEcho).contains { $0.contains("诊断回显了原始或敏感输入") })
+
+        let safe = Self.collectMessage(
+            ledger, tool: "safe", input: longInput, channel: "error", message: "输入格式无效。"
+        )
+        #expect(Self.violations(for: safe).isEmpty)
     }
 
     /// XML 诊断文案依赖 libxml 的错误码，且 `parser.parserError` 只给出笼统的
@@ -234,7 +282,7 @@ struct DiagnosticMessageCorpusAuditTests {
             guard let group = grouped[tool] else { continue }
             out += "\n----- \(tool)  (\(group.count)) -----\n"
             for row in group {
-                var line = "  [\(row.channel)] 输入「\(row.input)」 → 「\(row.message)」"
+                var line = "  [\(row.channel)] 输入「\(row.displayInput)」 → 「\(row.message)」"
                 if row.position != "—" { line += "  @\(row.position)" }
                 if let suggestion = row.suggestion { line += "  建议:「\(suggestion)」" }
                 out += line + "\n"
@@ -267,12 +315,18 @@ struct DiagnosticMessageCorpusAuditTests {
             let decision = JSONDiffValidation.evaluate(left: pair.0, right: pair.1, labels: labels)
             switch decision {
             case .empty:
-                collectMessage(ledger, tool: "json-diff", input: "\(pair.0) | \(pair.1)", channel: "silent", message: "（空态）")
+                collectMessage(ledger, tool: "json-diff", input: pair.0,
+                               displayInput: "\(Self.describe(pair.0)) | \(Self.describe(pair.1))",
+                               additionalSensitiveInputs: [pair.1], channel: "silent", message: "（空态）")
             case .invalid(let message):
-                collectMessage(ledger, tool: "json-diff", input: "\(pair.0) | \(pair.1)", channel: "error", message: message)
+                collectMessage(ledger, tool: "json-diff", input: pair.0,
+                               displayInput: "\(Self.describe(pair.0)) | \(Self.describe(pair.1))",
+                               additionalSensitiveInputs: [pair.1], channel: "error", message: message)
             case .comparable:
                 if let warning = JSONDiffValidation.comparisonWarning(left: pair.0, right: pair.1, labels: labels) {
-                    collectMessage(ledger, tool: "json-diff", input: "\(pair.0) | \(pair.1)", channel: "warning", message: warning)
+                    collectMessage(ledger, tool: "json-diff", input: pair.0,
+                                   displayInput: "\(Self.describe(pair.0)) | \(Self.describe(pair.1))",
+                                   additionalSensitiveInputs: [pair.1], channel: "warning", message: warning)
                 }
             }
         }
@@ -306,7 +360,8 @@ struct DiagnosticMessageCorpusAuditTests {
 
     static func auditEncoders(_ ledger: Ledger) {
         for entry in integerBaseCorpus {
-            collectThrowing(ledger, tool: "integer-base-converter", input: "\(entry.0) [base \(entry.1)]") {
+            collectThrowing(ledger, tool: "integer-base-converter", input: entry.0,
+                            displayInput: "\(Self.describe(entry.0)) [base \(entry.1)]") {
                 try IntegerBaseConverter.validatedConversions(input: entry.0, fromBase: entry.1)
             }
         }
@@ -443,7 +498,7 @@ struct DiagnosticMessageCorpusAuditTests {
             (String(repeating: "A", count: 100_000), "pw", .aes)
         ]
         for entry in encryptionCorpus {
-            collectThrowing(ledger, tool: "text-encryption(解密)", input: Self.describe(entry.0)) {
+            collectThrowing(ledger, tool: "text-encryption(解密)", input: entry.0) {
                 try TextEncryptionService.decrypt(entry.0, password: entry.1, algorithm: entry.2)
             }
         }
@@ -455,7 +510,8 @@ struct DiagnosticMessageCorpusAuditTests {
             (Data("Salted__".utf8 + [UInt8](repeating: 0, count: 16)).base64EncodedString(), .aesGCM)
         ]
         for entry in algorithmMismatchCorpus {
-            collectThrowing(ledger, tool: "text-encryption(解密)", input: "格式错配样本[\(entry.1.rawValue)]") {
+            collectThrowing(ledger, tool: "text-encryption(解密)", input: entry.0,
+                            displayInput: "格式错配样本[\(entry.1.rawValue)]") {
                 try TextEncryptionService.decrypt(entry.0, password: "pw", algorithm: entry.1)
             }
         }
@@ -513,7 +569,8 @@ struct DiagnosticMessageCorpusAuditTests {
                     collectMessage(
                         ledger,
                         tool: "quick-process",
-                        input: "\(action.rawValue)｜\(Self.describe(input))",
+                        input: input,
+                        displayInput: "\(action.rawValue)｜\(Self.describe(input))",
                         channel: "error",
                         message: failure.message
                     )
@@ -533,7 +590,8 @@ struct DiagnosticMessageCorpusAuditTests {
 
     static func auditDiffAndDocker(_ ledger: Ledger) {
         for entry in textDiffCorpus {
-            collectThrowing(ledger, tool: "text-diff", input: Self.describe(entry.1)) {
+            collectThrowing(ledger, tool: "text-diff", input: entry.1,
+                            additionalSensitiveInputs: [entry.0]) {
                 try LineDiffer.safeAlignedDiff(left: entry.0, right: entry.1)
             }
         }

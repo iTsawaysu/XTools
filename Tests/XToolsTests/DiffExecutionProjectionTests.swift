@@ -15,12 +15,19 @@ struct DiffExecutionProjectionTests {
 
     @Test
     func textProjectMapsLineDiffError() throws {
-        // Force oversized input path if possible; otherwise empty equal is fine.
+        let byteLimit = LineDiffBudget.standard.maximumInputBytesPerSide
+        let oversizedInput = String(repeating: "x", count: byteLimit + 1)
         let binding = try DiffExecution.project(
-            DiffExecutionRequest(kind: .text, left: "", right: "")
+            DiffExecutionRequest(kind: .text, left: oversizedInput, right: "")
         )
-        #expect(binding.error == nil)
-        #expect(binding.rows.isEmpty || binding.rows.allSatisfy { $0.left == $0.right || true })
+        let expectedError = LineDiffError.inputBytesTooLarge(
+            leftByteCount: byteLimit + 1,
+            rightByteCount: 0,
+            maximumBytesPerSide: byteLimit
+        ).errorDescription
+
+        #expect(binding.error == expectedError)
+        #expect(binding.rows.isEmpty)
     }
 
     @Test
