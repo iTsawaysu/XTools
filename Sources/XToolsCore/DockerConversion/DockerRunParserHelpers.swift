@@ -170,10 +170,6 @@ extension DockerRunToDockerComposeService {
         for short in shortFlagAliases.keys where !token.hasPrefix("--") && token.hasPrefix(short) && token != short {
             let rawRemainder = String(token.dropFirst(short.count))
             let remainder = rawRemainder.hasPrefix("=") ? String(rawRemainder.dropFirst()) : rawRemainder
-            let knownBooleanShorts: Set<Character> = ["d", "i", "t"]
-            if remainder.allSatisfy({ knownBooleanShorts.contains($0) }) {
-                continue
-            }
             return (short, remainder)
         }
 

@@ -45,6 +45,130 @@ struct DockerRunToDockerComposeServiceTests {
         #expect(result.yaml.contains("- bash"))
     }
 
+    @Test func explicitInteractiveAndTTYValuesFollowLastOccurrence() throws {
+        let cases: [(String, Bool, Bool)] = [
+            ("--interactive --tty", true, true),
+            ("-i -t", true, true),
+            ("--interactive=false --tty=false", false, false),
+            ("-i=false -t=false", false, false),
+            ("--interactive=true --tty=true", true, true),
+            ("-i=true -t=true", true, true),
+            ("-i=0 -t=1", false, true),
+            ("-it=false", true, false),
+            ("-dit=false", true, false),
+            ("-ti=false", false, true),
+            ("-it -i=false --tty=false", false, false),
+            ("-i=false --interactive -t=false --tty", true, true)
+        ]
+
+        for (options, stdinOpen, tty) in cases {
+            let result = try DockerRunToDockerComposeService.convert("docker run \(options) alpine")
+            #expect(result.yaml.contains("image: alpine"))
+            #expect(result.yaml.contains("stdin_open: true") == stdinOpen, Comment(rawValue: options))
+            #expect(result.yaml.contains("tty: true") == tty, Comment(rawValue: options))
+            #expect(result.unknownFlags.isEmpty)
+        }
+    }
+
+    @Test func shortBooleanClustersDoNotRewriteOptionValuesOrContainerArguments() throws {
+        let command = try DockerRunToDockerComposeService.convert(
+            "docker run alpine echo -- -it=false"
+        )
+        #expect(command.yaml.contains("      - --"))
+        #expect(command.yaml.contains("      - -it=false"))
+        #expect(!command.yaml.contains("stdin_open:"))
+        #expect(!command.yaml.contains("tty:"))
+
+        let value = try DockerRunToDockerComposeService.convert(
+            "docker run --health-cmd -it=false alpine"
+        )
+        #expect(value.yaml.contains("-it=false"))
+        #expect(!value.yaml.contains("stdin_open:"))
+        #expect(!value.yaml.contains("tty:"))
+
+        let afterSeparator = try DockerRunToDockerComposeService.convert(
+            "docker run -- alpine -it=false"
+        )
+        #expect(afterSeparator.yaml.contains("      - -it=false"))
+        #expect(!afterSeparator.yaml.contains("stdin_open:"))
+        #expect(!afterSeparator.yaml.contains("tty:"))
+    }
+
+    @Test func otherMappedBooleanOptionsHonorExplicitValues() throws {
+        let enabled = try DockerRunToDockerComposeService.convert(
+            "docker run --privileged --read-only --init --oom-kill-disable --no-healthcheck alpine"
+        )
+        for field in ["privileged: true", "read_only: true", "init: true", "oom_kill_disable: true", "disable: true"] {
+            #expect(enabled.yaml.contains(field), Comment(rawValue: field))
+        }
+
+        let disabled = try DockerRunToDockerComposeService.convert(
+            "docker run --privileged=false --read-only=false --init=false --oom-kill-disable=false --no-healthcheck=false alpine"
+        )
+        #expect(disabled.yaml.contains("privileged: false"))
+        for field in ["read_only: true", "init: true", "oom_kill_disable: true", "disable: true"] {
+            #expect(!disabled.yaml.contains(field), Comment(rawValue: field))
+        }
+
+        let repeated = try DockerRunToDockerComposeService.convert(
+            "docker run --privileged --privileged=false --init --init=false alpine"
+        )
+        #expect(repeated.yaml.contains("privileged: false"))
+        #expect(!repeated.yaml.contains("init: true"))
+    }
+
+    @Test func invalidExplicitBooleanValueIsRejectedWithoutEchoingInput() {
+        let invalid = "private-token-value"
+        for option in ["--interactive", "-t", "-it", "--privileged", "--read-only", "--init", "--oom-kill-disable", "--no-healthcheck", "--rm"] {
+            #expect {
+                _ = try DockerRunToDockerComposeService.convert("docker run \(option)=\(invalid) alpine")
+            } throws: { error in
+                guard case DockerRunToDockerComposeError.invalidBooleanValue(let reportedOption) = error else { return false }
+                let message = (error as? DockerRunToDockerComposeError)?.errorDescription ?? ""
+                let expectedOption = option == "-it" ? "-t" : option
+                return reportedOption == expectedOption && !message.contains(invalid)
+            }
+        }
+    }
+
+    @Test func healthcheckSettingsFollowFinalBooleanAndRejectConflicts() throws {
+        let restored = try DockerRunToDockerComposeService.convert(
+            "docker run --health-cmd='echo ok' --no-healthcheck --no-healthcheck=false alpine"
+        )
+        #expect(restored.yaml.contains("CMD-SHELL"))
+        #expect(restored.yaml.contains("echo ok"))
+        #expect(!restored.yaml.contains("disable: true"))
+
+        let restoredAfterFalse = try DockerRunToDockerComposeService.convert(
+            "docker run --no-healthcheck --no-healthcheck=false --health-cmd='echo ok' alpine"
+        )
+        #expect(restoredAfterFalse.yaml.contains("echo ok"))
+        #expect(!restoredAfterFalse.yaml.contains("disable: true"))
+
+        for setting in [
+            "--health-cmd='echo ok'",
+            "--health-interval=1s",
+            "--health-timeout=1s",
+            "--health-retries=1",
+            "--health-start-period=1s",
+            "--health-start-interval=1s"
+        ] {
+            for options in ["\(setting) --no-healthcheck", "--no-healthcheck \(setting)"] {
+                #expect {
+                    _ = try DockerRunToDockerComposeService.convert("docker run \(options) alpine")
+                } throws: { error in
+                    guard case DockerRunToDockerComposeError.conflictingHealthcheckOptions = error else { return false }
+                    return true
+                }
+            }
+        }
+
+        let zeroDefault = try DockerRunToDockerComposeService.convert(
+            "docker run --health-interval=0s --health-retries=0 --no-healthcheck alpine"
+        )
+        #expect(zeroDefault.yaml.contains("disable: true"))
+    }
+
     @Test func inlineLongOptions() throws {
         let result = try DockerRunToDockerComposeService.convert(
             "docker run --name=web --restart=unless-stopped --network=host nginx"
@@ -75,6 +199,17 @@ struct DockerRunToDockerComposeServiceTests {
         #expect(sticky.yaml.contains("user: \"1000:1000\""))
         #expect(separated.unknownFlags.isEmpty)
         #expect(sticky.unknownFlags.isEmpty)
+    }
+
+    @Test func valueShortOptionsKeepBooleanLookingStickyValues() throws {
+        let separated = try DockerRunToDockerComposeService.convert("docker run -u it -w it alpine")
+        let sticky = try DockerRunToDockerComposeService.convert("docker run -uit -wit alpine")
+        let single = try DockerRunToDockerComposeService.convert("docker run -ud alpine")
+
+        #expect(sticky.yaml == separated.yaml)
+        #expect(sticky.unknownFlags.isEmpty)
+        #expect(single.yaml.contains("user: d"))
+        #expect(single.unknownFlags.isEmpty)
     }
 
     @Test func unsupportedValueFlagDoesNotConsumeImage() throws {
@@ -155,6 +290,8 @@ struct DockerRunToDockerComposeServiceTests {
         #expect(DockerRunToDockerComposeError.multipleCommands.errorDescription == "一次只能转换一条 docker run 命令。")
         #expect(DockerRunToDockerComposeError.missingImage.errorDescription == "docker run 命令缺少镜像名称。")
         #expect(DockerRunToDockerComposeError.missingOptionValue("--name").errorDescription == "选项 `--name` 缺少参数值。")
+        #expect(DockerRunToDockerComposeError.invalidBooleanValue("--tty").errorDescription == "选项 `--tty` 的布尔值无效。")
+        #expect(DockerRunToDockerComposeError.conflictingHealthcheckOptions.errorDescription == "禁用健康检查不能与健康检查设置同时使用。")
         #expect(DockerRunToDockerComposeError.unterminatedQuote.errorDescription == "命令包含未闭合的引号。")
         #expect(DockerRunToDockerComposeDiagnostics.inputTooLongMessage(maxCharacters: 200_000) == "输入内容过长，最多支持 200000 个字符。")
         #expect(DockerRunToDockerComposeDiagnostics.emptyOutputMessage == "命令未包含可转换的服务配置。")
