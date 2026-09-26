@@ -1,6 +1,18 @@
 import AppKit
 import SwiftUI
 
+/// SwiftUI diffing must distinguish canonically equivalent formatter output
+/// when its Unicode bytes differ, so the native viewer can copy exact output.
+private struct IndexCodeViewerText: Equatable {
+    let value: String
+
+    var isEmpty: Bool { value.isEmpty }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.value.utf8.elementsEqual(rhs.value.utf8)
+    }
+}
+
 /// High-performance read-only code surface built on AppKit `NSTextView` and
 /// `IndexEditorLineNumberGutterView`.
 ///
@@ -13,7 +25,7 @@ import SwiftUI
 /// - Native macOS Find Bar support (`⌘F`)
 /// - Line spacing matching the input editor
 struct IndexCodeViewerSurface: View {
-    let text: String
+    private let text: IndexCodeViewerText
     var placeholder: String = IndexEmptyStateCopy.outputWillShowHere
     var lineNumbers: Bool = true
     var syntax: IndexSyntaxKind? = nil
@@ -21,6 +33,26 @@ struct IndexCodeViewerSurface: View {
     var minHeight: CGFloat = 220
     var lineBreakMode: NSLineBreakMode = .byCharWrapping
     var embedsFlat: Bool = false
+
+    init(
+        text: String,
+        placeholder: String = IndexEmptyStateCopy.outputWillShowHere,
+        lineNumbers: Bool = true,
+        syntax: IndexSyntaxKind? = nil,
+        fillsHeight: Bool = true,
+        minHeight: CGFloat = 220,
+        lineBreakMode: NSLineBreakMode = .byCharWrapping,
+        embedsFlat: Bool = false
+    ) {
+        self.text = IndexCodeViewerText(value: text)
+        self.placeholder = placeholder
+        self.lineNumbers = lineNumbers
+        self.syntax = syntax
+        self.fillsHeight = fillsHeight
+        self.minHeight = minHeight
+        self.lineBreakMode = lineBreakMode
+        self.embedsFlat = embedsFlat
+    }
 
     private var effectiveMinHeight: CGFloat { fillsHeight ? 60 : minHeight }
 
@@ -106,7 +138,9 @@ private final class IndexCodeViewerTextViewInternal: NSTextView, IndexAsymmetric
 
 private final class IndexCodeViewerScrollView: NSScrollView {
     weak var lineNumberGutter: IndexEditorLineNumberGutterView?
+    var onViewportSizeChange: (() -> Void)?
     private var isSynchronizing = false
+    private var lastViewportSize: NSSize = .zero
 
     override func tile() {
         super.tile()
@@ -123,7 +157,7 @@ private final class IndexCodeViewerScrollView: NSScrollView {
         synchronizeGeometryIfNeeded()
     }
 
-    private func synchronizeGeometryIfNeeded() {
+    func synchronizeGeometryIfNeeded() {
         guard !isSynchronizing else { return }
         isSynchronizing = true
         defer { isSynchronizing = false }
@@ -132,6 +166,13 @@ private final class IndexCodeViewerScrollView: NSScrollView {
             gutter.frame = NSRect(x: 0, y: 0, width: IndexEditorLineNumberGutter.width, height: bounds.height)
         }
         lineNumberGutter?.setNeedsDisplay(lineNumberGutter?.bounds ?? .zero)
+        let viewportSize = contentView.bounds.size
+        if viewportSize.width > 0, viewportSize.height > 0,
+           viewportSize != lastViewportSize,
+           let onViewportSizeChange {
+            lastViewportSize = viewportSize
+            onViewportSizeChange()
+        }
     }
 
     func synchronizeTextGeometry() {
@@ -145,7 +186,7 @@ private final class IndexCodeViewerScrollView: NSScrollView {
 }
 
 private struct IndexCodeViewerTextView: NSViewRepresentable {
-    let text: String
+    let text: IndexCodeViewerText
     var lineNumbers: Bool
     var syntax: IndexSyntaxKind?
     var lineBreakMode: NSLineBreakMode
@@ -201,8 +242,13 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
             syntax: syntax,
             baseAttributes: Self.baseAttributes(lineSpacing: 6)
         )
-        context.coordinator.highlighting.contentChanged(text: text, syntax: syntax)
-        scrollView.synchronizeTextGeometry()
+        scrollView.onViewportSizeChange = { [weak coordinator = context.coordinator] in
+            Task { @MainActor in
+                coordinator?.highlighting.highlightVisibleIfNeeded()
+            }
+        }
+        context.coordinator.highlighting.contentChanged(text: text.value, syntax: syntax)
+        scrollView.synchronizeGeometryIfNeeded()
         context.coordinator.lastText = text
         context.coordinator.lastSyntax = syntax
         return scrollView
@@ -218,13 +264,13 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
             context.coordinator.lastSyntax = syntax
             let previousSelectedRanges = textView.selectedRanges
             applyContent(to: textView)
-            let stringLength = (text as NSString).length
+            let stringLength = (text.value as NSString).length
             let validRanges = previousSelectedRanges.filter { $0.rangeValue.upperBound <= stringLength }
             if !validRanges.isEmpty {
                 textView.selectedRanges = validRanges
             }
             customScrollView.synchronizeTextGeometry()
-            context.coordinator.highlighting.contentChanged(text: text, syntax: syntax)
+            context.coordinator.highlighting.contentChanged(text: text.value, syntax: syntax)
             context.coordinator.lineNumberGutter?.refresh()
         } else {
             customScrollView.synchronizeTextGeometry()
@@ -262,7 +308,7 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
     /// viewport highlighter, which keeps first paint O(visible) regardless of
     /// document size.
     private func applyContent(to textView: NSTextView) {
-        let attributed = NSAttributedString(string: text, attributes: Self.baseAttributes(lineSpacing: 6))
+        let attributed = NSAttributedString(string: text.value, attributes: Self.baseAttributes(lineSpacing: 6))
         textView.textStorage?.setAttributedString(attributed)
     }
 
@@ -278,7 +324,7 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject {
-        var lastText: String?
+        var lastText: IndexCodeViewerText?
         var lastSyntax: IndexSyntaxKind?
         weak var lineNumberGutter: IndexEditorLineNumberGutterView?
         let highlighting = IndexViewportHighlighting()
@@ -303,6 +349,7 @@ final class IndexViewportHighlighting {
     /// UTF-16 ranges of each logical line including its trailing newline.
     private var lineRanges: [NSRange] = []
     private var highlightedLines: [Bool] = []
+    private var isApplyingAttributes = false
     private nonisolated(unsafe) var boundsObserver: (any NSObjectProtocol)?
 
     func install(
@@ -371,6 +418,7 @@ final class IndexViewportHighlighting {
     }
 
     func highlightVisibleIfNeeded() {
+        guard !isApplyingAttributes else { return }
         guard let scrollView, let textView, let syntax,
               !lineRanges.isEmpty,
               let layoutManager = textView.layoutManager,
@@ -398,8 +446,17 @@ final class IndexViewportHighlighting {
             margin: Self.viewportLineMargin
         )
         guard !span.isEmpty else { return }
+        guard span.contains(where: { !highlightedLines[$0] }) else { return }
 
         let nsText = textView.string as NSString
+        // Geometry is resolved above. TextKit coalesces the token edits and
+        // notifies observers after every line has been marked as highlighted.
+        isApplyingAttributes = true
+        textStorage.beginEditing()
+        defer {
+            textStorage.endEditing()
+            isApplyingAttributes = false
+        }
         for lineIndex in span where !highlightedLines[lineIndex] {
             highlightedLines[lineIndex] = true
             let fullRange = lineRanges[lineIndex]

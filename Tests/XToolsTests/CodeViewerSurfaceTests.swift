@@ -352,6 +352,148 @@ struct CodeViewerSurfaceTests {
     }
 
     @MainActor
+    @Test func codeViewerKeepsExactFormatterOutputAcrossCanonicalEquivalentUpdates() throws {
+        let options = SQLFormatting.Options(minify: true)
+        let composed = try SQLFormatting.format("SELECT 'café' FROM users", options: options)
+        let decomposed = try SQLFormatting.format("SELECT 'cafe\u{301}' FROM users", options: options)
+        #expect(composed == decomposed)
+        #expect(!composed.utf8.elementsEqual(decomposed.utf8))
+
+        let model = ViewerModel(text: composed, syntax: .sql)
+        let hostingView = NSHostingView(rootView: ViewerProbe(model: model))
+        hostingView.frame = NSRect(x: 0, y: 0, width: 640, height: 260)
+        hostingView.layoutSubtreeIfNeeded()
+        guard let textView = Self.findDescendant(of: hostingView, type: NSTextView.self) else {
+            Issue.record("Expected native code viewer")
+            return
+        }
+        #expect(textView.string.utf8.elementsEqual(composed.utf8))
+
+        model.text = decomposed
+        let updated = Self.waitForViewerUpdate(hostingView) {
+            textView.string.utf8.elementsEqual(decomposed.utf8)
+        }
+        #expect(updated)
+        #expect(Self.findDescendant(of: hostingView, type: NSTextView.self) === textView,
+                "The update must reuse the same representable and coordinator")
+        #expect(textView.string.utf8.elementsEqual(decomposed.utf8),
+                "The native viewer must keep the formatter's exact Unicode representation")
+
+        model.text = composed
+        #expect(Self.waitForViewerUpdate(hostingView) {
+            textView.string.utf8.elementsEqual(composed.utf8)
+        })
+        #expect(Self.findDescendant(of: hostingView, type: NSTextView.self) === textView)
+    }
+
+    @MainActor
+    @Test func codeViewerBatchesVisibleTokenEditsAndPreservesAttributes() {
+        let text = "{" + Array(repeating: #""key":1"#, count: 2_000).joined(separator: ",") + "}"
+        let model = ViewerModel(text: text, syntax: nil)
+        let hostingView = NSHostingView(rootView: ViewerProbe(model: model))
+        hostingView.frame = NSRect(x: 0, y: 0, width: 800, height: 260)
+        hostingView.layoutSubtreeIfNeeded()
+        guard let textView = Self.findDescendant(of: hostingView, type: NSTextView.self),
+              let storage = textView.textStorage else {
+            Issue.record("Expected native text storage")
+            return
+        }
+
+        textView.setSelectedRange(NSRange(location: 2, length: 3))
+        let editCounter = TextStorageEditCounter()
+        NotificationCenter.default.addObserver(
+            editCounter,
+            selector: #selector(TextStorageEditCounter.didProcessEditing(_:)),
+            name: NSTextStorage.didProcessEditingNotification,
+            object: storage
+        )
+        defer { NotificationCenter.default.removeObserver(editCounter) }
+
+        model.syntax = .json
+        let highlighted = Self.waitForViewerUpdate(hostingView) {
+            storage.attribute(.foregroundColor, at: 2, effectiveRange: nil) as? NSColor
+                == IndexSyntaxToken.Kind.key.nsColor
+        }
+        #expect(highlighted)
+
+        #expect(editCounter.count > 0)
+        #expect(editCounter.count <= 5,
+                "Thousands of visible tokens should produce one color edit transaction")
+        #expect(textView.string.utf8.elementsEqual(text.utf8))
+        #expect(textView.selectedRange() == NSRange(location: 2, length: 3))
+        #expect(storage.attribute(.foregroundColor, at: 2, effectiveRange: nil) as? NSColor
+                == IndexSyntaxToken.Kind.key.nsColor)
+        #expect(storage.attribute(.font, at: 2, effectiveRange: nil) as? NSFont != nil)
+        #expect(storage.attribute(.paragraphStyle, at: 2, effectiveRange: nil) as? NSParagraphStyle != nil)
+
+        model.syntax = nil
+        let reset = Self.waitForViewerUpdate(hostingView) {
+            storage.attribute(.foregroundColor, at: 2, effectiveRange: nil) as? NSColor
+                != IndexSyntaxToken.Kind.key.nsColor
+        }
+        #expect(reset)
+        #expect(storage.attribute(.foregroundColor, at: 2, effectiveRange: nil) as? NSColor
+                != IndexSyntaxToken.Kind.key.nsColor)
+
+        let editsBeforeRehighlight = editCounter.count
+        model.syntax = .json
+        let highlightedAgain = Self.waitForViewerUpdate(hostingView) {
+            storage.attribute(.foregroundColor, at: 2, effectiveRange: nil) as? NSColor
+                == IndexSyntaxToken.Kind.key.nsColor
+        }
+        #expect(highlightedAgain)
+        #expect(editCounter.count - editsBeforeRehighlight <= 5)
+
+        model.text = ""
+        #expect(Self.waitForViewerUpdate(hostingView) { textView.string.isEmpty })
+        #expect(textView.string.isEmpty)
+        #expect(storage.length == 0)
+    }
+
+    @MainActor
+    @Test func codeViewerHighlightsNewlyVisibleLinesAfterScroll() async {
+        let text = (0..<200).map { #"{"key":\#($0)}"# }.joined(separator: "\n")
+        let model = ViewerModel(text: text, syntax: .json)
+        let hostingView = NSHostingView(rootView: ViewerProbe(model: model))
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 240),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = hostingView
+        defer { window.close() }
+        window.displayIfNeeded()
+        hostingView.layoutSubtreeIfNeeded()
+        guard let textView = Self.findDescendant(of: hostingView, type: NSTextView.self),
+              let storage = textView.textStorage,
+              let scrollView = textView.enclosingScrollView else {
+            Issue.record("Expected scrollable native viewer")
+            return
+        }
+
+        #expect(await Self.waitForAsyncHighlight(hostingView) {
+            storage.attribute(.foregroundColor, at: 2, effectiveRange: nil) as? NSColor
+                == IndexSyntaxToken.Kind.key.nsColor
+        }, "The initial viewport must be highlighted before testing a distant line")
+        let target = (text as NSString).range(of: #"{"key":199}"#).location + 2
+        #expect(target > 2)
+        #expect(storage.attribute(.foregroundColor, at: target, effectiveRange: nil) as? NSColor
+                != IndexSyntaxToken.Kind.key.nsColor)
+
+        textView.scrollRangeToVisible(NSRange(location: target, length: 1))
+        let scrolledAndHighlighted = await Self.waitForAsyncHighlight(hostingView) {
+            scrollView.contentView.bounds.minY > 0
+                && storage.attribute(.foregroundColor, at: target, effectiveRange: nil) as? NSColor
+                    == IndexSyntaxToken.Kind.key.nsColor
+        }
+        #expect(scrolledAndHighlighted,
+                "viewport=\(scrollView.contentView.bounds), document=\(textView.frame), targetColor=\(String(describing: storage.attribute(.foregroundColor, at: target, effectiveRange: nil))), firstColor=\(String(describing: storage.attribute(.foregroundColor, at: 2, effectiveRange: nil)))")
+        #expect(textView.string.utf8.elementsEqual(text.utf8))
+    }
+
+    @MainActor
     @Test func xmlFormatPagePanesExpandResponsivelyWithoutFixedDeadZones() {
         let defaults = UserDefaults(suiteName: "CodeViewerSurfaceTests.XMLResponsive.\(UUID().uuidString)")!
         let repository = ToolWorkspaceRepository(defaults: defaults)
@@ -394,5 +536,61 @@ struct CodeViewerSurfaceTests {
             results.append(contentsOf: findAllDescendants(of: subview, type: type))
         }
         return results
+    }
+
+    @MainActor
+    private static func waitForViewerUpdate(
+        _ hostingView: NSView,
+        until condition: () -> Bool
+    ) -> Bool {
+        let deadline = ProcessInfo.processInfo.systemUptime + 1
+        repeat {
+            hostingView.layoutSubtreeIfNeeded()
+            if condition() { return true }
+            _ = RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.01))
+        } while ProcessInfo.processInfo.systemUptime < deadline
+        return condition()
+    }
+
+    @MainActor
+    private static func waitForAsyncHighlight(
+        _ hostingView: NSView,
+        until condition: () -> Bool
+    ) async -> Bool {
+        let deadline = ProcessInfo.processInfo.systemUptime + 1
+        repeat {
+            hostingView.layoutSubtreeIfNeeded()
+            if condition() { return true }
+            try? await Task.sleep(for: .milliseconds(10))
+        } while ProcessInfo.processInfo.systemUptime < deadline
+        return condition()
+    }
+}
+
+@MainActor
+private final class ViewerModel: ObservableObject {
+    @Published var text: String
+    @Published var syntax: IndexSyntaxKind?
+
+    init(text: String, syntax: IndexSyntaxKind?) {
+        self.text = text
+        self.syntax = syntax
+    }
+}
+
+private struct ViewerProbe: View {
+    @ObservedObject var model: ViewerModel
+
+    var body: some View {
+        IndexCodeViewerSurface(text: model.text, lineNumbers: false, syntax: model.syntax)
+    }
+}
+
+@MainActor
+private final class TextStorageEditCounter: NSObject {
+    private(set) var count = 0
+
+    @objc func didProcessEditing(_ notification: Notification) {
+        count += 1
     }
 }
