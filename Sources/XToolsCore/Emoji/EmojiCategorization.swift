@@ -8,6 +8,21 @@ private func normalizedEmojiSearchText(_ text: String) -> String {
         .lowercased()
 }
 
+/// NSCache is internally synchronized, but its Foundation declaration is not
+/// Sendable. This small wrapper makes that thread-safety explicit to Swift 6's
+/// concurrency checker while keeping the cache implementation private.
+private final class EmojiStringCache: @unchecked Sendable {
+    private let storage = NSCache<NSString, NSString>()
+
+    func value(for key: String) -> String? {
+        storage.object(forKey: key as NSString).map(String.init)
+    }
+
+    func insert(_ value: String, for key: String) {
+        storage.setObject(value as NSString, forKey: key as NSString)
+    }
+}
+
 public struct EmojiEntry: Identifiable, Equatable, Sendable {
     public let base: String
     public let name: String
@@ -26,16 +41,31 @@ public struct EmojiEntry: Identifiable, Equatable, Sendable {
     }
 
     public func helpText(for renderedGlyph: String) -> String {
+        let cacheKey = "\(base)\u{1F}\(name)\u{1F}\(renderedGlyph)"
+        if let cached = Self.helpTextCache.value(for: cacheKey) {
+            return cached
+        }
+
         let codePoints = Self.codePointDescription(for: renderedGlyph)
         let displayName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !displayName.isEmpty else { return codePoints }
-        return "\(displayName) · \(codePoints)"
+        let result = displayName.isEmpty ? codePoints : "\(displayName) · \(codePoints)"
+        Self.helpTextCache.insert(result, for: cacheKey)
+        return result
     }
 
+    private static let helpTextCache = EmojiStringCache()
+    private static let codePointDescriptionCache = EmojiStringCache()
+
     private static func codePointDescription(for glyph: String) -> String {
-        glyph.unicodeScalars
+        if let cached = codePointDescriptionCache.value(for: glyph) {
+            return cached
+        }
+
+        let result = glyph.unicodeScalars
             .map { String(format: "U+%04X", $0.value) }
             .joined(separator: " ")
+        codePointDescriptionCache.insert(result, for: glyph)
+        return result
     }
 
     public init(base: String, name: String, skinToneCapable: Bool, aliases: [String] = []) {
@@ -246,8 +276,15 @@ public enum EmojiCatalog {
         EmojiSkinTone(label: "默认", scalar: nil)
     ] + skinToneModifiers.map { EmojiSkinTone(label: $0.label, scalar: $0.scalar) }
 
+    private static let renderedGlyphCache = EmojiStringCache()
+
     public static func apply(tone: Unicode.Scalar?, to entry: EmojiEntry) -> String {
         guard let tone, entry.skinToneCapable else { return entry.base }
+
+        let cacheKey = "\(entry.base)\u{1F}\(tone.value)"
+        if let cached = renderedGlyphCache.value(for: cacheKey) {
+            return cached
+        }
 
         var output = String.UnicodeScalarView()
         let scalars = entry.base.unicodeScalars
@@ -267,7 +304,9 @@ public enum EmojiCatalog {
             index = scalars.index(after: index)
         }
 
-        return String(output)
+        let renderedGlyph = String(output)
+        renderedGlyphCache.insert(renderedGlyph, for: cacheKey)
+        return renderedGlyph
     }
 
     public static func search(matching query: String, limit: Int) -> EmojiSearchResult {

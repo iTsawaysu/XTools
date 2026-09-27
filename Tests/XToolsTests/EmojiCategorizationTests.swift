@@ -84,6 +84,15 @@ struct EmojiCategorizationTests {
         #expect(unnamed.helpText == "U+2192")
     }
 
+    @Test func helpTextCacheKeepsSameGlyphNamesDistinct() {
+        let play = EmojiEntry(base: "▶", name: "播放", skinToneCapable: false)
+        let next = EmojiEntry(base: "▶", name: "下一项", skinToneCapable: false)
+
+        #expect(play.helpText == "播放 · U+25B6")
+        #expect(next.helpText == "下一项 · U+25B6")
+        #expect(play.helpText != next.helpText)
+    }
+
     @Test func specialSymbolGroupPreservesBrowseSectionsAndUniqueCount() throws {
         let group = try #require(EmojiCatalog.groups.first { $0.name == EmojiCatalog.specialSymbolGroupName })
         let browseSymbols = group.sections.flatMap { section in
