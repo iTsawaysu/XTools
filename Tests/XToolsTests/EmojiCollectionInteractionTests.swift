@@ -127,6 +127,62 @@ struct EmojiCollectionInteractionTests {
         #expect(abs(fixture.scrollView.contentView.bounds.minY - initialOffset) < 0.5)
     }
 
+    @Test @MainActor func repeatedUpdateAndViewportResizeKeepDocumentGeometryValid() throws {
+        let fixture = try Self.makeFixture()
+        Self.scrollDown(fixture.scrollView)
+        let initialOffset = fixture.scrollView.contentView.bounds.minY
+        let snapshot = IndexEmojiCollectionSnapshot.flat(
+            entries: Array(EmojiCatalog.allEntries.prefix(200)),
+            tone: nil
+        )
+
+        fixture.coordinator.update(
+            scrollView: fixture.scrollView,
+            snapshot: snapshot,
+            scrollResetIdentity: "baseline",
+            reduceMotion: false,
+            onCopy: { _ in }
+        )
+        #expect(abs(fixture.scrollView.contentView.bounds.minY - initialOffset) < 0.5)
+
+        fixture.scrollView.setFrameSize(NSSize(width: 600, height: 420))
+        fixture.scrollView.layoutSubtreeIfNeeded()
+
+        let collectionView = try #require(fixture.scrollView.documentView as? NSCollectionView)
+        #expect(abs(collectionView.frame.width - fixture.scrollView.contentSize.width) < 0.5)
+        #expect(collectionView.frame.height >= fixture.scrollView.contentSize.height)
+    }
+
+    @Test @MainActor func snapshotChangeRefreshesDocumentHeightAfterLayout() throws {
+        let fixture = try Self.makeFixture(
+            snapshot: .flat(entries: Array(EmojiCatalog.allEntries.prefix(200)), tone: nil)
+        )
+        let collectionView = fixture.collectionView
+        #expect(collectionView.frame.height > fixture.scrollView.contentSize.height)
+
+        fixture.coordinator.update(
+            scrollView: fixture.scrollView,
+            snapshot: .flat(entries: Array(EmojiCatalog.allEntries.prefix(1)), tone: nil),
+            scrollResetIdentity: "baseline",
+            reduceMotion: false,
+            onCopy: { _ in }
+        )
+        #expect(abs(collectionView.frame.height - fixture.scrollView.contentSize.height) < 0.5)
+        fixture.scrollView.layoutSubtreeIfNeeded()
+
+        #expect(abs(collectionView.frame.height - fixture.scrollView.contentSize.height) < 0.5)
+    }
+
+    @Test @MainActor func verticalViewportResizeKeepsDocumentAtLeastViewportHeight() throws {
+        let fixture = try Self.makeFixture(
+            snapshot: .flat(entries: Array(EmojiCatalog.allEntries.prefix(1)), tone: nil)
+        )
+        fixture.scrollView.setFrameSize(NSSize(width: 900, height: 600))
+        fixture.scrollView.layoutSubtreeIfNeeded()
+
+        #expect(fixture.collectionView.frame.height + 0.5 >= fixture.scrollView.contentSize.height)
+    }
+
     private static func isPointerArea(_ area: NSTrackingArea) -> Bool {
         area.options.contains(.mouseEnteredAndExited)
             && area.options.contains(.activeInKeyWindow)

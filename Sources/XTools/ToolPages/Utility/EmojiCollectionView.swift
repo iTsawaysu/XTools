@@ -104,6 +104,13 @@ struct IndexEmojiCollectionView: NSViewRepresentable {
         private var hoveredIndexPath: IndexPath?
         private var reduceMotion = false
         private var onCopy: @MainActor (String) -> Void
+        // Collection layout is coordinated by the scroll view's layout pass. Keep
+        // the invalidation state here so repeated SwiftUI updates and clip-view
+        // callbacks do not synchronously re-enter the same layout tree.
+        private var needsLayoutRefresh = true
+        private var lastViewportWidth: CGFloat = 0
+        private var lastViewportHeight: CGFloat = 0
+        private var isRefreshingLayout = false
 
         init(
             onCopy: @escaping @MainActor (String) -> Void,
@@ -187,6 +194,7 @@ struct IndexEmojiCollectionView: NSViewRepresentable {
             if changed || motionChanged {
                 collectionView.reloadData()
                 collectionView.collectionViewLayout?.invalidateLayout()
+                needsLayoutRefresh = true
             }
             resizeCollectionView(in: scrollView)
             if shouldResetScroll, scrollView.contentView.bounds.minY > 0 {
@@ -210,17 +218,33 @@ struct IndexEmojiCollectionView: NSViewRepresentable {
             let viewportSize = scrollView.contentSize
             guard viewportSize.width > 0, viewportSize.height > 0 else { return }
 
-            if abs(collectionView.frame.width - viewportSize.width) > 0.5 {
+            let widthChanged = abs(lastViewportWidth - viewportSize.width) > 0.5
+            let heightChanged = abs(lastViewportHeight - viewportSize.height) > 0.5
+            guard (widthChanged || heightChanged || needsLayoutRefresh), !isRefreshingLayout else { return }
+
+            isRefreshingLayout = true
+            defer { isRefreshingLayout = false }
+            lastViewportWidth = viewportSize.width
+            lastViewportHeight = viewportSize.height
+
+            if widthChanged || abs(collectionView.frame.width - viewportSize.width) > 0.5 {
                 collectionView.setFrameSize(
                     NSSize(width: viewportSize.width, height: max(collectionView.frame.height, viewportSize.height))
                 )
                 layout.invalidateLayout()
             }
-            collectionView.layoutSubtreeIfNeeded()
+
+            // Reading the flow layout's content size is sufficient to update the
+            // document frame after invalidation. Synchronously forcing a subtree
+            // layout here would re-enter NSScrollView.layout().
             let contentHeight = layout.collectionViewContentSize.height
-            collectionView.setFrameSize(
-                NSSize(width: viewportSize.width, height: max(viewportSize.height, contentHeight))
-            )
+            let targetHeight = max(viewportSize.height, contentHeight)
+            if abs(collectionView.frame.height - targetHeight) > 0.5 {
+                collectionView.setFrameSize(
+                    NSSize(width: viewportSize.width, height: targetHeight)
+                )
+            }
+            needsLayoutRefresh = false
         }
 
         func debugUpdatePointerLocation(_ point: NSPoint?) {
