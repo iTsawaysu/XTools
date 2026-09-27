@@ -51,6 +51,10 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var droppedFile = IndexDroppedTextFile()
+    /// Output-breath generation: bumps once per explicit run that lands a
+    /// fresh, non-empty, error-free result — each bump pulses the output
+    /// pane's accent border exactly once (see `toolOutputBreath`).
+    @State private var outputBreathGeneration = 0
 
     init(
         inputTitle: String,
@@ -271,11 +275,20 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             }
             HStack(spacing: ToolMetrics.Spacing.sm) {
                 inputPaneWithHeader
+                    .toolPaneHoverChrome()
                 outputPane
+                    .toolPaneHoverChrome()
+                    .toolOutputBreath(generation: outputBreathGeneration)
             }
             .padding(.horizontal, ToolMetrics.Spacing.md)
             .padding(.bottom, ToolMetrics.Spacing.md)
             .padding(.top, ToolMetrics.Spacing.sm)
+            .onChange(of: isOutputFresh) { isFresh in
+                guard isFresh, onFormat != nil, !output.isEmpty, diagnosticTone != .error else {
+                    return
+                }
+                outputBreathGeneration += 1
+            }
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.84), value: hasDiagnostic)
         .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))

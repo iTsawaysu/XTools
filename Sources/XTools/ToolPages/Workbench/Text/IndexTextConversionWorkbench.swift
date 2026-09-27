@@ -161,9 +161,11 @@ struct IndexTextConversionWorkbench: View {
         // Clay Warmth: 12pt breathing gutter between the two editor cards.
         HStack(spacing: 12) {
             inputPanel
+                .toolPaneHoverChrome(cornerRadius: ToolMetrics.CornerRadius.panel)
             staticDivider
 
             outputPanel
+                .toolPaneHoverChrome(cornerRadius: ToolMetrics.CornerRadius.panel)
         }
     }
 

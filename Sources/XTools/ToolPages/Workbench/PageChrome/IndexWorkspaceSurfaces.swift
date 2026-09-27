@@ -248,13 +248,17 @@ extension IndexInputHeaderAccessory where PrimaryControl == EmptyView, CompactCo
 
 struct IndexInputCountLabel: View {
     let text: String
+    /// Drives the digit-roll tween; nil for free-form status strings.
+    private let numericCount: Int?
 
     init(count: Int) {
         text = "\(count) 字符"
+        numericCount = count
     }
 
     init(text: String) {
         self.text = text
+        numericCount = nil
     }
 
     var body: some View {
@@ -263,6 +267,7 @@ struct IndexInputCountLabel: View {
             .foregroundStyle(ToolTheme.textTertiary)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
+            .toolNumericTransition(value: numericCount ?? 0)
     }
 }
 

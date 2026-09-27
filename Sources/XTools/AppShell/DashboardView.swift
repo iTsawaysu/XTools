@@ -41,10 +41,12 @@ struct DashboardView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 pageHeader
+                statsSection
 
                 ToolWorkspaceHost(key: HomeContentSession.key) { session, observed in
                     HomeContentWorkbench(session: session, input: observed.input)
                 }
+                .padding(.top, ToolMetrics.Workbench.sectionGap)
 
                 shortcutSection.padding(.top, ToolMetrics.Workbench.sectionGap)
                 recentSection.padding(.top, ToolMetrics.Workbench.sectionGap)
@@ -64,7 +66,7 @@ struct DashboardView: View {
                 Text("工作台")
                     .font(ToolTypography.Workbench.title)
                     .foregroundStyle(ToolTheme.Workbench.textPrimary)
-                Text("粘贴一段内容，或直接打开常用工具。")
+                Text("\(greetingText) · 粘贴一段内容，或直接打开常用工具。")
                     .font(ToolTypography.Workbench.subtitle)
                     .foregroundStyle(ToolTheme.Workbench.textSecondary)
             }
@@ -77,6 +79,37 @@ struct DashboardView: View {
                 .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.bottom, 24)
+    }
+
+    private var greetingText: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 5..<11: return "早安，开发者"
+        case 11..<13: return "午安，开发者"
+        case 13..<18: return "下午好，开发者"
+        case 18..<24: return "晚上好，开发者"
+        default: return "夜深了，开发者"
+        }
+    }
+
+    /// Instrument strip: three monospaced counters that roll up on first
+    /// appearance. Backed by the already-persisted `DashboardStore` activity
+    /// (total launches / 7-day window) plus the live registry size.
+    private var statsSection: some View {
+        HStack(alignment: .top, spacing: 44) {
+            DashboardStat(
+                caption: "累计启动",
+                value: store.totalLaunches
+            )
+            DashboardStat(
+                caption: "近 7 日",
+                value: store.sevenDayTrend.reduce(0) { $0 + $1.launchCount }
+            )
+            DashboardStat(
+                caption: "收录工具",
+                value: registry.categoryGroups().reduce(0) { $0 + $1.tools.count }
+            )
+        }
     }
 
     private var shortcutSection: some View {
@@ -175,6 +208,38 @@ private struct WorkbenchSectionHeader: View {
             Text(detail)
                 .font(ToolTypography.Workbench.caption)
                 .foregroundStyle(ToolTheme.Workbench.textFaint)
+        }
+    }
+}
+
+/// One dashboard counter. The value rolls from zero on first appearance
+/// (macOS 14+ digit roll; older systems and Reduce Motion show the final
+/// number), giving the workspace an instrument-panel arrival beat.
+private struct DashboardStat: View {
+    let caption: String
+    let value: Int
+
+    @State private var hasAppeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var displayedValue: Int {
+        hasAppeared ? value : 0
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(caption)
+                .font(ToolTypography.monoCaption)
+                .foregroundStyle(ToolTheme.Workbench.textFaint)
+            Text("\(displayedValue)")
+                .font(ToolTypography.statValue)
+                .foregroundStyle(ToolTheme.Workbench.textPrimary)
+                .toolNumericTransition(value: displayedValue)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(caption) \(value)")
+        .onAppear {
+            hasAppeared = true
         }
     }
 }

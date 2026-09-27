@@ -961,6 +961,7 @@ private struct Base64OutputCountBadge: View {
             }
             .help(isTruncated ? "当前只显示前后片段，复制或保存会使用完整输出" : "输出字符数")
             .accessibilityLabel(accessibilityText)
+            .toolNumericTransition(value: characterCount)
     }
 }
 

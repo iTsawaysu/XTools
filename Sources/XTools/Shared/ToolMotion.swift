@@ -151,6 +151,9 @@ enum ToolMotion {
         static let resultPresenceAppearance = Curve.smoothOut(duration: ResultPresence.appearanceDuration)
         static let resultPresenceExit = Curve.productiveExit(duration: ResultPresence.exitDuration)
         static let diagnostic = Curve.inOut(duration: Duration.quick)
+        /// Output breath: one-shot accent border pulse when an explicit run
+        /// lands (output pane chrome). Border-opacity only — no glow.
+        static let outputBreath = Curve.inOut(duration: 0.5)
         /// Container settle: no-overshoot spring for selection pills and reveals.
         static let settle = Curve.gentleSpring()
         /// Delight: slight-overshoot spring for success/result-arrival moments only.
@@ -344,6 +347,28 @@ private struct ToolMotionIdentityTransitionModifier<ID: Hashable>: ViewModifier 
     }
 }
 
+/// Numeric readout tween: digit roll on value change (macOS 14+
+/// `numericText`). Older systems and Reduce Motion render the final value
+/// directly — the motion is presentation-only chrome for instrument reads.
+private struct ToolNumericTransitionModifier<Value: Equatable>: ViewModifier {
+    let value: Value
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        if #available(macOS 14.0, *) {
+            content
+                .contentTransition(.numericText())
+                .animation(
+                    ToolMotion.animation(ToolMotion.Preset.textSwap, reduceMotion: reduceMotion),
+                    value: value
+                )
+        } else {
+            content
+        }
+    }
+}
+
 extension View {
     func toolAnimation<Value: Equatable>(
         _ animation: Animation,
@@ -400,5 +425,11 @@ extension View {
                 animation: ToolMotion.Preset.textSwap
             )
         )
+    }
+
+    /// Digit-roll tween for monospaced count readouts (see
+    /// `ToolNumericTransitionModifier`).
+    func toolNumericTransition<Value: Equatable>(value: Value) -> some View {
+        modifier(ToolNumericTransitionModifier(value: value))
     }
 }

@@ -728,7 +728,23 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
                 IndexOptionButtonLabel(configuration: configuration)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(IndexOptionPressableButtonStyle())
+    }
+}
+
+/// Press feedback for option toggles: the same 0.98 settle the button and
+/// icon families use, so every pressable control in the spine shares one
+/// physical vocabulary (Reduce Motion collapses to identity).
+private struct IndexOptionPressableButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? ToolMotion.Scale.pressed : 1)
+            .animation(
+                ToolMotion.animation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion),
+                value: configuration.isPressed
+            )
     }
 }
 
