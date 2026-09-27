@@ -457,6 +457,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
                     .strokeBorder(ToolTheme.border, lineWidth: 0.5)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         } else {
             inputPane
         }

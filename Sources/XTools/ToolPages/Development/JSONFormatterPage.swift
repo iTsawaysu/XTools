@@ -135,23 +135,24 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                             density: .compact
                         )
                         IndexOptionSwitch(
+                            title: "转义",
+                            help: "转义为字符串",
+                            style: .button,
+                            isOn: escapeSelection
+                        )
+                        IndexOptionSwitch(
                             title: "去转义",
                             help: "去除转义",
                             style: .button,
                             isOn: unescapeSelection
                         )
                         IndexOptionSwitch(
-                            title: "转义",
-                            help: "转义为字符串",
+                            title: "Key 排序",
+                            help: "按字典序排序所有键",
                             style: .button,
-                            isOn: escapeSelection
+                            isOn: $workspace.sortKeys
                         )
                     }
-                },
-                outputControl: {
-                    // Key 排序作用于输出结果，放输出侧；也为输入侧工具栏
-                    // 留出 680pt 标准宽度预算。
-                    IndexOptionSwitch(title: "Key 排序", style: .button, isOn: $workspace.sortKeys)
                 }
             )
         }

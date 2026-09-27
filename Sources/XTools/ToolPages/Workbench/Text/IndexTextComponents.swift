@@ -1641,9 +1641,10 @@ enum IndexTextKitGeometry {
             }
         }
 
-        let height = max(ceil(minimumHeight), measuredTextHeight(for: textView))
+        let resolvedMinimumHeight = minimumHeight.isFinite ? minimumHeight : 0
+        let height = max(resolvedMinimumHeight, measuredTextHeight(for: textView))
         let currentSize = textView.frame.size
-        guard abs(currentSize.width - width) > 0.5 || abs(currentSize.height - height) > 0.5 else {
+        guard abs(currentSize.width - width) > 0.01 || abs(currentSize.height - height) > 0.01 else {
             return
         }
         textView.setFrameSize(NSSize(width: width, height: height))
