@@ -78,6 +78,10 @@ enum ToolTheme {
     /// Persistent cards sit one step above the workspace. Keep the lift
     /// visible but restrained so cards never read as floating dialogs.
     static let cardShadow = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.075, darkAlpha: 0.38)
+    /// Wave 2 card-lift pane hover: resting depth (prototype --pane-shadow).
+    static let paneHoverShadowResting = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.06, darkAlpha: 0.22)
+    /// Wave 2 card-lift pane hover: lifted depth (prototype --pane-shadow-hov).
+    static let paneHoverShadowLifted = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.16, darkAlpha: 0.50)
 
     // MARK: - Shadow recipes（层级语言：面板几乎无影靠色差，浮层与模态分层）
 
@@ -92,6 +96,10 @@ enum ToolTheme {
     enum Shadow {
         /// Resting panels: separation comes from the surface ladder, not shadow.
         static let panel = ShadowRecipe(color: panelShadow, radius: 1, y: 1)
+        /// Wave 2 card-lift pane hover depth pair (timing lives in
+        /// `ToolMotion.PaneHover`): resting → lifted is the hover transition.
+        static let paneHoverResting = ShadowRecipe(color: paneHoverShadowResting, radius: 8, y: 2)
+        static let paneHoverLifted = ShadowRecipe(color: paneHoverShadowLifted, radius: 28, y: 10)
         /// Resting content cards: a low, short lift distinct from panels and
         /// substantially quieter than floating/modal surfaces.
         static let card = ShadowRecipe(color: cardShadow, radius: 5, y: 2)

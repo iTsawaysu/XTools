@@ -19,6 +19,22 @@ enum ToolMotion {
         static let letterStagger: TimeInterval = 0.032
         /// Subtitle follow-up beat after the letter choreography starts.
         static let headerFollowDelay: TimeInterval = 0.16
+        /// Wave 2 output breath: the arc starts 80ms after the run so the
+        /// text swap lands first (prototype MOTION d.breathDelay).
+        static let outputBreathDelay: TimeInterval = 0.08
+        /// Half-arc of the single 640ms breath envelope (320 up + 320 down).
+        static let outputBreathHalfArc: TimeInterval = 0.32
+        /// Wave 2 card-lift pane hover: enter 180ms, leave 240ms (prototype
+        /// MOTION d.hoverIn / d.hoverOut).
+        static let hoverIn: TimeInterval = 0.18
+        static let hoverOut: TimeInterval = 0.24
+        /// Wave 2 error feedback: damped-sine shake total (prototype
+        /// MOTION d.shake).
+        static let shake: TimeInterval = 0.3
+        /// Warning tint fade-in (delayed off the shake start) / fade-out.
+        static let errorTintIn: TimeInterval = 0.24
+        static let errorTintOut: TimeInterval = 0.2
+        static let errorTintDelay: TimeInterval = 0.08
     }
 
     enum Distance {
@@ -100,6 +116,26 @@ enum ToolMotion {
             .easeInOut(duration: duration)
         }
 
+        /// Symmetric exit arc (prototype easeExit 0.45/0/0.55/1): keeps leaving
+        /// content readable mid-flight. Serves Wave 2 breath-fall and palette
+        /// close half-arcs; declared discrete exception to the smoothOut family.
+        static let exitControlPoints = (
+            x1: 0.45,
+            y1: 0.0,
+            x2: 0.55,
+            y2: 1.0
+        )
+
+        static func exit(duration: TimeInterval) -> Animation {
+            .timingCurve(
+                exitControlPoints.x1,
+                exitControlPoints.y1,
+                exitControlPoints.x2,
+                exitControlPoints.y2,
+                duration: duration
+            )
+        }
+
         // MARK: - Spring family (Clay Warmth feel)
         //
         // Springs derive their timing from `response` (both stay inside the
@@ -151,13 +187,54 @@ enum ToolMotion {
         static let resultPresenceAppearance = Curve.smoothOut(duration: ResultPresence.appearanceDuration)
         static let resultPresenceExit = Curve.productiveExit(duration: ResultPresence.exitDuration)
         static let diagnostic = Curve.inOut(duration: Duration.quick)
-        /// Output breath: one-shot accent border pulse when an explicit run
-        /// lands (output pane chrome). Border-opacity only — no glow.
-        static let outputBreath = Curve.inOut(duration: 0.5)
+        /// Output breath: one-shot accent pulse when an explicit run lands
+        /// (output pane chrome). Terminal envelope lives in `OutputBreath`.
         /// Container settle: no-overshoot spring for selection pills and reveals.
         static let settle = Curve.gentleSpring()
         /// Delight: slight-overshoot spring for success/result-arrival moments only.
         static let delight = Curve.playfulSpring()
+    }
+
+    /// Wave 2 terminal values for the output success breath (prototype
+    /// MOTION d.breath*): delayed single 640ms arc — border-led with a faint
+    /// wash, rise on smoothOut / fall on the exit arc. Border/wash opacity
+    /// only; no glow, no re-trigger stacking.
+    enum OutputBreath {
+        static let delay = Duration.outputBreathDelay
+        static let rise = Curve.smoothOut(duration: Duration.outputBreathHalfArc)
+        static let fall = Curve.exit(duration: Duration.outputBreathHalfArc)
+        /// Border-layer peak opacity over the arc.
+        static let borderPeak: Double = 0.28
+        /// Wash fill peak: accent at 1.5% over the pane background.
+        static let washPeak: Double = 0.015
+    }
+
+    /// Wave 2 card-lift pane hover (prototype MOTION d.hoverIn/hoverOut):
+    /// the pane reads as a card lifting off the surface through neutral
+    /// shadow depth (recipes live in `ToolTheme.Shadow.paneHover*`) plus a
+    /// border deepen and a faint white background lift. Zero
+    /// translate/scale by discipline; this namespace owns timing only.
+    enum PaneHover {
+        static let inCurve = Curve.smoothOut(duration: Duration.hoverIn)
+        static let outCurve = Curve.smoothOut(duration: Duration.hoverOut)
+        /// White overlay peak: ≈1.5% background lift in both themes.
+        static let washPeak: Double = 0.015
+    }
+
+    /// Wave 2 error feedback terminal values (prototype MOTION d.shake /
+    /// d.errTint* / x.shake*): one damped-sine horizontal jolt plus a
+    /// state-held warning tint. No-flash rule: the tint is a *state*, not a
+    /// pulse — it fades in delayed after the shake starts, holds while the
+    /// error persists, and fades out on resolve; border width never changes.
+    enum ErrorFeedback {
+        static let shakeCurve = Curve.inOut(duration: Duration.shake)
+        static let shakeAmplitude: CGFloat = 4
+        static let shakeDecay: Double = 0.68
+        static let shakeOscillations: Double = 3
+        static let tintDelay = Duration.errorTintDelay
+        static let tintPeak: Double = 0.55
+        static let tintIn = Curve.smoothOut(duration: Duration.errorTintIn)
+        static let tintOut = Curve.smoothOut(duration: Duration.errorTintOut)
     }
 
     struct AppKitMotion {

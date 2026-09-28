@@ -521,4 +521,58 @@ struct MotionSourceContractTests {
         contains(timezone, "IndexDisclosure(", "Timezone disclosure motion is owned by the shared IndexDisclosure component")
         doesNotContain(timezone, "formatTime(for: group.cities[0].timezone, currentTime: currentTime))\n                        .toolMotionTextSwap", "Timezone per-second time text must not animate")
     }
+
+    // MARK: - Wave 2 motion rollout (motion-wave2 prototype, terminal values)
+
+    @Test func wave2OutputBreathUsesTerminalEnvelope() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let shared = try readSource("Sources/XTools/Shared/Components/InteractionFeedback.swift")
+        contains(motion, "enum OutputBreath", "Wave 2 output breath must own one terminal-value namespace")
+        contains(motion, "static let outputBreathDelay: TimeInterval = 0.08", "Breath must start 80ms after the run so the text swap lands first")
+        contains(motion, "static let outputBreathHalfArc: TimeInterval = 0.32", "Breath must be a single 640ms arc (320 up + 320 down)")
+        contains(motion, "static let borderPeak: Double = 0.28", "Breath border layer must peak at the terminal 0.28 opacity")
+        contains(motion, "static let washPeak: Double = 0.015", "Breath wash layer must peak at 1.5% accent")
+        contains(motion, "static func exit(duration: TimeInterval)", "Exit half-arc must use the declared symmetric exit curve")
+        contains(shared, "breathTask?.cancel()", "Re-triggering the breath must restart the arc, never stack pulses")
+        contains(shared, "withAnimation(ToolMotion.OutputBreath.rise)", "Breath rise must be its own transaction")
+        contains(shared, "withAnimation(ToolMotion.OutputBreath.fall)", "Breath fall must be its own transaction")
+    }
+
+    @Test func wave2PaneHoverIsCardLiftWithoutTransform() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let theme = try readSource("Sources/XTools/Shared/ToolTheme.swift")
+        let shared = try readSource("Sources/XTools/Shared/Components/InteractionFeedback.swift")
+        contains(motion, "enum PaneHover", "Card-lift pane hover must own one timing namespace")
+        contains(motion, "static let hoverIn: TimeInterval = 0.18", "Hover enter must be 180ms")
+        contains(motion, "static let hoverOut: TimeInterval = 0.24", "Hover leave must be 240ms")
+        contains(theme, "static let paneHoverResting = ShadowRecipe(color: paneHoverShadowResting, radius: 8, y: 2)", "Resting card shadow must flow through the recipe token")
+        contains(theme, "static let paneHoverLifted = ShadowRecipe(color: paneHoverShadowLifted, radius: 28, y: 10)", "Lifted card shadow must flow through the recipe token")
+        contains(theme, "paneHoverShadowLifted = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.16, darkAlpha: 0.50)", "Lifted shadow must stay neutral and match the prototype tokens")
+        contains(shared, ".toolShadow(recipe)", "Hover depth must render through the shared recipe modifier")
+        contains(shared, "withAnimation(hovering ? ToolMotion.PaneHover.inCurve : ToolMotion.PaneHover.outCurve)", "Hover enter/leave must run their own directional transactions")
+        let modifier = sourceSlice(shared, from: "private struct ToolPaneHoverChromeModifier", to: "struct ToolOutputBreathModifier")
+        doesNotContain(modifier, ".offset(", "Hover must not translate the pane (discipline: no hover transform)")
+        doesNotContain(modifier, ".scaleEffect(", "Hover must not scale the pane (discipline: no hover transform)")
+    }
+
+    @Test func wave2ErrorFeedbackShakesOnceAndNeverFlashes() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let shared = try readSource("Sources/XTools/Shared/Components/InteractionFeedback.swift")
+        let workbench = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexFormatWorkbench.swift")
+        let banner = try readSource("Sources/XTools/ToolPages/Workbench/Diagnostics/IndexFormatDiagnosticViews.swift")
+        contains(motion, "enum ErrorFeedback", "Error feedback must own one terminal-value namespace")
+        contains(motion, "static let shake: TimeInterval = 0.3", "Damped-sine shake must last 300ms")
+        contains(motion, "static let shakeAmplitude: CGFloat = 4", "Shake must start at the 4pt terminal amplitude")
+        contains(motion, "static let shakeDecay: Double = 0.68", "Shake envelope must decay at the terminal ratio")
+        contains(motion, "static let errorTintIn: TimeInterval = 0.24", "Warning tint must fade in over 240ms")
+        contains(motion, "static let errorTintOut: TimeInterval = 0.2", "Warning tint must fade out over 200ms")
+        contains(motion, "static let errorTintDelay: TimeInterval = 0.08", "Warning tint must lag the shake onset by 80ms")
+        contains(motion, "static let tintPeak: Double = 0.55", "Warning tint must hold at the 0.55 state peak")
+        contains(shared, "struct ToolShakeEffect: GeometryEffect", "Shake must be the shared damped-sine GeometryEffect")
+        contains(shared, "strokeBorder(ToolTheme.error, lineWidth: 1)", "Error border must keep a constant width; only opacity moves")
+        doesNotContain(shared, "opacity(ToolTheme.error.opacity(0.55))", "Tint must not blink through a conditional border swap")
+        contains(workbench, ".toolErrorShake(", "The format workbench must consume its attempt counter for the shake")
+        contains(workbench, ".toolErrorTint(active: showsErrorState", "The error chrome must be state-held, not conditionally laid out")
+        contains(banner, ".toolMotionTextSwap(id: message)", "Diagnostic banner text must crossfade, never snap")
+    }
 }
