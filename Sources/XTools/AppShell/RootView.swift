@@ -614,7 +614,12 @@ struct RootView: View {
 
     private func toggleTheme() {
         let next = themePreference.next
-        themeName = next.rawValue
+        // Wave 2 theme crossfade: the colorScheme flip dissolves through one
+        // shared envelope instead of hard-cutting (AppKit sidebar chrome still
+        // flips natively via WindowAppearanceOwner).
+        withToolAnimation(ToolMotion.Preset.themeCrossfade, reduceMotion: reduceMotion) {
+            themeName = next.rawValue
+        }
         toastCenter.show(next.toastMessage, tone: .success)
     }
 

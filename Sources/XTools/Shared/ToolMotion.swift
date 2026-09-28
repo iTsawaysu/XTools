@@ -35,6 +35,8 @@ enum ToolMotion {
         static let errorTintIn: TimeInterval = 0.24
         static let errorTintOut: TimeInterval = 0.2
         static let errorTintDelay: TimeInterval = 0.08
+        /// Wave 2 theme crossfade: 320ms single envelope (prototype d.themeXfade).
+        static let themeCrossfade: TimeInterval = 0.32
         /// Wave 2 segmented-control active-label cross-fade (prototype
         /// MOTION d.labelXfade).
         static let labelXfade: TimeInterval = 0.12
@@ -196,6 +198,10 @@ enum ToolMotion {
         static let resultPresenceAppearance = Curve.smoothOut(duration: ResultPresence.appearanceDuration)
         static let resultPresenceExit = Curve.productiveExit(duration: ResultPresence.exitDuration)
         static let diagnostic = Curve.inOut(duration: Duration.quick)
+        /// Wave 2 theme crossfade (prototype MOTION d.themeXfade): the whole
+        /// SwiftUI colorScheme dissolves through one 320ms envelope; AppKit
+        /// chrome (WindowAppearanceOwner) still flips natively.
+        static let themeCrossfade = Curve.inOut(duration: Duration.themeCrossfade)
         /// Output breath: one-shot accent pulse when an explicit run lands
         /// (output pane chrome). Terminal envelope lives in `OutputBreath`.
         /// Container settle: no-overshoot spring for selection pills and reveals.

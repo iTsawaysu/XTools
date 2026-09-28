@@ -738,4 +738,12 @@ struct MotionSourceContractTests {
         // Reduce Motion: the cursor drops in place and the label cuts directly.
         contains(segmented, "reduceMotion", "The cursor layer must gate its spring on Reduce Motion")
     }
+
+    @Test func wave2ThemeToggleCrossfadesThroughOneEnvelope() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let root = try readSource("Sources/XTools/AppShell/RootView.swift")
+        contains(motion, "static let themeCrossfade: TimeInterval = 0.32", "Theme crossfade must run the terminal 320ms envelope")
+        contains(motion, "static let themeCrossfade = Curve.inOut(duration: Duration.themeCrossfade)", "Theme crossfade must stay on the shared inOut family")
+        contains(root, "withToolAnimation(ToolMotion.Preset.themeCrossfade, reduceMotion: reduceMotion) {\n            themeName = next.rawValue\n        }", "The theme flip must dissolve through one animated transaction, Reduce Motion collapsing to a direct switch")
+    }
 }
