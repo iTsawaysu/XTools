@@ -704,4 +704,38 @@ struct MotionSourceContractTests {
         // Repeat clicks during the dwell only reset the timer; the draw never replays.
         contains(slot, "if isDwelling {\n                resetDwell()", "An active dwell must only reset its hold timer on repeat clicks")
     }
+
+    // MARK: - Wave 2 segmented sliding cursor (candidate 1, terminal values)
+
+    @Test func wave2SegmentedCursorSlidesOnTheFastSelectionSpring() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
+
+        // Terminal tokens (prototype MOTION d.segCursor / d.labelXfade +
+        // s.segCursorStretch + MOTION.springFast).
+        contains(motion, "enum SegmentedCursor", "The segmented cursor must own one terminal-value namespace")
+        contains(motion, "static let slide = Animation.spring(\n            response: 0.22,\n            dampingFraction: 0.85,", "The cursor must ride the 0.22 fast variant of the 0.3/0.85 selection-slide family")
+        contains(motion, "static let stretchPeak: CGFloat = 1.10", "The cursor stretch must peak at the terminal 1.10")
+        contains(motion, "static let labelXfade: TimeInterval = 0.12", "The active label must cross-fade over the terminal 120ms")
+        contains(motion, "static let labelXfade = Curve.smoothOut(duration: Duration.labelXfade)", "The label cross-fade must stay on the smoothOut family")
+
+        // Shared floating cursor: anchor-measured, one layer behind segments.
+        let segmented = sourceSlice(controls, from: "struct IndexSegmentedControl: View", to: "// MARK: - IndexSwitch")
+        contains(controls, "IndexSegmentedCursorAnchorKey: PreferenceKey", "Segment bounds must publish through one anchor preference key")
+        contains(segmented, ".anchorPreference(", "Each segment must publish its bounds to the shared cursor")
+        contains(segmented, "IndexSegmentedCursorLayer(", "The selected fill must float in the shared cursor layer behind the segments")
+        contains(segmented, "ToolMotion.SegmentedCursor.slide", "Cursor flights must ride the shared ToolMotion spring")
+        contains(segmented, "struct IndexSegmentedCursorFlightEffect: GeometryEffect", "The flight stretch must be a GeometryEffect for envelope math")
+        contains(segmented, "4 * progress * (1 - progress)", "The stretch envelope must follow the 4p(1-p) pill family curve")
+        contains(segmented, "ToolMotion.SegmentedCursor.stretchPeak", "The stretch peak must come from ToolMotion")
+        contains(segmented, "ToolTheme.elevatedBackground", "The cursor must keep the elevated selected fill")
+
+        // Segments no longer own the selected fill; the active label cross-fades.
+        contains(segmented, ".toolAnimation(ToolMotion.SegmentedCursor.labelXfade, value: isSelected)", "The active label color must cross-fade at the terminal 120ms")
+        doesNotContain(segmented, "ToolMotion.Preset.tabs", "Segment selection must not keep the legacy tabs timing")
+        contains(segmented, "if isSelected { return Color.clear }", "A selected segment must leave its fill to the shared cursor")
+
+        // Reduce Motion: the cursor drops in place and the label cuts directly.
+        contains(segmented, "reduceMotion", "The cursor layer must gate its spring on Reduce Motion")
+    }
 }

@@ -35,6 +35,9 @@ enum ToolMotion {
         static let errorTintIn: TimeInterval = 0.24
         static let errorTintOut: TimeInterval = 0.2
         static let errorTintDelay: TimeInterval = 0.08
+        /// Wave 2 segmented-control active-label cross-fade (prototype
+        /// MOTION d.labelXfade).
+        static let labelXfade: TimeInterval = 0.12
     }
 
     enum Distance {
@@ -357,6 +360,29 @@ enum ToolMotion {
         /// (0.25, 1.2, 0.45, 1 — ≤2% overshoot), one-shot like the prototype
         /// keyframe; no retargeting surface, so the exact curve is safe here.
         static let boxSettle = Animation.timingCurve(0.25, 1.2, 0.45, 1.0, duration: box)
+    }
+
+    /// Wave 2 segmented-control sliding cursor (prototype MOTION d.segCursor /
+    /// d.labelXfade + s.segCursorStretch + MOTION.springFast): the selected
+    /// fill detaches from the segments into one shared cursor that springs to
+    /// the newly selected segment on the fast variant of the selection-slide
+    /// spring family (0.3/0.85 sidebar pill and palette highlight → 0.22
+    /// here, ≈220ms), stretching ≈1.10 horizontally mid-flight and settling
+    /// on arrival. The active label cross-fades its color over 120ms on the
+    /// smoothOut family. Reduce Motion drops the cursor onto the new segment
+    /// and cuts the label directly.
+    enum SegmentedCursor {
+        /// Cursor flight spring — the 0.22 fast variant of the shared
+        /// 0.3/0.85 selection-slide family (springFast ≈ 220ms).
+        static let slide = Animation.spring(
+            response: 0.22,
+            dampingFraction: 0.85,
+            blendDuration: 0
+        )
+        /// Horizontal stretch peak sampled mid-flight (s.segCursorStretch).
+        static let stretchPeak: CGFloat = 1.10
+        /// Active-label color/state cross-fade (d.labelXfade, smoothOut).
+        static let labelXfade = Curve.smoothOut(duration: Duration.labelXfade)
     }
 
     struct AppKitMotion {
