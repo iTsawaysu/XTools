@@ -264,6 +264,17 @@ enum ToolMotion {
         static let rise: CGFloat = 4
     }
 
+    /// Wave 2 empty-state arrival (prototype MOTION d/x.empty*): the icon
+    /// rises on a slight-overshoot spring, then the caption and message
+    /// follow one beat apart (fade-dominant). Reduce Motion shows directly.
+    enum EmptyArrival {
+        static let iconRise = Animation.spring(response: 0.3, dampingFraction: 0.71)
+        static let textFollow = Curve.smoothOut(duration: 0.3).delay(0.06)
+        static let messageFollow = Curve.smoothOut(duration: 0.3).delay(0.12)
+        static let iconRiseDistance: CGFloat = 6
+        static let textRiseDistance: CGFloat = 4
+    }
+
     /// Wave 2 command-palette choreography (prototype MOTION d/x/s.cmdk*):
     /// open = 240ms smoothOut rise (8pt) + fade while the scrim dims on its
     /// own independent 200ms arc; close = 200ms exit-arc fade settling toward

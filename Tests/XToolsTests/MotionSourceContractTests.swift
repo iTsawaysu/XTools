@@ -746,4 +746,17 @@ struct MotionSourceContractTests {
         contains(motion, "static let themeCrossfade = Curve.inOut(duration: Duration.themeCrossfade)", "Theme crossfade must stay on the shared inOut family")
         contains(root, "withToolAnimation(ToolMotion.Preset.themeCrossfade, reduceMotion: reduceMotion) {\n            themeName = next.rawValue\n        }", "The theme flip must dissolve through one animated transaction, Reduce Motion collapsing to a direct switch")
     }
+
+    @Test func wave2EmptyStateArrivesInStagedBeats() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let empty = try readSource("Sources/XTools/Shared/Components/IndexEmptyState.swift")
+        contains(motion, "enum EmptyArrival", "Empty-state arrival must own one terminal-value namespace")
+        contains(motion, "Animation.spring(response: 0.3, dampingFraction: 0.71)", "The icon must rise on the slight-overshoot spring variant")
+        contains(motion, "delay(0.06)", "The caption must follow one beat after the icon")
+        contains(motion, "delay(0.12)", "The message must follow a second beat")
+        contains(motion, "iconRiseDistance: CGFloat = 6", "The icon rise must be 6pt")
+        contains(motion, "textRiseDistance: CGFloat = 4", "The text rise must be 4pt")
+        contains(empty, "ToolMotion.EmptyArrival.iconRiseDistance", "The shared empty state must render the staged arrival")
+        contains(empty, "reduceMotion ? nil : ToolMotion.EmptyArrival.iconRise", "Reduce Motion must show the empty state directly")
+    }
 }

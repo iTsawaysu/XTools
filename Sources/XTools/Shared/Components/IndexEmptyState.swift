@@ -25,6 +25,9 @@ public struct IndexEmptyState: View {
     public let density: IndexEmptyStateDensity
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Wave 2 empty-state arrival: flips once on appear; per-element
+    /// animations stage the reveal (icon spring first, text follows).
+    @State private var arrivalStage = false
 
     public init(
         title: String,
@@ -47,6 +50,9 @@ public struct IndexEmptyState: View {
                     .frame(width: iconBoxSize, height: iconBoxSize)
                     .background(ToolTheme.panelBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
                     .toolMotionIconSwap(id: systemImage)
+                    .opacity(arrivalStage ? 1 : 0)
+                    .offset(y: arrivalStage ? 0 : ToolMotion.EmptyArrival.iconRiseDistance)
+                    .animation(reduceMotion ? nil : ToolMotion.EmptyArrival.iconRise, value: arrivalStage)
             }
 
             VStack(alignment: .center, spacing: 4) {
@@ -54,6 +60,9 @@ public struct IndexEmptyState: View {
                     .font(density == .panel ? ToolTypography.sectionTitle : ToolTypography.bodyMedium)
                     .foregroundStyle(ToolTheme.textPrimary)
                     .toolMotionTextSwap(id: title)
+                    .opacity(arrivalStage ? 1 : 0)
+                    .offset(y: arrivalStage ? 0 : ToolMotion.EmptyArrival.textRiseDistance)
+                    .animation(reduceMotion ? nil : ToolMotion.EmptyArrival.textFollow, value: arrivalStage)
 
                 if let message {
                     Text(message)
@@ -62,6 +71,9 @@ public struct IndexEmptyState: View {
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                         .toolMotionTextSwap(id: message)
+                        .opacity(arrivalStage ? 1 : 0)
+                        .offset(y: arrivalStage ? 0 : ToolMotion.EmptyArrival.textRiseDistance)
+                        .animation(reduceMotion ? nil : ToolMotion.EmptyArrival.messageFollow, value: arrivalStage)
                 }
             }
         }
@@ -70,6 +82,9 @@ public struct IndexEmptyState: View {
         .frame(maxWidth: density == .panel ? 360 : .infinity)
         .frame(maxWidth: .infinity, maxHeight: density == .list ? nil : .infinity)
         .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
+        .onAppear {
+            arrivalStage = true
+        }
     }
     
     private var iconSize: CGFloat {
