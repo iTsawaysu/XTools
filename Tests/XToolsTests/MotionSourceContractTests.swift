@@ -604,4 +604,56 @@ struct MotionSourceContractTests {
         contains(coordinator, "fadeOutRefine: searchRefinement && !searchArrivalEdge", "Filtered-out rows must fade out only mid-refinement")
         contains(coordinator, "removeAllAnimations()", "A re-matched row must be reclaimed from an interrupted fade")
     }
+
+    // MARK: - Wave 2 command palette (candidate 6, sixth-round terminal values)
+
+    @Test func wave2CommandPaletteChoreographyLocksOpenCloseStaggerAndSlide() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let root = try readSource("Sources/XTools/AppShell/RootView.swift")
+        let commandPalette = try readSource("Sources/XTools/AppShell/CommandPalette.swift")
+        let highlight = try readSource("Sources/XTools/AppShell/CommandPaletteSelectionHighlight.swift")
+
+        // Terminal tokens (prototype MOTION d/x/s.cmdk* + listStagger).
+        contains(motion, "enum PaletteMotion", "Palette choreography must own one terminal-value namespace")
+        contains(motion, "static let open = Animation.spring(\n            response: 0.24,", "Open must ride the 240ms spring-family rise")
+        contains(motion, "static let close = Animation.spring(\n            response: 0.2,", "Close must settle on the ~200ms critically damped exit spring")
+        contains(motion, "static let riseDistance: CGFloat = 8", "The unified open-rise/close-sink travel is 8pt (prototype splits 8 in / 6 out)")
+        contains(motion, "static let settleScale: CGFloat = 0.985", "Close terminal scale must be 0.985")
+        contains(motion, "static let rowsDelay: TimeInterval = 0.06", "Row stagger must start 60ms after the panel launch")
+        contains(motion, "static let rowStagger: TimeInterval = 0.02", "Row stagger cadence must be the shared 20ms listStagger")
+        contains(motion, "static let rowIn: TimeInterval = 0.15", "Each row entrance must run 150ms")
+        contains(motion, "static let rowRise: CGFloat = 4", "Row entrance rise must be 4pt")
+        contains(motion, "static let highlightSlide = Curve.gentleSpring()", "The highlight must share the 0.3/0.85 sidebar pill spring family")
+        contains(motion, "static let highlightStretchPeak: CGFloat = 1.08", "Highlight stretch must peak at 1.08")
+        contains(motion, "static func rowArrival(index: Int) -> Animation", "Row arrival must derive its delayed arc from ToolMotion")
+
+        // Open/close share one directional animation owner; every close path
+        // lands on the same arc (prototype closeCmdk unification).
+        contains(root, "presentation.shows\n                    ? ToolMotion.PaletteMotion.open\n                    : ToolMotion.PaletteMotion.close,", "One directional selector must own open vs close arcs")
+        contains(root, "value: presentation.shows", "The palette arcs must stay keyed on the stable presentation state")
+
+        // The scrim dims on its own 200ms arc, independent of the panel.
+        contains(root, ".opacity(isPresented ? 1 : 0)", "The scrim must dim through presentation state, not the panel progress")
+        contains(root, "? ToolMotion.PaletteMotion.scrimIn\n                            : ToolMotion.PaletteMotion.scrimOut,", "The scrim must own its independent directional arcs")
+
+        // Geometry: one continuous mapping (no hard-switch on reversal).
+        contains(commandPalette, "ToolMotion.PaletteMotion.riseDistance * (1 - progress)", "Offset must derive from the shared 8pt travel")
+        contains(commandPalette, "1 - (1 - ToolMotion.PaletteMotion.settleScale) * (1 - progress)", "Scale must settle through the 0.985 terminal value")
+
+        // Staggered row arrival: session-scoped, query filtering stays instant.
+        contains(commandPalette, "revealedSession", "Row arrival must be gated per presentation session")
+        contains(commandPalette, "CommandPaletteRowArrivalModifier(", "Rows must arrive through the shared stagger modifier")
+        contains(commandPalette, "ToolMotion.PaletteMotion.rowArrival(index: index)", "Row arrival delay must come from the shared cadence")
+        contains(commandPalette, "reduceMotion || revealedSession == sessionModel.session", "Reduce Motion must keep rows permanently arrived")
+
+        // Selection highlight: keyboard-sprung slide + multi-row stretch.
+        contains(commandPalette, "@State private var highlightFlightAnimated = false", "The palette must track keyboard-driven highlight intent")
+        contains(commandPalette, "CommandPaletteSelectionHighlightHost(", "The list must host the floating selection highlight")
+        contains(commandPalette, "CommandPaletteRowAnchorsKey.self) { rowAnchors = $0 }", "Row frames must publish through the shared anchor preference")
+        contains(highlight, "struct CommandPaletteRowAnchorsKey: PreferenceKey", "Selectable-row bounds must publish through one preference key")
+        contains(highlight, "struct CommandPaletteHighlightFlightEffect: GeometryEffect", "The highlight flight must be a GeometryEffect for envelope math")
+        contains(highlight, "abs(toY - fromY) >= rowHeight * 2", "Stretch must engage only across jumps of two rows or more")
+        contains(highlight, "4 * progress * (1 - progress)", "The stretch envelope must follow the 4p(1-p) pill family curve")
+        contains(highlight, "animates && !reduceMotion\n                ? ToolMotion.PaletteMotion.highlightSlide\n                : nil", "Keyboard moves must spring; rebuilds and Reduce Motion must drop instantly")
+    }
 }

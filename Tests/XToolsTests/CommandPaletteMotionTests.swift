@@ -9,6 +9,8 @@ import Testing
 struct CommandPaletteMotionTests {
     @Test
     func visibilityGeometryIsAContinuousFunctionOfProgress() {
+        // Wave 2: the palette rises/sinks `PaletteMotion.riseDistance` (8pt)
+        // across the full progress sweep (prototype cmdkRise).
         var previous = CommandPaletteVisibilityGeometry.resolve(
             progress: 0,
             reduceMotion: false
@@ -20,7 +22,7 @@ struct CommandPaletteMotionTests {
             )
 
             #expect(abs(current.opacity - Double(progress)) < 0.000_001)
-            #expect(abs(current.offsetY - previous.offsetY) <= ToolMotion.Distance.small * 0.05 + 0.000_001)
+            #expect(abs(current.offsetY - previous.offsetY) <= ToolMotion.PaletteMotion.riseDistance * 0.05 + 0.000_001)
             previous = current
         }
 
@@ -40,6 +42,87 @@ struct CommandPaletteMotionTests {
             #expect(geometry.offsetY == 0)
             #expect(geometry.opacity == Double(progress))
         }
+    }
+
+    // MARK: - Wave 2 palette choreography (prototype MOTION cmdk*)
+
+    /// Terminal values lock: open rise 8pt/240ms spring, close ~200ms spring
+    /// settle to 0.985, scrim 200ms, row stagger 20ms delayed 60ms, row arc
+    /// 150ms/4pt, highlight spring family + 1.08 stretch peak.
+    @Test
+    func paletteMotionTokensMatchWave2Prototype() {
+        #expect(ToolMotion.PaletteMotion.riseDistance == 8)
+        #expect(ToolMotion.PaletteMotion.settleScale == 0.985)
+        #expect(ToolMotion.PaletteMotion.rowsDelay == 0.06)
+        #expect(ToolMotion.PaletteMotion.rowStagger == 0.02)
+        #expect(ToolMotion.PaletteMotion.rowIn == 0.15)
+        #expect(ToolMotion.PaletteMotion.rowRise == 4)
+        #expect(ToolMotion.PaletteMotion.highlightStretchPeak == 1.08)
+        // Springs keep the presentation retargetable (timing-curve variants
+        // stalled real-window reversals); open ≈ prototype --ease feel.
+        #expect(ToolMotion.PaletteMotion.open == Animation.spring(response: 0.24, dampingFraction: 0.95, blendDuration: 0))
+        #expect(ToolMotion.PaletteMotion.close == Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0))
+        #expect(ToolMotion.PaletteMotion.scrimIn == Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0))
+        #expect(ToolMotion.PaletteMotion.scrimOut == Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0))
+        // Keyboard selection highlight shares the sidebar pill spring family.
+        #expect(ToolMotion.PaletteMotion.highlightSlide == ToolMotion.Curve.gentleSpring())
+    }
+
+    /// The open arc starts 8pt BELOW the resting position (prototype rises
+    /// up) and settles through the 0.985 close scale — one continuous
+    /// mapping for both directions.
+    @Test
+    func visibilityGeometryMatchesWave2Endpoints() {
+        let start = CommandPaletteVisibilityGeometry.resolve(
+            progress: 0,
+            reduceMotion: false
+        )
+        let settled = CommandPaletteVisibilityGeometry.resolve(
+            progress: 1,
+            reduceMotion: false
+        )
+
+        #expect(start.offsetY == ToolMotion.PaletteMotion.riseDistance)
+        #expect(start.scale == ToolMotion.PaletteMotion.settleScale)
+        #expect(settled.offsetY == 0)
+        #expect(settled.scale == 1)
+
+        var previousOffset = start.offsetY
+        for progress in stride(from: CGFloat(0.05), through: 1, by: 0.05) {
+            let geometry = CommandPaletteVisibilityGeometry.resolve(
+                progress: progress,
+                reduceMotion: false
+            )
+            // The panel rises monotonically toward its resting position.
+            #expect(geometry.offsetY < previousOffset)
+            #expect(geometry.offsetY >= 0)
+            previousOffset = geometry.offsetY
+        }
+    }
+
+    /// The floating highlight stretches only across jumps of two rows or
+    /// more, peaking at the prototype's 1.08 mid-flight and settling back
+    /// to 1 at both ends of the envelope.
+    @Test
+    func highlightFlightStretchesOnlyAcrossMultiRowJumps() {
+        let rowHeight: CGFloat = 38
+        let neighbor = CommandPaletteHighlightFlight(fromY: 0, toY: rowHeight, rowHeight: rowHeight)
+        #expect(!neighbor.stretches)
+
+        let multiRow = CommandPaletteHighlightFlight(fromY: 0, toY: rowHeight * 2, rowHeight: rowHeight)
+        #expect(multiRow.stretches)
+
+        let peakStretch = (ToolMotion.PaletteMotion.highlightStretchPeak - 1)
+            * 4
+            * multiRow.progress(at: rowHeight)
+            * (1 - multiRow.progress(at: rowHeight))
+        #expect(abs(peakStretch - 0.08) < 0.000_001)
+        #expect(multiRow.progress(at: 0) == 0)
+        #expect(multiRow.progress(at: rowHeight * 2) == 1)
+        // Out-of-range samples clamp so interrupted flights never invert
+        // the envelope.
+        #expect(multiRow.progress(at: -rowHeight) == 0)
+        #expect(multiRow.progress(at: rowHeight * 3) == 1)
     }
 
 #if DEBUG
@@ -488,9 +571,11 @@ struct CommandPaletteMotionTests {
         #expect(lhs.timestamp <= rhs.timestamp)
         #expect(elapsedMilliseconds < 100)
         #expect(progressDistance < 0.25)
+        // Wave 2: one continuous 8pt rise/sink mapping serves both directions
+        // (prototype cmdkRise; unified so reversals never switch geometry).
         #expect(
             offsetDistance
-                <= ToolMotion.Distance.small * progressDistance + 0.000_001
+                <= ToolMotion.PaletteMotion.riseDistance * progressDistance + 0.000_001
         )
     }
 

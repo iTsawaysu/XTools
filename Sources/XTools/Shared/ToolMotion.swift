@@ -255,6 +255,79 @@ enum ToolMotion {
         static let rise: CGFloat = 4
     }
 
+    /// Wave 2 command-palette choreography (prototype MOTION d/x/s.cmdk*):
+    /// open = 240ms smoothOut rise (8pt) + fade while the scrim dims on its
+    /// own independent 200ms arc; close = 200ms exit-arc fade settling toward
+    /// the 0.985 scale. Open and close share ONE continuous rise/sink
+    /// distance and scale mapping so rapid reversals never hard-switch the
+    /// presentation geometry (contract: `CommandPaletteVisibilityGeometry`).
+    /// Rows stagger in 20ms/row starting 60ms after the panel launch; the
+    /// keyboard selection highlight slides on the shared gentle spring
+    /// (0.3/0.85, same family as the sidebar pill) and stretches ≈1.08
+    /// vertically across jumps of two rows or more.
+    enum PaletteMotion {
+        /// Panel open: 8pt rise + fade on the spring family (cmdkIn 240ms,
+        /// prototype --ease ≈ smoothOut feel). A near-critical spring keeps
+        /// the arc overshoot-free while staying retargetable mid-flight.
+        static let open = Animation.spring(
+            response: 0.24,
+            dampingFraction: 0.95,
+            blendDuration: 0
+        )
+        /// Panel close: fade + sink settling in ~200ms (cmdkOut). A
+        /// critically damped spring approximates the prototype's easeExit
+        /// arc monotonically — timing-curve variants stall real-window
+        /// retargets (see `CommandPaletteMotionTests` rapid reversals).
+        static let close = Animation.spring(
+            response: 0.2,
+            dampingFraction: 1.0,
+            blendDuration: 0
+        )
+        /// Scrim dims in / out on its own 200ms arc, independent of the
+        /// panel's 240ms open choreography (cmdkMask). Critically damped so
+        /// opacity never overshoots.
+        static let scrimIn = Animation.spring(
+            response: 0.2,
+            dampingFraction: 1.0,
+            blendDuration: 0
+        )
+        static let scrimOut = Animation.spring(
+            response: 0.2,
+            dampingFraction: 1.0,
+            blendDuration: 0
+        )
+        /// Unified rise/sink travel: open rises from 8pt below the resting
+        /// position, close sinks the same 8pt while fading. The prototype
+        /// splits this 8 in / 6 out; one distance keeps reversal geometry
+        /// continuous (cmdkRise / cmdkSink).
+        static let riseDistance: CGFloat = 8
+        /// Panel settle scale at the closed end of the interpolation; the
+        /// open arc passes through the same settling scale (cmdkOut 0.985).
+        static let settleScale: CGFloat = 0.985
+        /// Row entrance starts 60ms after the panel launch (cmdkRowsDelay).
+        static let rowsDelay: TimeInterval = 0.06
+        /// Per-row entrance stagger: the shared list cadence (MOTION
+        /// d.listStagger, 20ms; the sidebar search keeps its faster 12ms
+        /// `SearchArrival.stagger`).
+        static let rowStagger: TimeInterval = 0.02
+        /// Each row's entrance arc (prototype rowIn .15s).
+        static let rowIn: TimeInterval = 0.15
+        /// Row entrance rise (prototype rowIn translateY 4px).
+        static let rowRise: CGFloat = 4
+        /// Selection highlight flight spring — the shared 0.3/0.85 container
+        /// spring, same family as the sidebar selection pill.
+        static let highlightSlide = Curve.gentleSpring()
+        /// Highlight vertical stretch peak across ≥2-row jumps (cmdkHlStretch).
+        static let highlightStretchPeak: CGFloat = 1.08
+
+        /// Per-row entrance animation: 150ms smoothOut rise + fade, delayed
+        /// by the 60ms panel-launch lead plus the row's 20ms stagger step.
+        static func rowArrival(index: Int) -> Animation {
+            Curve.smoothOut(duration: rowIn)
+                .delay(rowsDelay + TimeInterval(index) * rowStagger)
+        }
+    }
+
     struct AppKitMotion {
         let duration: TimeInterval
         let timingFunction: CAMediaTimingFunction
