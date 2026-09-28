@@ -54,6 +54,12 @@ enum ToolMotion {
         static let pressed: CGFloat = 0.98
         static let iconInserted: CGFloat = 0.98
         static let iconRemoved: CGFloat = 1.02
+        /// Wave 2 sidebar selection pill stretch (prototype MOTION s.pillStretch*):
+        /// vertical stretch per row of travel, capped, with horizontal volume
+        /// compensation; only jumps beyond `pillStretchMinRows` rows stretch.
+        static let pillStretchPerRow: CGFloat = 0.06
+        static let pillStretchMax: CGFloat = 0.15
+        static let pillStretchMinRows: CGFloat = 1.5
         /// Page-arrival depth: incoming tool pages settle from 99.5% scale.
         static let pageArrivalSink: CGFloat = 0.995
     }

@@ -575,4 +575,17 @@ struct MotionSourceContractTests {
         contains(workbench, ".toolErrorTint(active: showsErrorState", "The error chrome must be state-held, not conditionally laid out")
         contains(banner, ".toolMotionTextSwap(id: message)", "Diagnostic banner text must crossfade, never snap")
     }
+
+    @Test func wave2SidebarPillStretchesOnMultiRowJumps() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let track = try readSource("Sources/XTools/AppShell/SidebarNavigationTrackView.swift")
+        contains(motion, "static let pillStretchPerRow: CGFloat = 0.06", "Pill stretch must grow at the terminal per-row rate")
+        contains(motion, "static let pillStretchMax: CGFloat = 0.15", "Pill stretch must cap at the terminal maximum")
+        contains(motion, "static let pillStretchMinRows: CGFloat = 1.5", "Neighbor moves must never stretch the pill")
+        contains(track, "CAKeyframeAnimation(keyPath: \"transform.scale.y\")", "Stretch must ride a synchronized keyframe on the pill layer")
+        contains(track, "1 / sqrt(peak)", "Stretch must conserve volume through horizontal compensation")
+        contains(track, "addVelocityStretch(distance: distance, duration: spring.duration)", "Stretch must share the slide spring's duration")
+        let stretch = sourceSlice(track, from: "private func addVelocityStretch", to: "private func removeSlideAnimation")
+        doesNotContain(stretch, "prepareForStructuralMotion", "Structural motion paths must not pick up the stretch")
+    }
 }

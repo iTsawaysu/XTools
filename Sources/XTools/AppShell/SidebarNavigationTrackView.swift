@@ -374,6 +374,8 @@ final class SidebarSelectionIndicatorView: NSView {
     }
 
     private static let slideAnimationKey = "sidebar.selection.slide"
+    private static let stretchYAnimationKey = "sidebar.selection.stretch.y"
+    private static let stretchXAnimationKey = "sidebar.selection.stretch.x"
 
     private let pillLayer = CALayer()
     private let railLayer = CALayer()
@@ -461,14 +463,43 @@ final class SidebarSelectionIndicatorView: NSView {
         let fromY = layer.presentation()?.position.y ?? layer.position.y
         removeSlideAnimation()
         let toY = layer.position.y
-        guard abs(fromY - toY) > 0.5 else { return }
+        let distance = abs(fromY - toY)
+        guard distance > 0.5 else { return }
         let spring = ToolMotion.AppKitPreset.selectionSlide()
         spring.fromValue = fromY
         spring.toValue = toY
         layer.add(spring, forKey: Self.slideAnimationKey)
+        addVelocityStretch(distance: distance, duration: spring.duration)
+    }
+
+    /// Wave 2 velocity-aware liquid stretch: on multi-row jumps the pill
+    /// stretches vertically mid-flight (capped) with a horizontal volume
+    /// compensation, following the 4p(1-p) envelope so both ends rest at 1.
+    /// Neighbor moves (≤1.5 rows) never stretch. See `ToolMotion.Scale`.
+    private func addVelocityStretch(distance: CGFloat, duration: CFTimeInterval) {
+        let rowApprox = max(bounds.height, 1)
+        let rows = distance / rowApprox
+        guard rows > ToolMotion.Scale.pillStretchMinRows else { return }
+        let stretch = min(ToolMotion.Scale.pillStretchMax, ToolMotion.Scale.pillStretchPerRow * rows)
+        let scaleY: CAKeyframeAnimation = CAKeyframeAnimation(keyPath: "transform.scale.y")
+        let scaleX: CAKeyframeAnimation = CAKeyframeAnimation(keyPath: "transform.scale.x")
+        // 4p(1-p) envelope sampled at quarter points: 0, 0.75, 1, 0.75, 0.
+        let envelope: [CGFloat] = [0, 0.75, 1, 0.75, 0]
+        let peak = 1 + stretch
+        let compensated = 1 / sqrt(peak)
+        scaleY.values = envelope.map { 1 + stretch * $0 }
+        scaleX.values = envelope.map { 1 - (1 - compensated) * $0 }
+        scaleY.keyTimes = [0, 0.25, 0.5, 0.75, 1]
+        scaleX.keyTimes = scaleY.keyTimes
+        scaleY.duration = duration
+        scaleX.duration = duration
+        pillLayer.add(scaleY, forKey: Self.stretchYAnimationKey)
+        pillLayer.add(scaleX, forKey: Self.stretchXAnimationKey)
     }
 
     private func removeSlideAnimation() {
         layer?.removeAnimation(forKey: Self.slideAnimationKey)
+        pillLayer.removeAnimation(forKey: Self.stretchYAnimationKey)
+        pillLayer.removeAnimation(forKey: Self.stretchXAnimationKey)
     }
 }
