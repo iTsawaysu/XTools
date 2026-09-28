@@ -25,6 +25,7 @@ private struct IndexCodeViewerText: Equatable {
 /// - Native macOS Find Bar support (`⌘F`)
 /// - Line spacing matching the input editor
 struct IndexCodeViewerSurface: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let text: IndexCodeViewerText
     var placeholder: String = IndexEmptyStateCopy.outputWillShowHere
     var lineNumbers: Bool = true
@@ -70,8 +71,18 @@ struct IndexCodeViewerSurface: View {
 
             if text.isEmpty {
                 placeholderView
+                    // Wave 2 empty-arrival: the editor placeholder rises in
+                    // softly when content empties (IndexEmptyState owns the
+                    // staged beats for whole-panel empty states).
+                    .transition(
+                        .opacity.combined(with: .offset(y: ToolMotion.EmptyArrival.textRiseDistance))
+                    )
             }
         }
+        .animation(
+            reduceMotion ? nil : ToolMotion.EmptyArrival.elementArrival,
+            value: text.isEmpty
+        )
         .frame(
             maxWidth: .infinity,
             minHeight: effectiveMinHeight,

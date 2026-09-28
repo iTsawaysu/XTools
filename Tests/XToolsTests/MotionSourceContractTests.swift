@@ -732,6 +732,7 @@ struct MotionSourceContractTests {
         contains(segmented, ".toolAnimation(ToolMotion.SegmentedCursor.labelXfade, value: isSelected)", "The active label color must cross-fade at the terminal 120ms")
         doesNotContain(segmented, "ToolMotion.Preset.tabs", "Segment selection must not keep the legacy tabs timing")
         contains(segmented, "if isSelected { return Color.clear }", "A selected segment must leave its fill to the shared cursor")
+        contains(controls, "ABOVE the tray's opaque editorBackground", "The cursor layer must stack above the opaque tray background, or it never renders")
 
         // Reduce Motion: the cursor drops in place and the label cuts directly.
         contains(segmented, "reduceMotion", "The cursor layer must gate its spring on Reduce Motion")
@@ -756,6 +757,9 @@ struct MotionSourceContractTests {
         contains(motion, "textRiseDistance: CGFloat = 4", "The text rise must be 4pt")
         contains(empty, "ToolMotion.EmptyArrival.iconRiseDistance", "The shared empty state must render the staged arrival")
         contains(empty, "reduceMotion ? nil : ToolMotion.EmptyArrival.iconRise", "Reduce Motion must show the empty state directly")
+        let viewer = try readSource("Sources/XTools/Shared/Components/IndexCodeViewerSurface.swift")
+        contains(viewer, "ToolMotion.EmptyArrival.textRiseDistance", "The editor placeholder must rise in softly when content empties")
+        contains(motion, "static let elementArrival = Curve.smoothOut(duration: 0.3)", "The placeholder swap must share the empty-arrival family curve")
     }
 
     // MARK: - Wave 2 difference-block locating wash (candidate 5, sixth-round terminal values)

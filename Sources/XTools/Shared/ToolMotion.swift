@@ -273,6 +273,8 @@ enum ToolMotion {
         static let messageFollow = Curve.smoothOut(duration: 0.3).delay(0.12)
         static let iconRiseDistance: CGFloat = 6
         static let textRiseDistance: CGFloat = 4
+        /// Single-element variant (editor placeholder swap): no beat delay.
+        static let elementArrival = Curve.smoothOut(duration: 0.3)
     }
 
     /// Wave 2 dashboard trend bars (prototype MOTION d.trendBar /

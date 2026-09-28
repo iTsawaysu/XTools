@@ -621,14 +621,9 @@ struct IndexSegmentedControl: View {
             }
         }
         .padding(2)
-        .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                .strokeBorder(ToolTheme.border, lineWidth: 1)
-        }
-        .fixedSize(horizontal: true, vertical: false)
-        // Wave 2 sliding cursor: the selected fill floats in one shared layer
-        // behind the segments and springs between them on selection changes.
+        // Wave 2 sliding cursor: the selected fill floats behind the segments
+        // but ABOVE the tray's opaque editorBackground — stacking it outside
+        // that background would hide it completely.
         .background {
             GeometryReader { proxy in
                 IndexSegmentedCursorLayer(
@@ -636,6 +631,12 @@ struct IndexSegmentedControl: View {
                 )
             }
         }
+        .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                .strokeBorder(ToolTheme.border, lineWidth: 1)
+        }
+        .fixedSize(horizontal: true, vertical: false)
         .onPreferenceChange(IndexSegmentedCursorAnchorKey.self) { segmentAnchors = $0 }
     }
 
