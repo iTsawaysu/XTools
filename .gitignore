@@ -12,6 +12,8 @@ DerivedData/
 
 # Swift 包管理器
 .build/
+.build-*
+.build-*/
 .swiftpm-*
 .swiftpm/
 *.swiftpm
