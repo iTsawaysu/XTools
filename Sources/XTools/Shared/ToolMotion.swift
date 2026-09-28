@@ -402,6 +402,64 @@ enum ToolMotion {
         static let labelXfade = Curve.smoothOut(duration: Duration.labelXfade)
     }
 
+    /// Wave 2 difference-block locating wash (prototype MOTION d.diffPulse /
+    /// d.diffWashPeak): when a difference jump lands, the target block's
+    /// background sweeps one soft accent wash — opacity 0 → 10% → 0 across a
+    /// single 360ms arc (rise on smoothOut to a 40% peak, fall on the exit
+    /// arc) — while the pane's line-number slot marker deepens on the same
+    /// arc (2pt accent → 3pt accentHover → 2pt). One layer, one animated
+    /// property, one arc: outline and enclose treatments were explicitly
+    /// rejected. Reduce Motion skips the wash entirely; the jump still
+    /// scrolls and selects.
+    enum LocatingWash {
+        /// Total wash arc (prototype d.diffPulse, 360ms).
+        static let duration: TimeInterval = 0.36
+        /// Peak block-wash opacity over the pane background (prototype
+        /// d.diffWashPeak — accent at 10%).
+        static let washPeak: Double = 0.10
+        /// Peak position across the arc: rise smoothOut, fall exit (the
+        /// prototype keyframes split the arc at 40%).
+        static let peakFraction: Double = 0.4
+        /// Line-number slot marker deepening: the resting 2pt accent mark
+        /// widens to 3pt at the peak (prototype lnoDeep 2px→3px).
+        static let gutterDeepWidth: CGFloat = 3
+        /// The deepened slot mark shows at full opacity (single-property arc
+        /// on one added mark; the resting mark never moves).
+        static let gutterDeepPeak: Double = 1.0
+        /// Block-wash corner radius (prototype .cln 2px).
+        static let washCornerRadius: CGFloat = 2
+        /// Slot-mark corner radius, matching the resting gutter accent mark.
+        static let gutterDeepCornerRadius: CGFloat = 1
+
+        /// The single-arc opacity keyframe for AppKit-hosted wash surfaces
+        /// (control points come from the shared curve tokens; the block wash
+        /// passes `washPeak`, the slot mark passes `gutterDeepPeak`).
+        static func opacityKeyframe(peak: Double) -> CAKeyframeAnimation {
+            let smooth = Curve.smoothOutControlPoints
+            let exit = Curve.exitControlPoints
+            let arc = CAKeyframeAnimation(keyPath: "opacity")
+            arc.values = [0.0, peak, 0.0]
+            arc.keyTimes = [0.0, NSNumber(value: peakFraction), 1.0]
+            arc.duration = duration
+            arc.timingFunctions = [
+                CAMediaTimingFunction(
+                    controlPoints: Float(smooth.x1),
+                    Float(smooth.y1),
+                    Float(smooth.x2),
+                    Float(smooth.y2)
+                ),
+                CAMediaTimingFunction(
+                    controlPoints: Float(exit.x1),
+                    Float(exit.y1),
+                    Float(exit.x2),
+                    Float(exit.y2)
+                )
+            ]
+            arc.isRemovedOnCompletion = true
+            return arc
+        }
+    }
+
     struct AppKitMotion {
         let duration: TimeInterval
         let timingFunction: CAMediaTimingFunction

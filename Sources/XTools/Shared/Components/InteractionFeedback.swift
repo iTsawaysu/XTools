@@ -1,3 +1,5 @@
+import AppKit
+import QuartzCore
 import SwiftUI
 
 /// Shared press acknowledgement for controls across the shell.
@@ -220,5 +222,98 @@ extension View {
     /// State-held warning border tint (see `ToolErrorTintModifier`).
     func toolErrorTint(active: Bool, cornerRadius: CGFloat) -> some View {
         modifier(ToolErrorTintModifier(active: active, cornerRadius: cornerRadius))
+    }
+}
+
+// MARK: - Locating wash (Wave 2)
+
+/// One-shot locating wash for difference-block jumps (Wave 2, see
+/// `ToolMotion.LocatingWash`): when a jump lands on a difference block, one
+/// layer over the target block sweeps its opacity 0 → peak → 0 across a
+/// single 360ms arc while the pane's line-number slot marker deepens on the
+/// same arc. One layer, one animated property, one arc — outline and enclose
+/// treatments were explicitly rejected. Hosted on the AppKit side because
+/// block geometry lives inside the TextKit diff editors; SwiftUI hosts keep
+/// `toolOutputBreath` for pane-level feedback.
+///
+/// Two styles share one arc: `.blockWash` (accent fill peaking at
+/// `washPeak`) and `.gutterDeepen` (an accentHover mark at full opacity that
+/// widens the resting 2pt slot mark to 3pt mid-arc). Keyed by a
+/// caller-supplied generation so repeated identical triggers and re-renders
+/// never replay the arc. Reduce Motion plays nothing — the jump itself still
+/// scrolls and selects.
+@MainActor
+final class ToolLocatingWashView: NSView {
+    enum Style {
+        /// Block background wash: accent fill peaking at `washPeak` opacity.
+        case blockWash
+        /// Line-number slot mark deepening: accentHover fill at full opacity
+        /// over the resting slot mark, same 360ms arc.
+        case gutterDeepen
+    }
+
+    private let style: Style
+    private var playedGeneration = 0
+    private static let arcKey = "toolLocatingWashArc"
+
+    init(style: Style) {
+        self.style = style
+        super.init(frame: .zero)
+        wantsLayer = true
+        updateLayer()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        super.updateLayer()
+        switch style {
+        case .blockWash:
+            layer?.backgroundColor = NSColor(ToolTheme.accent).cgColor
+            layer?.cornerRadius = ToolMotion.LocatingWash.washCornerRadius
+        case .gutterDeepen:
+            layer?.backgroundColor = NSColor(ToolTheme.accentHover).cgColor
+            layer?.cornerRadius = ToolMotion.LocatingWash.gutterDeepCornerRadius
+        }
+        layer?.opacity = 0
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateLayer()
+    }
+
+    /// Repositions the wash to cover `rect` (host-view coordinates) without
+    /// an implicit layer animation, then plays the one-shot arc once per
+    /// generation change. Reduce Motion keeps the repositioning silent — the
+    /// jump's scroll/selection behavior is owned by the caller and untouched.
+    func play(generation: Int, frame: NSRect) {
+        guard generation != playedGeneration else { return }
+        playedGeneration = generation
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        self.frame = frame
+        CATransaction.commit()
+
+        guard !ToolMotion.systemReduceMotionEnabled else { return }
+        let peak: Double
+        switch style {
+        case .blockWash:
+            peak = ToolMotion.LocatingWash.washPeak
+        case .gutterDeepen:
+            peak = ToolMotion.LocatingWash.gutterDeepPeak
+        }
+        layer?.removeAnimation(forKey: Self.arcKey)
+        layer?.add(ToolMotion.LocatingWash.opacityKeyframe(peak: peak), forKey: Self.arcKey)
     }
 }

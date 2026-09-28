@@ -759,4 +759,49 @@ struct MotionSourceContractTests {
         contains(empty, "ToolMotion.EmptyArrival.iconRiseDistance", "The shared empty state must render the staged arrival")
         contains(empty, "reduceMotion ? nil : ToolMotion.EmptyArrival.iconRise", "Reduce Motion must show the empty state directly")
     }
+
+    // MARK: - Wave 2 difference-block locating wash (candidate 5, sixth-round terminal values)
+
+    @Test func wave2DifferenceLocatingWashSweepsOneArcWithNoOutlineTreatment() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let shared = try readSource("Sources/XTools/Shared/Components/InteractionFeedback.swift")
+        let workspace = try readSource("Sources/XTools/ToolPages/Workbench/Diff/IndexEditableDiffWorkspace.swift")
+
+        // Terminal tokens (prototype MOTION d.diffPulse / d.diffWashPeak).
+        contains(motion, "enum LocatingWash", "The locating wash must own one terminal-value namespace")
+        contains(motion, "static let duration: TimeInterval = 0.36", "The wash must be a single 360ms arc")
+        contains(motion, "static let washPeak: Double = 0.10", "The block wash must peak at 10% accent")
+        contains(motion, "static let peakFraction: Double = 0.4", "The arc must peak at 40% (smoothOut rise, exit fall)")
+        contains(motion, "static let gutterDeepWidth: CGFloat = 3", "The slot mark must deepen 2→3pt at the peak")
+        contains(motion, "static func opacityKeyframe(peak: Double) -> CAKeyframeAnimation", "The AppKit arc must derive from one ToolMotion keyframe factory")
+
+        // Shared host: one AppKit component, one opacity arc per jump, keyed
+        // by a generation so identical triggers never replay; Reduce Motion
+        // keeps the jump positioning without the wash.
+        contains(shared, "class ToolLocatingWashView: NSView", "The locating wash must be the shared AppKit-hosted component")
+        contains(shared, "ToolMotion.LocatingWash.opacityKeyframe(peak: peak)", "Both wash styles must ride the shared ToolMotion keyframe")
+        contains(shared, "guard generation != playedGeneration else { return }", "Repeated identical triggers must never replay the arc")
+        contains(shared, "guard !ToolMotion.systemReduceMotionEnabled else { return }", "Reduce Motion must skip the wash entirely")
+        doesNotContain(shared, "Ring", "No enclose-outline treatment may appear in the shared feedback components")
+
+        // No ring/stroke treatment in the wash vocabulary or the jump path
+        // ("String" ends in the same letters, so these run on the wash
+        // slices, which contain none).
+        let washTokens = sourceSlice(motion, from: "enum LocatingWash", to: "struct AppKitMotion")
+        doesNotContain(washTokens, "ring", "The wash namespace must not describe an outline treatment")
+        doesNotContain(washTokens, "stroke", "The wash must stay an opacity-only sweep")
+        let washPlay = sourceSlice(workspace, from: "private func playLocatingWash", to: "private func updateDifferenceHunks")
+        doesNotContain(washPlay, "ring", "The workspace jump path must not carry outline remnants")
+        doesNotContain(washPlay, "stroke", "The locating feedback must stay an opacity-only wash")
+
+        // Workspace wiring: each landed jump bumps the generation once, both
+        // panes host the shared surfaces, and the gutter slot mark deepens on
+        // the same arc.
+        contains(workspace, "ToolLocatingWashView(style: .blockWash)", "Each diff pane must host one block wash surface")
+        contains(workspace, "ToolLocatingWashView(style: .gutterDeepen)", "Each line-number gutter must host one deepening mark")
+        contains(workspace, "locatingWashGeneration += 1", "Each successful jump must bump the wash generation once")
+        contains(workspace, "playLocatingWash(for: hunk, generation: locatingWashGeneration)", "A landed jump must fire the locating wash")
+        contains(workspace, "gutterDeepeningFrame(", "The gutter deepening must align to the landed block's slot marks")
+        contains(workspace, "guard !ToolMotion.systemReduceMotionEnabled else { return }", "Reduce Motion must keep jump positioning without the wash")
+    }
 }
