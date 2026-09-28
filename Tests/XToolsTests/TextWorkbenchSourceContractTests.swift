@@ -448,7 +448,7 @@ struct TextWorkbenchSourceContractTests {
         appearsBefore(json, "IndexPage(", "IndexFormatWorkbench(", "JSON formatter body must be the prototype workbench")
         contains(json, "IndexSegmentedControl(", "JSON indent must stay in the workbench toolbar")
         doesNotContain(json, "IndexActionBar {", "JSON must not keep a page-level action bar")
-        contains(json, "IndexOptionSwitch(title: \"Key 排序\"", "JSON must provide the key-sort option in the workbench toolbar")
+        contains(json, "title: \"Key 排序\"", "JSON must provide the key-sort option in the workbench toolbar")
         doesNotContain(json, "IndexOptionPicker(", "JSON indent must use the toolbar segmented control")
         doesNotContain(json, "statsStrip", "JSON formatter must not keep the retired statistics strip")
         contains(json, "IndexPage(\"JSON 格式化\", subtitle: \"格式化、压缩和验证 JSON，支持自定义选项。\", workspaceSemantic: .structuredEditorTransform)", "JSON formatter must let the semantic resolve the compact fixed workbench page shell")

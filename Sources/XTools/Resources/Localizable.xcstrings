@@ -112,6 +112,15 @@
     "Favicon 部署包" : {
       "extractionState" : "manual"
     },
+    "Git 服务地址（GitLab / GitHub）" : {
+      "extractionState" : "manual"
+    },
+    "GitLab HTTPS 地址" : {
+      "extractionState" : "manual"
+    },
+    "GitLab Token（仅保留在当前页面）" : {
+      "extractionState" : "manual"
+    },
     "HTML 引用片段（假设文件位于站点根目录）" : {
       "extractionState" : "manual"
     },
@@ -268,13 +277,22 @@
     "下中" : {
       "extractionState" : "manual"
     },
+    "下午好，开发者" : {
+      "extractionState" : "manual"
+    },
     "下次运行时间" : {
       "extractionState" : "manual"
     },
     "不含空格" : {
       "extractionState" : "manual"
     },
+    "不处理" : {
+      "extractionState" : "manual"
+    },
     "不支持所选图片的文件格式。" : {
+      "extractionState" : "manual"
+    },
+    "与远端一致" : {
       "extractionState" : "manual"
     },
     "东京" : {
@@ -370,21 +388,6 @@
     "仅提取正文" : {
       "extractionState" : "manual"
     },
-    "去转义" : {
-      "extractionState" : "manual"
-    },
-    "转义" : {
-      "extractionState" : "manual"
-    },
-    "转字符串" : {
-      "extractionState" : "manual"
-    },
-    "转义为字符串" : {
-      "extractionState" : "manual"
-    },
-    "不处理" : {
-      "extractionState" : "manual"
-    },
     "今" : {
       "extractionState" : "manual"
     },
@@ -401,6 +404,12 @@
       "extractionState" : "manual"
     },
     "从侧边栏选择工具，或按 ⌘K 搜索。" : {
+      "extractionState" : "manual"
+    },
+    "仓库" : {
+      "extractionState" : "manual"
+    },
+    "仓库同步" : {
       "extractionState" : "manual"
     },
     "优化偏好" : {
@@ -514,6 +523,9 @@
     "全局匹配 (g)" : {
       "extractionState" : "manual"
     },
+    "全选当前" : {
+      "extractionState" : "manual"
+    },
     "全部" : {
       "extractionState" : "manual"
     },
@@ -616,6 +628,18 @@
     "切换转换方向" : {
       "extractionState" : "manual"
     },
+    "创建" : {
+      "extractionState" : "manual"
+    },
+    "创建 Merge Request" : {
+      "extractionState" : "manual"
+    },
+    "创建中…" : {
+      "extractionState" : "manual"
+    },
+    "创建前会再次查询相同源分支和目标分支的 opened MR，避免重复请求。Token 只用于当前请求。" : {
+      "extractionState" : "manual"
+    },
     "利马" : {
       "extractionState" : "manual"
     },
@@ -679,7 +703,13 @@
     "加密操作失败。" : {
       "extractionState" : "manual"
     },
+    "加载当前 Markdown 结果中的远程图片" : {
+      "extractionState" : "manual"
+    },
     "加载设备信息中…" : {
+      "extractionState" : "manual"
+    },
+    "加载远程图片" : {
       "extractionState" : "manual"
     },
     "动作" : {
@@ -715,6 +745,12 @@
     "十进制 (10)" : {
       "extractionState" : "manual"
     },
+    "午安，开发者" : {
+      "extractionState" : "manual"
+    },
+    "单个仓库" : {
+      "extractionState" : "manual"
+    },
     "单词" : {
       "extractionState" : "manual"
     },
@@ -739,6 +775,9 @@
     "原始文本…" : {
       "extractionState" : "manual"
     },
+    "去转义" : {
+      "extractionState" : "manual"
+    },
     "去除转义" : {
       "extractionState" : "manual"
     },
@@ -748,6 +787,9 @@
     "双向转换" : {
       "extractionState" : "manual"
     },
+    "取消" : {
+      "extractionState" : "manual"
+    },
     "取消收藏" : {
       "extractionState" : "manual"
     },
@@ -755,6 +797,9 @@
       "extractionState" : "manual"
     },
     "句子" : {
+      "extractionState" : "manual"
+    },
+    "只执行 git pull --ff-only" : {
       "extractionState" : "manual"
     },
     "可用端口" : {
@@ -776,6 +821,12 @@
       "extractionState" : "manual"
     },
     "各进制结果" : {
+      "extractionState" : "manual"
+    },
+    "同步本地 Git 仓库，并创建 GitLab Merge Request。" : {
+      "extractionState" : "manual"
+    },
+    "同步范围" : {
       "extractionState" : "manual"
     },
     "否" : {
@@ -824,6 +875,12 @@
       "extractionState" : "manual"
     },
     "图片压缩失败。" : {
+      "extractionState" : "manual"
+    },
+    "图片地址未获准加载" : {
+      "extractionState" : "manual"
+    },
+    "图片地址未获准加载。" : {
       "extractionState" : "manual"
     },
     "图片处理失败。" : {
@@ -883,6 +940,9 @@
     "填写有效 Payload 和 Secret 后自动生成" : {
       "extractionState" : "manual"
     },
+    "填好地址和 Token 后回车" : {
+      "extractionState" : "manual"
+    },
     "增加" : {
       "extractionState" : "manual"
     },
@@ -905,6 +965,9 @@
       "extractionState" : "manual"
     },
     "处理百分号编码" : {
+      "extractionState" : "manual"
+    },
+    "处理进度" : {
       "extractionState" : "manual"
     },
     "复制" : {
@@ -964,6 +1027,9 @@
     "多行模式 (m)" : {
       "extractionState" : "manual"
     },
+    "夜深了，开发者" : {
+      "extractionState" : "manual"
+    },
     "大" : {
       "extractionState" : "manual"
     },
@@ -980,6 +1046,9 @@
       "extractionState" : "manual"
     },
     "大洋洲" : {
+      "extractionState" : "manual"
+    },
+    "失败" : {
       "extractionState" : "manual"
     },
     "奥克兰" : {
@@ -1051,6 +1120,9 @@
     "将彩色图片转为灰度图。" : {
       "extractionState" : "manual"
     },
+    "将按顺序执行 git pull --ff-only。工作区有改动、没有 upstream 或无法快进的仓库会跳过。" : {
+      "extractionState" : "manual"
+    },
     "将文件编码为 Base64 / Data URL，或从 Base64 解码回文件。" : {
       "extractionState" : "manual"
     },
@@ -1061,6 +1133,9 @@
       "extractionState" : "manual"
     },
     "小时 (0-23)" : {
+      "extractionState" : "manual"
+    },
+    "尚未扫描仓库" : {
       "extractionState" : "manual"
     },
     "尚未检测文件" : {
@@ -1079,6 +1154,9 @@
       "extractionState" : "manual"
     },
     "展开" : {
+      "extractionState" : "manual"
+    },
+    "工作区" : {
       "extractionState" : "manual"
     },
     "工作台" : {
@@ -1117,7 +1195,13 @@
     "已加入收藏" : {
       "extractionState" : "manual"
     },
+    "已取消" : {
+      "extractionState" : "manual"
+    },
     "已取消收藏" : {
+      "extractionState" : "manual"
+    },
+    "已处理 (workspace.operationResults.count) / (workspace.selectedPaths.count) 个仓库" : {
       "extractionState" : "manual"
     },
     "已复制" : {
@@ -1132,10 +1216,19 @@
     "已收起" : {
       "extractionState" : "manual"
     },
+    "已更新" : {
+      "extractionState" : "manual"
+    },
+    "已最新" : {
+      "extractionState" : "manual"
+    },
     "已有文件选择器正在打开。" : {
       "extractionState" : "manual"
     },
     "已用时间" : {
+      "extractionState" : "manual"
+    },
+    "已跳过" : {
       "extractionState" : "manual"
     },
     "已选择" : {
@@ -1220,6 +1313,9 @@
       "extractionState" : "manual"
     },
     "待处理内容" : {
+      "extractionState" : "manual"
+    },
+    "待更新" : {
       "extractionState" : "manual"
     },
     "待转换的原图" : {
@@ -1312,6 +1408,12 @@
     "扩展屏幕" : {
       "extractionState" : "manual"
     },
+    "扫描中…" : {
+      "extractionState" : "manual"
+    },
+    "扫描仓库" : {
+      "extractionState" : "manual"
+    },
     "批量生成 UUID v4 或按时间排序的 UUID v7，支持单个复制与全部复制。" : {
       "extractionState" : "manual"
     },
@@ -1342,6 +1444,9 @@
     "按图片宽度比例设置水印大小" : {
       "extractionState" : "manual"
     },
+    "按字典序排序所有键" : {
+      "extractionState" : "manual"
+    },
     "按工具切换次数排序" : {
       "extractionState" : "manual"
     },
@@ -1369,6 +1474,9 @@
     "控制 sticky 特殊权限位" : {
       "extractionState" : "manual"
     },
+    "描述（可选）" : {
+      "extractionState" : "manual"
+    },
     "提取结果为空。页面可能由客户端 JS 动态渲染，或无有效文本内容。" : {
       "extractionState" : "manual"
     },
@@ -1379,6 +1487,9 @@
       "extractionState" : "manual"
     },
     "搜索一个工具开始" : {
+      "extractionState" : "manual"
+    },
+    "搜索仓库或分支" : {
       "extractionState" : "manual"
     },
     "搜索全部工具和动作" : {
@@ -1430,6 +1541,9 @@
       "extractionState" : "manual"
     },
     "支持输入 yyyy-MM-dd 或粘贴 yyyy/MM/dd" : {
+      "extractionState" : "manual"
+    },
+    "收录工具" : {
       "extractionState" : "manual"
     },
     "收藏" : {
@@ -1579,6 +1693,9 @@
     "日期计算" : {
       "extractionState" : "manual"
     },
+    "早安，开发者" : {
+      "extractionState" : "manual"
+    },
     "时区" : {
       "extractionState" : "manual"
     },
@@ -1645,6 +1762,9 @@
     "显示精选全球城市的当前时间，按大洲折叠并按 UTC 偏移量分组。" : {
       "extractionState" : "manual"
     },
+    "晚上好，开发者" : {
+      "extractionState" : "manual"
+    },
     "普通文件 · 50 MB 以内" : {
       "extractionState" : "manual"
     },
@@ -1696,6 +1816,9 @@
     "更换要转换的图片" : {
       "extractionState" : "manual"
     },
+    "更新中…" : {
+      "extractionState" : "manual"
+    },
     "曼谷" : {
       "extractionState" : "manual"
     },
@@ -1723,6 +1846,9 @@
     "有效 CSS 颜色" : {
       "extractionState" : "manual"
     },
+    "未变更内容已折叠，编辑器当前为只读；展开折叠区域后可继续编辑。" : {
+      "extractionState" : "manual"
+    },
     "未找到匹配。" : {
       "extractionState" : "manual"
     },
@@ -1741,7 +1867,7 @@
     "未选择" : {
       "extractionState" : "manual"
     },
-    "未变更内容已折叠，编辑器当前为只读；展开折叠区域后可继续编辑。" : {
+    "本地仓库" : {
       "extractionState" : "manual"
     },
     "本地尽力识别浏览器、操作系统与设备类型，仅供调试，不用于能力判断或安全决策。" : {
@@ -1786,6 +1912,9 @@
     "查找下一个" : {
       "extractionState" : "manual"
     },
+    "查找项目" : {
+      "extractionState" : "manual"
+    },
     "查看常用颜色格式" : {
       "extractionState" : "manual"
     },
@@ -1793,6 +1922,9 @@
       "extractionState" : "manual"
     },
     "查询 HTTP 状态码及其含义。" : {
+      "extractionState" : "manual"
+    },
+    "标题" : {
       "extractionState" : "manual"
     },
     "校验与整理结构" : {
@@ -1867,16 +1999,31 @@
     "正在准备解码预览" : {
       "extractionState" : "manual"
     },
+    "正在处理" : {
+      "extractionState" : "manual"
+    },
     "正在复制完整输出" : {
       "extractionState" : "manual"
     },
+    "正在对比…" : {
+      "extractionState" : "manual"
+    },
     "正在导入编码文本文件" : {
+      "extractionState" : "manual"
+    },
+    "正在扫描工作目录…" : {
+      "extractionState" : "manual"
+    },
+    "正在扫描有权限的项目…" : {
       "extractionState" : "manual"
     },
     "正在换算…" : {
       "extractionState" : "manual"
     },
     "正在更新匹配…" : {
+      "extractionState" : "manual"
+    },
+    "正在更新对比结果…" : {
       "extractionState" : "manual"
     },
     "正在更新水印预览" : {
@@ -1886,6 +2033,9 @@
       "extractionState" : "manual"
     },
     "正在更新遮蔽结果…" : {
+      "extractionState" : "manual"
+    },
+    "正在格式化…" : {
       "extractionState" : "manual"
     },
     "正在检测…" : {
@@ -1934,9 +2084,6 @@
       "extractionState" : "manual"
     },
     "正在读取图片…" : {
-      "extractionState" : "manual"
-    },
-    "正在格式化…" : {
       "extractionState" : "manual"
     },
     "正在转换…" : {
@@ -2012,6 +2159,9 @@
       "extractionState" : "manual"
     },
     "没有匹配的 Emoji 或符号" : {
+      "extractionState" : "manual"
+    },
+    "没有匹配的仓库" : {
       "extractionState" : "manual"
     },
     "没有匹配的工具" : {
@@ -2098,6 +2248,9 @@
     "清空输入" : {
       "extractionState" : "manual"
     },
+    "清除 Token" : {
+      "extractionState" : "manual"
+    },
     "清除图片" : {
       "extractionState" : "manual"
     },
@@ -2122,6 +2275,9 @@
     "温哥华" : {
       "extractionState" : "manual"
     },
+    "源分支" : {
+      "extractionState" : "manual"
+    },
     "源图片" : {
       "extractionState" : "manual"
     },
@@ -2135,6 +2291,9 @@
       "extractionState" : "manual"
     },
     "源码" : {
+      "extractionState" : "manual"
+    },
+    "源码管理" : {
       "extractionState" : "manual"
     },
     "灰度" : {
@@ -2224,10 +2383,22 @@
     "监听已暂停" : {
       "extractionState" : "manual"
     },
+    "目标分支" : {
+      "extractionState" : "manual"
+    },
     "目标格式" : {
       "extractionState" : "manual"
     },
     "确认 YAML 包含合法的 version 或 services 服务定义块。" : {
+      "extractionState" : "manual"
+    },
+    "确认创建 Merge Request？" : {
+      "extractionState" : "manual"
+    },
+    "确认更新" : {
+      "extractionState" : "manual"
+    },
+    "确认更新仓库？" : {
       "extractionState" : "manual"
     },
     "确认输入以 docker run 开头，且镜像名与参数格式正确。" : {
@@ -2273,6 +2444,9 @@
       "extractionState" : "manual"
     },
     "等待输入" : {
+      "extractionState" : "manual"
+    },
+    "筛选" : {
       "extractionState" : "manual"
     },
     "签名" : {
@@ -2327,6 +2501,9 @@
       "extractionState" : "manual"
     },
     "系统颜色和透明度" : {
+      "extractionState" : "manual"
+    },
+    "累计启动" : {
       "extractionState" : "manual"
     },
     "约翰内斯堡" : {
@@ -2536,7 +2713,13 @@
     "设置透明填充色" : {
       "extractionState" : "manual"
     },
+    "访问 Token（仅保留在当前页面）" : {
+      "extractionState" : "manual"
+    },
     "识别" : {
+      "extractionState" : "manual"
+    },
+    "试试清空搜索或切换筛选条件" : {
       "extractionState" : "manual"
     },
     "该 manifest 只声明图标资源，不包含应用名称、启动地址等完整 PWA 安装配置。" : {
@@ -2575,7 +2758,13 @@
     "跳转工具…" : {
       "extractionState" : "manual"
     },
+    "转义" : {
+      "extractionState" : "manual"
+    },
     "转义为字符串" : {
+      "extractionState" : "manual"
+    },
+    "转字符串" : {
       "extractionState" : "manual"
     },
     "转换" : {
@@ -2600,12 +2789,6 @@
       "extractionState" : "manual"
     },
     "输入" : {
-      "extractionState" : "manual"
-    },
-    "输入已更改，请重新格式化。" : {
-      "extractionState" : "manual"
-    },
-    "输入已更改，请重新转换。" : {
       "extractionState" : "manual"
     },
     "输入 DT-AES-GCM-v1 密文…" : {
@@ -2654,6 +2837,12 @@
       "extractionState" : "manual"
     },
     "输入十六进制颜色" : {
+      "extractionState" : "manual"
+    },
+    "输入已更改，请重新格式化。" : {
+      "extractionState" : "manual"
+    },
+    "输入已更改，请重新转换。" : {
       "extractionState" : "manual"
     },
     "输入数值" : {
@@ -2728,6 +2917,9 @@
     "运算符" : {
       "extractionState" : "manual"
     },
+    "近 7 日" : {
+      "extractionState" : "manual"
+    },
     "还没有最近使用记录" : {
       "extractionState" : "manual"
     },
@@ -2740,6 +2932,21 @@
     "进制转换" : {
       "extractionState" : "manual"
     },
+    "进行中" : {
+      "extractionState" : "manual"
+    },
+    "远程图片未加载" : {
+      "extractionState" : "manual"
+    },
+    "远程图片未加载。" : {
+      "extractionState" : "manual"
+    },
+    "远程图片默认不会加载。" : {
+      "extractionState" : "manual"
+    },
+    "连接 Git 服务" : {
+      "extractionState" : "manual"
+    },
     "迪拜" : {
       "extractionState" : "manual"
     },
@@ -2749,6 +2956,9 @@
     "送入解析模式" : {
       "extractionState" : "manual"
     },
+    "选择" : {
+      "extractionState" : "manual"
+    },
     "选择 Favicon 源图片" : {
       "extractionState" : "manual"
     },
@@ -2756,6 +2966,9 @@
       "extractionState" : "manual"
     },
     "选择一个工具" : {
+      "extractionState" : "manual"
+    },
+    "选择仓库目录" : {
       "extractionState" : "manual"
     },
     "选择保存目录" : {
@@ -2785,6 +2998,9 @@
     "选择图片开始转换" : {
       "extractionState" : "manual"
     },
+    "选择工作区目录" : {
+      "extractionState" : "manual"
+    },
     "选择或拖入文件" : {
       "extractionState" : "manual"
     },
@@ -2804,6 +3020,12 @@
       "extractionState" : "manual"
     },
     "选择水印位置" : {
+      "extractionState" : "manual"
+    },
+    "选择源码目录" : {
+      "extractionState" : "manual"
+    },
+    "选择目录后开始扫描" : {
       "extractionState" : "manual"
     },
     "选择要优化的图片" : {
@@ -2884,6 +3106,9 @@
     "重置文件名" : {
       "extractionState" : "manual"
     },
+    "重试" : {
+      "extractionState" : "manual"
+    },
     "错误" : {
       "extractionState" : "manual"
     },
@@ -2926,7 +3151,22 @@
     "隐藏密码" : {
       "extractionState" : "manual"
     },
+    "需处理" : {
+      "extractionState" : "manual"
+    },
     "非洲" : {
+      "extractionState" : "manual"
+    },
+    "项目路径，例如 group/project" : {
+      "extractionState" : "manual"
+    },
+    "项目路径，例如 group/project（可由上方发现预填）" : {
+      "extractionState" : "manual"
+    },
+    "预检" : {
+      "extractionState" : "manual"
+    },
+    "预检中…" : {
       "extractionState" : "manual"
     },
     "预览" : {
@@ -2942,33 +3182,6 @@
       "extractionState" : "manual"
     },
     "颜色预览" : {
-      "extractionState" : "manual"
-    },
-    "加载当前 Markdown 结果中的远程图片" : {
-      "extractionState" : "manual"
-    },
-    "加载远程图片" : {
-      "extractionState" : "manual"
-    },
-    "图片地址未获准加载" : {
-      "extractionState" : "manual"
-    },
-    "图片地址未获准加载。" : {
-      "extractionState" : "manual"
-    },
-    "正在对比…" : {
-      "extractionState" : "manual"
-    },
-    "正在更新对比结果…" : {
-      "extractionState" : "manual"
-    },
-    "远程图片默认不会加载。" : {
-      "extractionState" : "manual"
-    },
-    "远程图片未加载" : {
-      "extractionState" : "manual"
-    },
-    "远程图片未加载。" : {
       "extractionState" : "manual"
     },
     "饱和度" : {

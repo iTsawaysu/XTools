@@ -58,3 +58,75 @@ struct IndexProgressSpinner: View {
             .controlSize(.small)
     }
 }
+
+// MARK: - IndexProgressHairline
+
+/// Hairline linear progress: the sanctioned batch-work surface (multi-repo
+/// scans and updates) where a spinner cannot express "how far along". A 2.5pt
+/// accent fill rides a border-tone rail; determinate mode scales a
+/// leading-anchored fill (transform-only), indeterminate mode sweeps a segment.
+/// Reduce Motion keeps a static partial fill — a frozen loop reads as a hang,
+/// so the still form preserves the "work is happening" signal.
+struct IndexProgressHairline: View {
+    var fraction: Double?
+    var isIndeterminate: Bool = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweeping = false
+
+    private static let railHeight: CGFloat = 2.5
+    /// Indeterminate segment length as a fraction of the rail.
+    private static let segmentRatio: CGFloat = 0.3
+
+    init(isIndeterminate: Bool) {
+        self.isIndeterminate = isIndeterminate
+    }
+
+    init(fraction: Double?) {
+        self.fraction = fraction
+    }
+
+    private var clampedFraction: Double {
+        guard let fraction else { return 0 }
+        return min(max(fraction, 0), 1)
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let railWidth = max(proxy.size.width, 1)
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(ToolTheme.border)
+                if isIndeterminate {
+                    Capsule()
+                        .fill(ToolTheme.accent)
+                        .frame(width: railWidth * Self.segmentRatio)
+                        .offset(x: sweeping ? railWidth * (1 - Self.segmentRatio) : 0)
+                        .animation(
+                            ToolMotion.animation(ToolMotion.Preset.hairlineSweep, reduceMotion: reduceMotion),
+                            value: sweeping
+                        )
+                } else {
+                    Capsule()
+                        .fill(ToolTheme.accent)
+                        .frame(width: railWidth)
+                        .scaleEffect(x: clampedFraction, y: 1, anchor: .leading)
+                        .toolAnimation(
+                            ToolMotion.Curve.smoothOut(duration: ToolMotion.Duration.medium),
+                            value: clampedFraction
+                        )
+                }
+            }
+        }
+        .frame(height: Self.railHeight)
+        .onAppear {
+            // Under Reduce Motion the segment stays put: a still partial fill
+            // instead of a frozen loop.
+            guard !reduceMotion else { return }
+            sweeping = true
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(isIndeterminate ? "正在处理" : "处理进度")
+        .accessibilityValue(isIndeterminate ? "进行中" : "\(Int((clampedFraction * 100).rounded()))%")
+    }
+}

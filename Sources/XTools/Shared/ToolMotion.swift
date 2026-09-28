@@ -19,6 +19,11 @@ enum ToolMotion {
         static let letterStagger: TimeInterval = 0.032
         /// Subtitle follow-up beat after the letter choreography starts.
         static let headerFollowDelay: TimeInterval = 0.16
+        /// Indeterminate hairline sweep: one back-and-forth traversal of the
+        /// rail. Loops sit outside the one-shot feedback envelope because the
+        /// steady rhythm itself is the liveness cue — a sub-second sweep reads
+        /// as flicker.
+        static let progressLoop: TimeInterval = 1.4
     }
 
     enum Distance {
@@ -158,6 +163,10 @@ enum ToolMotion {
         static let settle = Curve.gentleSpring()
         /// Delight: slight-overshoot spring for success/result-arrival moments only.
         static let delight = Curve.playfulSpring()
+        /// Indeterminate hairline progress: continuous back-and-forth sweep for
+        /// `IndexProgressHairline`. Loops must not reuse one-shot state-feedback
+        /// durations.
+        static let hairlineSweep = Animation.easeInOut(duration: Duration.progressLoop).repeatForever(autoreverses: true)
     }
 
     struct AppKitMotion {

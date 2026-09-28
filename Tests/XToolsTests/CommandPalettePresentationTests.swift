@@ -123,10 +123,10 @@ struct CommandPalettePresentationTests {
         try await Self.waitForCondition(label: "initial palette native rows") {
             fixture.flush()
             oldRows = Self.commandPaletteRevealViews(in: fixture.hostingView)
-            return oldRows.count == 50 && oldRows.allSatisfy { $0.window === fixture.window }
+            return oldRows.count == 51 && oldRows.allSatisfy { $0.window === fixture.window }
         }
         let oldRowIdentifiers = Set(oldRows.map(ObjectIdentifier.init))
-        #expect(oldRowIdentifiers.count == 50)
+        #expect(oldRowIdentifiers.count == 51)
         let scrollView = try #require(oldRows.first?.enclosingScrollView)
         let initialScrollOrigin = scrollView.contentView.bounds.origin
         for _ in 0..<25 {
@@ -161,7 +161,7 @@ struct CommandPalettePresentationTests {
         try await Self.waitForCondition(label: "reopened palette native rows") {
             fixture.flush()
             newRows = Self.commandPaletteRevealViews(in: fixture.hostingView)
-            return newRows.count == 50 && newRows.allSatisfy { $0.window === fixture.window }
+            return newRows.count == 51 && newRows.allSatisfy { $0.window === fixture.window }
         }
         let newRowIdentifiers = Set(newRows.map(ObjectIdentifier.init))
 
@@ -456,7 +456,7 @@ struct CommandPalettePresentationTests {
         #expect(snapshot.counters[.visibleDisabledTransaction, default: 0] == 0)
         #expect(snapshot.counters[.visibilityTerminalSample, default: 0] > 0)
         if ordinal == 0 {
-            #expect(snapshot.counters[.revealMake, default: 0] == 50)
+            #expect(snapshot.counters[.revealMake, default: 0] == 51)
         } else {
             #expect(snapshot.counters[.revealMake, default: 0] == 0)
         }
