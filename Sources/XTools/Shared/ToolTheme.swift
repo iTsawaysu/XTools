@@ -79,9 +79,9 @@ enum ToolTheme {
     /// visible but restrained so cards never read as floating dialogs.
     static let cardShadow = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.075, darkAlpha: 0.38)
     /// Wave 2 card-lift pane hover: resting depth (prototype --pane-shadow).
-    static let paneHoverShadowResting = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.06, darkAlpha: 0.22)
+    static let paneHoverShadowResting = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.05, darkAlpha: 0.18)
     /// Wave 2 card-lift pane hover: lifted depth (prototype --pane-shadow-hov).
-    static let paneHoverShadowLifted = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.16, darkAlpha: 0.50)
+    static let paneHoverShadowLifted = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.12, darkAlpha: 0.34)
 
     // MARK: - Shadow recipes（层级语言：面板几乎无影靠色差，浮层与模态分层）
 
@@ -98,8 +98,9 @@ enum ToolTheme {
         static let panel = ShadowRecipe(color: panelShadow, radius: 1, y: 1)
         /// Wave 2 card-lift pane hover depth pair (timing lives in
         /// `ToolMotion.PaneHover`): resting → lifted is the hover transition.
-        static let paneHoverResting = ShadowRecipe(color: paneHoverShadowResting, radius: 8, y: 2)
-        static let paneHoverLifted = ShadowRecipe(color: paneHoverShadowLifted, radius: 28, y: 10)
+        /// Lift values stay restrained per review feedback.
+        static let paneHoverResting = ShadowRecipe(color: paneHoverShadowResting, radius: 6, y: 2)
+        static let paneHoverLifted = ShadowRecipe(color: paneHoverShadowLifted, radius: 20, y: 6)
         /// Resting content cards: a low, short lift distinct from panels and
         /// substantially quieter than floating/modal surfaces.
         static let card = ShadowRecipe(color: cardShadow, radius: 5, y: 2)
@@ -230,5 +231,23 @@ extension View {
     /// app-wide instead of per-view radius/offset improvisation.
     func toolShadow(_ recipe: ToolTheme.ShadowRecipe) -> some View {
         shadow(color: recipe.color, radius: recipe.radius, y: recipe.y)
+    }
+
+    /// Casts a shadow from an opaque rounded shape placed *behind* the view
+    /// instead of compositing the shadow out of the content itself. Panes
+    /// that host native AppKit editors need this: their gutter hairlines are
+    /// drawn at subpixel width inside `NSView.draw`, and a content-level
+    /// shadow flattens the subtree into the shadow layer, dropping those
+    /// hairlines. The backing shape is fully covered by the pane above it,
+    /// so only the shadow is visible.
+    func toolShadowBehind(
+        _ recipe: ToolTheme.ShadowRecipe,
+        cornerRadius: CGFloat
+    ) -> some View {
+        background {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(ToolTheme.panelBackground)
+                .shadow(color: recipe.color, radius: recipe.radius, y: recipe.y)
+        }
     }
 }

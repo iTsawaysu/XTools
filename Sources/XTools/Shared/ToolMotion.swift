@@ -232,8 +232,8 @@ enum ToolMotion {
     enum PaneHover {
         static let inCurve = Curve.smoothOut(duration: Duration.hoverIn)
         static let outCurve = Curve.smoothOut(duration: Duration.hoverOut)
-        /// White overlay peak: ≈1.5% background lift in both themes.
-        static let washPeak: Double = 0.015
+        /// White overlay peak: ≈1% restrained background lift in both themes.
+        static let washPeak: Double = 0.01
     }
 
     /// Wave 2 error feedback terminal values (prototype MOTION d.shake /

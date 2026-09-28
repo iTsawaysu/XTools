@@ -47,7 +47,7 @@ private struct ToolPaneHoverChromeModifier: ViewModifier {
             ? ToolTheme.Shadow.paneHoverLifted
             : ToolTheme.Shadow.paneHoverResting
         content
-            .toolShadow(recipe)
+            .toolShadowBehind(recipe, cornerRadius: cornerRadius)
             .overlay {
                 ZStack {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
