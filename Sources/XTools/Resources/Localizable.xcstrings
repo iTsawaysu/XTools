@@ -1,6 +1,33 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "早安，开发者" : {
+      "extractionState" : "manual"
+    },
+    "午安，开发者" : {
+      "extractionState" : "manual"
+    },
+    "下午好，开发者" : {
+      "extractionState" : "manual"
+    },
+    "晚上好，开发者" : {
+      "extractionState" : "manual"
+    },
+    "夜深了，开发者" : {
+      "extractionState" : "manual"
+    },
+    "按字典序排序所有键" : {
+      "extractionState" : "manual"
+    },
+    "收录工具" : {
+      "extractionState" : "manual"
+    },
+    "累计启动" : {
+      "extractionState" : "manual"
+    },
+    "近 7 日" : {
+      "extractionState" : "manual"
+    },
     " · 截断" : {
       "extractionState" : "manual"
     },
