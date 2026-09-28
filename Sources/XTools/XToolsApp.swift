@@ -51,8 +51,37 @@ enum AppKitUndoCommandRouter {
     }
 }
 
+@MainActor
+final class XToolsAppDelegate: NSObject, NSApplicationDelegate {
+    var openWindowAction: OpenWindowAction?
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            let candidate = sender.windows.first(where: { !($0 is NSPanel) }) ?? sender.windows.first
+            if let window = candidate {
+                if window.isMiniaturized {
+                    window.deminiaturize(nil)
+                } else {
+                    window.makeKeyAndOrderFront(nil)
+                }
+            } else {
+                openWindowAction?(id: "main")
+            }
+            sender.activate(ignoringOtherApps: true)
+        }
+        return true
+    }
+}
+
 @main
 struct XToolsApp: App {
+    @NSApplicationDelegateAdaptor(XToolsAppDelegate.self) private var appDelegate
+    @Environment(\.openWindow) private var openWindow
+
     init() {
         // Provide a snappy 400ms tooltip delay (default 1.5s is too slow).
         // This avoids instant-hover misfire while feeling much faster.
@@ -67,6 +96,9 @@ struct XToolsApp: App {
         Window("Tools", id: "main") {
             RootView()
                 .frame(minWidth: 960, minHeight: 640)
+                .onAppear {
+                    appDelegate.openWindowAction = openWindow
+                }
         }
         .windowStyle(HiddenTitleBarWindowStyle())
         // Compact unified chrome keeps the page identity and workspace close

@@ -273,7 +273,7 @@ struct UIInfrastructureSourceTests {
         contains(source, ".frame(minWidth: 960, minHeight: 640)", "Main window content minimum must match the validated RootView boundary")
         contains(source, ".windowResizability(.contentMinSize)", "Main window must derive resize limits from content constraints")
         doesNotContain(source, "WindowGroup", "App must not expose duplicate main windows through WindowGroup")
-        doesNotContain(source, "NSApplicationDelegateAdaptor", "Single-window close behavior should stay on SwiftUI's Window lifecycle, not a custom reopen bridge")
+        contains(source, "NSApplicationDelegateAdaptor(XToolsAppDelegate.self)", "App must bind XToolsAppDelegate to preserve background process on window close")
     }
 
     @Test func workspaceDiagnosticUsesNonDisplacingAnchorByDefault() throws {
