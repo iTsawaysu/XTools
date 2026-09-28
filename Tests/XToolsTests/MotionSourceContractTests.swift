@@ -588,4 +588,20 @@ struct MotionSourceContractTests {
         let stretch = sourceSlice(track, from: "private func addVelocityStretch", to: "private func removeSlideAnimation")
         doesNotContain(stretch, "prepareForStructuralMotion", "Structural motion paths must not pick up the stretch")
     }
+
+    @Test func wave2SidebarSearchArrivalIsFadeDominantAndRefinementCalm() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let coordinator = try readSource("Sources/XTools/AppShell/SidebarNavigationListCoordinator.swift")
+        contains(motion, "enum SearchArrival", "Search arrival must own one terminal-value namespace")
+        contains(motion, "static let stagger: TimeInterval = 0.012", "First-filter stagger must be 12ms/row")
+        contains(motion, "static let rowCap = 7", "First-filter stagger must cap at 7 rows")
+        contains(motion, "static let rowIn: TimeInterval = 0.14", "Each arrival row must run 140ms")
+        contains(motion, "static let rowCrossfade: TimeInterval = 0.1", "Refinement rows must crossfade 100ms")
+        contains(motion, "static let rise: CGFloat = 4", "Arrival rise must be the 4pt fade-dominant value")
+        contains(coordinator, "searchArrivalEdge = !wasSearchActive", "Only the no-filter→filter edge may stagger")
+        contains(coordinator, "runSearchArrivalStagger(plan: plan)", "The first-filter edge must run the stagger entrance")
+        contains(coordinator, "crossfadeRefinementInserts()", "Refinement inserts must crossfade in")
+        contains(coordinator, "fadeOutRefine: searchRefinement && !searchArrivalEdge", "Filtered-out rows must fade out only mid-refinement")
+        contains(coordinator, "removeAllAnimations()", "A re-matched row must be reclaimed from an interrupted fade")
+    }
 }
