@@ -238,7 +238,7 @@ private struct DashboardTrendStrip: View {
             HStack(alignment: .bottom, spacing: 6) {
                 ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
                     let isToday = index == days.count - 1
-                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.trendBar, style: .continuous)
                         .fill(isToday ? AnyShapeStyle(ToolTheme.accent) : AnyShapeStyle(ToolTheme.textTertiary))
                         .opacity(isToday ? 1 : 0.5)
                         .frame(width: 9, height: barHeight(day))
