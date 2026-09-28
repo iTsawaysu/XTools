@@ -422,28 +422,20 @@ enum ToolMotion {
     /// rejected. Reduce Motion skips the wash entirely; the jump still
     /// scrolls and selects.
     enum LocatingWash {
-        /// Total wash arc (prototype d.diffPulse, 360ms).
-        static let duration: TimeInterval = 0.36
-        /// Peak block-wash opacity over the pane background (prototype
-        /// d.diffWashPeak — accent at 10%).
-        static let washPeak: Double = 0.10
-        /// Peak position across the arc: rise smoothOut, fall exit (the
-        /// prototype keyframes split the arc at 40%).
-        static let peakFraction: Double = 0.4
-        /// Line-number slot marker deepening: the resting 2pt accent mark
-        /// widens to 3pt at the peak (prototype lnoDeep 2px→3px).
-        static let gutterDeepWidth: CGFloat = 3
-        /// The deepened slot mark shows at full opacity (single-property arc
-        /// on one added mark; the resting mark never moves).
-        static let gutterDeepPeak: Double = 1.0
-        /// Block-wash corner radius (prototype .cln 2px).
+        /// Total wash arc, redone to the GitHub line-fade profile: quick
+        /// attack then a long readable decay (was 360ms, which read as a
+        /// flash slab).
+        static let duration: TimeInterval = 0.9
+        /// Peak wash opacity — accent at 6%, restrained (was 10%).
+        static let washPeak: Double = 0.06
+        /// Peak position across the arc: ≈120ms attack, ≈780ms decay.
+        static let peakFraction: Double = 0.13
+        /// Wash corner radius.
         static let washCornerRadius: CGFloat = 2
-        /// Slot-mark corner radius, matching the resting gutter accent mark.
-        static let gutterDeepCornerRadius: CGFloat = 1
 
         /// The single-arc opacity keyframe for AppKit-hosted wash surfaces
-        /// (control points come from the shared curve tokens; the block wash
-        /// passes `washPeak`, the slot mark passes `gutterDeepPeak`).
+        /// (control points come from the shared curve tokens; callers pass
+        /// their peak, the wash passes `washPeak`).
         static func opacityKeyframe(peak: Double) -> CAKeyframeAnimation {
             let smooth = Curve.smoothOutControlPoints
             let exit = Curve.exitControlPoints

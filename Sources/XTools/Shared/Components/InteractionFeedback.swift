@@ -236,28 +236,17 @@ extension View {
 /// block geometry lives inside the TextKit diff editors; SwiftUI hosts keep
 /// `toolOutputBreath` for pane-level feedback.
 ///
-/// Two styles share one arc: `.blockWash` (accent fill peaking at
-/// `washPeak`) and `.gutterDeepen` (an accentHover mark at full opacity that
-/// widens the resting 2pt slot mark to 3pt mid-arc). Keyed by a
-/// caller-supplied generation so repeated identical triggers and re-renders
-/// never replay the arc. Reduce Motion plays nothing — the jump itself still
-/// scrolls and selects.
+/// One-shot locating wash for AppKit-hosted surfaces: an accent fill that
+/// rides the GitHub-style line-fade arc (quick attack, long decay) when a
+/// navigation jump lands. Keyed by a caller-supplied generation so repeated
+/// identical triggers and re-renders never replay the arc. Reduce Motion
+/// plays nothing — the jump itself still scrolls and selects.
 @MainActor
 final class ToolLocatingWashView: NSView {
-    enum Style {
-        /// Block background wash: accent fill peaking at `washPeak` opacity.
-        case blockWash
-        /// Line-number slot mark deepening: accentHover fill at full opacity
-        /// over the resting slot mark, same 360ms arc.
-        case gutterDeepen
-    }
-
-    private let style: Style
     private var playedGeneration = 0
     private static let arcKey = "toolLocatingWashArc"
 
-    init(style: Style) {
-        self.style = style
+    init() {
         super.init(frame: .zero)
         wantsLayer = true
         updateLayer()
@@ -276,14 +265,8 @@ final class ToolLocatingWashView: NSView {
 
     override func updateLayer() {
         super.updateLayer()
-        switch style {
-        case .blockWash:
-            layer?.backgroundColor = NSColor(ToolTheme.accent).cgColor
-            layer?.cornerRadius = ToolMotion.LocatingWash.washCornerRadius
-        case .gutterDeepen:
-            layer?.backgroundColor = NSColor(ToolTheme.accentHover).cgColor
-            layer?.cornerRadius = ToolMotion.LocatingWash.gutterDeepCornerRadius
-        }
+        layer?.backgroundColor = NSColor(ToolTheme.accent).cgColor
+        layer?.cornerRadius = ToolMotion.LocatingWash.washCornerRadius
         layer?.opacity = 0
     }
 
@@ -306,14 +289,10 @@ final class ToolLocatingWashView: NSView {
         CATransaction.commit()
 
         guard !ToolMotion.systemReduceMotionEnabled else { return }
-        let peak: Double
-        switch style {
-        case .blockWash:
-            peak = ToolMotion.LocatingWash.washPeak
-        case .gutterDeepen:
-            peak = ToolMotion.LocatingWash.gutterDeepPeak
-        }
         layer?.removeAnimation(forKey: Self.arcKey)
-        layer?.add(ToolMotion.LocatingWash.opacityKeyframe(peak: peak), forKey: Self.arcKey)
+        layer?.add(
+            ToolMotion.LocatingWash.opacityKeyframe(peak: ToolMotion.LocatingWash.washPeak),
+            forKey: Self.arcKey
+        )
     }
 }

@@ -592,7 +592,6 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         // wash a single arc; Reduce Motion leaves these silent (the jump
         // still scrolls and selects).
         private var blockWashes: [Side: ToolLocatingWashView] = [:]
-        private var gutterDeepens: [Side: ToolLocatingWashView] = [:]
         private var locatingWashGeneration = 0
 
         /// Consecutive changed rows form one navigation unit. Keeping every
@@ -740,12 +739,9 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             // Wave 2 locating wash surfaces: the block wash rides above the
             // editor pane; the slot-mark deepening rides above the gutter
             // overlay. Both stay non-interactive and animate opacity only.
-            let blockWash = ToolLocatingWashView(style: .blockWash)
-            let gutterDeepen = ToolLocatingWashView(style: .gutterDeepen)
+            let blockWash = ToolLocatingWashView()
             container.addSubview(blockWash)
-            lineNumberView.addSubview(gutterDeepen)
             blockWashes[side] = blockWash
-            gutterDeepens[side] = gutterDeepen
 
             // Set the delegate only after the side references are wired, so the
             // first `undoManager(for:)` query can resolve this view to its own
@@ -988,8 +984,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
                       let textView = editorTextView(for: side),
                       let lineNumberView = side == .left ? leftLineNumberView : rightLineNumberView,
                       let container = lineNumberView.superview,
-                      let blockWash = blockWashes[side],
-                      let gutterDeepen = gutterDeepens[side] else {
+                      let blockWash = blockWashes[side] else {
                     continue
                 }
 
@@ -1008,10 +1003,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
                 washRect.size.width = container.bounds.width
                 blockWash.play(generation: generation, frame: washRect)
 
-                let slotRect = lineNumberView.gutterDeepeningFrame(
-                    forBlock: textView.convert(block, to: lineNumberView)
-                )
-                gutterDeepen.play(generation: generation, frame: slotRect)
+
             }
         }
 
@@ -2116,22 +2108,6 @@ private final class IndexDiffLineNumberOverlayView: NSView {
             height: max(
                 IndexDiffEditorMetrics.gutterAccentMinHeight,
                 height - IndexDiffEditorMetrics.gutterAccentVerticalInset * 2
-            )
-        )
-    }
-
-    /// Wave 2 locating wash: the frame a `.gutterDeepen` mark must cover to
-    /// deepen this slot's accent — same vertical inset as the resting mark,
-    /// widened to the ToolMotion deep width. Input/output in this view's
-    /// coordinates.
-    func gutterDeepeningFrame(forBlock block: NSRect) -> NSRect {
-        NSRect(
-            x: IndexDiffEditorMetrics.gutterAccentLeadingPadding,
-            y: block.minY + IndexDiffEditorMetrics.gutterAccentVerticalInset,
-            width: ToolMotion.LocatingWash.gutterDeepWidth,
-            height: max(
-                IndexDiffEditorMetrics.gutterAccentMinHeight,
-                block.height - IndexDiffEditorMetrics.gutterAccentVerticalInset * 2
             )
         )
     }
