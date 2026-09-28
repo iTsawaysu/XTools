@@ -539,6 +539,7 @@ struct MotionSourceContractTests {
         contains(shared, "breathTask?.cancel()", "Re-triggering the breath must restart the arc, never stack pulses")
         contains(shared, "withAnimation(ToolMotion.OutputBreath.rise)", "Breath rise must be its own transaction")
         contains(shared, "withAnimation(ToolMotion.OutputBreath.fall)", "Breath fall must be its own transaction")
+        contains(shared, "UInt64(seconds * 1_000_000_000)", "Breath timing must convert seconds to nanoseconds - a ms-scale value collapses the arc into a flash")
     }
 
     @Test func wave2PaneHoverIsCardLiftWithoutTransform() throws {

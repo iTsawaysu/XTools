@@ -105,11 +105,11 @@ struct ToolOutputBreathModifier: ViewModifier {
                 guard generation > 0, !reduceMotion else { return }
                 breathTask?.cancel()
                 breathTask = Task { @MainActor in
-                    let ms = { (seconds: TimeInterval) in
-                        UInt64(seconds * 1000)
+                    let ns = { (seconds: TimeInterval) in
+                        UInt64(seconds * 1_000_000_000)
                     }
-                    let halfArc = ms(ToolMotion.Duration.outputBreathHalfArc)
-                    try? await Task.sleep(nanoseconds: ms(ToolMotion.OutputBreath.delay))
+                    let halfArc = ns(ToolMotion.Duration.outputBreathHalfArc)
+                    try? await Task.sleep(nanoseconds: ns(ToolMotion.OutputBreath.delay))
                     guard !Task.isCancelled else { return }
                     withAnimation(ToolMotion.OutputBreath.rise) { isBreathing = true }
                     try? await Task.sleep(nanoseconds: halfArc)
