@@ -278,8 +278,11 @@ struct MotionSourceContractTests {
         contains(workbench, "feedback.finish(generation: generation)", "Save reset completion must pass through the shared stale-generation gate")
         doesNotContain(workbench, "try? await Task.sleep(for: .seconds(1.2))", "Save feedback must not retain an unprotected local reset task")
 
-        contains(controls, ".toolMotionSuccessSwap(id: copied)", "Copy feedback must preserve the existing icon transition with the delight spring")
-        contains(controls, ".toolMotionTextSwap(id: copied)", "Copy feedback must preserve the existing text transition")
+        // Wave 2 d1 (复制确认 tick): the icon transition moved into the shared
+        // tick slot and the visible label is constant; 已复制 stays
+        // accessibility-facing only (see wave2CopyTick… below for the locks).
+        contains(controls, "IndexCopyTickIconSlot(generation: feedback.generation)", "Copy feedback must run the shared Wave 2 tick icon slot")
+        contains(controls, #"copied ? "已复制" : title"#, "Copy feedback must keep the 已复制 switch on the accessibility/help surface only")
         contains(workbench, ".toolMotionSuccessSwap(id: saved)", "Save feedback must preserve the existing icon transition with the delight spring")
         contains(workbench, ".toolMotionTextSwap(id: saved)", "Save feedback must preserve the existing text transition")
     }
@@ -655,5 +658,50 @@ struct MotionSourceContractTests {
         contains(highlight, "abs(toY - fromY) >= rowHeight * 2", "Stretch must engage only across jumps of two rows or more")
         contains(highlight, "4 * progress * (1 - progress)", "The stretch envelope must follow the 4p(1-p) pill family curve")
         contains(highlight, "animates && !reduceMotion\n                ? ToolMotion.PaletteMotion.highlightSlide\n                : nil", "Keyboard moves must spring; rebuilds and Reduce Motion must drop instantly")
+    }
+
+    // MARK: - Wave 2 copy-confirmation tick (candidate d1, sixth-round terminal values)
+
+    @Test func wave2CopyTickKeepsLabelConstantAndDrawsTheCheckOnce() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
+
+        // Terminal tokens (prototype MOTION d.copyOut/copyDraw/copyBox/copyBack/
+        // copyHold + s.copyBoxFrom).
+        contains(motion, "enum CopyTick", "The copy tick must own one terminal-value namespace")
+        contains(motion, "static let out: TimeInterval = 0.12", "The copy glyph must fade out over 120ms")
+        contains(motion, "static let draw: TimeInterval = 0.22", "The checkmark must stroke-draw over 220ms")
+        contains(motion, "static let box: TimeInterval = 0.18", "The icon box must settle over 180ms")
+        contains(motion, "static let back: TimeInterval = 0.12", "The dwell exit must fade back over the symmetric 120ms")
+        contains(motion, "static let hold: TimeInterval = 1.2", "The copied glyph dwell must match the pinned 1.2s copied-state lifecycle")
+        contains(motion, "static let boxFrom: CGFloat = 0.94", "The icon-box settle must start from 0.94")
+        contains(motion, "static let boxSettle = Animation.timingCurve(0.25, 1.2, 0.45, 1.0, duration: box)", "The box settle must use the declared easeSettle curve exception (≤2% overshoot)")
+
+        // Zero-deformation discipline: the visible label never changes; only the
+        // accessibility-facing help/label keeps announcing 已复制.
+        doesNotContain(controls, #"Text(copied ? "已复制" : title)"#, "The copy button label must stay constant (no visual 已复制 swap)")
+        doesNotContain(controls, ".toolMotionTextSwap(id: copied)", "Copy feedback must not crossfade any visible text")
+        doesNotContain(controls, ".toolMotionSuccessSwap(id: copied)", "Copy feedback must use the tick choreography, not the generic swap")
+        contains(controls, #"copied ? "已复制" : title"#, "The 已复制 switch may live on the accessibility/help surface")
+        contains(controls, "Text(title)", "The copy button must render the constant title")
+        contains(controls, ".help(copied ? \"已复制\" : title)", "Hover help may keep announcing the copied state")
+
+        // Both copy presentations share one fixed tick slot; Reduce Motion cuts
+        // directly between the SF Symbols (no draw, no scale).
+        occurrenceCount(controls, "IndexCopyTickIconSlot(generation: feedback.generation)", 2, "Both copy presentations must route through the fixed tick icon slot")
+        occurrenceCount(controls, #"copied ? "checkmark" : IndexActionSymbol.copy"#, 2, "Both copy presentations must keep the Reduce Motion symbol cut")
+
+        // Draw choreography: trim stroke-draw, glyph fades, one-shot box settle.
+        let slot = sourceSlice(controls, from: "struct IndexCopyTickIconSlot: View", to: "/// Primary action with an optional keycap hint")
+        contains(slot, ".trim(from: 0, to: checkDraw)", "The check must draw through the shared stroke-draw shape")
+        contains(slot, "withAnimation(ToolMotion.CopyTick.fade) { isDwelling = true }", "The glyph cross-fade must ride the ToolMotion fade curve")
+        contains(slot, "withAnimation(ToolMotion.CopyTick.drawCurve) { checkDraw = 1 }", "The draw must ride the ToolMotion draw curve")
+        contains(slot, "withAnimation(ToolMotion.CopyTick.boxSettle) { boxScale = 1 }", "The box settle must ride the ToolMotion settle curve")
+        contains(slot, "boxScale = ToolMotion.CopyTick.boxFrom", "The pre-draw frame must park the box at 0.94")
+        contains(slot, "withAnimation(ToolMotion.CopyTick.fadeBack) { isDwelling = false }", "The exit must fade both glyphs back symmetrically")
+        contains(slot, "Task.sleep(for: .seconds(ToolMotion.CopyTick.hold))", "The dwell must read the ToolMotion hold token")
+
+        // Repeat clicks during the dwell only reset the timer; the draw never replays.
+        contains(slot, "if isDwelling {\n                resetDwell()", "An active dwell must only reset its hold timer on repeat clicks")
     }
 }

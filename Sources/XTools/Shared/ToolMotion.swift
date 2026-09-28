@@ -328,6 +328,37 @@ enum ToolMotion {
         }
     }
 
+    /// Wave 2 copy-confirmation tick (prototype MOTION d.copyOut / d.copyDraw /
+    /// d.copyBox / d.copyBack / d.copyHold + s.copyBoxFrom): the shared copy
+    /// button keeps its label and width constant (zero deformation); the copy
+    /// glyph fades out while a checkmark stroke-draws in, the icon box settles
+    /// 0.94→1 once, dwells 1200ms (matching the pinned copied-state lifecycle), then both glyphs cross-fade back
+    /// symmetrically. Reduce Motion collapses to the plain symbol cut.
+    enum CopyTick {
+        /// Copy glyph fade-out on enter (d.copyOut).
+        static let out: TimeInterval = 0.12
+        /// Checkmark stroke draw (d.copyDraw, prototype --ease).
+        static let draw: TimeInterval = 0.22
+        /// Icon-box settle arc, 0.94→1 one-shot (d.copyBox).
+        static let box: TimeInterval = 0.18
+        /// Symmetric fade-back after the dwell (d.copyBack).
+        static let back: TimeInterval = 0.12
+        /// Dwell before the fade-back (d.copyHold).
+        static let hold: TimeInterval = 1.2
+        /// Icon-box settle start scale (s.copyBoxFrom).
+        static let boxFrom: CGFloat = 0.94
+        /// Glyph cross-fade in (copyOut on the shared smoothOut family).
+        static let fade = Curve.smoothOut(duration: out)
+        /// Glyph cross-fade out after the dwell (copyBack, symmetric).
+        static let fadeBack = Curve.smoothOut(duration: back)
+        /// Checkmark draw curve (prototype --ease).
+        static let drawCurve = Curve.smoothOut(duration: draw)
+        /// Icon-box settle: the one declared easeSettle curve exception
+        /// (0.25, 1.2, 0.45, 1 — ≤2% overshoot), one-shot like the prototype
+        /// keyframe; no retargeting surface, so the exact curve is safe here.
+        static let boxSettle = Animation.timingCurve(0.25, 1.2, 0.45, 1.0, duration: box)
+    }
+
     struct AppKitMotion {
         let duration: TimeInterval
         let timingFunction: CAMediaTimingFunction
