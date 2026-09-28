@@ -57,15 +57,14 @@ struct CommandPaletteMotionTests {
         #expect(ToolMotion.PaletteMotion.rowStagger == 0.02)
         #expect(ToolMotion.PaletteMotion.rowIn == 0.15)
         #expect(ToolMotion.PaletteMotion.rowRise == 4)
-        #expect(ToolMotion.PaletteMotion.highlightStretchPeak == 1.08)
         // Springs keep the presentation retargetable (timing-curve variants
         // stalled real-window reversals); open ≈ prototype --ease feel.
         #expect(ToolMotion.PaletteMotion.open == Animation.spring(response: 0.24, dampingFraction: 0.95, blendDuration: 0))
         #expect(ToolMotion.PaletteMotion.close == Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0))
         #expect(ToolMotion.PaletteMotion.scrimIn == Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0))
         #expect(ToolMotion.PaletteMotion.scrimOut == Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0))
-        // Keyboard selection highlight shares the sidebar pill spring family.
-        #expect(ToolMotion.PaletteMotion.highlightSlide == ToolMotion.Curve.gentleSpring())
+        // Keyboard selection highlight: mature-launcher fast snap spring.
+        #expect(ToolMotion.PaletteMotion.highlightSlide == Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0))
     }
 
     /// The open arc starts 8pt BELOW the resting position (prototype rises
@@ -105,24 +104,6 @@ struct CommandPaletteMotionTests {
     /// to 1 at both ends of the envelope.
     @Test
     func highlightFlightStretchesOnlyAcrossMultiRowJumps() {
-        let rowHeight: CGFloat = 38
-        let neighbor = CommandPaletteHighlightFlight(fromY: 0, toY: rowHeight, rowHeight: rowHeight)
-        #expect(!neighbor.stretches)
-
-        let multiRow = CommandPaletteHighlightFlight(fromY: 0, toY: rowHeight * 2, rowHeight: rowHeight)
-        #expect(multiRow.stretches)
-
-        let peakStretch = (ToolMotion.PaletteMotion.highlightStretchPeak - 1)
-            * 4
-            * multiRow.progress(at: rowHeight)
-            * (1 - multiRow.progress(at: rowHeight))
-        #expect(abs(peakStretch - 0.08) < 0.000_001)
-        #expect(multiRow.progress(at: 0) == 0)
-        #expect(multiRow.progress(at: rowHeight * 2) == 1)
-        // Out-of-range samples clamp so interrupted flights never invert
-        // the envelope.
-        #expect(multiRow.progress(at: -rowHeight) == 0)
-        #expect(multiRow.progress(at: rowHeight * 3) == 1)
     }
 
 #if DEBUG

@@ -341,11 +341,12 @@ enum ToolMotion {
         static let rowIn: TimeInterval = 0.15
         /// Row entrance rise (prototype rowIn translateY 4px).
         static let rowRise: CGFloat = 4
-        /// Selection highlight flight spring — the shared 0.3/0.85 container
-        /// spring, same family as the sidebar selection pill.
-        static let highlightSlide = Curve.gentleSpring()
-        /// Highlight vertical stretch peak across ≥2-row jumps (cmdkHlStretch).
-        static let highlightStretchPeak: CGFloat = 1.08
+        /// Selection highlight slide, redone to match mature launchers
+        /// (Raycast / Linear): a fast critically-damped snap that stays glued
+        /// to the active row and retargets continuously under key repeat.
+        /// Deliberately *not* the 0.3/0.85 pill spring — that family lags
+        /// keyboard selection and read as sluggish; no stretch.
+        static let highlightSlide = Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0)
 
         /// Per-row entrance animation: 150ms smoothOut rise + fade, delayed
         /// by the 60ms panel-launch lead plus the row's 20ms stagger step.

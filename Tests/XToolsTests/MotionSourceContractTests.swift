@@ -627,9 +627,8 @@ struct MotionSourceContractTests {
         contains(motion, "static let rowStagger: TimeInterval = 0.02", "Row stagger cadence must be the shared 20ms listStagger")
         contains(motion, "static let rowIn: TimeInterval = 0.15", "Each row entrance must run 150ms")
         contains(motion, "static let rowRise: CGFloat = 4", "Row entrance rise must be 4pt")
-        contains(motion, "static let highlightSlide = Curve.gentleSpring()", "The highlight must share the 0.3/0.85 sidebar pill spring family")
-        contains(motion, "static let highlightStretchPeak: CGFloat = 1.08", "Highlight stretch must peak at 1.08")
-        contains(motion, "static func rowArrival(index: Int) -> Animation", "Row arrival must derive its delayed arc from ToolMotion")
+        contains(motion, "static let highlightSlide = Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0)", "The highlight must snap on the mature-launcher fast spring, never the laggy pill spring")
+                contains(motion, "static func rowArrival(index: Int) -> Animation", "Row arrival must derive its delayed arc from ToolMotion")
 
         // Open/close share one directional animation owner; every close path
         // lands on the same arc (prototype closeCmdk unification).
@@ -655,10 +654,8 @@ struct MotionSourceContractTests {
         contains(commandPalette, "CommandPaletteSelectionHighlightHost(", "The list must host the floating selection highlight")
         contains(commandPalette, "CommandPaletteRowAnchorsKey.self) { rowAnchors = $0 }", "Row frames must publish through the shared anchor preference")
         contains(highlight, "struct CommandPaletteRowAnchorsKey: PreferenceKey", "Selectable-row bounds must publish through one preference key")
-        contains(highlight, "struct CommandPaletteHighlightFlightEffect: GeometryEffect", "The highlight flight must be a GeometryEffect for envelope math")
-        contains(highlight, "abs(toY - fromY) >= rowHeight * 2", "Stretch must engage only across jumps of two rows or more")
-        contains(highlight, "4 * progress * (1 - progress)", "The stretch envelope must follow the 4p(1-p) pill family curve")
-        contains(highlight, "animates && !reduceMotion\n                ? ToolMotion.PaletteMotion.highlightSlide\n                : nil", "Keyboard moves must spring; rebuilds and Reduce Motion must drop instantly")
+        contains(highlight, "animates && !reduceMotion\n                ? ToolMotion.PaletteMotion.highlightSlide\n                : nil", "Keyboard moves must snap; rebuilds and Reduce Motion must drop instantly")
+        doesNotContain(highlight, "FlightEffect", "The stretch-flight machinery must stay removed (mature launchers never stretch the palette highlight)")
     }
 
     // MARK: - Wave 2 copy-confirmation tick (candidate d1, sixth-round terminal values)
