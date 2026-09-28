@@ -123,12 +123,19 @@ struct IndexCodeViewerSurface: View {
         .padding(.vertical, 12)
         .padding(.trailing, 13)
         .padding(.leading, lineNumbers ? 0 : 13)
+        // Fill the pane first so the gutter hairline spans the full height
+        // like the native gutter instead of just the placeholder text block.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .leading) {
             if lineNumbers {
+                // 1pt at half opacity renders reliably where a 0.5pt frame
+                // gets rounded away in this overlay hierarchy, and reads
+                // identical to the native gutter hairline.
                 Rectangle()
                     .fill(ToolTheme.border)
-                    .frame(width: 0.5)
-                    .padding(.leading, IndexEditorLineNumberGutter.width)
+                    .frame(width: 1)
+                    .opacity(0.5)
+                    .padding(.leading, IndexEditorLineNumberGutter.width - 0.5)
             }
         }
     }

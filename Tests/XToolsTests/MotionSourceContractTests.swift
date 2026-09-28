@@ -759,6 +759,8 @@ struct MotionSourceContractTests {
         contains(empty, "reduceMotion ? nil : ToolMotion.EmptyArrival.iconRise", "Reduce Motion must show the empty state directly")
         let viewer = try readSource("Sources/XTools/Shared/Components/IndexCodeViewerSurface.swift")
         contains(viewer, "ToolMotion.EmptyArrival.textRiseDistance", "The editor placeholder must rise in softly when content empties")
+        contains(viewer, ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)\n        .overlay(alignment: .leading)", "The placeholder must fill the pane before hosting the gutter hairline so the line spans full height")
+        contains(viewer, ".frame(width: 1)\n                    .opacity(0.5)", "The placeholder hairline must render 1pt at half opacity - 0.5pt frames round away in this hierarchy")
         contains(motion, "static let elementArrival = Curve.smoothOut(duration: 0.3)", "The placeholder swap must share the empty-arrival family curve")
     }
 
