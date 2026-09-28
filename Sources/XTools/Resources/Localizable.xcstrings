@@ -1,6 +1,12 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "近 7 日趋势" : {
+      "extractionState" : "manual"
+    },
+    "近 7 日趋势:" : {
+      "extractionState" : "manual"
+    },
     "早安，开发者" : {
       "extractionState" : "manual"
     },

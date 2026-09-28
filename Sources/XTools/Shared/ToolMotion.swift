@@ -275,6 +275,13 @@ enum ToolMotion {
         static let textRiseDistance: CGFloat = 4
     }
 
+    /// Wave 2 dashboard trend bars (prototype MOTION d.trendBar /
+    /// d.trendStagger): bars spring-grow from the baseline one
+    /// `Duration.stagger` (0.04s) beat apart.
+    enum TrendBars {
+        static let growth = Animation.spring(response: 0.3, dampingFraction: 0.85)
+    }
+
     /// Wave 2 command-palette choreography (prototype MOTION d/x/s.cmdk*):
     /// open = 240ms smoothOut rise (8pt) + fade while the scrim dims on its
     /// own independent 200ms arc; close = 200ms exit-arc fade settling toward

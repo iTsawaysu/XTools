@@ -73,6 +73,8 @@ struct DashboardView: View {
 
             Spacer(minLength: 12)
 
+            DashboardTrendStrip(days: store.sevenDayTrend)
+
             Label("内容只在当前页面处理", systemImage: "lock")
                 .font(ToolTypography.Workbench.caption)
                 .foregroundStyle(ToolTheme.Workbench.textFaint)
@@ -215,8 +217,70 @@ private struct WorkbenchSectionHeader: View {
 /// One dashboard counter. The value rolls from zero on first appearance
 /// (macOS 14+ digit roll; older systems and Reduce Motion show the final
 /// number), giving the workspace an instrument-panel arrival beat.
-private struct DashboardStat: View {
-    let caption: String
+/// Wave 2 trend strip (prototype c7): seven launch-count bars spring-grow
+/// from the baseline one beat apart; today's bar carries the accent. Growth
+/// spring and stagger live in `ToolMotion` (`TrendBars` / `Duration.stagger`).
+private struct DashboardTrendStrip: View {
+    let days: [DashboardActivityDay]
+
+    @State private var hasAppeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var maxValue: Int {
+        max(1, days.map(\.launchCount).max() ?? 1)
+    }
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            Text("近 7 日趋势")
+                .font(ToolTypography.monoCaption)
+                .foregroundStyle(ToolTheme.Workbench.textFaint)
+            HStack(alignment: .bottom, spacing: 6) {
+                ForEach(Array(days.enumerated()), id: \.element.id) { index, day in
+                    let isToday = index == days.count - 1
+                    RoundedRectangle(cornerRadius: 2.5, style: .continuous)
+                        .fill(isToday ? AnyShapeStyle(ToolTheme.accent) : AnyShapeStyle(ToolTheme.textTertiary))
+                        .opacity(isToday ? 1 : 0.5)
+                        .frame(width: 9, height: barHeight(day))
+                        .scaleEffect(y: hasAppeared ? 1 : 0.001, anchor: .bottom)
+                        .animation(
+                            reduceMotion
+                                ? nil
+                                : ToolMotion.TrendBars.growth.delay(Double(index) * ToolMotion.Duration.stagger),
+                            value: hasAppeared
+                        )
+                }
+            }
+            .frame(height: 46, alignment: .bottom)
+            HStack(spacing: 6) {
+                ForEach(days) { day in
+                    Text(Self.weekdayLabel(day.date))
+                        .font(ToolTypography.monoCaption)
+                        .foregroundStyle(ToolTheme.Workbench.textFaint)
+                        .frame(width: 9)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("近 7 日趋势:" + days
+            .map { "\(Self.weekdayLabel($0.date)) \( $0.launchCount) 次" }
+            .joined(separator: "，"))
+        .onAppear {
+            hasAppeared = true
+        }
+    }
+
+    private func barHeight(_ day: DashboardActivityDay) -> CGFloat {
+        8 + CGFloat(day.launchCount) / CGFloat(maxValue) * 38
+    }
+
+    private static func weekdayLabel(_ date: Date) -> String {
+        let index = Calendar.current.component(.weekday, from: date)
+        return Calendar.current.veryShortWeekdaySymbols[index - 1]
+    }
+}
+
+private struct DashboardStat: View {    let caption: String
     let value: Int
 
     @State private var hasAppeared = false
