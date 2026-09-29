@@ -25,6 +25,9 @@ private struct IndexCodeViewerText: Equatable {
 struct IndexCodeViewerSurface: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var highlightingLimited = false
+    @State private var fullTextSource: IndexCodeViewerText?
+    @State private var previewSource: IndexCodeViewerText?
+    @State private var previewCharacterCount: Int?
     private let text: IndexCodeViewerText
     var placeholder: String = IndexEmptyStateCopy.outputWillShowHere
     var lineNumbers: Bool = true
@@ -65,6 +68,13 @@ struct IndexCodeViewerSurface: View {
                     syntax: syntax,
                     lineBreakMode: lineBreakMode,
                     embedsFlat: embedsFlat,
+                    permitsFullText: fullTextSource == text,
+                    onPreviewChange: { source, count in
+                        Task { @MainActor in
+                            previewSource = source
+                            previewCharacterCount = count
+                        }
+                    },
                     onHighlightingDegradation: { limited in
                         Task { @MainActor in highlightingLimited = limited }
                     }
@@ -82,7 +92,22 @@ struct IndexCodeViewerSurface: View {
                         )
                 }
             }
-            if highlightingLimited, !text.isEmpty {
+            if previewSource == text, let previewCharacterCount {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("预览前 \(previewCharacterCount) 个字符；选择与查找仅限预览")
+                        .font(ToolTypography.monoCaption)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                    HStack {
+                        IndexCopyButton(text: text.value, title: "复制全文", showsIcon: false)
+                        Button("载入全文") { fullTextSource = text }
+                            .buttonStyle(IndexSmallButtonStyle())
+                            .help("全文排版可能需要较长时间")
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 4)
+            } else if highlightingLimited, !text.isEmpty {
                 Text("部分内容已简化着色；仍可选择和复制全文")
                     .font(ToolTypography.monoCaption)
                     .foregroundStyle(ToolTheme.textSecondary)
@@ -91,6 +116,7 @@ struct IndexCodeViewerSurface: View {
                     .padding(.vertical, 4)
             }
         }
+        .onChange(of: text) { _ in fullTextSource = nil }
         .animation(
             reduceMotion ? nil : ToolMotion.EmptyArrival.elementArrival,
             value: text.isEmpty
@@ -111,6 +137,9 @@ struct IndexCodeViewerSurface: View {
                     .strokeBorder(ToolTheme.border, lineWidth: 0.5)
             }
         }
+        // Workbenches name the whole output surface. Keep that label on a
+        // container so it cannot replace the preview notice/action labels.
+        .accessibilityElement(children: .contain)
     }
 
     private var placeholderView: some View {
@@ -210,7 +239,8 @@ private final class IndexCodeViewerScrollView: NSScrollView {
         IndexTextKitGeometry.synchronizeTextGeometry(
             for: textView,
             visibleWidth: contentSize.width,
-            minimumHeight: contentSize.height
+            minimumHeight: contentSize.height,
+            usesViewportLayout: true
         )
     }
 }
@@ -221,6 +251,8 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
     var syntax: IndexSyntaxKind?
     var lineBreakMode: NSLineBreakMode
     var embedsFlat: Bool
+    var permitsFullText: Bool
+    var onPreviewChange: (IndexCodeViewerText, Int?) -> Void
     var onHighlightingDegradation: (Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -265,7 +297,9 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
             context.coordinator.lineNumberGutter = gutter
         }
 
-        applyContent(to: textView)
+        let plan = IndexCodePreviewPlan.make(text: text.value, permitsFullText: permitsFullText)
+        applyContent(plan.displayedText, to: textView)
+        onPreviewChange(text, plan.previewCharacterCount)
 
         context.coordinator.highlighting.onDegradationChange = onHighlightingDegradation
         context.coordinator.highlighting.install(
@@ -279,10 +313,11 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
                 coordinator?.highlighting.highlightVisibleIfNeeded()
             }
         }
-        context.coordinator.highlighting.contentChanged(text: text.value, syntax: syntax)
+        context.coordinator.highlighting.contentChanged(text: plan.displayedText, syntax: syntax)
         scrollView.synchronizeGeometryIfNeeded()
         context.coordinator.lastText = text
         context.coordinator.lastSyntax = syntax
+        context.coordinator.lastPermitsFullText = permitsFullText
         return scrollView
     }
 
@@ -292,18 +327,22 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
         configure(textView)
         context.coordinator.highlighting.onDegradationChange = onHighlightingDegradation
 
-        if context.coordinator.lastText != text || context.coordinator.lastSyntax != syntax {
+        if context.coordinator.lastText != text || context.coordinator.lastSyntax != syntax
+            || context.coordinator.lastPermitsFullText != permitsFullText {
             context.coordinator.lastText = text
             context.coordinator.lastSyntax = syntax
+            context.coordinator.lastPermitsFullText = permitsFullText
+            let plan = IndexCodePreviewPlan.make(text: text.value, permitsFullText: permitsFullText)
             let previousSelectedRanges = textView.selectedRanges
-            applyContent(to: textView)
-            let stringLength = (text.value as NSString).length
+            applyContent(plan.displayedText, to: textView)
+            onPreviewChange(text, plan.previewCharacterCount)
+            let stringLength = (plan.displayedText as NSString).length
             let validRanges = previousSelectedRanges.filter { $0.rangeValue.upperBound <= stringLength }
             if !validRanges.isEmpty {
                 textView.selectedRanges = validRanges
             }
             customScrollView.synchronizeTextGeometry()
-            context.coordinator.highlighting.contentChanged(text: text.value, syntax: syntax)
+            context.coordinator.highlighting.contentChanged(text: plan.displayedText, syntax: syntax)
             context.coordinator.lineNumberGutter?.refresh()
         } else {
             customScrollView.synchronizeTextGeometry()
@@ -312,18 +351,22 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
     }
 
     private func configure(_ textView: NSTextView) {
+        IndexNativeViewportLayout.configure(textView)
         textView.isEditable = false
         textView.isSelectable = true
         textView.usesFindBar = true
         textView.isIncrementalSearchingEnabled = true
         AppKitTextEditingConfiguration.configurePlainTextEditor(textView, allowsUndo: false)
 
-        textView.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
-        textView.textColor = NSColor(ToolTheme.textSecondary)
-
+        let font = NSFont.monospacedSystemFont(ofSize: 12.5, weight: .regular)
+        if textView.font != font { textView.font = font }
+        // The attributed document owns its colors. Setting textColor again
+        // would erase token colors during an unrelated SwiftUI state update.
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.lineSpacing = 6
-        textView.defaultParagraphStyle = paragraphStyle
+        if textView.defaultParagraphStyle != paragraphStyle {
+            textView.defaultParagraphStyle = paragraphStyle
+        }
 
         textView.textContainerInset = NSSize(
             width: lineNumbers ? IndexEditorLineNumberGutter.width + 13 : 13,
@@ -337,10 +380,10 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
         }
     }
 
-    /// The native document remains complete. Only tokenization and color
-    /// application are viewport bounded; TextKit's first layout is still O(n).
-    private func applyContent(to textView: NSTextView) {
-        let attributed = NSAttributedString(string: text.value, attributes: Self.baseAttributes(lineSpacing: 6))
+    /// The explicit preview policy owns the displayed document. Toolbar copy
+    /// and export continue to use the complete formatter result.
+    private func applyContent(_ displayedText: String, to textView: NSTextView) {
+        let attributed = NSAttributedString(string: displayedText, attributes: Self.baseAttributes(lineSpacing: 6))
         textView.textStorage?.setAttributedString(attributed)
     }
 
@@ -358,6 +401,7 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
     final class Coordinator: NSObject {
         var lastText: IndexCodeViewerText?
         var lastSyntax: IndexSyntaxKind?
+        var lastPermitsFullText = false
         weak var lineNumberGutter: IndexEditorLineNumberGutterView?
         let highlighting = IndexViewportHighlighting()
     }
@@ -408,6 +452,7 @@ final class IndexViewportHighlighting {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in
+                (self?.scrollView as? IndexCodeViewerScrollView)?.synchronizeGeometryIfNeeded()
                 self?.highlightVisibleIfNeeded()
             }
         }

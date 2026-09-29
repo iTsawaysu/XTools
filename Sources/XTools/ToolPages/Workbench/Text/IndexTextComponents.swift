@@ -1783,7 +1783,8 @@ enum IndexTextKitGeometry {
         for textView: NSTextView,
         visibleWidth: CGFloat,
         minimumHeight: CGFloat,
-        trailingReadingGuard: CGFloat = trailingWrapGuard
+        trailingReadingGuard: CGFloat = trailingWrapGuard,
+        usesViewportLayout: Bool = false
     ) {
         let width = max(1, floor(visibleWidth.isFinite ? visibleWidth : textView.bounds.width))
 
@@ -1804,7 +1805,10 @@ enum IndexTextKitGeometry {
         }
 
         let resolvedMinimumHeight = minimumHeight.isFinite ? minimumHeight : 0
-        let height = max(resolvedMinimumHeight, measuredTextHeight(for: textView))
+        let documentHeight = usesViewportLayout
+            ? IndexNativeViewportLayout.documentHeight(for: textView)
+            : measuredTextHeight(for: textView)
+        let height = max(resolvedMinimumHeight, documentHeight)
         let currentSize = textView.frame.size
         guard abs(currentSize.width - width) > 0.01 || abs(currentSize.height - height) > 0.01 else {
             return

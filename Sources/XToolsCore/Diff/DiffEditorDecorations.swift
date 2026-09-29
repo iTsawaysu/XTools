@@ -81,9 +81,8 @@ public enum DiffSourceText {
             var contentRange = lineRange
 
             while contentRange.length > 0 {
-                let lastRange = NSRange(location: contentRange.location + contentRange.length - 1, length: 1)
-                let last = nsText.substring(with: lastRange)
-                if last == "\n" || last == "\r" {
+                let last = nsText.character(at: NSMaxRange(contentRange) - 1)
+                if last == 10 || last == 13 {
                     contentRange.length -= 1
                 } else {
                     break

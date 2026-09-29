@@ -974,6 +974,12 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             isApplyingNavigationSelection = true
             targetTextView.window?.makeFirstResponder(targetTextView)
             targetTextView.setSelectedRange(targetRange)
+            // A distant target can extend a lazily laid-out prefix. Grow the
+            // shared document before native reveal so an inner clip cannot
+            // acquire its own vertical scroll offset.
+            targetTextView.layoutManager?.ensureLayout(forCharacterRange: targetRange)
+            refreshEditorLayout()
+            hostView?.layoutSubtreeIfNeeded()
             targetTextView.scrollRangeToVisible(targetRange)
             scrollSelectionIntoOuterView(targetTextView)
             isApplyingNavigationSelection = false
@@ -1279,6 +1285,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         }
 
         private func configure(_ textView: NSTextView) {
+            IndexNativeViewportLayout.configure(textView, allowsNonContiguousLayout: false)
             textView.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
             textView.textColor = IndexDiffNSPalette.textPrimary
             textView.insertionPointColor = IndexDiffNSPalette.textPrimary
@@ -1421,6 +1428,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
                 forCharacterRange: NSRange(location: characterLocation, length: 0),
                 actualCharacterRange: nil
             )
+            refreshEditorLayout()
+            hostView?.layoutSubtreeIfNeeded()
             var caretRect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
             caretRect.origin.x += textView.textContainerOrigin.x
             caretRect.origin.y += textView.textContainerOrigin.y
@@ -1623,6 +1632,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         }
 
         @objc private func viewportDidChange(_ notification: Notification) {
+            refreshEditorLayout()
             refreshViewportDecorations()
             leftLineNumberView?.needsDisplay = true
             rightLineNumberView?.needsDisplay = true

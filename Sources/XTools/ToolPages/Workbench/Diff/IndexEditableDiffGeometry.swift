@@ -9,13 +9,6 @@ final class IndexDiffTextIndex: NSObject {
     private var cachedRanges: [NSRange]?
     private(set) var revision = 0
     private(set) var rebuildCount = 0
-    private struct HeightKey: Equatable {
-        let width: CGFloat
-        let font: NSFont?
-        let inset: NSSize
-    }
-    private var heightKey: HeightKey?
-    private var cachedHeight: CGFloat?
 
     init(storage: NSTextStorage?) {
         self.storage = storage
@@ -33,7 +26,6 @@ final class IndexDiffTextIndex: NSObject {
     @objc private func storageEdited(_ notification: Notification) {
         guard let storage, storage.editedMask.contains(.editedCharacters) else { return }
         cachedRanges = nil
-        cachedHeight = nil
         revision &+= 1
     }
 
@@ -46,13 +38,25 @@ final class IndexDiffTextIndex: NSObject {
     }
 
     func documentHeight(for view: NSTextView) -> CGFloat {
-        let key = HeightKey(width: view.textContainer?.containerSize.width ?? 0,
-                            font: view.font, inset: view.textContainerInset)
-        if heightKey == key, let cachedHeight { return cachedHeight }
-        let height = IndexTextKitGeometry.measuredTextHeight(for: view)
-        heightKey = key
-        cachedHeight = height
-        return height
+        // Independent noncontiguous holes give the same source line different
+        // estimated Y positions in the two panes. Keep the laid-out prefix
+        // contiguous, and estimate only the as-yet-unseen document height.
+        let laidHeight = IndexNativeViewportLayout.documentHeight(
+            for: view, allowsNonContiguousLayout: false
+        )
+        guard let manager = view.layoutManager, let storage,
+              storage.length > 0 else { return laidHeight }
+        let laidCharacters = manager.firstUnlaidCharacterIndex()
+        guard laidCharacters < storage.length else { return laidHeight }
+        let ranges = self.ranges
+        var low = 0, high = ranges.count
+        while low < high {
+            let middle = low + (high - low) / 2
+            if ranges[middle].location < laidCharacters { low = middle + 1 }
+            else { high = middle }
+        }
+        let lineHeight = IndexDiffTextLayoutGeometry.defaultLineHeight(for: view)
+        return laidHeight + CGFloat(ranges.count - low) * lineHeight
     }
 }
 
@@ -76,8 +80,8 @@ enum IndexDiffTextLayoutGeometry {
         return IndexTextKitGeometry.measuredTextHeight(for: textView)
     }
 
-    /// The shared outer scroller needs the full document height once per text
-    /// revision/wrapping width. Reuse that measurement during scroll/layout.
+    /// The outer scroller estimates only the unlaid height. Source-line Y
+    /// positions remain exact and consistent between the two native panes.
     static func synchronizeTextGeometry(
         for textView: NSTextView, visibleWidth: CGFloat, minimumHeight: CGFloat,
         trailingReadingGuard: CGFloat

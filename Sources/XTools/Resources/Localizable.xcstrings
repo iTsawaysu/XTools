@@ -3069,6 +3069,18 @@
     },
     "部分内容已简化着色；仍可选择和复制全文" : {
       "extractionState" : "manual"
+    },
+    "预览前 %lld 个字符；选择与查找仅限预览" : {
+      "extractionState" : "manual"
+    },
+    "复制全文" : {
+      "extractionState" : "manual"
+    },
+    "载入全文" : {
+      "extractionState" : "manual"
+    },
+    "全文排版可能需要较长时间" : {
+      "extractionState" : "manual"
     }
   },
   "version" : "1.0"
