@@ -50,12 +50,14 @@ public enum SQLFormatting {
     }
 
     public static func validate(_ input: String) throws {
+        try StructuredTextExecution.validateInput(input, format: "SQL")
         var lexer = SQLLexer(input)
         let tokens = try lexer.tokenizeWithPositions()
         try validate(tokens, input: input)
     }
 
     public static func format(_ input: String, options: Options = Options()) throws -> String {
+        try StructuredTextExecution.validateInput(input, format: "SQL")
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
 
@@ -64,7 +66,7 @@ public enum SQLFormatting {
         try validate(positionedTokens, input: input)
 
         var formatter = SQLFormatter(tokens: positionedTokens.map(\.token), options: options)
-        return formatter.render()
+        return try formatter.render()
     }
 
     private static func validate(_ tokens: [SQLPositionedToken], input: String) throws {
@@ -82,6 +84,7 @@ public enum SQLFormatting {
         var hasStatementKeyword = false
 
         for positionedToken in tokens {
+            try StructuredTextExecution.checkCancellation()
             switch positionedToken.token {
             case .symbol("("):
                 openParentheses.append(positionedToken)
@@ -140,6 +143,7 @@ public enum SQLFormatting {
         var depth = 0
 
         for index in tokens.indices {
+            try StructuredTextExecution.checkpoint(index)
             switch tokens[index].token {
             case .symbol("("):
                 depth += 1
@@ -167,6 +171,7 @@ public enum SQLFormatting {
         var fromIndices: [Int] = []
         var orderIndices: [Int] = []
         for index in tokens.indices {
+            try StructuredTextExecution.checkpoint(index)
             let token = tokens[index].token
             switch token {
             case .symbol("("):

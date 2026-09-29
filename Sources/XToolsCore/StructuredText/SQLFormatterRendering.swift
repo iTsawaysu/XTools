@@ -17,6 +17,7 @@ extension SQLFormatter {
             flushLine()
             resetStatementState()
             if index < tokens.count - 1 {
+                completedOutputBytes += 1
                 lines.append("")
             }
 
@@ -125,15 +126,26 @@ extension SQLFormatter {
     }
 
     mutating func appendRaw(_ value: String) {
-        if current.isEmpty {
-            current = indentPrefix()
+        guard outputFailure == nil else { return }
+        let prefix = current.isEmpty ? indentPrefix() : ""
+        let addedBytes = prefix.utf8.count + value.utf8.count
+        guard addedBytes <= StructuredTextExecution.outputByteLimit - completedOutputBytes - current.utf8.count else {
+            outputFailure = StructuredTextResourceError(format: "SQL", reason: "结果超过处理容量上限")
+            return
         }
+        current += prefix
         current += value
     }
 
     mutating func flushLine() {
         let line = current.trimmingTrailingWhitespace()
         if !line.isEmpty {
+            let count = line.utf8.count + (lines.isEmpty ? 0 : 1)
+            guard count <= StructuredTextExecution.outputByteLimit - completedOutputBytes else {
+                outputFailure = StructuredTextResourceError(format: "SQL", reason: "结果超过处理容量上限")
+                return
+            }
+            completedOutputBytes += count
             lines.append(line)
         }
         current = ""

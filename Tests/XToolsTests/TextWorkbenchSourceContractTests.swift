@@ -452,7 +452,7 @@ struct TextWorkbenchSourceContractTests {
         doesNotContain(json, "IndexOptionPicker(", "JSON indent must use the toolbar segmented control")
         doesNotContain(json, "statsStrip", "JSON formatter must not keep the retired statistics strip")
         contains(json, "IndexPage(\"JSON 格式化\", subtitle: \"格式化、压缩和验证 JSON，支持自定义选项。\", workspaceSemantic: .structuredEditorTransform)", "JSON formatter must let the semantic resolve the compact fixed workbench page shell")
-        contains(json, "execution.schedule(snapshot: snapshot, sourceText: snapshot.unescape ? nil : snapshot.input, delay: .zero)", "Formatting must submit its source snapshot, withholding unmapped unescape diagnostics")
+        contains(json, "execution.schedule(snapshot: snapshot, sourceText: snapshot.unescape ? nil : snapshot.input, delay: .zero, cooperativeCancellation: true)", "Formatting must submit its source snapshot, withholding unmapped unescape diagnostics")
         doesNotContain(json, "workspace.seedEntryExampleIfNeeded()", "JSON must start with clean placeholder rather than seeding sample text")
         contains(json, "formatAttempt += 1", "Each format attempt must advance feedback identity")
 
@@ -461,7 +461,7 @@ struct TextWorkbenchSourceContractTests {
         contains(sql, "items: [(\"upper\", \"大写\"), (\"lower\", \"小写\")]", "SQL keyword-case must use the toolbar segmented control")
         contains(sql, "leadingControl: {", "SQL keyword-case controls must ride the workbench toolbar's leading slot")
         doesNotContain(sql, "IndexActionBar {", "SQL must not keep a page-level action bar")
-        contains(sql, "execution.schedule(snapshot: snapshot, sourceText: snapshot.input, delay: .zero)", "SQL formatting must submit the original source snapshot for diagnostics")
+        contains(sql, "execution.schedule(snapshot: snapshot, sourceText: snapshot.input, delay: .zero, cooperativeCancellation: true)", "SQL formatting must submit the original source snapshot for diagnostics")
         contains(sql, "formatAttempt += 1", "Each SQL format attempt must advance feedback identity")
         contains(sql, "outputLineNumbers: true", "SQL formatter must keep syntax highlighting with a line-number gutter")
         contains(sql, "outputSyntax: .sql", "SQL formatter must keep structured output highlighting")

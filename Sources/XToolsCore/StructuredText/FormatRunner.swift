@@ -27,6 +27,10 @@ public enum FormatRunner {
 
         do {
             return .produced(try produce(input))
+        } catch is CancellationError {
+            // Cancellation is not malformed input. The owning worker rejects
+            // this generation before publication, retaining its previous result.
+            return .empty
         } catch let error as FormatDiagnosticProviding {
             return .failed(error.diagnostic)
         } catch {

@@ -65,7 +65,7 @@ public enum JSONFormatting {
     ) throws -> FormattingResult {
         let document = try parseOrderedJSON(text, parserDidStart: parserDidStart)
         let duplicateKeys = uniqueDuplicateKeys(document.duplicateKeys)
-        let rendered = render(
+        let rendered = try render(
             document.value,
             sortKeys: sortKeys,
             sortArrays: sortArrays,
@@ -83,7 +83,7 @@ public enum JSONFormatting {
     public static func minifyResult(_ text: String, sortKeys: Bool = false, sortArrays: Bool = false) throws -> FormattingResult {
         let document = try parseOrderedJSON(text, parserDidStart: nil)
         let duplicateKeys = uniqueDuplicateKeys(document.duplicateKeys)
-        let rendered = renderCompact(document.value, sortKeys: sortKeys, sortArrays: sortArrays)
+        let rendered = try renderCompact(document.value, sortKeys: sortKeys, sortArrays: sortArrays)
         return FormattingResult(
             text: rendered,
             warning: duplicateKeyWarning(from: duplicateKeys),
@@ -117,7 +117,19 @@ public enum JSONFormatting {
         "\"\(escapeString(string))\""
     }
 
+    public static func escapeJSONChecked(_ string: String) throws -> String {
+        try StructuredTextExecution.checkCancellation()
+        var output = StructuredTextOutput(format: "JSON")
+        try appendEscaped(string, to: &output)
+        return output.text
+    }
+
     public static func unescapeJSON(_ string: String) -> String {
+        (try? unescapeJSONChecked(string)) ?? string
+    }
+
+    public static func unescapeJSONChecked(_ string: String) throws -> String {
+        try StructuredTextExecution.validateInput(string, format: "JSON")
         let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") && trimmed.count >= 2,
            let decoded = try? JSONDecoder().decode(String.self, from: Data(trimmed.utf8)) {
@@ -131,7 +143,10 @@ public enum JSONFormatting {
             var result = ""
             result.reserveCapacity(trimmed.count)
             var iterator = trimmed.makeIterator()
+            var offset = 0
             while let char = iterator.next() {
+                try StructuredTextExecution.checkpoint(offset)
+                offset += 1
                 if char == "\\" {
                     if let next = iterator.next() {
                         switch next {
@@ -161,7 +176,9 @@ public enum JSONFormatting {
         _ text: String,
         parserDidStart: (@Sendable () -> Void)?
     ) throws -> OrderedJSONDocument {
+        try StructuredTextExecution.validateInput(text, format: "JSON")
         parserDidStart?()
+        try StructuredTextExecution.checkCancellation()
         var parser = OrderedJSONParser(text)
         return try parser.parse()
     }
@@ -187,82 +204,124 @@ public enum JSONFormatting {
         sortArrays: Bool,
         indentWidth: Int,
         level: Int
-    ) -> String {
+    ) throws -> String {
+        try StructuredTextExecution.validateIndent(indentWidth, format: "JSON")
+        var output = StructuredTextOutput(format: "JSON")
+        try append(value, to: &output, sortKeys: sortKeys, sortArrays: sortArrays,
+                   indentWidth: indentWidth, level: level, compact: false)
+        return output.text
+    }
+
+    private static func renderCompact(_ value: OrderedJSONValue, sortKeys: Bool, sortArrays: Bool) throws -> String {
+        var output = StructuredTextOutput(format: "JSON")
+        try append(value, to: &output, sortKeys: sortKeys, sortArrays: sortArrays,
+                   indentWidth: 0, level: 0, compact: true)
+        return output.text
+    }
+
+    private static func append(
+        _ value: OrderedJSONValue, to output: inout StructuredTextOutput,
+        sortKeys: Bool, sortArrays: Bool, indentWidth: Int, level: Int, compact: Bool
+    ) throws {
+        try StructuredTextExecution.checkCancellation()
         switch value {
         case .object(let pairs):
-            guard !pairs.isEmpty else { return "{}" }
-            let orderedPairs = orderedObjectPairs(pairs, sortKeys: sortKeys)
-            let childIndent = String(repeating: " ", count: (level + 1) * indentWidth)
-            let currentIndent = String(repeating: " ", count: level * indentWidth)
-            let lines = orderedPairs.enumerated().map { index, pair in
-                let comma = index == orderedPairs.count - 1 ? "" : ","
-                return "\(childIndent)\"\(escapeString(pair.key))\": \(render(pair.value, sortKeys: sortKeys, sortArrays: sortArrays, indentWidth: indentWidth, level: level + 1))\(comma)"
+            let ordered = try orderedObjectPairs(pairs, sortKeys: sortKeys)
+            try output.append("{")
+            for (index, pair) in ordered.enumerated() {
+                if index > 0 { try output.append(",") }
+                if !compact {
+                    try output.append("\n")
+                    try output.spaces((level + 1) * indentWidth)
+                }
+                try appendEscaped(pair.key, to: &output)
+                try output.append(compact ? ":" : ": ")
+                try append(pair.value, to: &output, sortKeys: sortKeys, sortArrays: sortArrays,
+                           indentWidth: indentWidth, level: level + 1, compact: compact)
             }
-            return "{\n\(lines.joined(separator: "\n"))\n\(currentIndent)}"
-
+            if !compact, !pairs.isEmpty {
+                try output.append("\n")
+                try output.spaces(level * indentWidth)
+            }
+            try output.append("}")
         case .array(let values):
-            guard !values.isEmpty else { return "[]" }
-            let orderedValues = orderedArrayValues(
-                values,
-                sortKeys: sortKeys,
-                sortArrays: sortArrays
-            )
-            let childIndent = String(repeating: " ", count: (level + 1) * indentWidth)
-            let currentIndent = String(repeating: " ", count: level * indentWidth)
-            let lines = orderedValues.enumerated().map { index, item in
-                let comma = index == orderedValues.count - 1 ? "" : ","
-                return "\(childIndent)\(render(item, sortKeys: sortKeys, sortArrays: sortArrays, indentWidth: indentWidth, level: level + 1))\(comma)"
+            if compact, sortArrays, values.count > 1 {
+                // Sorting already rendered every child as compact JSON. Reuse
+                // that result: rendering the nested arrays again doubles work
+                // at each level and becomes exponential near the depth limit.
+                let entries = try orderedArrayEntries(values, sortKeys: sortKeys, sortArrays: sortArrays)
+                try output.append("[")
+                for (index, entry) in entries.enumerated() {
+                    if index > 0 { try output.append(",") }
+                    try output.append(entry.compactText)
+                }
+                try output.append("]")
+                return
             }
-            return "[\n\(lines.joined(separator: "\n"))\n\(currentIndent)]"
-
-        case .string(let string):
-            return "\"\(escapeString(string))\""
-        case .number(let number):
-            return number
-        case .bool(let value):
-            return value ? "true" : "false"
-        case .null:
-            return "null"
+            let ordered = try orderedArrayValues(values, sortKeys: sortKeys, sortArrays: sortArrays)
+            try output.append("[")
+            for (index, item) in ordered.enumerated() {
+                if index > 0 { try output.append(",") }
+                if !compact {
+                    try output.append("\n")
+                    try output.spaces((level + 1) * indentWidth)
+                }
+                try append(item, to: &output, sortKeys: sortKeys, sortArrays: sortArrays,
+                           indentWidth: indentWidth, level: level + 1, compact: compact)
+            }
+            if !compact, !values.isEmpty {
+                try output.append("\n")
+                try output.spaces(level * indentWidth)
+            }
+            try output.append("]")
+        case .string(let string): try appendEscaped(string, to: &output)
+        case .number(let number): try output.append(number)
+        case .bool(let value): try output.append(value ? "true" : "false")
+        case .null: try output.append("null")
         }
     }
 
-    private static func renderCompact(_ value: OrderedJSONValue, sortKeys: Bool, sortArrays: Bool) -> String {
-        switch value {
-        case .object(let pairs):
-            let orderedPairs = orderedObjectPairs(pairs, sortKeys: sortKeys)
-            return "{" + orderedPairs.map { "\"\(escapeString($0.key))\":\(renderCompact($0.value, sortKeys: sortKeys, sortArrays: sortArrays))" }.joined(separator: ",") + "}"
-        case .array(let values):
-            guard sortArrays, values.count > 1 else {
-                return "[" + values.map {
-                    renderCompact($0, sortKeys: sortKeys, sortArrays: sortArrays)
-                }.joined(separator: ",") + "]"
+    private static func appendEscaped(_ string: String, to output: inout StructuredTextOutput) throws {
+        try output.append("\"")
+        // Bounded chunks make long single strings cancellable without calling a
+        // task-local probe for every scalar.
+        var chunk = ""
+        for (offset, scalar) in string.unicodeScalars.enumerated() {
+            if offset & 1023 == 0 {
+                try output.append(chunk)
+                chunk = ""
             }
-            let orderedEntries = orderedArrayEntries(values, sortKeys: sortKeys, sortArrays: sortArrays)
-            return "[" + orderedEntries.map(\.compactText).joined(separator: ",") + "]"
-        case .string(let string):
-            return "\"\(escapeString(string))\""
-        case .number(let number):
-            return number
-        case .bool(let value):
-            return value ? "true" : "false"
-        case .null:
-            return "null"
+            switch scalar {
+            case "\"": chunk += "\\\""
+            case "\\": chunk += "\\\\"
+            case "\u{08}": chunk += "\\b"
+            case "\u{0C}": chunk += "\\f"
+            case "\n": chunk += "\\n"
+            case "\r": chunk += "\\r"
+            case "\t": chunk += "\\t"
+            case let scalar where scalar.value < 0x20:
+                chunk += String(format: "\\u%04X", scalar.value)
+            default: chunk.unicodeScalars.append(scalar)
+            }
         }
+        try output.append(chunk)
+        try output.append("\"")
     }
 
     private static func orderedObjectPairs(
         _ pairs: [(key: String, value: OrderedJSONValue)],
         sortKeys: Bool
-    ) -> [(key: String, value: OrderedJSONValue)] {
+    ) throws -> [(key: String, value: OrderedJSONValue)] {
         guard sortKeys else {
             return pairs
         }
 
-        return pairs.enumerated()
+        return try pairs.enumerated()
             .map { offset, pair in
                 (offset: offset, pair: pair, identity: JSONExactTextIdentity(pair.key))
             }
             .sorted { left, right in
+                try StructuredTextExecution.checkCancellation()
                 if left.identity == right.identity {
                     return left.offset < right.offset
                 }
@@ -275,12 +334,12 @@ public enum JSONFormatting {
         _ values: [OrderedJSONValue],
         sortKeys: Bool,
         sortArrays: Bool
-    ) -> [OrderedJSONValue] {
+    ) throws -> [OrderedJSONValue] {
         guard sortArrays, values.count > 1 else {
             return values
         }
 
-        return orderedArrayEntries(values, sortKeys: sortKeys, sortArrays: sortArrays)
+        return try orderedArrayEntries(values, sortKeys: sortKeys, sortArrays: sortArrays)
             .map(\.value)
     }
 
@@ -288,10 +347,10 @@ public enum JSONFormatting {
         _ values: [OrderedJSONValue],
         sortKeys: Bool,
         sortArrays: Bool
-    ) -> [(value: OrderedJSONValue, compactText: String)] {
-        return values.enumerated()
+    ) throws -> [(value: OrderedJSONValue, compactText: String)] {
+        return try values.enumerated()
             .map { offset, value in
-                let compact = renderCompact(value, sortKeys: sortKeys, sortArrays: sortArrays)
+                let compact = try renderCompact(value, sortKeys: sortKeys, sortArrays: sortArrays)
                 return (
                     offset: offset,
                     value: value,
@@ -300,6 +359,7 @@ public enum JSONFormatting {
                 )
             }
             .sorted { left, right in
+                try StructuredTextExecution.checkCancellation()
                 if left.identity == right.identity {
                     return left.offset < right.offset
                 }
@@ -440,9 +500,9 @@ private struct OrderedJSONParser {
     }
 
     mutating func parse() throws -> OrderedJSONDocument {
-        skipWhitespace()
+        try skipWhitespace()
         let value = try parseValue()
-        skipWhitespace()
+        try skipWhitespace()
         guard index == scalars.count else {
             throw error(.trailingContent)
         }
@@ -450,12 +510,12 @@ private struct OrderedJSONParser {
     }
 
     private mutating func parseValue() throws -> OrderedJSONValue {
-        skipWhitespace()
+        try skipWhitespace()
         return try parseValue(context: .root, currentKey: nil)
     }
 
     private mutating func parseValue(context: JSONParseContext, currentKey: String? = nil) throws -> OrderedJSONValue {
-        skipWhitespace()
+        try skipWhitespace()
         guard let char = peek() else {
             throw error(.unexpectedEnd)
         }
@@ -522,19 +582,19 @@ private struct OrderedJSONParser {
     private mutating func parseObject(currentKey: String? = nil) throws -> OrderedJSONValue {
         let openIndex = index
         try consume("{")
-        skipWhitespace()
+        try skipWhitespace()
 
         openContainers.append(OpenContainer(kind: .object, startIndex: openIndex, key: currentKey))
         defer { openContainers.removeLast() }
 
         var pairs: [(key: String, value: OrderedJSONValue)] = []
         var seenKeys = Set<JSONExactTextIdentity>()
-        if consumeIfPresent("}") {
+        if try consumeIfPresent("}") {
             return .object(pairs)
         }
 
         while true {
-            skipWhitespace()
+            try skipWhitespace()
             guard let next = peek() else {
                 throw error(.containerNotClosed(kind: .object, startIndex: openIndex, key: currentKey))
             }
@@ -546,22 +606,22 @@ private struct OrderedJSONParser {
             if !seenKeys.insert(keyIdentity).inserted {
                 duplicateKeys.append(key)
             }
-            skipWhitespace()
-            guard consumeIfPresent(":") else {
+            try skipWhitespace()
+            guard try consumeIfPresent(":") else {
                 throw error(.missingColonAfterObjectKey)
             }
-            skipWhitespace()
+            try skipWhitespace()
             if peek() == nil || peek() == "}" || peek() == "," {
                 throw error(.missingObjectValue)
             }
             let value = try parseValue(context: .objectValue, currentKey: key)
             pairs.append((key, value))
-            skipWhitespace()
+            try skipWhitespace()
 
-            if consumeIfPresent("}") {
+            if try consumeIfPresent("}") {
                 return .object(pairs)
             }
-            guard consumeIfPresent(",") else {
+            guard try consumeIfPresent(",") else {
                 if peek() == nil {
                     throw error(.containerNotClosed(kind: .object, startIndex: openIndex, key: currentKey))
                 }
@@ -571,7 +631,7 @@ private struct OrderedJSONParser {
                 throw error(.missingCommaOrClose)
             }
 
-            skipWhitespace()
+            try skipWhitespace()
             guard let nextMember = peek() else {
                 throw error(.containerNotClosed(kind: .object, startIndex: openIndex, key: currentKey))
             }
@@ -587,24 +647,24 @@ private struct OrderedJSONParser {
     private mutating func parseArray(currentKey: String? = nil) throws -> OrderedJSONValue {
         let openIndex = index
         try consume("[")
-        skipWhitespace()
+        try skipWhitespace()
 
         openContainers.append(OpenContainer(kind: .array, startIndex: openIndex, key: currentKey))
         defer { openContainers.removeLast() }
 
         var values: [OrderedJSONValue] = []
-        if consumeIfPresent("]") {
+        if try consumeIfPresent("]") {
             return .array(values)
         }
 
         while true {
             values.append(try parseValue(context: .array, currentKey: currentKey))
-            skipWhitespace()
+            try skipWhitespace()
 
-            if consumeIfPresent("]") {
+            if try consumeIfPresent("]") {
                 return .array(values)
             }
-            guard consumeIfPresent(",") else {
+            guard try consumeIfPresent(",") else {
                 if peek() == nil {
                     throw error(.containerNotClosed(kind: .array, startIndex: openIndex, key: currentKey))
                 }
@@ -614,7 +674,7 @@ private struct OrderedJSONParser {
                 throw error(.missingCommaOrClose)
             }
 
-            skipWhitespace()
+            try skipWhitespace()
             guard let nextValue = peek() else {
                 throw error(.containerNotClosed(kind: .array, startIndex: openIndex, key: currentKey))
             }
@@ -631,7 +691,7 @@ private struct OrderedJSONParser {
         try consume("\"")
         var result = ""
 
-        while let char = advance() {
+        while let char = try advance() {
             switch char {
             case "\"":
                 return result
@@ -649,7 +709,7 @@ private struct OrderedJSONParser {
     }
 
     private mutating func parseEscapedCharacter() throws -> String {
-        guard let escape = advance() else {
+        guard let escape = try advance() else {
             throw error(.invalidString(.unterminatedEscape))
         }
 
@@ -674,7 +734,7 @@ private struct OrderedJSONParser {
 
         if (0xD800...0xDBFF).contains(first) {
             let savedIndex = index
-            guard consumeIfPresent("\\"), consumeIfPresent("u") else {
+            guard try consumeIfPresent("\\"), try consumeIfPresent("u") else {
                 index = savedIndex
                 throw error(.invalidString(.missingLowSurrogate))
             }
@@ -708,7 +768,7 @@ private struct OrderedJSONParser {
             guard let char = peek(), isJSONHexDigit(char) else {
                 throw error(.invalidString(.invalidUnicodeEscape))
             }
-            hex.unicodeScalars.append(advance()!)
+            hex.unicodeScalars.append(try advance()!)
         }
 
         guard let value = Int(hex, radix: 16) else {
@@ -720,7 +780,7 @@ private struct OrderedJSONParser {
     private mutating func parseNumber() throws -> String {
         var result = ""
 
-        let hasMinus = consumeIfPresent("-")
+        let hasMinus = try consumeIfPresent("-")
         if hasMinus {
             result += "-"
         }
@@ -736,7 +796,7 @@ private struct OrderedJSONParser {
         }
 
         if first == "0" {
-            result.unicodeScalars.append(advance()!)
+            result.unicodeScalars.append(try advance()!)
             if let next = peek() {
                 if isJSONDigit(next) {
                     throw error(.invalidNumber(.leadingZero))
@@ -750,7 +810,7 @@ private struct OrderedJSONParser {
             }
         } else if isJSONNonZeroDigit(first) {
             while let char = peek(), isJSONDigit(char) {
-                result.unicodeScalars.append(advance()!)
+                result.unicodeScalars.append(try advance()!)
             }
             if let next = peek(), isNonASCIIDecimalDigit(next) {
                 throw error(.invalidNumber(.nonASCIIDigit(.integer)))
@@ -763,7 +823,7 @@ private struct OrderedJSONParser {
             throw error(.invalidNumber(.invalid))
         }
 
-        if consumeIfPresent(".") {
+        if try consumeIfPresent(".") {
             result += "."
             if let next = peek(), isNonASCIIDecimalDigit(next) {
                 throw error(.invalidNumber(.nonASCIIDigit(.fraction)))
@@ -772,7 +832,7 @@ private struct OrderedJSONParser {
                 throw error(.invalidNumber(.missingFractionDigit))
             }
             while let char = peek(), isJSONDigit(char) {
-                result.unicodeScalars.append(advance()!)
+                result.unicodeScalars.append(try advance()!)
             }
             if let next = peek(), isNonASCIIDecimalDigit(next) {
                 throw error(.invalidNumber(.nonASCIIDigit(.fraction)))
@@ -780,9 +840,9 @@ private struct OrderedJSONParser {
         }
 
         if let char = peek(), char == "e" || char == "E" {
-            result.unicodeScalars.append(advance()!)
+            result.unicodeScalars.append(try advance()!)
             if let sign = peek(), sign == "+" || sign == "-" {
-            result.unicodeScalars.append(advance()!)
+            result.unicodeScalars.append(try advance()!)
             }
             if let next = peek(), isNonASCIIDecimalDigit(next) {
                 throw error(.invalidNumber(.nonASCIIDigit(.exponent)))
@@ -791,7 +851,7 @@ private struct OrderedJSONParser {
                 throw error(.invalidNumber(.missingExponentDigit))
             }
             while let char = peek(), isJSONDigit(char) {
-                result.unicodeScalars.append(advance()!)
+                result.unicodeScalars.append(try advance()!)
             }
             if let next = peek(), isNonASCIIDecimalDigit(next) {
                 throw error(.invalidNumber(.nonASCIIDigit(.exponent)))
@@ -810,14 +870,14 @@ private struct OrderedJSONParser {
             guard peek() == expected else {
                 throw error(.incompleteLiteral(literal))
             }
-            _ = advance()
+            _ = try advance()
         }
     }
 
-    private mutating func skipWhitespace() {
+    private mutating func skipWhitespace() throws {
         while let char = peek(),
               char == " " || char == "\n" || char == "\r" || char == "\t" {
-            _ = advance()
+            _ = try advance()
         }
     }
 
@@ -829,10 +889,11 @@ private struct OrderedJSONParser {
     }
 
     @discardableResult
-    private mutating func advance() -> Unicode.Scalar? {
+    private mutating func advance() throws -> Unicode.Scalar? {
         guard index < scalars.count else {
             return nil
         }
+        try StructuredTextExecution.checkpoint(index)
         let char = scalars[index]
         index += 1
         return char
@@ -851,14 +912,14 @@ private struct OrderedJSONParser {
                 throw error(.unexpectedCharacter(peek() ?? expected))
             }
         }
-        _ = advance()
+        _ = try advance()
     }
 
-    private mutating func consumeIfPresent(_ expected: Unicode.Scalar) -> Bool {
+    private mutating func consumeIfPresent(_ expected: Unicode.Scalar) throws -> Bool {
         guard peek() == expected else {
             return false
         }
-        _ = advance()
+        _ = try advance()
         return true
     }
 

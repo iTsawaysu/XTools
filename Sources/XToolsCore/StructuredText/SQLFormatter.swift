@@ -12,6 +12,8 @@ struct SQLFormatter {
     var index = 0
     var lines: [String] = []
     var current = ""
+    var completedOutputBytes = 0
+    var outputFailure: StructuredTextResourceError?
     var currentIndentLevel = 0
     var currentAbsoluteIndent: Int?
     var blockIndentLevel = 0
@@ -30,8 +32,9 @@ struct SQLFormatter {
         self.options = options
     }
 
-    mutating func render() -> String {
+    mutating func render() throws -> String {
         while index < tokens.count {
+            try StructuredTextExecution.checkCancellation()
             if let keyword = peekKeyword() {
                 index += keyword.length
                 handleKeyword(keyword)
@@ -39,15 +42,18 @@ struct SQLFormatter {
                 consume(tokens[index])
                 index += 1
             }
+            if let outputFailure { throw outputFailure }
         }
 
         flushLine()
+        if let outputFailure { throw outputFailure }
 
         if options.minify {
             var minifiedLines: [String] = []
             var currentMinified = ""
 
             for line in lines {
+                try StructuredTextExecution.checkCancellation()
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 guard !trimmed.isEmpty else { continue }
 

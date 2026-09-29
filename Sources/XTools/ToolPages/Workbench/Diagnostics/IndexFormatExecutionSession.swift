@@ -39,6 +39,7 @@ final class IndexFormatExecutionSession: ObservableObject {
         snapshot: Snapshot,
         sourceText: String? = nil,
         delay: Duration = .milliseconds(200),
+        cooperativeCancellation: Bool = false,
         operation: @escaping @Sendable (Snapshot) -> FormatBinding
     ) {
         let requestOperation: @Sendable (
@@ -47,7 +48,10 @@ final class IndexFormatExecutionSession: ObservableObject {
             if shouldCancel() {
                 throw CancellationError()
             }
-            let binding = operation(snapshot)
+            let binding = cooperativeCancellation
+                ? StructuredTextExecution.withCancellation(shouldCancel) { operation(snapshot) }
+                : operation(snapshot)
+            if shouldCancel() { throw CancellationError() }
             let marker = sourceText.flatMap { source in
                 binding.diagnostic.flatMap { IndexTextAreaDiagnosticMarker(diagnostic: $0, sourceText: source) }
             }

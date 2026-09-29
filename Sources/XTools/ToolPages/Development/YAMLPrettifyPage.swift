@@ -99,7 +99,7 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
             sortKeys: workspace.sortKeys
         )
         let snapshot = (input: workspace.input, options: options)
-        execution.schedule(snapshot: snapshot, sourceText: snapshot.input, delay: .zero) { snapshot in
+        execution.schedule(snapshot: snapshot, sourceText: snapshot.input, delay: .zero, cooperativeCancellation: true) { snapshot in
             FormatRunner.run(snapshot.input) {
                 try YAMLPrettifier.formatValidated($0, options: snapshot.options)
             }

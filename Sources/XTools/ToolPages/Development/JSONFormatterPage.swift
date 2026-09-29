@@ -224,12 +224,14 @@ private struct IndexJSONFormatterWorkspaceContent: View {
             unescape: workspace.unescape,
             escape: workspace.escape
         )
-        execution.schedule(snapshot: snapshot, sourceText: snapshot.unescape ? nil : snapshot.input, delay: .zero) { snapshot in
-            var textToFormat = snapshot.input
-            if snapshot.unescape {
-                textToFormat = JSONFormatting.unescapeJSON(textToFormat)
-            }
-            return FormatRunner.run(textToFormat) { value -> JSONFormatting.FormattingResult in
+        execution.schedule(snapshot: snapshot, sourceText: snapshot.unescape ? nil : snapshot.input, delay: .zero, cooperativeCancellation: true) { snapshot in
+            return FormatRunner.run(snapshot.input) { raw -> JSONFormatting.FormattingResult in
+                let value = snapshot.unescape ? try JSONFormatting.unescapeJSONChecked(raw) : raw
+                // Unescaping may produce empty/whitespace text. Preserve the
+                // original quiet-empty behavior after this transformation.
+                guard !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    return JSONFormatting.FormattingResult(text: "")
+                }
                 let formattedResult: JSONFormatting.FormattingResult
                 switch snapshot.mode {
                 case .two:
@@ -252,7 +254,7 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                 }
 
                 if snapshot.escape {
-                    let escaped = JSONFormatting.escapeJSON(formattedResult.text)
+                    let escaped = try JSONFormatting.escapeJSONChecked(formattedResult.text)
                     return JSONFormatting.FormattingResult(
                         text: escaped,
                         warning: formattedResult.warning,

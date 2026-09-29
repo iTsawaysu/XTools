@@ -40,13 +40,14 @@ struct SQLLexer {
         var tokens: [SQLPositionedToken] = []
 
         while let character = peek() {
+            try StructuredTextExecution.checkCancellation()
             let startOffset = index
 
             if Character(character).isWhitespace {
-                advance()
+                try advance()
             } else if character == "'" || character == "\"" || character == "`" {
                 tokens.append(SQLPositionedToken(token: .stringLiteral(try readQuoted(until: character)), offset: startOffset))
-            } else if character == "$", startsDollarQuotedLiteral() {
+            } else if character == "$", try startsDollarQuotedLiteral() {
                 throw SQLFormatting.ValidationError.unsupportedDialectLiteral(
                     diagnostic(
                         message: "暂不支持 PostgreSQL dollar-quoted 字符串",
@@ -55,30 +56,30 @@ struct SQLLexer {
                     )
                 )
             } else if startsPositionalParameter() {
-                tokens.append(SQLPositionedToken(token: .word(readPositionalParameter()), offset: startOffset))
+                tokens.append(SQLPositionedToken(token: .word(try readPositionalParameter()), offset: startOffset))
             } else if startsNamedParameter() {
-                tokens.append(SQLPositionedToken(token: .word(readNamedParameter()), offset: startOffset))
+                tokens.append(SQLPositionedToken(token: .word(try readNamedParameter()), offset: startOffset))
             } else if character == "[" {
                 tokens.append(SQLPositionedToken(token: .stringLiteral(try readBracketIdentifier()), offset: startOffset))
             } else if character == "-", peek(offset: 1) == "-" {
-                tokens.append(SQLPositionedToken(token: .comment(readLineComment()), offset: startOffset))
+                tokens.append(SQLPositionedToken(token: .comment(try readLineComment()), offset: startOffset))
             } else if character == "/", peek(offset: 1) == "*" {
                 tokens.append(SQLPositionedToken(token: .comment(try readBlockComment()), offset: startOffset))
             } else if startsPrefixedQuotedLiteral() {
                 tokens.append(SQLPositionedToken(token: .stringLiteral(try readPrefixedQuotedLiteral()), offset: startOffset))
             } else if Character(character).isLetter || character == "_" || startsAtPrefixedWord() {
-                tokens.append(SQLPositionedToken(token: .word(readWord()), offset: startOffset))
+                tokens.append(SQLPositionedToken(token: .word(try readWord()), offset: startOffset))
             } else if isASCIIDigit(character) {
-                tokens.append(SQLPositionedToken(token: .number(readNumber()), offset: startOffset))
+                tokens.append(SQLPositionedToken(token: .number(try readNumber()), offset: startOffset))
             } else {
-                tokens.append(SQLPositionedToken(token: .symbol(readSymbol()), offset: startOffset))
+                tokens.append(SQLPositionedToken(token: .symbol(try readSymbol()), offset: startOffset))
             }
         }
 
         return tokens
     }
 
-    private func startsDollarQuotedLiteral() -> Bool {
+    private func startsDollarQuotedLiteral() throws -> Bool {
         guard peek() == "$" else { return false }
 
         if peek(offset: 1) == "$" {
@@ -92,6 +93,7 @@ struct SQLLexer {
 
         var cursor = 2
         while let character = peek(offset: cursor), isDollarQuoteTagContinuation(character) {
+            try StructuredTextExecution.checkpoint(cursor)
             cursor += 1
         }
 
@@ -135,7 +137,8 @@ struct SQLLexer {
         return characters[position]
     }
 
-    private mutating func advance(_ amount: Int = 1) {
+    private mutating func advance(_ amount: Int = 1) throws {
+        try StructuredTextExecution.checkpoint(index)
         index += amount
         stringIndex = input.unicodeScalars.index(stringIndex, offsetBy: amount)
     }
@@ -143,16 +146,16 @@ struct SQLLexer {
     private mutating func readQuoted(until quote: Unicode.Scalar) throws -> String {
         let startOffset = index
         var value = String(quote)
-        advance()
+        try advance()
 
         while let character = peek() {
             value.unicodeScalars.append(character)
-            advance()
+            try advance()
 
             if character == quote {
                 if peek() == quote {
                     value.unicodeScalars.append(quote)
-                    advance()
+                    try advance()
                     continue
                 }
                 return value
@@ -160,7 +163,7 @@ struct SQLLexer {
 
             if character == "\\", let escaped = peek() {
                 value.unicodeScalars.append(escaped)
-                advance()
+                try advance()
             }
         }
 
@@ -175,23 +178,23 @@ struct SQLLexer {
 
     private mutating func readPrefixedQuotedLiteral() throws -> String {
         let prefix = String(peek() ?? " ")
-        advance()
+        try advance()
         return prefix + (try readQuoted(until: "'"))
     }
 
     private mutating func readBracketIdentifier() throws -> String {
         let startOffset = index
         var value = "["
-        advance()
+        try advance()
 
         while let character = peek() {
             value.unicodeScalars.append(character)
-            advance()
+            try advance()
 
             if character == "]" {
                 if peek() == "]" {
                     value.append("]")
-                    advance()
+                    try advance()
                     continue
                 }
                 return value
@@ -207,11 +210,11 @@ struct SQLLexer {
         )
     }
 
-    private mutating func readLineComment() -> String {
+    private mutating func readLineComment() throws -> String {
         var value = ""
         while let character = peek(), !Character(character).isNewline {
             value.unicodeScalars.append(character)
-            advance()
+            try advance()
         }
         return value
     }
@@ -219,17 +222,17 @@ struct SQLLexer {
     private mutating func readBlockComment() throws -> String {
         let startOffset = index
         var value = "/*"
-        advance(2)
+        try advance(2)
 
         while let character = peek() {
             if character == "*", peek(offset: 1) == "/" {
                 value.append("*/")
-                advance(2)
+                try advance(2)
                 return value
             }
 
             value.unicodeScalars.append(character)
-            advance()
+            try advance()
         }
 
         throw SQLFormatting.ValidationError.unterminatedBlockComment(
@@ -241,11 +244,11 @@ struct SQLLexer {
         )
     }
 
-    private mutating func readWord() -> String {
+    private mutating func readWord() throws -> String {
         var value = ""
         while let character = peek(), isWordContinuation(character) {
             value.unicodeScalars.append(character)
-            advance()
+            try advance()
         }
         return value
     }
@@ -257,27 +260,27 @@ struct SQLLexer {
             || stringIndex.samePosition(in: input) == nil
     }
 
-    private mutating func readPositionalParameter() -> String {
+    private mutating func readPositionalParameter() throws -> String {
         var value = "$"
-        advance()
+        try advance()
         while let character = peek(), isASCIIDigit(character) {
             value.unicodeScalars.append(character)
-            advance()
+            try advance()
         }
         return value
     }
 
-    private mutating func readNamedParameter() -> String {
+    private mutating func readNamedParameter() throws -> String {
         var value = ":"
-        advance()
+        try advance()
         while let character = peek(), isASCIIIdentifierContinuation(character) {
             value.unicodeScalars.append(character)
-            advance()
+            try advance()
         }
         return value
     }
 
-    private mutating func readNumber() -> String {
+    private mutating func readNumber() throws -> String {
         var value = ""
 
         if peek() == "0",
@@ -285,30 +288,30 @@ struct SQLLexer {
            let firstDigit = peek(offset: 2), Character(firstDigit).isASCIIHexDigit {
             value.append("0")
             value.unicodeScalars.append(marker)
-            advance(2)
+            try advance(2)
             while let character = peek(), Character(character).isASCIIHexDigit {
                 value.unicodeScalars.append(character)
-                advance()
+                try advance()
             }
             return value
         }
 
         while let character = peek(), isASCIIDigit(character) || character == "." {
             value.unicodeScalars.append(character)
-            advance()
+            try advance()
         }
 
         if let exponent = peek(), exponent == "e" || exponent == "E",
            hasValidExponent(at: index) {
             value.unicodeScalars.append(exponent)
-            advance()
+            try advance()
             if let sign = peek(), sign == "+" || sign == "-" {
                 value.unicodeScalars.append(sign)
-                advance()
+                try advance()
             }
             while let character = peek(), isASCIIDigit(character) {
                 value.unicodeScalars.append(character)
-                advance()
+                try advance()
             }
         }
 
@@ -343,12 +346,12 @@ struct SQLLexer {
         isASCIIIdentifierStart(character) || isASCIIDigit(character)
     }
 
-    private mutating func readSymbol() -> String {
+    private mutating func readSymbol() throws -> String {
         let threeCharacterSymbols = ["->>", "#>>"]
         if let first = peek(), let second = peek(offset: 1), let third = peek(offset: 2) {
             let value = "\(first)\(second)\(third)"
             if threeCharacterSymbols.contains(value) {
-                advance(3)
+                try advance(3)
                 return value
             }
         }
@@ -360,13 +363,13 @@ struct SQLLexer {
         if let first = peek(), let second = peek(offset: 1) {
             let value = "\(first)\(second)"
             if twoCharacterSymbols.contains(value) {
-                advance(2)
+                try advance(2)
                 return value
             }
         }
 
         let value = String(input[stringIndex...].first ?? " ")
-        advance(value.unicodeScalars.count)
+        try advance(value.unicodeScalars.count)
         return value
     }
 

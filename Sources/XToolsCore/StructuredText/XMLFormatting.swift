@@ -28,6 +28,8 @@ public enum XMLFormatting {
     }
 
     public static func format(_ input: String, indentWidth: Int = 2, minify: Bool = false) throws -> String {
+        try StructuredTextExecution.validateInput(input, format: "XML")
+        try StructuredTextExecution.validateIndent(indentWidth, format: "XML")
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return ""
@@ -37,12 +39,13 @@ public enum XMLFormatting {
         let originalStart = input.firstIndex(where: { !$0.isWhitespace }) ?? input.endIndex
         let leadingLines = input[..<originalStart].reduce(0) { $0 + ($1.isNewline ? 1 : 0) }
         do {
-            if let syntaxDiagnostic = syntaxDiagnostic(
+            if let syntaxDiagnostic = try syntaxDiagnostic(
                 for: normalizedInput, originalInput: input, leadingLines: leadingLines
             ) {
                 throw FormattingError.invalidXML(syntaxDiagnostic)
             }
 
+            try StructuredTextExecution.checkCancellation()
             let document = try XMLDocument(
                 xmlString: normalizedInput,
                 options: [
@@ -53,6 +56,7 @@ public enum XMLFormatting {
                     .nodeLoadExternalEntitiesNever
                 ]
             )
+            try StructuredTextExecution.checkCancellation()
             guard let root = document.rootElement() else {
                 throw FormattingError.invalidXML(
                     FormatDiagnostic(formatName: "XML", message: "XML 文档缺少根节点")
@@ -63,28 +67,40 @@ public enum XMLFormatting {
             // syntaxDiagnostic 里随解析一起完成，必须在构造 XMLDocument 之前拦住：
             // 深层文档一旦被构造成 XMLNode 树，连释放都是递归的，会在 dealloc 时崩溃。
 
-            var outputParts = topLevelPreamble(in: normalizedInput)
+            var output = StructuredTextOutput(format: "XML")
+            for part in topLevelPreamble(in: normalizedInput) {
+                if !output.text.isEmpty { try output.append("\n") }
+                try output.append(part)
+            }
             let topChildren = document.children ?? []
             if let rootIndex = topChildren.firstIndex(where: { $0.kind == .element }) {
                 for child in topChildren[rootIndex...] {
+                    try StructuredTextExecution.checkCancellation()
+                    if child.kind == .element || child.kind == .comment || child.kind == .processingInstruction {
+                        if !output.text.isEmpty { try output.append("\n") }
+                    }
                     if child.kind == .element {
                         if minify {
-                            outputParts.append(render(child, level: 0, indentWidth: 0, minify: true))
+                            try output.append(try render(child, level: 0, indentWidth: 0, minify: true))
                         } else {
-                            outputParts.append(render(child, level: 0, indentWidth: max(0, indentWidth), minify: false))
+                            try output.append(try render(child, level: 0, indentWidth: max(0, indentWidth), minify: false))
                         }
                     } else if child.kind == .comment || child.kind == .processingInstruction {
-                        outputParts.append(child.xmlString(options: []))
+                        try output.append(child.xmlString(options: []))
                     }
                 }
             } else {
                 if minify {
-                    outputParts.append(render(root, level: 0, indentWidth: 0, minify: true))
+                    try output.append(try render(root, level: 0, indentWidth: 0, minify: true))
                 } else {
-                    outputParts.append(render(root, level: 0, indentWidth: max(0, indentWidth), minify: false))
+                    try output.append(try render(root, level: 0, indentWidth: max(0, indentWidth), minify: false))
                 }
             }
-            return outputParts.joined(separator: "\n")
+            return output.text
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let resourceError as StructuredTextResourceError {
+            throw resourceError
         } catch let formattingError as FormattingError {
             throw formattingError
         } catch {
@@ -104,7 +120,8 @@ public enum XMLFormatting {
 
     private static func syntaxDiagnostic(
         for input: String, originalInput: String, leadingLines: Int
-    ) -> FormatDiagnostic? {
+    ) throws -> FormatDiagnostic? {
+        try StructuredTextExecution.checkCancellation()
         guard let data = input.data(using: .utf8) else {
             return FormatDiagnostic(
                 formatName: "XML",
@@ -118,9 +135,10 @@ public enum XMLFormatting {
         parser.shouldResolveExternalEntities = false
         parser.delegate = delegate
 
-        guard !parser.parse() else {
-            return nil
-        }
+        let parsed = parser.parse()
+        if let interruption = delegate.interruption { throw interruption }
+        try StructuredTextExecution.checkCancellation()
+        guard !parsed else { return nil }
 
         // 深度超限时解析是被主动 abort 的，随后的解析错误只是副产品，必须先报深度。
         if delegate.exceededDepthLimit {
@@ -457,7 +475,8 @@ public enum XMLFormatting {
         inheritedSpace: XMLSpaceMode = .default,
         includeLeadingIndent: Bool = true,
         layoutPrefixOverride: LayoutPrefix? = nil
-    ) -> String {
+    ) throws -> String {
+        try StructuredTextExecution.checkCancellation()
         let fallbackLayoutPrefix = layoutPrefixOverride ?? .spaces(level * indentWidth)
         let preserveLeadingWhitespace = inheritedSpace == .preserve && !includeLeadingIndent
         // preserve 子树的首个子节点：Foundation 对这类节点的 xmlString 会带上
@@ -471,25 +490,26 @@ public enum XMLFormatting {
         let layoutIndent = layoutPrefix.raw
         let indent = includeLeadingIndent ? layoutIndent : ""
         guard node.kind == .element else {
-            return indent + node.xmlString(options: [])
+            return try boundedJoin([indent, node.xmlString(options: [])])
         }
 
         let element = node as? XMLElement
         let effectiveSpace = xmlSpaceMode(for: element, inherited: inheritedSpace)
         let children = node.children ?? []
         guard !children.isEmpty else {
-            return indent + elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)
+            return try boundedJoin([indent, elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)])
         }
 
         if effectiveSpace == .preserve {
             guard let name = node.name,
                   let opening = openingTag(of: node, leadingText: preservedLeadingRaw) else {
-                return indent + node.xmlString(options: [])
+                return try boundedJoin([indent, node.xmlString(options: [])])
             }
 
             var currentLayoutPrefix = layoutPrefix
-            let renderedChildren = children.map { child in
-                let renderedChild = render(
+            var renderedChildren = StructuredTextOutput(format: "XML")
+            for child in children {
+                let renderedChild = try render(
                     child,
                     level: level + 1,
                     indentWidth: indentWidth,
@@ -499,15 +519,15 @@ public enum XMLFormatting {
                     layoutPrefixOverride: currentLayoutPrefix
                 )
                 currentLayoutPrefix = preservedLinePrefix(after: renderedChild) ?? currentLayoutPrefix
-                return renderedChild
-            }.joined()
+                try renderedChildren.append(renderedChild)
+            }
             let trailingContent = preservedTrailingContent(
                 of: node,
                 opening: opening,
                 children: children,
                 name: name
             )
-            return "\(indent)\(opening)\(renderedChildren)\(trailingContent)</\(name)>"
+            return try boundedJoin([indent, opening, renderedChildren.text, trailingContent, "</\(name)>"])
         }
 
         let significantChildren = children.filter { child in
@@ -520,20 +540,22 @@ public enum XMLFormatting {
         // Pretty-printing mixed content inserts new text-node whitespace. Keep
         // that subtree compact so visible text remains byte-for-byte meaningful.
         if hasStructuredChild && hasSignificantText {
-            return indent + elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)
+            return try boundedJoin([indent, elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)])
         }
 
         if !hasStructuredChild {
-            return indent + elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)
+            return try boundedJoin([indent, elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)])
         }
 
         guard let opening = openingTag(of: node, leadingText: preservedLeadingRaw),
               let name = node.name else {
-            return indent + elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)
+            return try boundedJoin([indent, elementXMLString(node, preservingLeadingWhitespace: preserveLeadingWhitespace)])
         }
 
-        let renderedChildren = significantChildren.map { child in
-            render(
+        var renderedChildren = StructuredTextOutput(format: "XML")
+        for child in significantChildren {
+            if !minify, !renderedChildren.text.isEmpty { try renderedChildren.append("\n") }
+            try renderedChildren.append(try render(
                 child,
                 level: level + 1,
                 indentWidth: indentWidth,
@@ -543,17 +565,23 @@ public enum XMLFormatting {
                 layoutPrefixOverride: layoutPrefixOverride == nil
                     ? nil
                     : layoutPrefix.appendingSpaces(indentWidth)
-            )
-        }.joined(separator: minify ? "" : "\n")
+            ))
+        }
 
         if minify {
-            return "\(indent)\(opening)\(renderedChildren)</\(name)>"
+            return try boundedJoin([indent, opening, renderedChildren.text, "</\(name)>"])
         }
 
         // A default subtree can begin within an inherited `xml:space="preserve"`
         // text node. Its opening tag must use that preserved prefix, while its
         // generated closing tag returns to the preserved line's layout indent.
-        return "\(indent)\(opening)\n\(renderedChildren)\n\(layoutIndent)</\(name)>"
+        return try boundedJoin([indent, opening, "\n", renderedChildren.text, "\n", layoutIndent, "</\(name)>"])
+    }
+
+    private static func boundedJoin(_ parts: [String]) throws -> String {
+        var output = StructuredTextOutput(format: "XML")
+        for part in parts { try output.append(part) }
+        return output.text
     }
 
     private static func rawLeadingTextBeforeFirstTag(of node: XMLNode) -> String {
@@ -690,6 +718,8 @@ public enum XMLFormatting {
 /// 用 SAX 回调计数（由 C 层解析器驱动，本身不递归）可以从根上避免构造深树。
 private final class XMLSyntaxErrorDelegate: NSObject, XMLParserDelegate {
     var error: Error?
+    private(set) var interruption: Error?
+    private var expandedTextBytes = 0
     private(set) var exceededDepthLimit = false
 
     private let depthLimit: Int
@@ -706,6 +736,7 @@ private final class XMLSyntaxErrorDelegate: NSObject, XMLParserDelegate {
         qualifiedName qName: String?,
         attributes attributeDict: [String: String] = [:]
     ) {
+        guard continueParsing(parser) else { return }
         currentDepth += 1
         guard currentDepth > depthLimit else { return }
         exceededDepthLimit = true
@@ -718,7 +749,28 @@ private final class XMLSyntaxErrorDelegate: NSObject, XMLParserDelegate {
         namespaceURI: String?,
         qualifiedName qName: String?
     ) {
+        guard continueParsing(parser) else { return }
         currentDepth -= 1
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        guard continueParsing(parser) else { return }
+        expandedTextBytes += string.utf8.count
+        if expandedTextBytes > StructuredTextExecution.outputByteLimit {
+            interruption = StructuredTextResourceError(format: "XML", reason: "实体展开或正文超过处理容量上限")
+            parser.abortParsing()
+        }
+    }
+
+    private func continueParsing(_ parser: XMLParser) -> Bool {
+        do {
+            try StructuredTextExecution.checkCancellation()
+            return true
+        } catch {
+            interruption = error
+            parser.abortParsing()
+            return false
+        }
     }
 
     func parser(_ parser: XMLParser, parseErrorOccurred parseError: Error) {

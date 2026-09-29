@@ -125,7 +125,7 @@ private struct IndexXMLFormatWorkspaceContent: View {
         let indentWidth = workspace.formatMode == .four ? 4 : 2
         let minify = workspace.formatMode == .compact
         let snapshot = (input: workspace.input, indentWidth: indentWidth, minify: minify)
-        execution.schedule(snapshot: snapshot, sourceText: snapshot.input, delay: .zero) { snapshot in
+        execution.schedule(snapshot: snapshot, sourceText: snapshot.input, delay: .zero, cooperativeCancellation: true) { snapshot in
             FormatRunner.run(snapshot.input) {
                 try XMLFormatting.format($0, indentWidth: snapshot.indentWidth, minify: snapshot.minify)
             }

@@ -315,3 +315,56 @@ private final class FormatOperationProbe: @unchecked Sendable {
         lock.withLock { active -= 1 }
     }
 }
+
+// The run signals its first parser checkpoint, then stays in real Core work
+// until the owning session invalidates it. A late completion is observed rather
+// than guessed using a sleep deadline.
+extension IndexFormatExecutionSessionTests {
+    @Test func cooperativeParserCancellationRetainsPreviousCompleteOutput() async throws {
+        let session = IndexFormatExecutionSession(binding: FormatBinding(output: "previous complete output"))
+        let state = FormatterCancellationState()
+        session.schedule(snapshot: "source", delay: .zero, cooperativeCancellation: true) { _ in
+            defer { state.markFinished() }
+            return FormatRunner.run("source") { _ -> String in
+                let safetyDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+                do {
+                    while ContinuousClock.now < safetyDeadline {
+                        _ = try JSONFormatting.formatResult("[1,2,3]", sortKeys: false, indentWidth: 2,
+                            parserDidStart: { state.markStarted() })
+                    }
+                    throw FormatterCancellationTestFailure.didNotCancel
+                } catch is CancellationError {
+                    state.markCancelled()
+                    throw CancellationError()
+                }
+            }.binding(text: { $0 })
+        }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while !state.didStart, ContinuousClock.now < deadline { await Task.yield() }
+        #expect(state.didStart)
+        session.sourceDidChange()
+        while !state.didFinish, ContinuousClock.now < deadline { await Task.yield() }
+        #expect(state.didFinish)
+        #expect(state.wasCancelled)
+        #expect(session.binding.output == "previous complete output")
+        #expect(session.binding.error == nil)
+        #expect(session.diagnostic == nil)
+        #expect(!session.isRunning)
+        #expect(!session.isOutputFresh)
+    }
+}
+
+private final class FormatterCancellationState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var started = false
+    private var finished = false
+    private var cancelled = false
+    var wasCancelled: Bool { lock.withLock { cancelled } }
+    func markCancelled() { lock.withLock { cancelled = true } }
+    var didStart: Bool { lock.withLock { started } }
+    var didFinish: Bool { lock.withLock { finished } }
+    func markStarted() { lock.withLock { started = true } }
+    func markFinished() { lock.withLock { finished = true } }
+}
+
+private enum FormatterCancellationTestFailure: Error { case didNotCancel }

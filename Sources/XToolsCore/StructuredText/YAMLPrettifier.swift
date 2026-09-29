@@ -39,12 +39,25 @@ public enum YAMLPrettifier {
     }
 
     public static func validate(_ input: String) throws {
+        _ = try validatedPreflight(input, indent: 2)
+    }
+
+    private static func validatedPreflight(_ input: String, indent: Int) throws -> YAMLProcessingPreflight.Summary {
+        let preflight = try YAMLProcessingPreflight.inspect(input, indent: indent)
         guard !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return
+            return preflight
         }
 
         do {
-            _ = try Yams.load(yaml: input)
+            // Compose validates the same single-document grammar and duplicate
+            // keys without recursively constructing Any values from aliases.
+            _ = try Yams.compose(yaml: input)
+            try StructuredTextExecution.checkCancellation()
+            return preflight
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as StructuredTextResourceError {
+            throw error
         } catch let yamlError as YamlError {
             throw ValidationError.invalidSyntax(diagnostic(from: yamlError, input: input))
         } catch {
@@ -70,22 +83,28 @@ public enum YAMLPrettifier {
 
     public static func formatValidated(_ input: String) throws -> String {
         try validate(input)
-        return format(input)
+        return try formatPreservingComments(input, indentWidth: nil)
     }
 
     public static func formatValidated(_ input: String, options: Options) throws -> String {
-        try validate(input)
-        return try format(input, options: options)
+        let preflight = try validatedPreflight(input, indent: options.indent)
+        return try format(input, options: options, preflight: preflight)
     }
 
     public static func format(_ input: String, options: Options) throws -> String {
+        let preflight = try YAMLProcessingPreflight.inspect(input, indent: options.indent)
+        return try format(input, options: options, preflight: preflight)
+    }
+
+    private static func format(_ input: String, options: Options, preflight: YAMLProcessingPreflight.Summary) throws -> String {
+        try StructuredTextExecution.validateIndent(options.indent, format: "YAML")
         guard !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return ""
         }
 
         // 两个检测共享一次行拆分与遍历（各自维护独立的块标量状态机，
         // 判定逻辑与分开扫描时逐行等价）。
-        let (hasAnchorOrAlias, hasStructuralComment) = anchorAndCommentPresence(in: input)
+        let (hasAnchorOrAlias, hasStructuralComment) = try anchorAndCommentPresence(in: input)
 
         if options.sortKeys, hasStructuralComment {
             throw ValidationError.unsupportedCommentPreservingSort(
@@ -112,29 +131,44 @@ public enum YAMLPrettifier {
             // `a: &x 1` + `b: *x` 会变成 `a: 1` + `b: 1`，之后锚点改动时别名
             // 不再跟随，输出与输入语义不同。带锚点/别名的输入改走逐行路径，
             // 原样保留这些记号（与带注释输入同一处理方式）。
-            return formatPreservingComments(input, indentWidth: options.indent)
+            return try formatPreservingComments(input, indentWidth: options.indent)
         }
 
         if !options.sortKeys, hasStructuralComment {
             // 序列化器不保留注释，带注释的输入只能走逐行路径；但逐行路径同样要兑现
             // indent 选项，否则用户改了缩进宽度却看不到任何变化。
-            return formatPreservingComments(input, indentWidth: options.indent)
+            return try formatPreservingComments(input, indentWidth: options.indent)
         }
 
-        let nodes = Array(try compose_all(yaml: input))
-        var dumped = try serialize(nodes: nodes, indent: options.indent, sortKeys: options.sortKeys)
+        guard preflight.outputUpperBound <= StructuredTextExecution.outputByteLimit else {
+            throw StructuredTextResourceError(format: "YAML", reason: "预计序列化结果超过处理容量上限")
+        }
+        // Yams.YamlSequence.next() catches parse errors. Iterate its throwing
+        // parser directly so a malformed later document cannot be dropped.
+        let parser = try Yams.Parser(yaml: input)
+        var nodes: [Node] = []
+        while let node = try parser.nextRoot() {
+            try StructuredTextExecution.checkCancellation()
+            nodes.append(node)
+        }
+        try StructuredTextExecution.checkCancellation()
+        var dumped = try serialize(nodes: nodes, indent: max(0, options.indent), sortKeys: options.sortKeys)
+        try StructuredTextExecution.checkCancellation()
         while dumped.hasSuffix("\n") {
             dumped.removeLast()
         }
-        return dumped
+        var output = StructuredTextOutput(format: "YAML")
+        try output.append(dumped)
+        return output.text
     }
 
     public static func format(_ input: String) -> String {
-        formatPreservingComments(input, indentWidth: nil)
+        (try? formatPreservingComments(input, indentWidth: nil)) ?? input
     }
 
     /// 逐行格式化（保留注释）。`indentWidth` 为 nil 时保持原有缩进不变。
-    private static func formatPreservingComments(_ input: String, indentWidth: Int?) -> String {
+    private static func formatPreservingComments(_ input: String, indentWidth: Int?) throws -> String {
+        try StructuredTextExecution.validateInput(input, format: "YAML")
         guard !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return ""
         }
@@ -145,6 +179,7 @@ public enum YAMLPrettifier {
         var activeBlockScalar: BlockScalarState?
 
         for line in lines {
+            try StructuredTextExecution.checkCancellation()
             if var blockScalar = activeBlockScalar {
                 if blockScalar.contains(line) {
                     formattedLines.append(line)
@@ -156,10 +191,10 @@ public enum YAMLPrettifier {
                 activeBlockScalar = nil
             }
 
-            let formattedLine = formatLine(expandingIndentationTabs(in: line))
+            let formattedLine = try formatLine(expandingIndentationTabs(in: line))
             appendOutsideBlockLine(formattedLine, to: &formattedLines, previousWasBlank: &previousWasBlank)
 
-            if let header = blockScalarHeader(in: formattedLine) {
+            if let header = try blockScalarHeader(in: formattedLine) {
                 activeBlockScalar = BlockScalarState(header: header)
             }
         }
@@ -171,14 +206,23 @@ public enum YAMLPrettifier {
         }
 
         guard let indentWidth else {
-            return formattedLines.joined(separator: "\n")
+            return try joinedWithinBudget(formattedLines)
         }
-        return reindented(formattedLines, indentWidth: indentWidth).joined(separator: "\n")
+        return try joinedWithinBudget(reindented(formattedLines, indentWidth: indentWidth))
+    }
+
+    private static func joinedWithinBudget(_ lines: [String]) throws -> String {
+        var output = StructuredTextOutput(format: "YAML")
+        for (index, line) in lines.enumerated() {
+            if index > 0 { try output.append("\n") }
+            try output.append(line)
+        }
+        return output.text
     }
 
     /// 只展开行首缩进里的制表符，保留标量内容中的字面 tab。
     /// 此前是整行替换，`key: "a<TAB>b"` 会被悄悄改成 `key: "a  b"`（数据损坏）。
-    private static func expandingIndentationTabs(in line: String) -> String {
+    private static func expandingIndentationTabs(in line: String) throws -> String {
         let indentation = line.prefix { $0 == "\t" || $0 == " " }
         guard indentation.contains("\t") else { return line }
 
@@ -191,18 +235,21 @@ public enum YAMLPrettifier {
     ///
     /// 仅在缩进一致（所有正缩进都是该单位的整数倍）时重排——否则可能把不同层级
     /// 压平，宁可不改，保持与旧行为一致。
-    private static func reindented(_ lines: [String], indentWidth: Int) -> [String] {
+    private static func reindented(_ lines: [String], indentWidth: Int) throws -> [String] {
+        try StructuredTextExecution.validateIndent(indentWidth, format: "YAML")
         guard indentWidth > 0 else { return lines }
 
-        let unit = detectedIndentUnit(in: lines)
+        let unit = try detectedIndentUnit(in: lines)
         guard unit > 0, unit != indentWidth, hasConsistentIndentation(lines, unit: unit) else {
             return lines
         }
 
         var result: [String] = []
+        var budget = StructuredTextOutput(format: "YAML")
         var activeBlockScalar: BlockScalarState?
 
         for line in lines {
+            try StructuredTextExecution.checkCancellation()
             if var blockScalar = activeBlockScalar {
                 let stillInside = blockScalar.contains(line)
                 result.append(line)
@@ -213,12 +260,14 @@ public enum YAMLPrettifier {
             let leading = line.prefix { $0 == " " }.count
             if !line.isEmpty {
                 let level = leading / unit
-                result.append(String(repeating: " ", count: level * indentWidth) + line.dropFirst(leading))
+                let padding = level * indentWidth
+                try budget.reserve(padding + line.utf8.count - leading + 1)
+                result.append(String(repeating: " ", count: padding) + line.dropFirst(leading))
             } else {
                 result.append(line)
             }
 
-            if let header = blockScalarHeader(in: line) {
+            if let header = try blockScalarHeader(in: line) {
                 activeBlockScalar = BlockScalarState(header: header)
             }
         }
@@ -226,9 +275,10 @@ public enum YAMLPrettifier {
         return result
     }
 
-    private static func detectedIndentUnit(in lines: [String]) -> Int {
+    private static func detectedIndentUnit(in lines: [String]) throws -> Int {
         var unit = 0
         for line in lines {
+            try StructuredTextExecution.checkCancellation()
             let leading = line.prefix { $0 == " " }.count
             guard leading > 0, !line.dropFirst(leading).isEmpty else { continue }
             unit = unit == 0 ? leading : min(unit, leading)
@@ -243,23 +293,23 @@ public enum YAMLPrettifier {
         }
     }
 
-    private static func formatLine(_ line: String) -> String {
-        let trimmedRight = trimTrailingWhitespace(line)
+    private static func formatLine(_ line: String) throws -> String {
+        let trimmedRight = try trimTrailingWhitespace(line)
         guard !trimmedRight.trimmingCharacters(in: .whitespaces).isEmpty else {
             return ""
         }
 
         let leadingSpaces = String(trimmedRight.prefix { $0 == " " })
         let body = String(trimmedRight.dropFirst(leadingSpaces.count))
-        return leadingSpaces + normalizeFirstMappingDelimiter(in: body)
+        return leadingSpaces + (try normalizeFirstMappingDelimiter(in: body))
     }
 
-    private static func normalizeFirstMappingDelimiter(in body: String) -> String {
+    private static func normalizeFirstMappingDelimiter(in body: String) throws -> String {
         guard !body.trimmingCharacters(in: .whitespaces).hasPrefix("#") else {
             return body
         }
 
-        guard let delimiterIndex = firstMappingDelimiterIndex(in: body) else {
+        guard let delimiterIndex = try firstMappingDelimiterIndex(in: body) else {
             return body
         }
 
@@ -289,9 +339,12 @@ public enum YAMLPrettifier {
         return "\(rawKey): \(body[valueStart...])"
     }
 
-    private static func trimTrailingWhitespace(_ line: String) -> String {
+    private static func trimTrailingWhitespace(_ line: String) throws -> String {
         var end = line.endIndex
+        var scanSteps = 0
         while end > line.startIndex {
+            try StructuredTextExecution.checkpoint(scanSteps)
+            scanSteps += 1
             let previous = line.index(before: end)
             guard line[previous] == " " else {
                 break
@@ -349,7 +402,7 @@ public enum YAMLPrettifier {
         }
     }
 
-    private static func blockScalarHeader(in line: String) -> BlockScalarHeader? {
+    private static func blockScalarHeader(in line: String) throws -> BlockScalarHeader? {
         let parentIndent = leadingIndentWidth(line)
         var candidate = line.dropFirst(min(parentIndent, line.count))[...]
         candidate = candidate.drop { $0 == " " }
@@ -370,7 +423,7 @@ public enum YAMLPrettifier {
         }
 
         let body = String(candidate)
-        guard let delimiterIndex = firstMappingDelimiterIndex(in: body) else {
+        guard let delimiterIndex = try firstMappingDelimiterIndex(in: body) else {
             return nil
         }
 
@@ -422,7 +475,7 @@ public enum YAMLPrettifier {
     /// 单次遍历同时检测锚点/别名与结构性注释。两个检测原先各自拆行全量
     /// 扫描；合并后共享一次拆分，但各自维持独立的块标量/引号状态机，
     /// 逐行判定（含块标量内跳过）与分开扫描完全一致。
-    private static func anchorAndCommentPresence(in input: String) -> (hasAnchorOrAlias: Bool, hasStructuralComment: Bool) {
+    private static func anchorAndCommentPresence(in input: String) throws -> (hasAnchorOrAlias: Bool, hasStructuralComment: Bool) {
         let lines = input.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var anchorBlockScalar: BlockScalarState?
         var commentBlockScalar: BlockScalarState?
@@ -442,9 +495,9 @@ public enum YAMLPrettifier {
                     }
                 }
                 if !anchorSkipsLine {
-                    if lineContainsAnchorOrAliasToken(line) {
+                    if try lineContainsAnchorOrAliasToken(line) {
                         hasAnchorOrAlias = true
-                    } else if let header = blockScalarHeader(in: line) {
+                    } else if let header = try blockScalarHeader(in: line) {
                         anchorBlockScalar = BlockScalarState(header: header)
                     }
                 }
@@ -461,10 +514,10 @@ public enum YAMLPrettifier {
                     }
                 }
                 if !commentSkipsLine {
-                    if quoteState.containsCommentToken(in: line) {
+                    if try quoteState.containsCommentToken(in: line) {
                         hasStructuralComment = true
                     } else if !quoteState.isInsideQuotedScalar,
-                              let header = blockScalarHeader(in: line) {
+                              let header = try blockScalarHeader(in: line) {
                         commentBlockScalar = BlockScalarState(header: header)
                     }
                 }
@@ -481,13 +534,16 @@ public enum YAMLPrettifier {
     /// 只有 token 起始位置的 `&`/`*` 才可能是锚点/别名（前一字符是行首、空白
     /// 或 flow 分隔符）。`a*b`、`echo *`、`"&x"`、注释里的 `*x` 都不算，避免
     /// 把普通标量误判成锚点而白白放弃序列化路径。
-    private static func lineContainsAnchorOrAliasToken(_ line: String) -> Bool {
+    private static func lineContainsAnchorOrAliasToken(_ line: String) throws -> Bool {
         var inSingleQuote = false
         var inDoubleQuote = false
         var previous: Character?
 
         var index = line.startIndex
+        var scanSteps = 0
         while index < line.endIndex {
+            try StructuredTextExecution.checkpoint(scanSteps)
+            scanSteps += 1
             let character = line[index]
 
             if inSingleQuote {
@@ -540,13 +596,16 @@ public enum YAMLPrettifier {
             inSingleQuote || inDoubleQuote
         }
 
-        mutating func containsCommentToken(in line: String) -> Bool {
+        mutating func containsCommentToken(in line: String) throws -> Bool {
             var index = line.startIndex
             // A backslash at the end of a double-quoted physical line escapes
             // the line break, not the first character of the following line.
             var escaped = false
 
+            var scanSteps = 0
             while index < line.endIndex {
+                try StructuredTextExecution.checkpoint(scanSteps)
+                scanSteps += 1
                 let character = line[index]
                 if inDoubleQuote {
                     if escaped {
@@ -599,13 +658,16 @@ public enum YAMLPrettifier {
         }
     }
 
-    private static func firstMappingDelimiterIndex(in body: String) -> String.Index? {
+    private static func firstMappingDelimiterIndex(in body: String) throws -> String.Index? {
         var index = body.startIndex
         var inSingleQuote = false
         var inDoubleQuote = false
         var escaped = false
 
+        var scanSteps = 0
         while index < body.endIndex {
+            try StructuredTextExecution.checkpoint(scanSteps)
+            scanSteps += 1
             let character = body[index]
 
             if inDoubleQuote {
@@ -921,7 +983,7 @@ public enum YAMLPrettifier {
 
         return currentIndent > 0
             && previousIndent > currentIndent
-            && (firstMappingDelimiterIndex(in: currentTrimmed) != nil || currentTrimmed.hasPrefix("- "))
+            && ((try? firstMappingDelimiterIndex(in: currentTrimmed)) != nil || currentTrimmed.hasPrefix("- "))
     }
 
     /// 「a: 1」之后紧跟缩进更深的「b: 2」时，Yams 报的是直译难懂的
@@ -949,7 +1011,7 @@ public enum YAMLPrettifier {
         // 列表项——它既不属于任何子映射也无列表可挂靠。上一行若以冒号或
         // flow 标点结尾（容器键 / 跨行 flow），更深的缩进是合法嵌套。
         return currentIndent > previousIndent
-            && firstMappingDelimiterIndex(in: previousTrimmed) != nil
+            && (try? firstMappingDelimiterIndex(in: previousTrimmed)) != nil
             && !previousTrimmed.hasSuffix(":")
             && !previousTrimmed.hasSuffix("[")
             && !previousTrimmed.hasSuffix("{")
@@ -967,7 +1029,7 @@ public enum YAMLPrettifier {
         guard !previousTrimmed.isEmpty,
               !previousTrimmed.hasPrefix("#"),
               !previousTrimmed.hasPrefix("- "),
-              firstMappingDelimiterIndex(in: previousTrimmed) == nil else {
+              (try? firstMappingDelimiterIndex(in: previousTrimmed)) == nil else {
             return false
         }
 
@@ -977,7 +1039,7 @@ public enum YAMLPrettifier {
 
         let currentLine = lines[mark.line - 1]
         return leadingIndentWidth(currentLine) > leadingIndentWidth(previous.text)
-            && firstMappingDelimiterIndex(in: currentLine.trimmingCharacters(in: .whitespaces)) != nil
+            && (try? firstMappingDelimiterIndex(in: currentLine.trimmingCharacters(in: .whitespaces))) != nil
     }
 
     private static func previousSignificantLine(before line: Int, in lines: [String]) -> (number: Int, text: String)? {
