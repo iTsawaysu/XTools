@@ -83,14 +83,15 @@ struct NativeInitialLayoutTests {
         #expect(updated.string.utf8.elementsEqual("e\u{301}".utf8))
     }
 
-    @Test func previewNoticeAndActionsKeepAccessibleNamesInsideLabeledOutput() async throws {
+    @Test(arguments: [true, false], [CGFloat(320), CGFloat(600)])
+    func previewFooterAlignsWithNativeTextAndKeepsAccessibleActions(lineNumbers: Bool, width: CGFloat) async throws {
         let text = String(repeating: "x", count: 40_000)
         let plan = IndexCodePreviewPlan.make(text: text, permitsFullText: false)
         let previewCount = try #require(plan.previewCharacterCount)
-        let host = NSHostingView(rootView: IndexCodeViewerSurface(text: text, syntax: .json)
+        let host = NSHostingView(rootView: IndexCodeViewerSurface(text: text, lineNumbers: lineNumbers, syntax: .json)
             .accessibilityLabel("输出")
             .environment(\.accessibilityEnabled, true))
-        host.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
+        host.frame = NSRect(x: 0, y: 0, width: width, height: 400)
         let window = NSWindow(contentRect: host.frame, styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentView = host
@@ -132,6 +133,28 @@ struct NativeInitialLayoutTests {
         #expect(buttons.contains { $0.label == "复制全文" })
         let load = try #require(buttons.first { $0.label == "载入全文" })
         #expect(!buttons.contains { $0.label == "输出" })
+        let notice = try #require(elements.first {
+            $0.role == NSAccessibility.Role.staticText.rawValue
+                && (($0.label ?? $0.value ?? "").contains("选择与查找仅限预览"))
+        })
+        let scrollView = try #require(editor.enclosingScrollView)
+        let viewport = window.convertToScreen(scrollView.convert(scrollView.bounds, to: nil))
+        let textOrigin = window.convertPoint(toScreen: editor.convert(editor.textContainerOrigin, to: nil))
+        let surface = window.convertToScreen(host.convert(host.bounds, to: nil))
+        #expect(abs(notice.frame.minX - textOrigin.x) < 1,
+                "The footer notice must share the real native code origin, including the optional gutter")
+        #expect(notice.frame.maxY <= viewport.minY - 4,
+                "The footer must remain below a separated viewport, not overlap code")
+        #expect(notice.frame.maxX <= surface.maxX - 8)
+        #expect(notice.frame.height >= 12, "Narrow notices must retain readable wrapped height")
+        for button in buttons where ["复制全文", "载入全文"].contains(button.label ?? "") {
+            #expect(button.frame.minX >= notice.frame.minX - 1)
+            #expect(button.frame.maxX <= surface.maxX - 8)
+            #expect(button.frame.maxY <= notice.frame.minY,
+                    "Actions must occupy a separate row below the notice")
+            #expect(button.frame.minY >= surface.minY + 6,
+                    "The footer actions must not crowd the field's bottom border")
+        }
         #expect(load.press())
         try await waitUntil { editor.string.utf8.elementsEqual(text.utf8) }
         #expect(findTextView(in: host) === editor,
@@ -139,8 +162,21 @@ struct NativeInitialLayoutTests {
         editor.selectAll(nil)
         #expect(editor.selectedRange().length == (text as NSString).length)
         try await waitUntil {
-            !previewAccessibilityElements(in: window).contains { $0.label == "载入全文" }
+            previewAccessibilityElements(in: window).contains {
+                ($0.label ?? $0.value ?? "").contains("部分内容已简化着色")
+            }
         }
+        let fullElements = previewAccessibilityElements(in: window)
+        #expect(!fullElements.contains { $0.label == "载入全文" })
+        let highlightingNotice = try #require(fullElements.first {
+            $0.role == NSAccessibility.Role.staticText.rawValue
+                && ($0.label ?? $0.value ?? "").contains("部分内容已简化着色")
+        })
+        let fullViewport = window.convertToScreen(scrollView.convert(scrollView.bounds, to: nil))
+        #expect(abs(highlightingNotice.frame.minX - textOrigin.x) < 1,
+                "The coloring-only notice must reuse the same reading edge")
+        #expect(highlightingNotice.frame.maxY <= fullViewport.minY - 4)
+        #expect(highlightingNotice.frame.minY >= surface.minY + 6)
     }
 
     @Test func lazyDocumentCanRevealLastSourceRangeAndKeepStableRepeatedGeometry() throws {
@@ -322,6 +358,12 @@ private struct PreviewAccessibilityElement {
         let selector = NSSelectorFromString("accessibilityValue")
         let value = object.responds(to: selector) ? object.perform(selector)?.takeUnretainedValue() : nil
         return value as? String ?? attribute("AXValue") as? String
+    }
+    var frame: NSRect {
+        if let frame = dynamic.accessibilityFrame?() { return frame }
+        guard let position = attribute("AXPosition") as? NSValue,
+              let size = attribute("AXSize") as? NSValue else { return .zero }
+        return NSRect(origin: position.pointValue, size: size.sizeValue)
     }
     var children: [PreviewAccessibilityElement] {
         let children = dynamic.accessibilityChildren?() ?? attribute("AXChildren") as? [Any] ?? []

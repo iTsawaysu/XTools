@@ -13,6 +13,15 @@ private struct IndexCodeViewerText: Equatable {
     }
 }
 
+/// Native text, empty placeholders and status footers share one reading edge.
+private enum IndexCodeViewerLayout {
+    static let horizontalInset: CGFloat = 13
+
+    static func leadingInset(lineNumbers: Bool) -> CGFloat {
+        horizontalInset + (lineNumbers ? IndexEditorLineNumberGutter.width : 0)
+    }
+}
+
 /// High-performance read-only code surface built on AppKit `NSTextView` and
 /// `IndexEditorLineNumberGutterView`.
 ///
@@ -93,27 +102,27 @@ struct IndexCodeViewerSurface: View {
                 }
             }
             if previewSource == text, let previewCharacterCount {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("预览前 \(previewCharacterCount) 个字符；选择与查找仅限预览")
-                        .font(ToolTypography.monoCaption)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                    HStack {
-                        IndexCopyButton(text: text.value, title: "复制全文", showsIcon: false)
-                        Button("载入全文") { fullTextSource = text }
-                            .buttonStyle(IndexSmallButtonStyle())
-                            .help("全文排版可能需要较长时间")
+                statusFooter {
+                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
+                        Text("预览前 \(previewCharacterCount) 个字符；选择与查找仅限预览")
+                            .font(ToolTypography.monoCaption)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: ToolMetrics.Spacing.sm) {
+                            IndexCopyButton(text: text.value, title: "复制全文", showsIcon: false)
+                            Button("载入全文") { fullTextSource = text }
+                                .buttonStyle(IndexSmallButtonStyle())
+                                .help("全文排版可能需要较长时间")
+                        }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 4)
             } else if highlightingLimited, !text.isEmpty {
-                Text("部分内容已简化着色；仍可选择和复制全文")
-                    .font(ToolTypography.monoCaption)
-                    .foregroundStyle(ToolTheme.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 4)
+                statusFooter {
+                    Text("部分内容已简化着色；仍可选择和复制全文")
+                        .font(ToolTypography.monoCaption)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .onChange(of: text) { _ in fullTextSource = nil }
@@ -142,6 +151,23 @@ struct IndexCodeViewerSurface: View {
         .accessibilityElement(children: .contain)
     }
 
+    private func statusFooter<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(ToolTheme.border)
+                .frame(height: 0.5)
+                .accessibilityHidden(true)
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, IndexCodeViewerLayout.leadingInset(lineNumbers: lineNumbers))
+                .padding(.trailing, IndexCodeViewerLayout.horizontalInset)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
+        }
+        // The footer sizes to its content; only the code viewport gives up
+        // height when the notice wraps in a narrow pane.
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
     private var placeholderView: some View {
         HStack(alignment: .top, spacing: 0) {
             if lineNumbers {
@@ -158,12 +184,12 @@ struct IndexCodeViewerSurface: View {
                 .lineLimit(nil)
                 .multilineTextAlignment(.leading)
                 .lineSpacing(6)
-                .padding(.leading, lineNumbers ? 13 : 0)
+                .padding(.leading, lineNumbers ? IndexCodeViewerLayout.horizontalInset : 0)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .padding(.vertical, 12)
-        .padding(.trailing, 13)
-        .padding(.leading, lineNumbers ? 0 : 13)
+        .padding(.trailing, IndexCodeViewerLayout.horizontalInset)
+        .padding(.leading, lineNumbers ? 0 : IndexCodeViewerLayout.horizontalInset)
         // Fill the pane first so the gutter hairline spans the full height
         // like the native gutter instead of just the placeholder text block.
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -369,7 +395,7 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
         }
 
         textView.textContainerInset = NSSize(
-            width: lineNumbers ? IndexEditorLineNumberGutter.width + 13 : 13,
+            width: IndexCodeViewerLayout.leadingInset(lineNumbers: lineNumbers),
             height: 12
         )
 
