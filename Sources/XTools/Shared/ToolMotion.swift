@@ -551,6 +551,20 @@ enum ToolMotion {
             )
         }
 
+        /// Toolbar-anchored dropdown (IndexOptionsMenu): the panel fades in
+        /// slightly small and settles down from the trigger edge; removal
+        /// reverses the settle. Top-anchored so the panel reads as unfolding
+        /// from below its trigger rather than zooming from its center.
+        static var anchoredDropdown: AnyTransition {
+            AnyTransition.asymmetric(
+                insertion: .opacity
+                    .combined(with: .scale(scale: Scale.modal, anchor: .top))
+                    .combined(with: .offset(y: -Distance.micro)),
+                removal: .opacity
+                    .combined(with: .scale(scale: Scale.modal, anchor: .top))
+            )
+        }
+
         static var modeContent: AnyTransition {
             AnyTransition.asymmetric(
                 insertion: .opacity.combined(with: .offset(y: Distance.micro)),

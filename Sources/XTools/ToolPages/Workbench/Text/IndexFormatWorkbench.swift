@@ -391,6 +391,10 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         }
         .frame(height: 44)
         .padding(.horizontal, 12)
+        // Anchored toolbar menus (IndexOptionsMenu) drop below the 44pt row and
+        // over the panes; the toolbar subtree must draw above the later pane
+        // siblings or the editors would paint over the open menu.
+        .zIndex(1)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(ToolTheme.border)

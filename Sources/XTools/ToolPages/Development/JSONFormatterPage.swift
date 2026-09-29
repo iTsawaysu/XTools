@@ -135,23 +135,33 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                             selection: formatModeSelection,
                             density: .compact
                         )
-                        IndexOptionSwitch(
-                            title: "转义",
-                            help: "转义为字符串",
-                            style: .button,
-                            isOn: escapeSelection
-                        )
-                        IndexOptionSwitch(
-                            title: "去转义",
-                            help: "去除转义",
-                            style: .button,
-                            isOn: unescapeSelection
-                        )
-                        IndexOptionSwitch(
-                            title: "Key 排序",
-                            help: "按字典序排序所有键",
-                            style: .button,
-                            isOn: $workspace.sortKeys
+                        // 转义/去转义/Key 排序收进次级「处理选项 ▾」菜单：
+                        // 互斥仍由下方 escapeSelection/unescapeSelection 保证，
+                        // 状态变化沿工作区 didSet 自动重跑格式化。
+                        IndexOptionsMenu(
+                            menuTitle: "处理选项",
+                            triggerTitle: "处理选项",
+                            options: [
+                                IndexOptionsMenuOption(
+                                    id: "escape",
+                                    title: "转义",
+                                    help: "转义为字符串",
+                                    isOn: escapeSelection
+                                ),
+                                IndexOptionsMenuOption(
+                                    id: "unescape",
+                                    title: "去转义",
+                                    help: "去除转义",
+                                    isOn: unescapeSelection
+                                ),
+                                IndexOptionsMenuOption(
+                                    id: "sort-keys",
+                                    title: "Key 排序",
+                                    help: "按字典序排序所有键",
+                                    isOn: $workspace.sortKeys
+                                ),
+                            ],
+                            dividersBefore: ["sort-keys"]
                         )
                     }
                 }
