@@ -208,16 +208,16 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            ZStack {
-                if hasDiagnostic {
+            if hasDiagnostic {
+                ZStack {
                     IndexDiagnosticBanner(
                         diagnostic: nil,
                         message: diagnosticText!,
                         tone: diagnosticTone
                     )
                 }
+                .frame(height: 36)
             }
-            .frame(height: 36)
             IndexEditableDiffMergeView(
                 left: $left,
                 right: $right,

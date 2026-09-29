@@ -7,6 +7,34 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct EditableDiffInteractionTests {
+    @Test func absentDiagnosticLeavesNoReservedStatusRowAboveThePanes() async throws {
+        let model = DiffDiagnosticProbeModel()
+        let hosting = NSHostingView(rootView: DiffDiagnosticProbe(model: model))
+        hosting.frame = NSRect(x: 0, y: 0, width: 1000, height: 500)
+        hosting.layoutSubtreeIfNeeded()
+        let editor = try #require(textView(in: hosting))
+        let viewport = try #require(editor.enclosingScrollView)
+        let originalFrame = viewport.convert(viewport.bounds, to: hosting)
+
+        // The toolbar is 44pt; only the normal 8pt pane inset may follow it.
+        let topInset = hosting.isFlipped ? originalFrame.minY : hosting.bounds.maxY - originalFrame.maxY
+        #expect(abs(topInset - 52) < 0.5, "No diff diagnostic must leave no reserved status row")
+
+        model.error = "对比输入有误"
+        try await Task.sleep(for: .milliseconds(60))
+        hosting.layoutSubtreeIfNeeded()
+        let diagnosticFrame = viewport.convert(viewport.bounds, to: hosting)
+        #expect(abs(diagnosticFrame.height - (originalFrame.height - 36)) < 0.5,
+                "A visible diff diagnostic must occupy exactly its own 36pt status row")
+        #expect(diagnosticFrame.minX == originalFrame.minX && diagnosticFrame.width == originalFrame.width)
+
+        model.error = nil
+        try await Task.sleep(for: .milliseconds(60))
+        hosting.layoutSubtreeIfNeeded()
+        #expect(viewport.convert(viewport.bounds, to: hosting) == originalFrame,
+                "Clearing the diff diagnostic must reclaim the status row")
+    }
+
     @Test func rejectedNativeFileDropReportsDiagnosticAndKeepsBothDrafts() async throws {
         let left = MutableStringValue("existing left")
         let right = MutableStringValue("existing right")
@@ -837,5 +865,28 @@ private final class MutableStringValue {
 
     init(_ value: String) {
         self.value = value
+    }
+}
+
+@MainActor private final class DiffDiagnosticProbeModel: ObservableObject {
+    @Published var left = "draft"
+    @Published var right = ""
+    @Published var error: String?
+}
+
+private struct DiffDiagnosticProbe: View {
+    @ObservedObject var model: DiffDiagnosticProbeModel
+    var body: some View {
+        IndexEditableDiffWorkspace(
+            leftPlaceholder: "原始文本…",
+            rightPlaceholder: "对比文本…",
+            left: $model.left,
+            right: $model.right,
+            rows: [],
+            resultState: .current,
+            error: model.error,
+            onClear: {},
+            leadingControl: {}
+        )
     }
 }

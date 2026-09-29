@@ -76,6 +76,12 @@ struct EditableDiffSourceContractTests {
         #expect(scrollView.contentView.bounds.origin.y > 44, "scrollToVisible should still be allowed to move vertically")
     }
 
+    @Test func absentDiffDiagnosticDoesNotReserveABlankStatusRow() throws {
+        let source = try readSource("Sources/XTools/ToolPages/Workbench/Diff/IndexEditableDiffWorkspace.swift")
+        contains(source, "if hasDiagnostic {\n                ZStack {", "Absent diff diagnostics must not reserve a blank status row above the editable panes")
+        contains(source, ".frame(height: 36)", "Visible diff diagnostics must keep a bounded status-row height")
+    }
+
     @Test func editableDiffAppliesLatestCanonicalTextWhenEitherEditorEndsEditing() throws {
         let source = try readSource("Sources/XTools/ToolPages/Workbench/Diff/IndexEditableDiffWorkspace.swift")
         contains(source, "private var latestLeftDisplayText", "The left editor must retain the newest canonical display while its draft is active")
