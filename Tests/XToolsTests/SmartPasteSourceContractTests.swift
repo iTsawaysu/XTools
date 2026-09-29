@@ -39,8 +39,11 @@ struct SmartPasteSourceContractTests {
         contains(monitor, "tool.id != currentToolID", "The tool already on screen must not be suggested")
         contains(monitor, "func noteSelectedTool", "Navigation must be able to retire a stale suggestion")
         contains(monitor, ": \"formatter\"", "Clipboard kinds must route to registered tool identities")
-        contains(monitor, "formatterSegment: \"json\"", "Clipboard JSON must deep-link into the formatter hub's JSON segment")
-        contains(monitor, "formatterSegment: \"xml\"", "Clipboard XML must deep-link into the formatter hub's XML segment")
+        contains(monitor, "hubSegment: \"json\"", "Clipboard JSON must deep-link into the formatter hub's JSON segment")
+        contains(monitor, "hubSegment: \"xml\"", "Clipboard XML must deep-link into the formatter hub's XML segment")
+        contains(monitor, ": \"text-encoding\"", "URL-encoded and Base64 clipboards must route into the encoding hub")
+        contains(monitor, "hubSegment: \"url\"", "Clipboard URL-encoded text must deep-link into the encoding hub's URL segment")
+        contains(monitor, "hubSegment: \"base64\"", "Clipboard Base64 must deep-link into the encoding hub's Base64 segment")
     }
 
     @Test func bannerFloatsWithoutDisplacingTheWorkspace() throws {

@@ -33,8 +33,8 @@ struct AllToolsDiagnosticInventoryTests {
         let actual = registeredGroups.mapValues { $0[0].categoryID.rawValue }
         let expected = inventoryGroups.mapValues { $0[0].category }
 
-        #expect(actual.count == 38)
-        #expect(Self.inventory.count == 38)
+        #expect(actual.count == 35)
+        #expect(Self.inventory.count == 35)
         #expect(actual == expected)
     }
 
@@ -68,10 +68,7 @@ struct AllToolsDiagnosticInventoryTests {
 
     static let inventory: [ToolDiagnosticInventoryEntry] = [
         entry("base64-file-converter", "converter", .externalIO, "Converter/Base64FileWorkflow.swift"),
-        entry("base64-string", "converter", .inputValidation, "Converter/Base64StringPage.swift"),
-        entry("url-encoder-decoder", "converter", .inputValidation, "Converter/URLCoderPage.swift"),
-        entry("text-to-ascii-binary", "converter", .inputValidation, "Converter/ASCIIBinaryPage.swift"),
-        entry("text-to-unicode", "converter", .inputValidation, "Converter/UnicodePage.swift"),
+        entry("text-encoding", "converter", .inputValidation, "Converter/EncodingHubPage.swift"),
         entry("integer-base-converter", "converter", .inputValidation, "Converter/IntegerBaseConverterPage.swift"),
         entry("roman-numeral-converter", "converter", .inputValidation, "Converter/RomanNumeralPage.swift"),
         entry("case-converter", "converter", .none, "Converter/CaseConverterPage.swift", "所有文本都能产生大小写派生结果，空输入仅显示空状态。"),

@@ -242,6 +242,7 @@ struct IndexConverterPage: View {
     let placeholder: String
     let outputPresentation: IndexTextConversionOutputPresentation
     let backfillModeTransition: (String, String) -> Bool
+    let embedsPageShell: Bool
 
     private let workspaceKey: ToolWorkspaceKey<IndexConverterToolWorkspaceModel>
 
@@ -259,6 +260,7 @@ struct IndexConverterPage: View {
 
     init(
         toolID: ToolID,
+        embedsPageShell: Bool = true,
         title: String,
         subtitle: String,
         modes: [IndexConverterMode],
@@ -278,6 +280,7 @@ struct IndexConverterPage: View {
         self.placeholder = placeholder
         self.outputPresentation = outputPresentation
         self.backfillModeTransition = backfillModeTransition ?? { _, _ in backfillsOutputOnModeChange }
+        self.embedsPageShell = embedsPageShell
 
         let resolvedEmptyInput: IndexConverterEmptyInput = isEmptyInputForMode ?? { input, _ in isEmptyInput(input) }
         let resolvedInitialMode = Self.resolvedInitialMode(requested: initialMode, modes: modes)
@@ -300,6 +303,7 @@ struct IndexConverterPage: View {
                 placeholder: placeholder,
                 outputPresentation: outputPresentation,
                 backfillModeTransition: backfillModeTransition,
+                embedsPageShell: embedsPageShell,
                 workspace: workspace
             )
         }
@@ -313,6 +317,9 @@ private struct IndexConverterWorkspaceContent: View {
     let placeholder: String
     let outputPresentation: IndexTextConversionOutputPresentation
     let backfillModeTransition: (String, String) -> Bool
+    /// 是否内嵌 IndexPage 页面壳：true（默认）时本视图独立成页；false 时
+    /// 页面壳由所属 Hub 提供，本视图只贡献工作台主体（四个转换分段复用）。
+    let embedsPageShell: Bool
 
     @ObservedObject var workspace: IndexConverterToolWorkspaceModel
     private var modeSelection: Binding<String> {
@@ -323,10 +330,22 @@ private struct IndexConverterWorkspaceContent: View {
     }
 
     var body: some View {
-        IndexPage(title, subtitle: subtitle, workspaceSemantic: .copyTransformWorkspace) {
-            actionBar
-            converterPair
+        if embedsPageShell {
+            IndexPage(title, subtitle: subtitle, workspaceSemantic: .copyTransformWorkspace) {
+                workbenchBody
+            }
+        } else {
+            workbenchBody
         }
+    }
+
+    /// actionBar + converterPair 的同构组合：壳内作为 IndexPage 的内容闭包，
+    /// 嵌入态直接挂到 Hub 的内容闭包——两者同为 VStack 上下文，元素间距与
+    /// 合并前完全一致。
+    @ViewBuilder
+    private var workbenchBody: some View {
+        actionBar
+        converterPair
     }
 
     private var actionBar: some View {

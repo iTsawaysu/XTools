@@ -252,7 +252,7 @@ struct RootView: View {
     @StateObject private var workspaceRepository: ToolWorkspaceRepository
     @StateObject private var dashboardStore: DashboardStore
     @StateObject private var smartPaste = SmartPasteMonitor()
-    @StateObject private var formatterEntryHint = FormatterEntryHint()
+    @StateObject private var hubSegmentEntryHint = HubSegmentEntryHint()
     @StateObject private var systemAppearanceSource: SystemAppearanceSource
     @State private var previousSelectedToolID: ToolID?
     @State private var showsPreferences = false
@@ -370,7 +370,7 @@ struct RootView: View {
         .environment(\.fileInputPanelClient, fileInputPanelCoordinator.client)
         .environment(\.fileOutputPanelClient, fileOutputPanelCoordinator.client)
         .environmentObject(workspaceRepository)
-        .environmentObject(formatterEntryHint)
+        .environmentObject(hubSegmentEntryHint)
         .appThemeEnvironment(preference: themePreference, source: systemAppearanceSource)
         .toolbar {
             WindowToolbarContent(
@@ -441,9 +441,12 @@ struct RootView: View {
                 SmartPasteSuggestionBanner(
                     suggestion: suggestion,
                     onOpen: {
-                        // 深链目标带分段时先写提示，再切换工具；Hub 出现时
-                        // 一次性消费（覆盖记忆的分段）。
-                        formatterEntryHint.segment = suggestion.formatterSegment
+                        // 深链目标带分段时先写提示（带 toolID，由目标 Hub 校验
+                        // 消费），再切换工具；Hub 出现时一次性消费（覆盖记忆
+                        // 的分段）。
+                        hubSegmentEntryHint.request = suggestion.hubSegment.map {
+                            HubSegmentEntryHint.Request(toolID: suggestion.toolID, segment: $0)
+                        }
                         _ = navigationActions.selectTool(suggestion.toolID)
                     },
                     onDismiss: smartPaste.dismiss

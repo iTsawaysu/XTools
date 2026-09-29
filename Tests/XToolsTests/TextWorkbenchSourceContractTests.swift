@@ -185,6 +185,28 @@ struct TextWorkbenchSourceContractTests {
         }
     }
 
+    @Test func encodingHubShellCarriesSegmentedConverterWorkbenches() throws {
+        let hub = try readSource("Sources/XTools/ToolPages/Converter/EncodingHubPage.swift")
+        let base64 = try readSource("Sources/XTools/ToolPages/Converter/Base64StringPage.swift")
+        let url = try readSource("Sources/XTools/ToolPages/Converter/URLCoderPage.swift")
+        let asciiBinary = try readSource("Sources/XTools/ToolPages/Converter/ASCIIBinaryPage.swift")
+        let unicode = try readSource("Sources/XTools/ToolPages/Converter/UnicodePage.swift")
+
+        // Base64/URL/ASCII/Unicode 合并为单入口「文本编码」后，IndexPage 页面壳
+        // 统一上移到 Hub；四分段经 IndexConverterPage(embedsPageShell: false)
+        // 只保留各自的转换工作台（会话仍按合并前四页的 key 保活）。
+        appearsBefore(hub, "IndexPage(", "IndexSegmentedControl(", "Encoding hub body must open with the shared page shell before the segment control")
+        contains(hub, "IndexBase64StringSegment()", "Encoding hub must mount the Base64 segment")
+        contains(hub, "IndexURLCoderSegment()", "Encoding hub must mount the URL coder segment")
+        contains(hub, "IndexASCIIBinarySegment()", "Encoding hub must mount the ASCII/binary segment")
+        contains(hub, "IndexUnicodeSegment()", "Encoding hub must mount the Unicode segment")
+        contains(hub, "IndexPage(\"文本编码\", subtitle: workspace.segment.subtitle, workspaceSemantic: .copyTransformWorkspace)", "Encoding hub must let the semantic resolve the copy-transform workspace page shell")
+        for segment in [base64, url, asciiBinary, unicode] {
+            contains(segment, "IndexConverterPage(", "Encoding segments must keep delegating their panes to the shared converter workbench")
+            doesNotContain(segment, "IndexPage(", "Encoding segments must not nest a second page shell inside the hub")
+        }
+    }
+
     @Test func urlCoderReusesAutomaticConverterShell() throws {
         let source = try readSource("Sources/XTools/ToolPages/Converter/URLCoderPage.swift")
 

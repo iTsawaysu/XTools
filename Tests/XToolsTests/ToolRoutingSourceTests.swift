@@ -39,10 +39,7 @@ struct ToolRoutingSourceTests {
 
         #expect(try #require(groups.first { $0.category.id == .converter }?.tools).map(\.title) == [
             "Base64 文件",
-            "Base64 字符串",
-            "URL 编解码",
-            "ASCII / 二进制",
-            "Unicode 转换",
+            "文本编码",
             "进制转换",
             "罗马数字",
             "大小写转换"

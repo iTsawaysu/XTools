@@ -64,7 +64,7 @@ struct IndexFormatterHubPage: View {
 /// 合并前各工具 id），切换分段或离开再回来不丢输入与输出。
 private struct IndexFormatterHubContent: View {
     @ObservedObject var workspace: FormatterHubWorkspaceModel
-    @EnvironmentObject var entryHint: FormatterEntryHint
+    @EnvironmentObject var entryHint: HubSegmentEntryHint
 
     var body: some View {
         IndexPage("格式化", subtitle: workspace.segment.subtitle, workspaceSemantic: .structuredEditorTransform) {
@@ -76,7 +76,7 @@ private struct IndexFormatterHubContent: View {
             segmentContent
         }
         .onAppear { consumeEntryHintIfNeeded() }
-        .onChange(of: entryHint.segment) { _ in consumeEntryHintIfNeeded() }
+        .onChange(of: entryHint.request) { _ in consumeEntryHintIfNeeded() }
     }
 
     private var segmentSelection: Binding<String> {
@@ -100,11 +100,12 @@ private struct IndexFormatterHubContent: View {
     }
 
     /// SmartPaste 深链（剪贴板 JSON/XML 建议）：进入本工具或工具已打开时
-    /// 一次性消费分段提示，切到对应分段后清空，避免滞留覆盖后续手动切换。
+    /// 一次性消费分段提示（先清 request 再设分段，避免滞留覆盖后续手动
+    /// 切换；仅消费指向本工具的请求，其余 Hub 的请求原样保留）。
     private func consumeEntryHintIfNeeded() {
-        guard let rawSegment = entryHint.segment else { return }
-        entryHint.segment = nil
-        guard let segment = FormatterHubWorkspaceModel.Segment(rawValue: rawSegment) else { return }
+        guard let request = entryHint.request, request.toolID == "formatter" else { return }
+        entryHint.request = nil
+        guard let segment = FormatterHubWorkspaceModel.Segment(rawValue: request.segment) else { return }
         workspace.segment = segment
     }
 }

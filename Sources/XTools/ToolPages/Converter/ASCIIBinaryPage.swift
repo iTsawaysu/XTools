@@ -1,7 +1,10 @@
 import XToolsCore
 import SwiftUI
 
-struct IndexASCIIBinaryPage: View {
+/// 「文本编码」Hub 的 ASCII/二进制分段：经共享 IndexConverterPage 嵌入
+/// （embedsPageShell: false，页面壳由 Hub 提供），workspace key 沿用
+/// 合并前的 text-to-ascii-binary。
+struct IndexASCIIBinarySegment: View {
     nonisolated static func isEmptyInput(_ input: String, mode: String) -> Bool {
         switch mode {
         case "bin", "ascii":
@@ -14,6 +17,7 @@ struct IndexASCIIBinaryPage: View {
     var body: some View {
         IndexConverterPage(
             toolID: "text-to-ascii-binary",
+            embedsPageShell: false,
             title: "ASCII / 二进制",
             subtitle: "文本与 ASCII 码、二进制串之间互转。",
             modes: [

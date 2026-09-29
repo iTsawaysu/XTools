@@ -153,10 +153,7 @@ struct IconSemanticContractTests {
 
     private let approvedToolIcons: [ToolID: String] = [
         "base64-file-converter": "doc",
-        "base64-string": "text.quote",
-        "url-encoder-decoder": "link",
-        "text-to-ascii-binary": "01.square",
-        "text-to-unicode": "textformat",
+        "text-encoding": "text.quote",
         "integer-base-converter": "arrow.left.arrow.right.square",
         "roman-numeral-converter": "building.columns",
         "case-converter": "textformat.size",

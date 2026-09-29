@@ -19,30 +19,30 @@ final class SmartPasteMonitor: ObservableObject {
         let toolID: ToolID
         let toolTitle: String
         let message: String
-        /// 目标工具自带分段时的深链分段（formatter: json/xml）。
-        let formatterSegment: String?
+        /// 目标工具自带分段时的深链分段（formatter: json/xml；text-encoding: url/base64）。
+        let hubSegment: String?
     }
 
     private struct Route {
         let toolID: ToolID
         let message: String
-        /// 目标工具自带分段时的深链分段（formatter: json/xml）。
+        /// 目标工具自带分段时的深链分段（formatter: json/xml；text-encoding: url/base64）。
         /// var + 默认值使其留在 memberwise init 的可选参数里。
-        var formatterSegment: String? = nil
+        var hubSegment: String? = nil
     }
 
     /// Clipboard kind → owning tool. Tool identities live here (the app layer),
     /// while `SmartPasteDetector` stays UI- and registry-free.
     private static let routes: [SmartPasteDetector.Kind: Route] = [
-        .json: Route(toolID: "formatter", message: "剪贴板里是 JSON", formatterSegment: "json"),
+        .json: Route(toolID: "formatter", message: "剪贴板里是 JSON", hubSegment: "json"),
         .jwt: Route(toolID: "jwt-parser", message: "剪贴板里是 JWT"),
         .html: Route(toolID: "html-to-markdown", message: "剪贴板里是 HTML"),
-        .xml: Route(toolID: "formatter", message: "剪贴板里是 XML", formatterSegment: "xml"),
+        .xml: Route(toolID: "formatter", message: "剪贴板里是 XML", hubSegment: "xml"),
         .cssColor: Route(toolID: "color-picker", message: "剪贴板里是 CSS 颜色"),
         .unixTimestamp: Route(toolID: "date-time-converter", message: "剪贴板里是 Unix 时间戳"),
-        .urlEncoded: Route(toolID: "url-encoder-decoder", message: "剪贴板里是 URL 编码文本"),
+        .urlEncoded: Route(toolID: "text-encoding", message: "剪贴板里是 URL 编码文本", hubSegment: "url"),
         .dataURL: Route(toolID: "base64-file-converter", message: "剪贴板里是 Data URL"),
-        .base64: Route(toolID: "base64-string", message: "剪贴板里是 Base64")
+        .base64: Route(toolID: "text-encoding", message: "剪贴板里是 Base64", hubSegment: "base64")
     ]
 
     @Published private(set) var suggestion: Suggestion?
@@ -94,7 +94,7 @@ final class SmartPasteMonitor: ObservableObject {
             toolID: tool.id,
             toolTitle: tool.title,
             message: route.message,
-            formatterSegment: route.formatterSegment
+            hubSegment: route.hubSegment
         )
     }
 
@@ -111,10 +111,16 @@ final class SmartPasteMonitor: ObservableObject {
     }
 }
 
-/// SmartPaste 深链的一次性分段提示：横幅点击时写入目标分段，经
-/// environmentObject 注入，「格式化」Hub 出现时消费并清空（工具已打开
-/// 再点建议时经 onChange 立即生效）。
+/// SmartPaste 深链的一次性分段提示：横幅点击时写入目标工具与分段，经
+/// environmentObject 注入，目标 Hub 出现时校验 toolID 后消费并清空（工具
+/// 已打开再点建议时经 onChange 立即生效），「格式化」「文本编码」等
+/// 分段式 Hub 共用。
 @MainActor
-final class FormatterEntryHint: ObservableObject {
-    @Published var segment: String?
+final class HubSegmentEntryHint: ObservableObject {
+    struct Request: Equatable {
+        let toolID: ToolID
+        let segment: String
+    }
+
+    @Published var request: Request?
 }

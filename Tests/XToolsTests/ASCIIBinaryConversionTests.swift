@@ -20,10 +20,10 @@ struct ASCIIBinaryConversionTests {
     }
 
     @Test func pageTreatsWhitespaceAsTextOnlyInEncodingModes() {
-        #expect(!IndexASCIIBinaryPage.isEmptyInput(" ", mode: "bin"))
-        #expect(!IndexASCIIBinaryPage.isEmptyInput(" ", mode: "ascii"))
-        #expect(IndexASCIIBinaryPage.isEmptyInput(" \n\t", mode: "debin"))
-        #expect(IndexASCIIBinaryPage.isEmptyInput(" \n\t", mode: "deascii"))
+        #expect(!IndexASCIIBinarySegment.isEmptyInput(" ", mode: "bin"))
+        #expect(!IndexASCIIBinarySegment.isEmptyInput(" ", mode: "ascii"))
+        #expect(IndexASCIIBinarySegment.isEmptyInput(" \n\t", mode: "debin"))
+        #expect(IndexASCIIBinarySegment.isEmptyInput(" \n\t", mode: "deascii"))
         #expect(ASCIIBinaryConversion.textToBinary(" ") == "00100000")
         #expect(ASCIIBinaryConversion.textToASCII(" ") == "32")
     }

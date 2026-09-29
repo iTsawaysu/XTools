@@ -61,6 +61,9 @@
     "ASCII 或二进制转换失败。" : {
       "extractionState" : "manual"
     },
+    "ASCII/二进制" : {
+      "extractionState" : "manual"
+    },
     "ASCII→文本" : {
       "extractionState" : "manual"
     },
@@ -68,6 +71,9 @@
       "extractionState" : "manual"
     },
     "Authorization 请求头" : {
+      "extractionState" : "manual"
+    },
+    "Base64 · URL · ASCII · Unicode" : {
       "extractionState" : "manual"
     },
     "Base64 字符串" : {
@@ -1553,6 +1559,9 @@
       "extractionState" : "manual"
     },
     "文本对比" : {
+      "extractionState" : "manual"
+    },
+    "文本编码" : {
       "extractionState" : "manual"
     },
     "文本统计" : {

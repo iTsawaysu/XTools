@@ -175,40 +175,18 @@ extension ToolRegistry {
                 IndexBase64FilePage()
             },
             RegisteredTool(
-                id: "base64-string",
-                title: "Base64 字符串",
+                id: "text-encoding",
+                title: "文本编码",
                 categoryID: .converter,
                 systemImage: "text.quote",
-                keywords: ["base64", "encode", "decode"]
+                keywords: [
+                    "base64", "encode", "decode",
+                    "url", "percent",
+                    "ascii", "binary", "text", "convert", "二进制",
+                    "unicode", "escape"
+                ]
             ) {
-                IndexBase64StringPage()
-            },
-            RegisteredTool(
-                id: "url-encoder-decoder",
-                title: "URL 编解码",
-                categoryID: .converter,
-                systemImage: "link",
-                keywords: ["url", "encode", "decode", "percent"]
-            ) {
-                IndexURLCoderPage()
-            },
-            RegisteredTool(
-                id: "text-to-ascii-binary",
-                title: "ASCII / 二进制",
-                categoryID: .converter,
-                systemImage: "01.square",
-                keywords: ["ascii", "binary", "text", "convert", "二进制"]
-            ) {
-                IndexASCIIBinaryPage()
-            },
-            RegisteredTool(
-                id: "text-to-unicode",
-                title: "Unicode 转换",
-                categoryID: .converter,
-                systemImage: "textformat",
-                keywords: ["unicode", "text", "convert", "escape"]
-            ) {
-                IndexUnicodePage()
+                IndexEncodingHubPage()
             },
             RegisteredTool(
                 id: "integer-base-converter",

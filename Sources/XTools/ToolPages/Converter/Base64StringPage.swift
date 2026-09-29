@@ -1,10 +1,14 @@
 import XToolsCore
 import SwiftUI
 
-struct IndexBase64StringPage: View {
+/// 「文本编码」Hub 的 Base64 分段：经共享 IndexConverterPage 嵌入
+/// （embedsPageShell: false，页面壳由 Hub 提供），workspace key 沿用
+/// 合并前的 base64-string。
+struct IndexBase64StringSegment: View {
     var body: some View {
         IndexConverterPage(
             toolID: "base64-string",
+            embedsPageShell: false,
             title: "Base64 字符串",
             subtitle: "在纯文本与 Base64 之间互转，支持 UTF-8。",
             modes: [

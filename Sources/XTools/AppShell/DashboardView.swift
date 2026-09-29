@@ -16,8 +16,7 @@ struct DashboardView: View {
 
     private static let shortcuts: [Shortcut] = [
         Shortcut(id: "formatter", detail: "JSON · XML · YAML · SQL"),
-        Shortcut(id: "base64-string", detail: "编码与解码文本"),
-        Shortcut(id: "url-encoder-decoder", detail: "处理百分号编码"),
+        Shortcut(id: "text-encoding", detail: "Base64 · URL · ASCII · Unicode"),
         Shortcut(id: "regex-tester", detail: "验证文本匹配"),
         Shortcut(id: "date-time-converter", detail: "转换日期与时间"),
         Shortcut(id: "color-picker", detail: "查看常用颜色格式")

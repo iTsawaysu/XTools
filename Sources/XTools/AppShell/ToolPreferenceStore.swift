@@ -437,6 +437,12 @@ enum TextDevelopmentToolPreferenceKeys {
         default: "convert",
         allowedValues: ["convert", "compress", "grayscale", "favicon"]
     )
+    /// 「文本编码」Hub 上次使用的分段（base64/url/ascii/unicode），重启后恢复。
+    static let encodingSegment = ToolPreferenceKey<String>.string(
+        "tools.encoding.segment.v1",
+        default: "base64",
+        allowedValues: ["base64", "url", "ascii", "unicode"]
+    )
     static let integerBase = ToolPreferenceKey<String>.string(
         "tools.integerBase.inputBase.v1",
         default: "10",
