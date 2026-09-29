@@ -61,7 +61,9 @@ final class XToolsAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
-            let candidate = sender.windows.first(where: { !($0 is NSPanel) }) ?? sender.windows.first
+            let candidate = sender.windows.first(where: { !($0 is NSPanel) && $0.title == "Tools" })
+                ?? sender.windows.first(where: { !($0 is NSPanel) })
+                ?? sender.windows.first
             if let window = candidate {
                 if window.isMiniaturized {
                     window.deminiaturize(nil)
@@ -71,7 +73,11 @@ final class XToolsAppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 openWindowAction?(id: "main")
             }
-            sender.activate(ignoringOtherApps: true)
+            if #available(macOS 14.0, *) {
+                sender.activate()
+            } else {
+                sender.activate(ignoringOtherApps: true)
+            }
         }
         return true
     }
