@@ -28,6 +28,8 @@ final class SourceControlWorkspaceModel: ObservableObject {
     @Published private(set) var repositories: [SourceControlRepository] = []
     @Published private(set) var selectedPaths: Set<String> = []
     @Published private(set) var isScanning = false
+    /// 扫描实时进度：目录遍历期只有发现计数；读取期有 N/M。
+    @Published private(set) var scanProgress: SourceControlScanProgress?
     @Published private(set) var isUpdating = false
     @Published private(set) var diagnostic: SourceControlDiagnostic?
     @Published private(set) var operationResults: [SourceControlOperationResult] = []
@@ -115,6 +117,24 @@ final class SourceControlWorkspaceModel: ObservableObject {
         }
     }
 
+    /// 行内远端平台徽章：GitHub / GitLab / 自建 host（HTTPS 与 scp-like 均解析）。
+    static func remoteHost(from remote: String?) -> String? {
+        guard let remote, !remote.isEmpty else { return nil }
+        var host: String?
+        if let url = URL(string: remote), let parsed = url.host {
+            host = parsed
+        } else if let at = remote.firstIndex(of: "@"), let colon = remote[at...].firstIndex(of: ":") {
+            let parsed = String(remote[remote.index(after: at)..<colon])
+            host = parsed.isEmpty ? nil : parsed
+        }
+        guard let host, !host.isEmpty else { return nil }
+        switch host.lowercased() {
+        case "github.com": return "GitHub"
+        case "gitlab.com": return "GitLab"
+        default: return host
+        }
+    }
+
     private static func gitLabReference(from remote: String) -> (host: String?, projectPath: String?) {
         if let url = URL(string: remote), let host = url.host {
             var path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -171,6 +191,7 @@ final class SourceControlWorkspaceModel: ObservableObject {
     private func resetScanDerivedState() {
         repositories = []
         selectedPaths = []
+        scanProgress = nil
         diagnostic = nil
         operationResults = []
         failureSummary = []
@@ -256,13 +277,25 @@ final class SourceControlWorkspaceModel: ObservableObject {
         let operationGeneration = generation
         let scope = SourceControlScanScope.directory(path: path.trimmingCharacters(in: .whitespacesAndNewlines))
         isScanning = true
+        scanProgress = nil
         diagnostic = nil
+        repositories = []
+        selectedPaths = []
         failureSummary = []
         lastRunSummary = nil
         task = Task { [weak self] in
             guard let self else { return }
             do {
-                let snapshot = try await scanner.scan(scope: scope)
+                let snapshot = try await scanner.scan(
+                    scope: scope,
+                    onRepository: { [weak self] repository in
+                        // 流式上屏：扫描期行陆续出现并保持默认全选。
+                        await self?.appendScannedRepository(repository, generation: operationGeneration)
+                    },
+                    onProgress: { [weak self] progress in
+                        await self?.recordScanProgress(progress, generation: operationGeneration)
+                    }
+                )
                 guard !Task.isCancelled, generation == operationGeneration else { return }
                 repositories = snapshot.repositories
                 // 默认全选：成熟工具（SourceTree / JetBrains Update Project /
@@ -285,8 +318,27 @@ final class SourceControlWorkspaceModel: ObservableObject {
             }
             if generation == operationGeneration {
                 isScanning = false
+                scanProgress = nil
             }
         }
+    }
+
+    private func appendScannedRepository(_ repository: SourceControlRepository, generation expectedGeneration: Int) {
+        guard expectedGeneration == generation else { return }
+        guard !repositories.contains(where: { $0.id == repository.id }) else { return }
+        repositories.append(repository)
+        selectedPaths.insert(repository.path)
+    }
+
+    private func recordScanProgress(_ progress: SourceControlScanProgress, generation expectedGeneration: Int) {
+        guard expectedGeneration == generation else { return }
+        // 目录遍历期的发现计数经无序 Task 投递，只接受单调递增，避免回跳。
+        if let current = scanProgress,
+           progress.readTotalCount == nil, current.readTotalCount == nil,
+           progress.discoveredCount < current.discoveredCount {
+            return
+        }
+        scanProgress = progress
     }
 
     // MARK: - Selection
@@ -456,10 +508,19 @@ final class SourceControlWorkspaceModel: ObservableObject {
         let operationGeneration = generation
         let scope = SourceControlScanScope.directory(path: path.trimmingCharacters(in: .whitespacesAndNewlines))
         isScanning = true
+        scanProgress = nil
         task = Task { [weak self] in
             guard let self else { return }
             do {
-                let snapshot = try await scanner.scan(scope: scope)
+                let snapshot = try await scanner.scan(
+                    scope: scope,
+                    onRepository: { [weak self] repository in
+                        await self?.appendScannedRepository(repository, generation: operationGeneration)
+                    },
+                    onProgress: { [weak self] progress in
+                        await self?.recordScanProgress(progress, generation: operationGeneration)
+                    }
+                )
                 guard !Task.isCancelled, generation == operationGeneration else { return }
                 repositories = snapshot.repositories
                 selectedPaths = Set(snapshot.repositories.map(\.path))
@@ -473,6 +534,7 @@ final class SourceControlWorkspaceModel: ObservableObject {
             }
             if generation == operationGeneration {
                 isScanning = false
+                scanProgress = nil
             }
         }
     }
@@ -485,6 +547,7 @@ final class SourceControlWorkspaceModel: ObservableObject {
         task?.cancel()
         generation &+= 1
         isScanning = false
+        scanProgress = nil
         isUpdating = false
         isCheckingMerge = false
         isCreatingMerge = false
@@ -727,8 +790,18 @@ private struct SourceControlWorkspaceContent: View {
                     if let summary = runSummary {
                         runSummaryBar(summary)
                     }
-                    if workspace.isScanning {
+                    if workspace.isScanning, let progress = workspace.scanProgress, let total = progress.readTotalCount {
+                        IndexProgressHairline(fraction: Double(progress.readCompletedCount) / Double(max(total, 1)))
+                        Text("正在读取仓库状态 \(progress.readCompletedCount) / \(total)…")
+                            .font(ToolTypography.caption)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else if workspace.isScanning {
                         IndexProgressHairline(isIndeterminate: true)
+                        Text("正在扫描目录…已发现 \(workspace.scanProgress?.discoveredCount ?? 0) 个仓库")
+                            .font(ToolTypography.caption)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     if workspace.isUpdating {
                         IndexProgressHairline(fraction: updateFraction)
@@ -789,8 +862,8 @@ private struct SourceControlWorkspaceContent: View {
                     .help("跳过的仓库直接尝试 git pull --ff-only，改动会被覆盖或无法快进时 Git 仍会拒绝")
             }
             if summary.failedCount > 0 {
-                Button("重试失败项") { workspace.retryFailures() }
-                    .buttonStyle(IndexSmallButtonStyle())
+                Button("重试失败项（\(summary.failedCount)）") { workspace.retryFailures() }
+                    .buttonStyle(IndexButtonStyle(primary: true))
                     .disabled(workspace.isUpdating || workspace.isScanning)
             }
         }
@@ -840,6 +913,7 @@ private struct SourceControlWorkspaceContent: View {
         let isActive = workspace.activeUpdatePath == repository.path
         // 行内重试回放当时的快照（拉取前执行器会重新校验磁盘状态）。
         let failedResult = workspace.operationResults.last(where: { $0.repository.id == repository.id })
+        let hasFailure = failedResult?.outcome.isFailure == true
         return HStack(spacing: 8) {
             Button {
                 workspace.toggleSelection(repository)
@@ -851,20 +925,39 @@ private struct SourceControlWorkspaceContent: View {
                             Text(URL(fileURLWithPath: repository.path).lastPathComponent)
                                 .font(ToolTypography.bodyMedium)
                                 .lineLimit(1)
-                            Text(repository.branch)
-                                .font(ToolTypography.monoCaption)
-                                .foregroundStyle(ToolTheme.textSecondary)
-                                .lineLimit(1)
+                            if !repository.branch.isEmpty, repository.branch != "HEAD" {
+                                Text(repository.branch)
+                                    .font(ToolTypography.monoCaption)
+                                    .foregroundStyle(ToolTheme.textSecondary)
+                                    .lineLimit(1)
+                            }
+                            if let host = SourceControlWorkspaceModel.remoteHost(from: repository.remote) {
+                                Text(host)
+                                    .font(ToolTypography.micro)
+                                    .foregroundStyle(ToolTheme.textTertiary)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 1)
+                                    .background(
+                                        Capsule(style: .continuous)
+                                            .fill(ToolTheme.utilityBackground)
+                                    )
+                                    .overlay {
+                                        Capsule(style: .continuous)
+                                            .strokeBorder(ToolTheme.border, lineWidth: 1)
+                                    }
+                            }
                         }
                         Text(repository.path)
                             .font(ToolTypography.caption)
                             .foregroundStyle(ToolTheme.textTertiary)
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        Text(repositoryDetail(repository))
-                            .font(ToolTypography.caption)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                            .lineLimit(2)
+                        if let detail = repositoryDetail(repository) {
+                            Text(detail)
+                                .font(ToolTypography.caption)
+                                .foregroundStyle(hasFailure ? ToolTheme.warning : ToolTheme.textSecondary)
+                                .lineLimit(2)
+                        }
                     }
                     Spacer()
                     if isActive {
@@ -952,17 +1045,19 @@ private struct SourceControlWorkspaceContent: View {
         return repository.behind > 0 ? "待更新" : "已最新"
     }
 
-    private func repositoryDetail(_ repository: SourceControlRepository) -> String {
+    /// 行详情只在有信息量时返回（sha 与落后/跳过/失败原因），
+    /// 避免与右侧状态徽章重复的「与远端一致」填充文案。
+    private func repositoryDetail(_ repository: SourceControlRepository) -> String? {
         if workspace.activeUpdatePath == repository.path { return "正在拉取最新代码…" }
         if let result = workspace.operationResults.last(where: { $0.repository.id == repository.id }),
            case let .failed(diagnostic) = result.outcome {
             return diagnostic.summary
         }
-        var detail = repository.behind > 0 ? "落后 \(repository.behind) 个提交" : "与远端一致"
-        if let reason = skipReason(repository) {
-            detail += " · \(reason)，更新时会跳过"
-        }
-        return "\(repository.shortRevision) · \(detail)"
+        var parts: [String] = []
+        if !repository.shortRevision.isEmpty { parts.append(repository.shortRevision) }
+        if repository.behind > 0 { parts.append("落后 \(repository.behind)") }
+        if let reason = skipReason(repository) { parts.append(reason) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     /// UI 侧从扫描数据推导「需处理」的具体原因（执行器仍按 Core 规则跳过）。
@@ -1262,28 +1357,40 @@ private struct SourceControlFailureSummarySheet: View {
     private func failureRow(_ failure: SourceControlWorkspaceModel.UpdateFailureSummary) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(ToolTheme.warning)
+                    .font(.system(size: ToolMetrics.IconSize.small))
+                    .accessibilityHidden(true)
                 Text(URL(fileURLWithPath: failure.repository.path).lastPathComponent)
                     .font(ToolTypography.bodyMedium)
                     .lineLimit(1)
-                Text(failure.repository.branch)
-                    .font(ToolTypography.monoCaption)
-                    .foregroundStyle(ToolTheme.textTertiary)
-                    .lineLimit(1)
+                if !failure.repository.branch.isEmpty, failure.repository.branch != "HEAD" {
+                    Text(failure.repository.branch)
+                        .font(ToolTypography.monoCaption)
+                        .foregroundStyle(ToolTheme.textTertiary)
+                        .lineLimit(1)
+                }
+                if let host = SourceControlWorkspaceModel.remoteHost(from: failure.repository.remote) {
+                    Text(host)
+                        .font(ToolTypography.micro)
+                        .foregroundStyle(ToolTheme.textTertiary)
+                }
                 Spacer()
-                IndexBadge(failure.diagnostic.code, tone: .warning)
+                IndexBadge(failure.diagnostic.shortLabel, tone: .warning)
             }
             Text(failure.repository.path)
                 .font(ToolTypography.caption)
                 .foregroundStyle(ToolTheme.textTertiary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-            Text("\(failure.diagnostic.summary) \(failure.diagnostic.recovery)")
+            Text(failure.diagnostic.summary)
                 .font(ToolTypography.caption)
                 .foregroundStyle(ToolTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(2)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
                 .fill(ToolTheme.panelBackground)

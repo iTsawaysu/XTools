@@ -11,16 +11,23 @@ public struct SourceControlScanner: Sendable {
 
     public func scan(
         scope: SourceControlScanScope,
-        onRepository: (@Sendable (SourceControlRepository) async -> Void)? = nil
+        onRepository: (@Sendable (SourceControlRepository) async -> Void)? = nil,
+        onProgress: (@Sendable (SourceControlScanProgress) async -> Void)? = nil
     ) async throws -> SourceControlScanSnapshot {
         try Task.checkCancellation()
-        let paths = try discoverRepositoryPaths(scope: scope)
+        let paths = try discoverRepositoryPaths(scope: scope) { discovered in
+            let progress = SourceControlScanProgress(discoveredCount: discovered, readCompletedCount: 0, readTotalCount: nil)
+            // The walk is synchronous on a background executor; hop to the
+            // caller's context without blocking the enumeration.
+            Task { await onProgress?(progress) }
+        }
         guard !paths.isEmpty else {
             if scope.isSingleRepository { throw SourceControlError.notRepository }
             return SourceControlScanSnapshot(scope: scope, repositories: [])
         }
 
         var repositories: [SourceControlRepository] = []
+        var readCompleted = 0
         var index = 0
         while index < paths.count {
             try Task.checkCancellation()
@@ -45,6 +52,12 @@ public struct SourceControlScanner: Sendable {
                 for try await repository in group {
                     repositories.append(repository)
                     await onRepository?(repository)
+                    readCompleted += 1
+                    await onProgress?(SourceControlScanProgress(
+                        discoveredCount: paths.count,
+                        readCompletedCount: readCompleted,
+                        readTotalCount: paths.count
+                    ))
                 }
             }
         }
@@ -53,7 +66,10 @@ public struct SourceControlScanner: Sendable {
         return SourceControlScanSnapshot(scope: scope, repositories: repositories)
     }
 
-    private func discoverRepositoryPaths(scope: SourceControlScanScope) throws -> [String] {
+    private func discoverRepositoryPaths(
+        scope: SourceControlScanScope,
+        onDiscovery: ((Int) -> Void)? = nil
+    ) throws -> [String] {
         let fileManager = FileManager.default
         let root = URL(fileURLWithPath: scope.path).standardizedFileURL
         var isDirectory: ObjCBool = false
@@ -96,6 +112,7 @@ public struct SourceControlScanner: Sendable {
                 }
                 if hasGitMarker(at: item) {
                     result.insert(item.standardizedFileURL.path)
+                    onDiscovery?(result.count)
                     enumerator.skipDescendants()
                 }
             }
@@ -128,20 +145,22 @@ private func readRepository(path: String, git: any GitProcessClient) async throw
     let hasUpstream = upstreamResult != nil || divergenceResult != nil
     let statusText = try await statusOutput.standardOutput
     let divergence = parseDivergence(divergenceResult?.standardOutput)
-    let remoteRevision = upstream.isEmpty ? nil : cleanSHA((try await optionalOutput(git: git, kind: .remoteRevision, path: path, argument: upstream))?.standardOutput)
+    // Scanning stays offline: no per-repository `ls-remote`. Divergence against
+    // the local tracking refs classifies the row, and `git pull --ff-only`
+    // reveals the true remote state at update time. One network round trip per
+    // repository made large workspaces crawl when remotes were slow/unreachable.
     let remoteState: SourceControlRemoteState
     if !hasUpstream { remoteState = .noUpstream }
     else if divergence.ahead > 0, divergence.behind > 0 { remoteState = .diverged }
     else if divergence.ahead > 0 { remoteState = .localAhead }
     else if divergence.behind > 0 { remoteState = .updateAvailable }
-    else if let remoteRevision, !remoteRevision.isEmpty { remoteState = remoteRevision == fullRevision ? .upToDate : .unknown }
-    else { remoteState = .unknown }
+    else { remoteState = .upToDate }
     var defaultBranch: String?
     if let name = remoteInfo.name {
         defaultBranch = cleanLine((try await optionalOutput(git: git, kind: .defaultBranch, path: path, argument: name))?.standardOutput)
         if defaultBranch?.hasPrefix("\(name)/") == true { defaultBranch = String(defaultBranch!.dropFirst(name.count + 1)) }
     }
-    return SourceControlRepository(path: URL(fileURLWithPath: path).standardizedFileURL.path, branch: branch, shortRevision: String(fullRevision.prefix(8)), remote: remoteInfo.url, status: parseStatus(statusText, branch: branch), ahead: divergence.ahead, behind: divergence.behind, hasUpstream: hasUpstream, upstream: upstream.isEmpty ? nil : upstream, revision: fullRevision.isEmpty ? nil : fullRevision, remoteRevision: remoteRevision, remoteState: remoteState, branches: parseBranches((try await branchesOutput)?.standardOutput, remoteName: remoteInfo.name), defaultBranch: defaultBranch)
+    return SourceControlRepository(path: URL(fileURLWithPath: path).standardizedFileURL.path, branch: branch, shortRevision: String(fullRevision.prefix(8)), remote: remoteInfo.url, status: parseStatus(statusText, branch: branch), ahead: divergence.ahead, behind: divergence.behind, hasUpstream: hasUpstream, upstream: upstream.isEmpty ? nil : upstream, revision: fullRevision.isEmpty ? nil : fullRevision, remoteState: remoteState, branches: parseBranches((try await branchesOutput)?.standardOutput, remoteName: remoteInfo.name), defaultBranch: defaultBranch)
 }
 
 private func requiredOutput(git: any GitProcessClient, kind: GitCommandKind, path: String) async throws -> GitProcessOutput {

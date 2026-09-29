@@ -117,6 +117,21 @@ public struct SourceControlScanSnapshot: Sendable, Equatable {
     }
 }
 
+/// Live scan telemetry for progress surfaces. `readTotalCount` stays nil while
+/// the directory walk is still discovering repositories; once the walk ends it
+/// is fixed and `readCompletedCount` climbs toward it.
+public struct SourceControlScanProgress: Sendable, Equatable {
+    public let discoveredCount: Int
+    public let readCompletedCount: Int
+    public let readTotalCount: Int?
+
+    public init(discoveredCount: Int, readCompletedCount: Int, readTotalCount: Int?) {
+        self.discoveredCount = discoveredCount
+        self.readCompletedCount = readCompletedCount
+        self.readTotalCount = readTotalCount
+    }
+}
+
 public enum SourceControlOperationOutcome: Sendable, Equatable {
     case updated
     case upToDate
@@ -209,6 +224,22 @@ public struct SourceControlDiagnostic: Error, Codable, Equatable, Hashable, Send
             recovery: "请检查仓库状态和远端配置后重试。"
         )
     }
+
+    /// One-look Chinese reason chip for list rows and the failure sheet.
+    public var shortLabel: String {
+        switch code {
+        case "pull-dirty-worktree": return "本地改动会被覆盖"
+        case "pull-diverged": return "与远端分叉"
+        case "pull-remote-unavailable": return "远端不可达"
+        case "pull-conflict": return "合并冲突"
+        case "pull-failed": return "拉取失败"
+        case "stale-snapshot": return "仓库已变化"
+        case "command-failed": return "执行失败"
+        case "git-unavailable": return "Git 不可用"
+        case "timed-out": return "超时"
+        default: return "失败"
+        }
+    }
 }
 
 public enum SourceControlError: Error, Equatable, Sendable {
@@ -244,7 +275,7 @@ public extension SourceControlError {
         case .commandFailed:
             return SourceControlDiagnostic(code: "command-failed", summary: "Git 操作未完成。", recovery: "请检查仓库状态和远端配置后重试。")
         case .staleSnapshot:
-            return SourceControlDiagnostic(code: "stale-snapshot", summary: "仓库状态在更新前发生变化。", recovery: "请重新扫描后再更新。")
+            return SourceControlDiagnostic(code: "stale-snapshot", summary: "扫描后仓库有变化，已停止更新。", recovery: "重新扫描后再更新。")
         case .operationInProgress:
             return SourceControlDiagnostic(code: "operation-in-progress", summary: "已有 Git 操作正在进行。", recovery: "请等待当前操作结束后重试。")
         case .timedOut:

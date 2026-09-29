@@ -82,6 +82,82 @@ final class SourceControlCoreTests: XCTestCase {
         XCTAssertFalse(snapshot.repositories.first?.isFastForwardCandidate == true)
     }
 
+    // MARK: - Scan progress & offline classification
+
+    func testScanReportsDiscoveryAndReadProgress() async throws {
+        let root = makeTemporaryDirectory()
+        for name in ["one", "two", "three"] {
+            try FileManager.default.createDirectory(atPath: "\(root.path)/\(name)/.git", withIntermediateDirectories: true)
+        }
+        let git = MockGitClient { request in
+            switch request.kind {
+            case .branch: return GitProcessOutput(exitCode: 0, standardOutput: "main\n")
+            case .revision: return GitProcessOutput(exitCode: 0, standardOutput: "abc123\n")
+            case .remote: return GitProcessOutput(exitCode: 1)
+            case .upstream: return GitProcessOutput(exitCode: 1)
+            case .status: return GitProcessOutput(exitCode: 0, standardOutput: "")
+            default: return GitProcessOutput(exitCode: 1)
+            }
+        }
+        final class ProgressBox: @unchecked Sendable {
+            private let lock = NSLock()
+            private var storage: [SourceControlScanProgress] = []
+            func append(_ progress: SourceControlScanProgress) {
+                lock.lock(); storage.append(progress); lock.unlock()
+            }
+            var values: [SourceControlScanProgress] {
+                lock.lock(); defer { lock.unlock() }
+                return storage
+            }
+        }
+        let events = ProgressBox()
+        _ = try await SourceControlScanner(git: git).scan(scope: .directory(path: root.path)) { _ in } onProgress: { progress in
+            events.append(progress)
+        }
+        let progressEvents = events.values
+
+        let walkEvents = progressEvents.filter { $0.readTotalCount == nil }
+        let readEvents = progressEvents.filter { $0.readTotalCount != nil }
+        XCTAssertFalse(walkEvents.isEmpty, "目录遍历期应上报发现计数")
+        XCTAssertEqual(walkEvents.map(\.discoveredCount), walkEvents.map(\.discoveredCount).sorted(), "发现计数应单调递增")
+        XCTAssertFalse(readEvents.isEmpty, "读取期应上报 N/M 进度")
+        XCTAssertEqual(readEvents.last?.readTotalCount, 3)
+        XCTAssertEqual(readEvents.last?.readCompletedCount, 3)
+    }
+
+    /// 扫描离线化：不再逐仓 `ls-remote`，干净且与本地跟踪一致的仓库直接判 upToDate。
+    func testCleanRepositoryClassifiesUpToDateWithoutRemoteLookup() async throws {
+        let root = makeTemporaryDirectory()
+        try FileManager.default.createDirectory(atPath: "\(root.path)/.git", withIntermediateDirectories: true)
+        let git = MockGitClient { request in
+            switch request.kind {
+            case .branch: return GitProcessOutput(exitCode: 0, standardOutput: "main\n")
+            case .revision: return GitProcessOutput(exitCode: 0, standardOutput: "abc123\n")
+            case .remote: return GitProcessOutput(exitCode: 0, standardOutput: "origin\thttps://gitlab.example/acme/repo.git (fetch)\n")
+            case .upstream: return GitProcessOutput(exitCode: 0, standardOutput: "origin/main\n")
+            case .status: return GitProcessOutput(exitCode: 0, standardOutput: "")
+            case .divergence: return GitProcessOutput(exitCode: 0, standardOutput: "0\t0\n")
+            case .remoteRevision:
+                // ls-remote 若被调用即视为失败（离线扫描契约）。
+                return GitProcessOutput(exitCode: 1)
+            default: return GitProcessOutput(exitCode: 1)
+            }
+        }
+
+        let snapshot = try await SourceControlScanner(git: git).scan(scope: .repository(path: root.path))
+        XCTAssertEqual(snapshot.repositories.first?.remoteState, .upToDate)
+        XCTAssertTrue(snapshot.repositories.first?.isFastForwardCandidate == true)
+        let calls = await git.calls
+        XCTAssertFalse(calls.contains(.remoteRevision), "扫描不应发起网络请求（ls-remote）")
+    }
+
+    func testDiagnosticShortLabelMapsCommonCodes() {
+        XCTAssertEqual(SourceControlDiagnostic(code: "pull-dirty-worktree", summary: "", recovery: "").shortLabel, "本地改动会被覆盖")
+        XCTAssertEqual(SourceControlDiagnostic(code: "stale-snapshot", summary: "", recovery: "").shortLabel, "仓库已变化")
+        XCTAssertEqual(SourceControlDiagnostic(code: "pull-remote-unavailable", summary: "", recovery: "").shortLabel, "远端不可达")
+        XCTAssertEqual(SourceControlDiagnostic(code: "totally-unknown", summary: "", recovery: "").shortLabel, "失败")
+    }
+
     // MARK: - Pull failure classification
 
     func testPullFailureClassifiesDirtyWorktreeDivergenceAndRemoteErrors() {

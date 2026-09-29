@@ -163,6 +163,15 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
         XCTAssertTrue(model.canScan)
     }
 
+    func testRemoteHostParsesHTTPSAndSCPLikeRemotes() {
+        XCTAssertEqual(SourceControlWorkspaceModel.remoteHost(from: "https://github.com/acme/repo.git"), "GitHub")
+        XCTAssertEqual(SourceControlWorkspaceModel.remoteHost(from: "https://gitlab.com/acme/repo.git"), "GitLab")
+        XCTAssertEqual(SourceControlWorkspaceModel.remoteHost(from: "git@gitlab.example.com:acme/repo.git"), "gitlab.example.com")
+        XCTAssertEqual(SourceControlWorkspaceModel.remoteHost(from: "ssh://git@github.com/acme/repo.git"), "GitHub")
+        XCTAssertNil(SourceControlWorkspaceModel.remoteHost(from: nil))
+        XCTAssertNil(SourceControlWorkspaceModel.remoteHost(from: "/local/path"))
+    }
+
     // MARK: - Helpers
 
     private struct Fixture {
