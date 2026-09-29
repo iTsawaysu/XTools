@@ -215,17 +215,26 @@ stop_existing_app() {
 }
 
 write_info_plist_if_needed() {
+  # 开发者工具需要访问用户自建的内网服务（http Git 等）：URLSession 默认被
+  # ATS 拦截明文请求，无此例外源码管理的 http 自建 Git 全链路不可用。
+  ensure_ats_exception() {
+    /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$INFO_PLIST" 2>/dev/null
+    /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$INFO_PLIST" 2>/dev/null
+    /usr/libexec/PlistBuddy -c "Set :NSAppTransportSecurity:NSAllowsArbitraryLoads true" "$INFO_PLIST" 2>/dev/null || true
+  }
   if [[ -f "$INFO_PLIST" ]]; then
     local current_bundle_id
     if current_bundle_id="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$INFO_PLIST" 2>/dev/null)"; then
       # Keep the hot path byte-for-byte stable when the requested identity is unchanged.
       if [[ "$current_bundle_id" == "$BUNDLE_ID" ]]; then
+        ensure_ats_exception
         return 0
       fi
       /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$INFO_PLIST"
     else
       /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $BUNDLE_ID" "$INFO_PLIST"
     fi
+    ensure_ats_exception
     return 0
   fi
 
@@ -252,6 +261,11 @@ write_info_plist_if_needed() {
   <string>1</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+  </dict>
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSPrincipalClass</key>

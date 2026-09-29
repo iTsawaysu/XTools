@@ -19,6 +19,11 @@ enum ToolMotion {
         static let letterStagger: TimeInterval = 0.032
         /// Subtitle follow-up beat after the letter choreography starts.
         static let headerFollowDelay: TimeInterval = 0.16
+        /// Indeterminate hairline sweep: one back-and-forth traversal of the
+        /// rail. Loops sit outside the one-shot feedback envelope because the
+        /// steady rhythm itself is the liveness cue — a shorter sweep reads
+        /// as flicker. (Dropped by the logic-branch merge; restored.)
+        static let progressLoop: TimeInterval = 1.4
         /// Wave 2 output breath: the arc starts 80ms after the run so the
         /// text swap lands first (prototype MOTION d.breathDelay).
         static let outputBreathDelay: TimeInterval = 0.08
@@ -208,6 +213,10 @@ enum ToolMotion {
         static let settle = Curve.gentleSpring()
         /// Delight: slight-overshoot spring for success/result-arrival moments only.
         static let delight = Curve.playfulSpring()
+        /// Indeterminate hairline progress: continuous back-and-forth sweep for
+        /// `IndexProgressHairline`. Loops must not reuse one-shot state-feedback
+        /// durations.
+        static let hairlineSweep = Animation.easeInOut(duration: Duration.progressLoop).repeatForever(autoreverses: true)
     }
 
     /// Wave 2 terminal values for the output success breath (prototype

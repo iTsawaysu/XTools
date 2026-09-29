@@ -396,6 +396,22 @@ enum MediaToolPreferenceKeys {
 }
 
 @MainActor
+enum SourceControlToolPreferenceKeys {
+    /// User-approved persistence (2026-09-28 task 09-28-source-control-sync-ux):
+    /// the scan root survives launches. Re-picking the directory on every
+    /// launch is exactly the friction this preference removes, and the value
+    /// is a non-sensitive local directory path.
+    static let scanDirectory = ToolPreferenceKey<String>.string(
+        "tools.sourceControl.scanDirectory.v1",
+        default: ""
+    )
+
+    static let allRawKeys = [
+        scanDirectory.rawKey
+    ]
+}
+
+@MainActor
 enum TextDevelopmentToolPreferenceKeys {
     static let integerBase = ToolPreferenceKey<String>.string(
         "tools.integerBase.inputBase.v1",

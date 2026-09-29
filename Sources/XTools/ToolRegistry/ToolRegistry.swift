@@ -403,6 +403,15 @@ extension ToolRegistry {
             ) {
                 IndexChmodPage()
             },
+            RegisteredTool(
+                id: "source-control",
+                title: "源码管理",
+                categoryID: .development,
+                systemImage: "arrow.triangle.branch",
+                keywords: ["git", "repository", "pull", "source control", "源码", "仓库"]
+            ) {
+                IndexSourceControlPage()
+            },
 
             // MARK: - Web
             RegisteredTool(
