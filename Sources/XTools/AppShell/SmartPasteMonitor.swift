@@ -19,20 +19,25 @@ final class SmartPasteMonitor: ObservableObject {
         let toolID: ToolID
         let toolTitle: String
         let message: String
+        /// 目标工具自带分段时的深链分段（formatter: json/xml）。
+        let formatterSegment: String?
     }
 
     private struct Route {
         let toolID: ToolID
         let message: String
+        /// 目标工具自带分段时的深链分段（formatter: json/xml）。
+        /// var + 默认值使其留在 memberwise init 的可选参数里。
+        var formatterSegment: String? = nil
     }
 
     /// Clipboard kind → owning tool. Tool identities live here (the app layer),
     /// while `SmartPasteDetector` stays UI- and registry-free.
     private static let routes: [SmartPasteDetector.Kind: Route] = [
-        .json: Route(toolID: "json-formatter", message: "剪贴板里是 JSON"),
+        .json: Route(toolID: "formatter", message: "剪贴板里是 JSON", formatterSegment: "json"),
         .jwt: Route(toolID: "jwt-parser", message: "剪贴板里是 JWT"),
         .html: Route(toolID: "html-to-markdown", message: "剪贴板里是 HTML"),
-        .xml: Route(toolID: "xml-formatter", message: "剪贴板里是 XML"),
+        .xml: Route(toolID: "formatter", message: "剪贴板里是 XML", formatterSegment: "xml"),
         .cssColor: Route(toolID: "color-picker", message: "剪贴板里是 CSS 颜色"),
         .unixTimestamp: Route(toolID: "date-time-converter", message: "剪贴板里是 Unix 时间戳"),
         .urlEncoded: Route(toolID: "url-encoder-decoder", message: "剪贴板里是 URL 编码文本"),
@@ -88,7 +93,8 @@ final class SmartPasteMonitor: ObservableObject {
             kind: kind,
             toolID: tool.id,
             toolTitle: tool.title,
-            message: route.message
+            message: route.message,
+            formatterSegment: route.formatterSegment
         )
     }
 
@@ -103,4 +109,12 @@ final class SmartPasteMonitor: ObservableObject {
             suggestion = nil
         }
     }
+}
+
+/// SmartPaste 深链的一次性分段提示：横幅点击时写入目标分段，经
+/// environmentObject 注入，「格式化」Hub 出现时消费并清空（工具已打开
+/// 再点建议时经 onChange 立即生效）。
+@MainActor
+final class FormatterEntryHint: ObservableObject {
+    @Published var segment: String?
 }

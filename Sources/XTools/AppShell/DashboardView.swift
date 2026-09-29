@@ -15,7 +15,7 @@ struct DashboardView: View {
     }
 
     private static let shortcuts: [Shortcut] = [
-        Shortcut(id: "json-formatter", detail: "校验与整理结构"),
+        Shortcut(id: "formatter", detail: "JSON · XML · YAML · SQL"),
         Shortcut(id: "base64-string", detail: "编码与解码文本"),
         Shortcut(id: "url-encoder-decoder", detail: "处理百分号编码"),
         Shortcut(id: "regex-tester", detail: "验证文本匹配"),

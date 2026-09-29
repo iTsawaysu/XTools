@@ -172,6 +172,9 @@
     "JSON 格式化" : {
       "extractionState" : "manual"
     },
+    "JSON · XML · YAML · SQL" : {
+      "extractionState" : "manual"
+    },
     "Key 排序" : {
       "extractionState" : "manual"
     },
@@ -271,6 +274,9 @@
     "上一处差异（⌥⌘↑）" : {
       "extractionState" : "manual"
     },
+    "上一个处理选项" : {
+      "extractionState" : "manual"
+    },
     "上中" : {
       "extractionState" : "manual"
     },
@@ -296,6 +302,9 @@
       "extractionState" : "manual"
     },
     "下一处差异（⌥⌘↓）" : {
+      "extractionState" : "manual"
+    },
+    "下一个处理选项" : {
       "extractionState" : "manual"
     },
     "下中" : {
@@ -647,6 +656,9 @@
       "extractionState" : "manual"
     },
     "切换转换方向" : {
+      "extractionState" : "manual"
+    },
+    "切换当前处理选项" : {
       "extractionState" : "manual"
     },
     "利马" : {
@@ -1772,6 +1784,9 @@
       "extractionState" : "manual"
     },
     "未选择" : {
+      "extractionState" : "manual"
+    },
+    "未启用任何处理选项" : {
       "extractionState" : "manual"
     },
     "未变更内容已折叠，编辑器当前为只读；展开折叠区域后可继续编辑。" : {
@@ -3031,6 +3046,9 @@
     "关闭导入提示" : {
       "extractionState" : "manual"
     },
+    "关闭处理选项菜单" : {
+      "extractionState" : "manual"
+    },
     "只能导入普通文本文件，原输入已保留。" : {
       "extractionState" : "manual"
     },
@@ -3131,6 +3149,9 @@
       "extractionState" : "manual"
     },
     "处理进度" : {
+      "extractionState" : "manual"
+    },
+    "处理选项" : {
       "extractionState" : "manual"
     },
     "失败" : {

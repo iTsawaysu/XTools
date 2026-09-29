@@ -413,6 +413,12 @@ enum SourceControlToolPreferenceKeys {
 
 @MainActor
 enum TextDevelopmentToolPreferenceKeys {
+    /// 「格式化」Hub 上次使用的分段（json/xml/yaml/sql），重启后恢复。
+    static let formatterSegment = ToolPreferenceKey<String>.string(
+        "tools.formatter.segment.v1",
+        default: "json",
+        allowedValues: ["json", "xml", "yaml", "sql"]
+    )
     static let integerBase = ToolPreferenceKey<String>.string(
         "tools.integerBase.inputBase.v1",
         default: "10",

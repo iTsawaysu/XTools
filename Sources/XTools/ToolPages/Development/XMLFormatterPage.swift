@@ -55,7 +55,9 @@ final class XMLFormatterToolWorkspaceModel: ObservableObject {
     }
 }
 
-struct IndexXMLFormatPage: View {
+/// 「格式化」Hub 的 XML 分段。workspace key 沿用 toolID "xml-formatter"，
+/// 输入与执行状态由 ToolWorkspaceRepository 保活，分段切换不丢。
+struct IndexXMLFormatterSegment: View {
     var body: some View {
         ToolWorkspaceHost(key: XMLFormatterToolWorkspaceModel.key) { workspace, _ in
             IndexXMLFormatWorkspaceContent(
@@ -72,34 +74,32 @@ private struct IndexXMLFormatWorkspaceContent: View {
     @State private var formatAttempt = 0
 
     var body: some View {
-        IndexPage("XML 格式化", subtitle: "格式化与压缩 XML，支持 2/4 空格缩进与 Minify。", workspaceSemantic: .structuredEditorTransform) {
-            IndexFormatWorkbench(
-                inputTitle: "输入",
-                outputTitle: "输出",
-                input: $workspace.input,
-                output: execution.binding.output,
-                inputPlaceholder: #"<root><item id="1">a</item></root>"#,
-                diagnostic: execution.binding.error ?? execution.binding.warning,
-                diagnosticTone: execution.binding.error == nil ? .warning : .error,
-                diagnosticDetail: execution.diagnostic,
-                diagnosticMarker: execution.diagnosticMarker,
-                formatAttempt: formatAttempt,
-                outputLineNumbers: true,
-                outputSyntax: .xml,
-                isRunning: execution.isRunning,
-                isOutputFresh: execution.isOutputFresh,
-                clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
-                onFormat: format,
-                onClear: workspace.clear,
-                leadingControl: {
-                    IndexSegmentedControl(
-                        items: XMLFormatterToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
-                        selection: formatModeSelection,
-                        density: .compact
-                    )
-                }
-            )
-        }
+        IndexFormatWorkbench(
+            inputTitle: "输入",
+            outputTitle: "输出",
+            input: $workspace.input,
+            output: execution.binding.output,
+            inputPlaceholder: #"<root><item id="1">a</item></root>"#,
+            diagnostic: execution.binding.error ?? execution.binding.warning,
+            diagnosticTone: execution.binding.error == nil ? .warning : .error,
+            diagnosticDetail: execution.diagnostic,
+            diagnosticMarker: execution.diagnosticMarker,
+            formatAttempt: formatAttempt,
+            outputLineNumbers: true,
+            outputSyntax: .xml,
+            isRunning: execution.isRunning,
+            isOutputFresh: execution.isOutputFresh,
+            clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
+            onFormat: format,
+            onClear: workspace.clear,
+            leadingControl: {
+                IndexSegmentedControl(
+                    items: XMLFormatterToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
+                    selection: formatModeSelection,
+                    density: .compact
+                )
+            }
+        )
     }
 
     private var formatModeSelection: Binding<String> {

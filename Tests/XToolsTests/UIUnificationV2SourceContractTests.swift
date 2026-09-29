@@ -167,7 +167,7 @@ struct UIUnificationV2SourceContractTests {
 
         contains(dashboard, "ToolWorkspaceHost(key: HomeContentSession.key)", "Workbench input must stay in the window-scoped session repository")
         contains(dashboard, "ToolMetrics.Workbench.mainMaxWidth", "Workbench layout must use the approved named geometry tokens")
-        contains(dashboard, "Shortcut(id: \"json-formatter\"", "Workbench must expose real registered shortcut identifiers")
+        contains(dashboard, "Shortcut(id: \"formatter\"", "Workbench must expose real registered shortcut identifiers")
         contains(dashboard, "Shortcut(id: \"color-picker\"", "Workbench must keep all six approved default shortcuts")
         doesNotContain(dashboard, "DashboardWaterfall", "Retired waterfall rendering must not remain in the V3 workbench")
         doesNotContain(dashboard, "showsLayoutEditor", "V3 workbench must not retain card-layout editing")

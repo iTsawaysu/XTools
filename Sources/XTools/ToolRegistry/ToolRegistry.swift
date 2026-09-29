@@ -296,40 +296,13 @@ extension ToolRegistry {
 
             // MARK: - 开发
             RegisteredTool(
-                id: "json-formatter",
-                title: "JSON 格式化",
+                id: "formatter",
+                title: "格式化",
                 categoryID: .development,
                 systemImage: "curlybraces.square",
-                keywords: ["json", "prettify", "minify", "format", "beautify", "compress", "美化", "压缩"]
+                keywords: ["json", "xml", "yaml", "yml", "sql", "format", "prettify", "beautify", "minify", "compress", "格式化", "美化", "压缩"]
             ) {
-                IndexJSONFormatterPage()
-            },
-            RegisteredTool(
-                id: "sql-prettify",
-                title: "SQL 格式化",
-                categoryID: .development,
-                systemImage: "cylinder",
-                keywords: ["sql", "prettify", "format", "beautify", "格式化", "美化"]
-            ) {
-                IndexSQLPrettifyPage()
-            },
-            RegisteredTool(
-                id: "xml-formatter",
-                title: "XML 格式化",
-                categoryID: .development,
-                systemImage: "chevron.left.forwardslash.chevron.right",
-                keywords: ["xml", "format", "prettify", "indent"]
-            ) {
-                IndexXMLFormatPage()
-            },
-            RegisteredTool(
-                id: "yaml-prettify",
-                title: "YAML 格式化",
-                categoryID: .development,
-                systemImage: "list.bullet.indent",
-                keywords: ["yaml", "yml", "prettify", "format", "格式化"]
-            ) {
-                IndexYAMLPrettifyPage()
+                IndexFormatterHubPage()
             },
             RegisteredTool(
                 id: "json-diff",

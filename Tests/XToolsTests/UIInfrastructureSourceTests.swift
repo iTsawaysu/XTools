@@ -553,7 +553,7 @@ struct UIInfrastructureSourceTests {
         contains(jsonFormatter, "outputLineNumbers: true", "JSON must keep the line-number gutters on both panes")
         doesNotContain(jsonFormatter, "Toggle(\"键排序\"", "JSON formatter must not fall back to a native Toggle")
         doesNotContain(jsonFormatter, "Picker(\"缩进\"", "JSON formatter must not fall back to a native Picker")
-        contains(jsonFormatter, "IndexOptionSwitch(", "JSON formatter provides the key-sort switch")
+        contains(jsonFormatter, "IndexOptionsMenu(", "JSON formatter provides the key-sort option through the toolbar options menu")
         doesNotContain(jsonFormatter, ".animation(", "Optional-control reveal must not bind page-level animations")
 
         contains(base64File, "Text(\"选择或拖入文件\")", "Base64 file page may advertise drag and drop only because it implements the workflow")
@@ -665,8 +665,7 @@ struct UIInfrastructureSourceTests {
         let typography = try readSource("Sources/XTools/Shared/ToolTypography.swift")
         let sharedComponents = try readSharedBagComponents()
         let converter = try readSource("Sources/XTools/ToolPages/Workbench/Converter/IndexConverterPage.swift")
-        let json = try readSource("Sources/XTools/ToolPages/Development/JSONFormatterPage.swift")
-        let sql = try readSource("Sources/XTools/ToolPages/Development/SQLPrettifyPage.swift")
+        let formatterHub = try readSource("Sources/XTools/ToolPages/Development/FormatterHubPage.swift")
 
         contains(root, "enum SidebarVisibility: Equatable", "Root shell must use an explicit sidebar visibility state")
         contains(root, "private var detailColumn: some View", "Detail chrome must stay in one stable detail column")
@@ -756,8 +755,7 @@ struct UIInfrastructureSourceTests {
         doesNotContain(sharedComponents, "showsHeader", "Compact workspace chrome must not hide tool identity inside the content area")
         contains(sharedComponents, ".padding(.horizontal, chrome.horizontalPadding)", "Page horizontal padding must come from the chrome density")
         contains(converter, "IndexPage(title, subtitle: subtitle, workspaceSemantic: .copyTransformWorkspace)", "Shared converter workbenches must resolve chrome through the settled copy-transform semantic")
-        contains(json, "workspaceSemantic: .structuredEditorTransform", "JSON must opt into the semantic that resolves the compact fixed editor workbench shell")
-        contains(sql, "workspaceSemantic: .structuredEditorTransform", "SQL must opt into the semantic that resolves the compact fixed editor workbench shell")
+        contains(formatterHub, "workspaceSemantic: .structuredEditorTransform", "Formatter segments must opt into the semantic that resolves the compact fixed editor workbench shell")
     }
 
     @Test func layoutSafetyContractIsDocumentedInChinese() throws {

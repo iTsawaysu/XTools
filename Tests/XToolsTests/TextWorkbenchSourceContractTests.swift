@@ -350,6 +350,9 @@ struct TextWorkbenchSourceContractTests {
         let docker = try readSource("Sources/XTools/ToolPages/Development/DockerRunToComposePage.swift")
         let html = try readSource("Sources/XTools/ToolPages/Development/HTMLToMarkdownPage.swift")
         let sql = try readSource("Sources/XTools/ToolPages/Development/SQLPrettifyPage.swift")
+        // 四个格式化页面合并为单入口「格式化」后，IndexPage 页面壳统一
+        // 上移到 Hub；semantic 壳断言改锚 Hub 文件。
+        let formatterHub = try readSource("Sources/XTools/ToolPages/Development/FormatterHubPage.swift")
 
         contains(semantics, "enum IndexWorkspaceSemantic", "Shared workspaces must expose a domain-named semantic seam")
         contains(semantics, "case structuredOutputReading", "Workspace semantics must model structured output reading")
@@ -384,17 +387,12 @@ struct TextWorkbenchSourceContractTests {
         contains(textComponents, "var scrollsInternally = true", "Output surfaces must keep internal scrolling as the default")
         contains(textComponents, "if scrollsInternally {\n                    ScrollView {", "Output surfaces must make the scroll container conditional")
 
-        contains(json, "workspaceSemantic: .structuredEditorTransform", "JSON formatter must use the editor-transform semantic that resolves the compact fixed page shell")
-        contains(xml, "workspaceSemantic: .structuredEditorTransform", "XML formatter must use the editor-transform semantic that resolves the compact fixed page shell")
-        contains(yaml, "workspaceSemantic: .structuredEditorTransform", "YAML formatter must use the editor-transform semantic that resolves the compact fixed page shell")
+        contains(formatterHub, "workspaceSemantic: .structuredEditorTransform", "Formatter hub must use the editor-transform semantic that resolves the compact fixed page shell")
         contains(docker, "workspaceSemantic: .structuredEditorTransform", "Docker Run to Compose must use the editor-transform semantic that resolves the compact fixed page shell")
         contains(html, "workspaceSemantic: .structuredEditorTransform", "HTML to Markdown must use the editor-transform semantic that resolves the compact fixed page shell")
-        contains(json, "workspaceSemantic: .structuredEditorTransform", "JSON formatter must select the structured editor-transform semantic")
-        contains(xml, "workspaceSemantic: .structuredEditorTransform", "XML formatter must select the structured editor-transform semantic")
-        contains(yaml, "workspaceSemantic: .structuredEditorTransform", "YAML formatter must select the structured editor-transform semantic")
+        contains(formatterHub, "workspaceSemantic: .structuredEditorTransform", "Formatter hub must select the structured editor-transform semantic")
         contains(docker, "workspaceSemantic: .structuredEditorTransform", "Docker Run to Compose must select the structured editor-transform semantic")
         contains(html, "workspaceSemantic: .structuredEditorTransform", "HTML to Markdown must select the structured editor-transform semantic")
-        contains(sql, "workspaceSemantic: .structuredEditorTransform", "SQL formatter must select the structured editor-transform semantic")
         for page in [json, xml, yaml, sql, docker] {
             contains(page, "outputLineNumbers: true", "Prototype family outputs keep the structured line-number gutter")
         }
@@ -426,7 +424,7 @@ struct TextWorkbenchSourceContractTests {
             doesNotContain(page, "showsResetSplitButton", "Structured formatter pages must rely on the fixed shared pane layout")
             doesNotContain(page, "IndexIOPair(", "Structured formatter pages must not keep the old shared IO pair after workbench migration")
         }
-        contains(json, "workspaceSemantic: .structuredEditorTransform", "JSON formatter must express editor-transform behavior through the semantic seam")
+        contains(formatterHub, "workspaceSemantic: .structuredEditorTransform", "Formatter hub must express editor-transform behavior through the semantic seam")
         contains(formatWorkbench, "struct IndexFormatWorkbench", "The prototype workbench must be a shared component")
         contains(formatWorkbench, "embedsFlat: false", "Workbench panes must use carded editor surfaces")
         contains(formatWorkbench, "IndexBadge(\"STDIN\", tone: .accent, isCapsule: true)", "The workbench toolbar must carry the STDIN identity")
@@ -442,21 +440,28 @@ struct TextWorkbenchSourceContractTests {
     @Test func structuredFormatterTopControlsStayInPlace() throws {
         let json = try readSource("Sources/XTools/ToolPages/Development/JSONFormatterPage.swift")
         let sql = try readSource("Sources/XTools/ToolPages/Development/SQLPrettifyPage.swift")
+        let formatterHub = try readSource("Sources/XTools/ToolPages/Development/FormatterHubPage.swift")
 
         // Prototype v3: JSON owns one toolbar inside the workbench — no page
         // action bar, no key-sort switch; the indent control rides the toolbar.
-        appearsBefore(json, "IndexPage(", "IndexFormatWorkbench(", "JSON formatter body must be the prototype workbench")
+        // 页面壳合并后由 Hub 承载：IndexPage 在分段控件之前，四个分段
+        // 挂在同一个 switch 下。
+        appearsBefore(formatterHub, "IndexPage(", "IndexSegmentedControl(", "Formatter hub body must open with the shared page shell before the segment control")
+        contains(formatterHub, "IndexJSONFormatterSegment()", "Formatter hub must mount the JSON formatter segment")
+        contains(formatterHub, "IndexXMLFormatterSegment()", "Formatter hub must mount the XML formatter segment")
+        contains(formatterHub, "IndexYAMLPrettifySegment()", "Formatter hub must mount the YAML formatter segment")
+        contains(formatterHub, "IndexSQLPrettifySegment()", "Formatter hub must mount the SQL formatter segment")
+        contains(formatterHub, "IndexPage(\"格式化\", subtitle: workspace.segment.subtitle, workspaceSemantic: .structuredEditorTransform)", "Formatter hub must let the semantic resolve the compact fixed workbench page shell")
         contains(json, "IndexSegmentedControl(", "JSON indent must stay in the workbench toolbar")
         doesNotContain(json, "IndexActionBar {", "JSON must not keep a page-level action bar")
         contains(json, "title: \"Key 排序\"", "JSON must provide the key-sort option in the workbench toolbar")
         doesNotContain(json, "IndexOptionPicker(", "JSON indent must use the toolbar segmented control")
         doesNotContain(json, "statsStrip", "JSON formatter must not keep the retired statistics strip")
-        contains(json, "IndexPage(\"JSON 格式化\", subtitle: \"格式化、压缩和验证 JSON，支持自定义选项。\", workspaceSemantic: .structuredEditorTransform)", "JSON formatter must let the semantic resolve the compact fixed workbench page shell")
         contains(json, "execution.schedule(snapshot: snapshot, sourceText: snapshot.unescape ? nil : snapshot.input, delay: .zero, cooperativeCancellation: true)", "Formatting must submit its source snapshot, withholding unmapped unescape diagnostics")
         doesNotContain(json, "workspace.seedEntryExampleIfNeeded()", "JSON must start with clean placeholder rather than seeding sample text")
         contains(json, "formatAttempt += 1", "Each format attempt must advance feedback identity")
 
-        appearsBefore(sql, "IndexPage(", "IndexFormatWorkbench(", "SQL formatter body must be the prototype workbench")
+        contains(sql, "IndexFormatWorkbench(", "SQL formatter segment body must be the prototype workbench")
         doesNotContain(sql, "IndexOptionLabel(\"关键字\")", "SQL formatter toolbar must keep keyword case control compact without a redundant label")
         contains(sql, "items: [(\"upper\", \"大写\"), (\"lower\", \"小写\")]", "SQL keyword-case must use the toolbar segmented control")
         contains(sql, "leadingControl: {", "SQL keyword-case controls must ride the workbench toolbar's leading slot")
@@ -465,8 +470,6 @@ struct TextWorkbenchSourceContractTests {
         contains(sql, "formatAttempt += 1", "Each SQL format attempt must advance feedback identity")
         contains(sql, "outputLineNumbers: true", "SQL formatter must keep syntax highlighting with a line-number gutter")
         contains(sql, "outputSyntax: .sql", "SQL formatter must keep structured output highlighting")
-        contains(sql, "IndexPage(\"SQL 格式化\", subtitle: \"格式化与压缩 SQL，支持关键字大小写和缩进选项。\", workspaceSemantic: .structuredEditorTransform)", "SQL formatter must let the semantic resolve the compact fixed workbench page shell")
-        contains(sql, "workspaceSemantic: .structuredEditorTransform", "SQL formatter must express editor-transform behavior through the semantic seam")
         doesNotContain(sql, "expandsWithContent: true", "SQL formatter must not hand-assemble input growth for editor-transform behavior")
         doesNotContain(sql, "scrollsInternally: false", "SQL formatter must not hand-assemble output scrolling for editor-transform behavior")
         doesNotContain(sql, "IndexPairLayout(collapseWidth: 0, fillsHeight: true)", "SQL formatter must not keep the old page-local side-by-side pair")

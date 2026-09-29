@@ -223,7 +223,7 @@ struct CodeViewerSurfaceTests {
     @Test func jsonFormatterPageMountsWithCleanEmptyStateInHostingView() {
         let defaults = UserDefaults(suiteName: "CodeViewerSurfaceTests.Mount.\(UUID().uuidString)")!
         let repository = ToolWorkspaceRepository(defaults: defaults)
-        let view = IndexJSONFormatterPage().environmentObject(repository)
+        let view = IndexJSONFormatterSegment().environmentObject(repository)
         let hostingView = NSHostingView(rootView: view)
         hostingView.frame = NSRect(x: 0, y: 0, width: 800, height: 600)
         hostingView.layoutSubtreeIfNeeded()
@@ -238,7 +238,7 @@ struct CodeViewerSurfaceTests {
     @Test func jsonFormatterEditorViewportsFitMinimumRootWindowDetailWidth() {
         let defaults = UserDefaults(suiteName: "CodeViewerSurfaceTests.Layout.\(UUID().uuidString)")!
         let repository = ToolWorkspaceRepository(defaults: defaults)
-        let view = IndexJSONFormatterPage().environmentObject(repository)
+        let view = IndexJSONFormatterSegment().environmentObject(repository)
         let hostingView = NSHostingView(rootView: view)
         let rootWidth: CGFloat = 960
         let sidebarWidth: CGFloat = 220
@@ -497,7 +497,7 @@ struct CodeViewerSurfaceTests {
     @Test func xmlFormatPagePanesExpandResponsivelyWithoutFixedDeadZones() {
         let defaults = UserDefaults(suiteName: "CodeViewerSurfaceTests.XMLResponsive.\(UUID().uuidString)")!
         let repository = ToolWorkspaceRepository(defaults: defaults)
-        let view = IndexXMLFormatPage().environmentObject(repository)
+        let view = IndexXMLFormatterSegment().environmentObject(repository)
         let hostingView = NSHostingView(rootView: view)
 
         hostingView.frame = NSRect(x: 0, y: 0, width: 700, height: 500)

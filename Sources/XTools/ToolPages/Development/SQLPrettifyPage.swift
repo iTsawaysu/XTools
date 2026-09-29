@@ -63,7 +63,9 @@ final class SQLPrettifyToolWorkspaceModel: ObservableObject {
     }
 }
 
-struct IndexSQLPrettifyPage: View {
+/// 「格式化」Hub 的 SQL 分段。workspace key 沿用 toolID "sql-prettify"，
+/// 输入与执行状态由 ToolWorkspaceRepository 保活，分段切换不丢。
+struct IndexSQLPrettifySegment: View {
     var body: some View {
         ToolWorkspaceHost(key: SQLPrettifyToolWorkspaceModel.key) { workspace, _ in
             IndexSQLPrettifyWorkspaceContent(
@@ -80,43 +82,41 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
     @State private var formatAttempt = 0
 
     var body: some View {
-        IndexPage("SQL 格式化", subtitle: "格式化与压缩 SQL，支持关键字大小写和缩进选项。", workspaceSemantic: .structuredEditorTransform) {
-            IndexFormatWorkbench(
-                inputTitle: "输入",
-                outputTitle: "输出",
-                input: $workspace.input,
-                output: execution.binding.output,
-                inputPlaceholder: "with active_users as (select id,name from users where deleted_at is null) select * from active_users order by name",
-                diagnostic: execution.binding.error ?? execution.binding.warning,
-                diagnosticTone: execution.binding.error == nil ? .warning : .error,
-                diagnosticDetail: execution.diagnostic,
-                diagnosticMarker: execution.diagnosticMarker,
-                formatAttempt: formatAttempt,
-                // SQL output is line-oriented; keep the gutter aligned with syntax colors.
-                outputLineNumbers: true,
-                outputSyntax: .sql,
-                isRunning: execution.isRunning,
-                isOutputFresh: execution.isOutputFresh,
-                clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
-                onFormat: format,
-                onClear: workspace.clear,
-                leadingControl: {
-                    HStack(spacing: 6) {
-                        IndexSegmentedControl(
-                            items: SQLPrettifyToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
-                            selection: formatModeSelection,
-                            density: .compact
-                        )
-                        IndexSegmentedControl(
-                            items: [("upper", "大写"), ("lower", "小写")],
-                            selection: keywordCaseSelection,
-                            density: .compact
-                        )
-                        .help("关键字大小写 (UPPER / lower)")
-                    }
+        IndexFormatWorkbench(
+            inputTitle: "输入",
+            outputTitle: "输出",
+            input: $workspace.input,
+            output: execution.binding.output,
+            inputPlaceholder: "with active_users as (select id,name from users where deleted_at is null) select * from active_users order by name",
+            diagnostic: execution.binding.error ?? execution.binding.warning,
+            diagnosticTone: execution.binding.error == nil ? .warning : .error,
+            diagnosticDetail: execution.diagnostic,
+            diagnosticMarker: execution.diagnosticMarker,
+            formatAttempt: formatAttempt,
+            // SQL output is line-oriented; keep the gutter aligned with syntax colors.
+            outputLineNumbers: true,
+            outputSyntax: .sql,
+            isRunning: execution.isRunning,
+            isOutputFresh: execution.isOutputFresh,
+            clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
+            onFormat: format,
+            onClear: workspace.clear,
+            leadingControl: {
+                HStack(spacing: 6) {
+                    IndexSegmentedControl(
+                        items: SQLPrettifyToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
+                        selection: formatModeSelection,
+                        density: .compact
+                    )
+                    IndexSegmentedControl(
+                        items: [("upper", "大写"), ("lower", "小写")],
+                        selection: keywordCaseSelection,
+                        density: .compact
+                    )
+                    .help("关键字大小写 (UPPER / lower)")
                 }
-            )
-        }
+            }
+        )
     }
 
     private var keywordCaseSelection: Binding<String> {

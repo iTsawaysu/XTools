@@ -39,7 +39,9 @@ final class YAMLPrettifyToolWorkspaceModel: ObservableObject {
     }
 }
 
-struct IndexYAMLPrettifyPage: View {
+/// 「格式化」Hub 的 YAML 分段。workspace key 沿用 toolID "yaml-prettify"，
+/// 输入与执行状态由 ToolWorkspaceRepository 保活，分段切换不丢。
+struct IndexYAMLPrettifySegment: View {
     var body: some View {
         ToolWorkspaceHost(key: YAMLPrettifyToolWorkspaceModel.key) { workspace, _ in
             IndexYAMLPrettifyWorkspaceContent(
@@ -56,30 +58,28 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
     @State private var formatAttempt = 0
 
     var body: some View {
-        IndexPage("YAML 格式化", subtitle: "规整 YAML 空白与键值间距，支持 Key 排序。", workspaceSemantic: .structuredEditorTransform) {
-            IndexFormatWorkbench(
-                inputTitle: "输入",
-                outputTitle: "输出",
-                input: $workspace.input,
-                output: execution.binding.output,
-                inputPlaceholder: "key:   value\nlist:\n   - a\n   - b",
-                diagnostic: execution.binding.error ?? execution.binding.warning,
-                diagnosticTone: execution.binding.error == nil ? .warning : .error,
-                diagnosticDetail: execution.diagnostic,
-                diagnosticMarker: execution.diagnosticMarker,
-                formatAttempt: formatAttempt,
-                outputLineNumbers: true,
-                outputSyntax: .yaml,
-                isRunning: execution.isRunning,
-                isOutputFresh: execution.isOutputFresh,
-                clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
-                onFormat: format,
-                onClear: workspace.clear,
-                leadingControl: {
-                    IndexOptionSwitch(title: "Key 排序", style: .button, isOn: $workspace.sortKeys)
-                }
-            )
-        }
+        IndexFormatWorkbench(
+            inputTitle: "输入",
+            outputTitle: "输出",
+            input: $workspace.input,
+            output: execution.binding.output,
+            inputPlaceholder: "key:   value\nlist:\n   - a\n   - b",
+            diagnostic: execution.binding.error ?? execution.binding.warning,
+            diagnosticTone: execution.binding.error == nil ? .warning : .error,
+            diagnosticDetail: execution.diagnostic,
+            diagnosticMarker: execution.diagnosticMarker,
+            formatAttempt: formatAttempt,
+            outputLineNumbers: true,
+            outputSyntax: .yaml,
+            isRunning: execution.isRunning,
+            isOutputFresh: execution.isOutputFresh,
+            clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
+            onFormat: format,
+            onClear: workspace.clear,
+            leadingControl: {
+                IndexOptionSwitch(title: "Key 排序", style: .button, isOn: $workspace.sortKeys)
+            }
+        )
         .onChange(of: workspace.sortKeys) { _ in
             if !workspace.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 format()

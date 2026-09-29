@@ -79,7 +79,9 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
     }
 }
 
-struct IndexJSONFormatterPage: View {
+/// 「格式化」Hub 的 JSON 分段。workspace key 沿用 toolID "json-formatter"，
+/// 输入与执行状态由 ToolWorkspaceRepository 保活，分段切换不丢。
+struct IndexJSONFormatterSegment: View {
     var body: some View {
         ToolWorkspaceHost(key: JSONFormatterToolWorkspaceModel.key) { workspace, _ in
             IndexJSONFormatterWorkspaceContent(
@@ -109,64 +111,62 @@ private struct IndexJSONFormatterWorkspaceContent: View {
     @State private var formatAttempt = 0
 
     var body: some View {
-        IndexPage("JSON 格式化", subtitle: "格式化、压缩和验证 JSON，支持自定义选项。", workspaceSemantic: .structuredEditorTransform) {
-            IndexFormatWorkbench(
-                inputTitle: "输入",
-                outputTitle: "输出",
-                input: $workspace.input,
-                output: execution.binding.output,
-                inputPlaceholder: #"{"name":"XTools","tags":["dev","macos"]}"#,
-                diagnostic: execution.binding.error ?? execution.binding.warning,
-                diagnosticTone: execution.binding.error == nil ? .warning : .error,
-                diagnosticDetail: execution.diagnostic,
-                diagnosticMarker: execution.diagnosticMarker,
-                formatAttempt: formatAttempt,
-                outputLineNumbers: true,
-                outputSyntax: .json,
-                isRunning: execution.isRunning,
-                isOutputFresh: execution.isOutputFresh,
-                clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
-                onFormat: format,
-                onClear: workspace.clear,
-                leadingControl: {
-                    HStack(spacing: 6) {
-                        IndexSegmentedControl(
-                            items: JSONFormatterToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
-                            selection: formatModeSelection,
-                            density: .compact
-                        )
-                        // 转义/去转义/Key 排序收进次级「处理选项 ▾」菜单：
-                        // 互斥仍由下方 escapeSelection/unescapeSelection 保证，
-                        // 状态变化沿工作区 didSet 自动重跑格式化。
-                        IndexOptionsMenu(
-                            menuTitle: "处理选项",
-                            triggerTitle: "处理选项",
-                            options: [
-                                IndexOptionsMenuOption(
-                                    id: "escape",
-                                    title: "转义",
-                                    help: "转义为字符串",
-                                    isOn: escapeSelection
-                                ),
-                                IndexOptionsMenuOption(
-                                    id: "unescape",
-                                    title: "去转义",
-                                    help: "去除转义",
-                                    isOn: unescapeSelection
-                                ),
-                                IndexOptionsMenuOption(
-                                    id: "sort-keys",
-                                    title: "Key 排序",
-                                    help: "按字典序排序所有键",
-                                    isOn: $workspace.sortKeys
-                                ),
-                            ],
-                            dividersBefore: ["sort-keys"]
-                        )
-                    }
+        IndexFormatWorkbench(
+            inputTitle: "输入",
+            outputTitle: "输出",
+            input: $workspace.input,
+            output: execution.binding.output,
+            inputPlaceholder: #"{"name":"XTools","tags":["dev","macos"]}"#,
+            diagnostic: execution.binding.error ?? execution.binding.warning,
+            diagnosticTone: execution.binding.error == nil ? .warning : .error,
+            diagnosticDetail: execution.diagnostic,
+            diagnosticMarker: execution.diagnosticMarker,
+            formatAttempt: formatAttempt,
+            outputLineNumbers: true,
+            outputSyntax: .json,
+            isRunning: execution.isRunning,
+            isOutputFresh: execution.isOutputFresh,
+            clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
+            onFormat: format,
+            onClear: workspace.clear,
+            leadingControl: {
+                HStack(spacing: 6) {
+                    IndexSegmentedControl(
+                        items: JSONFormatterToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
+                        selection: formatModeSelection,
+                        density: .compact
+                    )
+                    // 转义/去转义/Key 排序收进次级「处理选项 ▾」菜单：
+                    // 互斥仍由下方 escapeSelection/unescapeSelection 保证，
+                    // 状态变化沿工作区 didSet 自动重跑格式化。
+                    IndexOptionsMenu(
+                        menuTitle: "处理选项",
+                        triggerTitle: "处理选项",
+                        options: [
+                            IndexOptionsMenuOption(
+                                id: "escape",
+                                title: "转义",
+                                help: "转义为字符串",
+                                isOn: escapeSelection
+                            ),
+                            IndexOptionsMenuOption(
+                                id: "unescape",
+                                title: "去转义",
+                                help: "去除转义",
+                                isOn: unescapeSelection
+                            ),
+                            IndexOptionsMenuOption(
+                                id: "sort-keys",
+                                title: "Key 排序",
+                                help: "按字典序排序所有键",
+                                isOn: $workspace.sortKeys
+                            ),
+                        ],
+                        dividersBefore: ["sort-keys"]
+                    )
                 }
-            )
-        }
+            }
+        )
         .onChange(of: workspace.sortKeys) { _ in
             if !execution.binding.output.isEmpty {
                 format()

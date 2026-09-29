@@ -33,8 +33,8 @@ struct AllToolsDiagnosticInventoryTests {
         let actual = registeredGroups.mapValues { $0[0].categoryID.rawValue }
         let expected = inventoryGroups.mapValues { $0[0].category }
 
-        #expect(actual.count == 47)
-        #expect(Self.inventory.count == 47)
+        #expect(actual.count == 44)
+        #expect(Self.inventory.count == 44)
         #expect(actual == expected)
     }
 
@@ -83,10 +83,7 @@ struct AllToolsDiagnosticInventoryTests {
         entry("uuid-generator", "crypto", .none, "Crypto/UUIDGeneratorPage.swift", "受支持数量范围由控件约束，生成过程无用户输入解析错误。"),
         entry("password-generator", "crypto", .securityValidation, "Crypto/PasswordGeneratorPage.swift"),
 
-        entry("json-formatter", "development", .errorAndWarning, "Development/JSONFormatterPage.swift"),
-        entry("sql-prettify", "development", .inputValidation, "Development/SQLPrettifyPage.swift"),
-        entry("xml-formatter", "development", .inputValidation, "Development/XMLFormatterPage.swift"),
-        entry("yaml-prettify", "development", .inputValidation, "Development/YAMLPrettifyPage.swift"),
+        entry("formatter", "development", .errorAndWarning, "Development/FormatterHubPage.swift"),
         entry("json-diff", "development", .errorAndWarning, "Development/JSONDiffPage.swift"),
         entry("text-diff", "development", .inputValidation, "Development/TextDiffPage.swift"),
         entry("regex-tester", "development", .inputValidation, "Development/RegexTesterPage.swift"),

@@ -38,7 +38,9 @@ struct SmartPasteSourceContractTests {
         contains(monitor, "guard changeCount != dismissedChangeCount else { return }", "A dismissed suggestion must not reappear for the same clipboard content")
         contains(monitor, "tool.id != currentToolID", "The tool already on screen must not be suggested")
         contains(monitor, "func noteSelectedTool", "Navigation must be able to retire a stale suggestion")
-        contains(monitor, ": \"json-formatter\"", "Clipboard kinds must route to registered tool identities")
+        contains(monitor, ": \"formatter\"", "Clipboard kinds must route to registered tool identities")
+        contains(monitor, "formatterSegment: \"json\"", "Clipboard JSON must deep-link into the formatter hub's JSON segment")
+        contains(monitor, "formatterSegment: \"xml\"", "Clipboard XML must deep-link into the formatter hub's XML segment")
     }
 
     @Test func bannerFloatsWithoutDisplacingTheWorkspace() throws {

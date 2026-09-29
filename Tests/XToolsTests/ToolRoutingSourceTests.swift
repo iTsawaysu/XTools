@@ -56,10 +56,7 @@ struct ToolRoutingSourceTests {
             "密码生成器"
         ])
         #expect(try #require(groups.first { $0.category.id == .development }?.tools).map(\.title) == [
-            "JSON 格式化",
-            "SQL 格式化",
-            "XML 格式化",
-            "YAML 格式化",
+            "格式化",
             "JSON 对比",
             "文本对比",
             "正则测试",
