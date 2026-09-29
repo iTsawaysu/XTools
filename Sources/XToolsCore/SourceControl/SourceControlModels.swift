@@ -90,16 +90,11 @@ public enum SourceControlRepositoryStatus: String, Codable, CaseIterable, Sendab
 }
 
 public enum SourceControlScanScope: Hashable, Sendable {
-    /// Whole-machine discovery: the scanner walks the user's home directory
-    /// with the machine exclusion profile. Spotlight is not used — its index
-    /// is unreliable for hidden `.git` directories and honors user excludes.
-    case machine
     case repository(path: String)
     case directory(path: String)
 
-    public var path: String? {
+    public var path: String {
         switch self {
-        case .machine: return nil
         case let .repository(path), let .directory(path): return path
         }
     }

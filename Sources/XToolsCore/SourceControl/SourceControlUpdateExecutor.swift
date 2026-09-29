@@ -9,20 +9,32 @@ public struct SourceControlUpdateExecutor: Sendable {
     /// The non-throwing compatibility entry point reports cancellation as a final
     /// `.cancelled` row; `updateOrThrow` is available to callers that need a
     /// cancellation error after the progress stream has drained.
-    public func update(repositories: [SourceControlRepository], onResult: (@Sendable (SourceControlOperationResult) async -> Void)? = nil) async -> [SourceControlOperationResult] {
-        do { return try await updateOrThrow(repositories: repositories, onResult: onResult) }
+    ///
+    /// `force` relaxes only the clean-worktree precondition: the pull stays
+    /// `git pull --ff-only`, so git itself still refuses when uncommitted
+    /// changes would be overwritten or the branch cannot fast-forward.
+    public func update(
+        repositories: [SourceControlRepository],
+        force: Bool = false,
+        onResult: (@Sendable (SourceControlOperationResult) async -> Void)? = nil
+    ) async -> [SourceControlOperationResult] {
+        do { return try await updateOrThrow(repositories: repositories, force: force, onResult: onResult) }
         catch is CancellationError { return [] }
         catch { return [] }
     }
 
-    public func updateOrThrow(repositories: [SourceControlRepository], onResult: (@Sendable (SourceControlOperationResult) async -> Void)? = nil) async throws -> [SourceControlOperationResult] {
+    public func updateOrThrow(
+        repositories: [SourceControlRepository],
+        force: Bool = false,
+        onResult: (@Sendable (SourceControlOperationResult) async -> Void)? = nil
+    ) async throws -> [SourceControlOperationResult] {
         guard await coordinator.begin() else { return [] }
         var results: [SourceControlOperationResult] = []; results.reserveCapacity(repositories.count)
         for repository in repositories {
             if Task.isCancelled { await coordinator.end(); throw CancellationError() }
-            guard repository.isFastForwardCandidate else { let result = SourceControlOperationResult(repository: repository, outcome: .skipped); results.append(result); await onResult?(result); continue }
+            guard repository.isFastForwardCandidate || force else { let result = SourceControlOperationResult(repository: repository, outcome: .skipped); results.append(result); await onResult?(result); continue }
             do {
-                try await verifySnapshot(repository)
+                try await verifySnapshot(repository, allowDirtyWorktree: force)
             } catch is CancellationError {
                 let result = SourceControlOperationResult(repository: repository, outcome: .cancelled)
                 results.append(result)
@@ -59,7 +71,7 @@ public struct SourceControlUpdateExecutor: Sendable {
         await coordinator.end(); return results
     }
 
-    private func verifySnapshot(_ repository: SourceControlRepository) async throws {
+    private func verifySnapshot(_ repository: SourceControlRepository, allowDirtyWorktree: Bool = false) async throws {
         // Unit fixtures often use virtual paths. Real repositories are always
         // re-read; a missing path is left to the Git command itself for compatibility.
         guard FileManager.default.fileExists(atPath: repository.path) else { return }
@@ -70,7 +82,9 @@ public struct SourceControlUpdateExecutor: Sendable {
         let revision = try await required(.revision, repository.path)
         if let expected = repository.revision { guard cleanLine(revision.standardOutput) == expected else { throw SourceControlError.staleSnapshot } }
         let status = try await required(.status, repository.path)
-        guard status.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw SourceControlError.staleSnapshot }
+        if !allowDirtyWorktree {
+            guard status.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw SourceControlError.staleSnapshot }
+        }
         let upstream = try await optional(.upstream, repository.path)
         if repository.hasUpstream, let expectedUpstream = repository.upstream {
             guard cleanLine(upstream?.standardOutput ?? "") == expectedUpstream else { throw SourceControlError.staleSnapshot }

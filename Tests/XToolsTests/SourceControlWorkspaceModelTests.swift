@@ -106,34 +106,60 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
         XCTAssertTrue({ if case .upToDate = brokenOutcome { return true }; return false }(), "回退快照后重试应真正执行拉取")
     }
 
-    func testScanModeAndDirectoryPersistAcrossModelRecreation() async throws {
+    /// 跳过的仓库（如未跟踪/未提交改动）可强制更新：仍走 ff-only，
+    /// 只放开「工作区必须干净」的预检；汇总条数据随之刷新。
+    func testForceUpdateSkippedRepositoriesPullsDespiteDirtyWorktree() async throws {
+        let fixture = makeFixtureHome(repositories: ["work/clean", "work/dirty"])
+        let dirtyPath = "\(fixture.home.path)/work/dirty"
+        await fixture.git.setDirtyStatusPaths([dirtyPath])
+        let model = makeModel(home: fixture.home, git: fixture.git)
+        model.scan()
+        await waitUntil { !model.isScanning }
+
+        model.update()
+        await waitUntil { !model.isUpdating && !model.isScanning }
+        XCTAssertEqual(model.lastRunSummary?.skippedCount, 1)
+        XCTAssertEqual(model.lastRunSummary?.upToDateCount, 1)
+        let dirtyOutcome = model.operationResults.first { $0.repository.path == dirtyPath }?.outcome
+        XCTAssertTrue({ if case .skipped = dirtyOutcome { return true }; return false }())
+
+        // 用户显式强制：脏仓库也应执行 pull 并成功。
+        model.forceUpdateSkipped()
+        await waitUntil { !model.isUpdating && !model.isScanning }
+
+        let forcedOutcome = model.operationResults.first { $0.repository.path == dirtyPath }?.outcome
+        XCTAssertTrue({ if case .upToDate = forcedOutcome { return true }; return false }(), "强制更新应真正执行拉取")
+        XCTAssertEqual(model.lastRunSummary?.skippedCount, 0, "强制批次不应再有跳过")
+        // 未参与强制批次的仓库结果保留。
+        let cleanOutcome = model.operationResults.first { !$0.repository.path.hasSuffix("dirty") }?.outcome
+        XCTAssertTrue({ if case .upToDate = cleanOutcome { return true }; return false }())
+    }
+
+    func testScanDirectoryPersistsAcrossModelRecreation() async throws {
         let defaults = makeIsolatedDefaults()
         let preferences = ToolPreferenceStore(defaults: defaults)
         let fixture = makeFixtureHome(repositories: ["work/alpha"])
         let first = makeModel(home: fixture.home, git: fixture.git, preferences: preferences)
 
-        XCTAssertEqual(first.mode, .machine)
-        first.setMode(.directory)
         first.setPath("/Users/demo/work")
 
         let recreated = SourceControlWorkspaceModel(
             preferences: preferences,
-            scanner: SourceControlScanner(git: fixture.git, homeDirectoryPath: { fixture.home.path }),
+            scanner: SourceControlScanner(git: fixture.git),
             updater: SourceControlUpdateExecutor(git: fixture.git)
         )
-        XCTAssertEqual(recreated.mode, .directory)
         XCTAssertEqual(recreated.path, "/Users/demo/work")
+        XCTAssertTrue(recreated.canScan)
     }
 
-    func testDirectoryModeWithoutPathCannotScanButMachineAlwaysCan() async throws {
+    func testScanRequiresDirectoryPath() async throws {
         let fixture = makeFixtureHome(repositories: ["work/alpha"])
         let model = makeModel(home: fixture.home, git: fixture.git)
-        model.setMode(.directory)
         model.setPath("   ")
 
         XCTAssertFalse(model.canScan)
 
-        model.setMode(.machine)
+        model.setPath(fixture.home.path)
         XCTAssertTrue(model.canScan)
     }
 
@@ -145,11 +171,13 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
     }
 
     private func makeModel(home: URL, git: WorkspaceMockGitClient, preferences: ToolPreferenceStore? = nil) -> SourceControlWorkspaceModel {
-        SourceControlWorkspaceModel(
+        let model = SourceControlWorkspaceModel(
             preferences: preferences ?? ToolPreferenceStore(defaults: makeIsolatedDefaults()),
-            scanner: SourceControlScanner(git: git, homeDirectoryPath: { home.path }),
+            scanner: SourceControlScanner(git: git),
             updater: SourceControlUpdateExecutor(git: git)
         )
+        model.setPath(home.path)
+        return model
     }
 
     private func makeFixtureHome(repositories: [String]) -> Fixture {

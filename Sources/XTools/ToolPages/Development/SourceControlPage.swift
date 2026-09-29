@@ -7,20 +7,6 @@ final class SourceControlWorkspaceModel: ObservableObject {
         SourceControlWorkspaceModel(preferences: preferences)
     }
 
-    enum ScopeMode: String, CaseIterable, Identifiable {
-        case machine
-        case directory
-
-        var id: String { rawValue }
-
-        var title: String {
-            switch self {
-            case .machine: return "整机扫描"
-            case .directory: return "指定目录"
-            }
-        }
-    }
-
     /// Typed completion counts for the batch-update toast. The UUID keeps two
     /// identical runs distinct so `onChange` observers fire for each one.
     struct UpdateCompletionSummary: Equatable {
@@ -38,7 +24,6 @@ final class SourceControlWorkspaceModel: ObservableObject {
         var id: String { repository.id }
     }
 
-    @Published private(set) var mode: ScopeMode
     @Published var path = ""
     @Published private(set) var repositories: [SourceControlRepository] = []
     @Published private(set) var selectedPaths: Set<String> = []
@@ -48,6 +33,8 @@ final class SourceControlWorkspaceModel: ObservableObject {
     @Published private(set) var operationResults: [SourceControlOperationResult] = []
     @Published private(set) var failureSummary: [UpdateFailureSummary] = []
     @Published private(set) var lastCompletion: UpdateCompletionSummary?
+    /// 持久保留的最近一次批量结果计数（汇总条数据源）；新扫描/改路径清除。
+    @Published private(set) var lastRunSummary: UpdateCompletionSummary?
     /// Repository currently being pulled (serial run) for the row spinner.
     @Published private(set) var activeUpdatePath: String?
     @Published private(set) var updateRunCompleted = 0
@@ -90,7 +77,6 @@ final class SourceControlWorkspaceModel: ObservableObject {
         self.preferences = preferences
         self.scanner = scanner
         self.updater = updater
-        mode = ScopeMode(rawValue: preferences.value(for: SourceControlToolPreferenceKeys.scanMode)) ?? .machine
         path = preferences.value(for: SourceControlToolPreferenceKeys.scanDirectory)
     }
 
@@ -100,16 +86,6 @@ final class SourceControlWorkspaceModel: ObservableObject {
 
     var mergeRepository: SourceControlRepository? {
         repositories.first { $0.path == mergeRepositoryPath }
-    }
-
-    /// The scope caption shown next to the repository list.
-    var scopeTitle: String {
-        switch mode {
-        case .machine: return "主目录 · 整机扫描"
-        case .directory:
-            let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? "指定目录" : "目录：\(trimmed)"
-        }
     }
 
     var targetBranchOptions: [String] {
@@ -157,7 +133,7 @@ final class SourceControlWorkspaceModel: ObservableObject {
     }
 
     var canScan: Bool {
-        (mode == .machine || !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !isScanning && !isUpdating && !isCheckingMerge && !isCreatingMerge
     }
     var canUpdate: Bool {
@@ -180,19 +156,6 @@ final class SourceControlWorkspaceModel: ObservableObject {
         operationResults.append(result)
     }
 
-    func setMode(_ newMode: ScopeMode) {
-        guard newMode != mode else { return }
-        task?.cancel()
-        generation &+= 1
-        isScanning = false
-        isUpdating = false
-        isCheckingMerge = false
-        isCreatingMerge = false
-        mode = newMode
-        preferences.set(newMode.rawValue, for: SourceControlToolPreferenceKeys.scanMode)
-        resetScanDerivedState()
-    }
-
     func setPath(_ value: String) {
         task?.cancel()
         generation &+= 1
@@ -211,6 +174,7 @@ final class SourceControlWorkspaceModel: ObservableObject {
         diagnostic = nil
         operationResults = []
         failureSummary = []
+        lastRunSummary = nil
         preflight = nil
         createdMergeRequest = nil
         mergeDiagnostic = nil
@@ -290,12 +254,11 @@ final class SourceControlWorkspaceModel: ObservableObject {
         task?.cancel()
         generation &+= 1
         let operationGeneration = generation
-        let scope: SourceControlScanScope = mode == .machine
-            ? .machine
-            : .directory(path: path.trimmingCharacters(in: .whitespacesAndNewlines))
+        let scope = SourceControlScanScope.directory(path: path.trimmingCharacters(in: .whitespacesAndNewlines))
         isScanning = true
         diagnostic = nil
         failureSummary = []
+        lastRunSummary = nil
         task = Task { [weak self] in
             guard let self else { return }
             do {
@@ -371,6 +334,24 @@ final class SourceControlWorkspaceModel: ObservableObject {
         startUpdate([repository], resetResults: false)
     }
 
+    /// 跳过行的强制更新：放开「工作区必须干净」的预检，让 `git pull
+    /// --ff-only` 自行决定（改动会被覆盖或无法快进时 git 仍会拒绝）。
+    func forceUpdate(_ repository: SourceControlRepository) {
+        guard !isScanning, !isUpdating, !isCheckingMerge, !isCreatingMerge else { return }
+        startUpdate([repository], resetResults: false, force: true)
+    }
+
+    /// 汇总条「强制更新跳过项」：批量重跑上次被跳过的仓库。
+    func forceUpdateSkipped() {
+        guard !isScanning, !isUpdating, !isCheckingMerge, !isCreatingMerge else { return }
+        let targets = repositories.filter { repository in
+            guard let outcome = operationResults.last(where: { $0.repository.id == repository.id })?.outcome else { return false }
+            if case .skipped = outcome { return true }
+            return false
+        }
+        startUpdate(targets, resetResults: false, force: true)
+    }
+
     /// 失败汇总 sheet 的「重试失败项」：只重跑失败的仓库，保留其余结果。
     /// 重试目标优先取刷新扫描里仍是快进候选的数据；刷新快照在仓库已
     /// 恢复干净时是陈旧的（会把它标成不可快进），此时回退到失败时的
@@ -389,7 +370,7 @@ final class SourceControlWorkspaceModel: ObservableObject {
         startUpdate(targets, resetResults: false)
     }
 
-    private func startUpdate(_ targets: [SourceControlRepository], resetResults: Bool) {
+    private func startUpdate(_ targets: [SourceControlRepository], resetResults: Bool, force: Bool = false) {
         guard !targets.isEmpty else { return }
         task?.cancel()
         generation &+= 1
@@ -409,7 +390,7 @@ final class SourceControlWorkspaceModel: ObservableObject {
         activeUpdatePath = targets.first?.path
         task = Task { [weak self] in
             guard let self else { return }
-            _ = await updater.update(repositories: targets) { [weak self] result in
+            _ = await updater.update(repositories: targets, force: force) { [weak self] result in
                 await self?.recordUpdateResult(result, generation: operationGeneration, total: targets.count)
             }
             guard !Task.isCancelled, generation == operationGeneration else { return }
@@ -460,20 +441,20 @@ final class SourceControlWorkspaceModel: ObservableObject {
             }
         }
         failureSummary = failures
-        lastCompletion = UpdateCompletionSummary(
+        let summary = UpdateCompletionSummary(
             updatedCount: updated,
             upToDateCount: upToDate,
             skippedCount: skipped,
             failedCount: failed
         )
+        lastCompletion = summary
+        lastRunSummary = summary
     }
 
     /// 更新完成后的状态重扫：不清失败汇总与结果行，选择恢复为全选。
     private func refreshAfterUpdate() {
         let operationGeneration = generation
-        let scope: SourceControlScanScope = mode == .machine
-            ? .machine
-            : .directory(path: path.trimmingCharacters(in: .whitespacesAndNewlines))
+        let scope = SourceControlScanScope.directory(path: path.trimmingCharacters(in: .whitespacesAndNewlines))
         isScanning = true
         task = Task { [weak self] in
             guard let self else { return }
@@ -656,7 +637,7 @@ private struct SourceControlWorkspaceContent: View {
             Button("取消", role: .cancel) {}
             Button("确认更新") { workspace.update() }
         } message: {
-            Text("将按顺序对所选仓库执行 git pull --ff-only。有未提交改动、没有 upstream 或无法快进的仓库会自动跳过，失败不会影响其余仓库。")
+            Text("将按顺序对所选仓库执行 git pull --ff-only。有未提交改动、没有 upstream 或无法快进的仓库会自动跳过（跳过的仓库可单独强制更新），失败不会影响其余仓库。")
         }
         .alert("确认创建 Merge Request？", isPresented: $showsMergeConfirmation) {
             Button("取消", role: .cancel) {}
@@ -697,36 +678,16 @@ private struct SourceControlWorkspaceContent: View {
 
     private var scopePanel: some View {
         IndexPanel("同步范围") {
-            VStack(alignment: .leading, spacing: 10) {
-                IndexSegmentedControl(
-                    items: SourceControlWorkspaceModel.ScopeMode.allCases.map { ($0.id, $0.title) },
-                    selection: Binding(
-                        get: { workspace.mode.id },
-                        set: { workspace.setMode(.init(rawValue: $0) ?? .machine) }
-                    ),
-                    density: .compact
-                )
-                .disabled(workspace.isScanning || workspace.isUpdating)
-                if workspace.mode == .directory {
-                    HStack(spacing: 8) {
-                        IndexTextInput(
-                            placeholder: "工作区目录，例如 ~/work",
-                            text: Binding(get: { workspace.path }, set: workspace.setPath),
-                            onSubmit: { workspace.scan() }
-                        )
-                        Button { chooseDirectory() } label: { Label("选择", systemImage: "folder") }
-                            .buttonStyle(IndexSmallButtonStyle())
-                            .disabled(workspace.isScanning || workspace.isUpdating)
-                    }
-                    Text("扫描该目录（含子目录）下的所有 Git 仓库。目录会被记住，下次打开时自动恢复。")
-                        .font(ToolTypography.caption)
-                        .foregroundStyle(ToolTheme.textTertiary)
-                } else {
-                    Text("扫描当前用户主目录下的所有 Git 仓库，忽略资源库、媒体与依赖缓存目录。")
-                        .font(ToolTypography.caption)
-                        .foregroundStyle(ToolTheme.textTertiary)
-                }
+            VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
+                    IndexTextInput(
+                        placeholder: "工作区目录，例如 ~/work",
+                        text: Binding(get: { workspace.path }, set: workspace.setPath),
+                        onSubmit: { workspace.scan() }
+                    )
+                    Button { chooseDirectory() } label: { Label("选择", systemImage: "folder") }
+                        .buttonStyle(IndexSmallButtonStyle())
+                        .disabled(workspace.isScanning || workspace.isUpdating)
                     Button { workspace.scan() } label: {
                         IndexProgressMotionLabel(
                             title: workspace.isScanning ? "扫描中…" : "扫描仓库",
@@ -741,6 +702,9 @@ private struct SourceControlWorkspaceContent: View {
                         Button("取消") { workspace.cancel() }.buttonStyle(IndexSmallButtonStyle())
                     }
                 }
+                Text("扫描该目录（含子目录）下的所有 Git 仓库。目录会被记住，下次打开时自动恢复。")
+                    .font(ToolTypography.caption)
+                    .foregroundStyle(ToolTheme.textTertiary)
             }
         } accessory: { Text("只执行 git pull --ff-only").font(ToolTypography.caption).foregroundStyle(ToolTheme.textSecondary) }
     }
@@ -754,12 +718,15 @@ private struct SourceControlWorkspaceContent: View {
                     IndexEmptyState(
                         title: "尚未扫描仓库",
                         systemImage: "shippingbox",
-                        message: workspace.mode == .directory ? "选择目录后开始扫描" : "点击「扫描仓库」扫描本机仓库"
+                        message: "选择工作区目录后开始扫描，目录会被记住"
                     )
                 }
             } else {
                 VStack(spacing: 6) {
                     repositoryToolbar
+                    if let summary = runSummary {
+                        runSummaryBar(summary)
+                    }
                     if workspace.isScanning {
                         IndexProgressHairline(isIndeterminate: true)
                     }
@@ -785,15 +752,54 @@ private struct SourceControlWorkspaceContent: View {
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
             }
-        } accessory: {
-            Text(workspace.scopeTitle)
-                .font(ToolTypography.caption)
-                .foregroundStyle(ToolTheme.textSecondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
         }
         .verticallyFilling()
         .indexWorkspaceDiagnostic(workspace.diagnostic?.summary)
+    }
+
+    /// 汇总条只在一次运行结束后展示；运行中由细线进度 + 计数行接管。
+    private var runSummary: SourceControlWorkspaceModel.UpdateCompletionSummary? {
+        guard !workspace.isUpdating, !workspace.isScanning, let summary = workspace.lastRunSummary else { return nil }
+        guard summary.updatedCount + summary.upToDateCount + summary.skippedCount + summary.failedCount > 0 else { return nil }
+        return summary
+    }
+
+    private func runSummaryBar(_ summary: SourceControlWorkspaceModel.UpdateCompletionSummary) -> some View {
+        HStack(spacing: 8) {
+            Text("上次更新")
+                .font(ToolTypography.caption)
+                .foregroundStyle(ToolTheme.textTertiary)
+            if summary.updatedCount > 0 {
+                IndexBadge("已更新 \(summary.updatedCount)", tone: .success)
+            }
+            if summary.upToDateCount > 0 {
+                IndexBadge("已最新 \(summary.upToDateCount)", tone: .neutral)
+            }
+            if summary.skippedCount > 0 {
+                IndexBadge("跳过 \(summary.skippedCount)", tone: .warning)
+            }
+            if summary.failedCount > 0 {
+                IndexBadge("失败 \(summary.failedCount)", tone: .warning)
+            }
+            Spacer()
+            if summary.skippedCount > 0 {
+                Button("强制更新跳过项") { workspace.forceUpdateSkipped() }
+                    .buttonStyle(IndexSmallButtonStyle())
+                    .disabled(workspace.isUpdating || workspace.isScanning)
+                    .help("跳过的仓库直接尝试 git pull --ff-only，改动会被覆盖或无法快进时 Git 仍会拒绝")
+            }
+            if summary.failedCount > 0 {
+                Button("重试失败项") { workspace.retryFailures() }
+                    .buttonStyle(IndexSmallButtonStyle())
+                    .disabled(workspace.isUpdating || workspace.isScanning)
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
+                .fill(ToolTheme.utilityBackground)
+        )
     }
 
     private var repositoryToolbar: some View {
@@ -890,6 +896,11 @@ private struct SourceControlWorkspaceContent: View {
                 Button("重试") { workspace.retry(failedResult.repository) }
                     .buttonStyle(IndexSmallButtonStyle())
                     .disabled(workspace.isUpdating || workspace.isScanning)
+            } else if let skipped = skippedResult(of: repository) {
+                Button("强制更新") { workspace.forceUpdate(skipped.repository) }
+                    .buttonStyle(IndexSmallButtonStyle())
+                    .disabled(workspace.isUpdating || workspace.isScanning)
+                    .help("跳过干净预检直接尝试 git pull --ff-only；本地改动会被覆盖或无法快进时 Git 仍会拒绝")
             }
         }
     }
@@ -918,6 +929,13 @@ private struct SourceControlWorkspaceContent: View {
             .hoverHighlight()
         }
         .buttonStyle(IndexBareButtonStyle())
+    }
+
+    /// 行尾「强制更新」入口只挂在被跳过的行上（结果类型驱动，不解析文案）。
+    private func skippedResult(of repository: SourceControlRepository) -> SourceControlOperationResult? {
+        guard let result = workspace.operationResults.last(where: { $0.repository.id == repository.id }),
+              case .skipped = result.outcome else { return nil }
+        return result
     }
 
     private func repositoryStatusTitle(_ repository: SourceControlRepository) -> String {

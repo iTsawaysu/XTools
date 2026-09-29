@@ -3,19 +3,10 @@ import Foundation
 public struct SourceControlScanner: Sendable {
     private let git: any GitProcessClient
     private let maximumConcurrentRepositories: Int
-    private let homeDirectoryPath: @Sendable () -> String
 
-    /// - Parameter homeDirectoryPath: root used by the `.machine` scope.
-    ///   Injectable so behavior tests can point whole-machine discovery at a
-    ///   fixture tree instead of the real home directory.
-    public init(
-        git: any GitProcessClient = SystemGitProcessClient(),
-        maximumConcurrentRepositories: Int = 4,
-        homeDirectoryPath: @escaping @Sendable () -> String = { NSHomeDirectory() }
-    ) {
+    public init(git: any GitProcessClient = SystemGitProcessClient(), maximumConcurrentRepositories: Int = 4) {
         self.git = git
         self.maximumConcurrentRepositories = max(1, maximumConcurrentRepositories)
-        self.homeDirectoryPath = homeDirectoryPath
     }
 
     public func scan(
@@ -64,12 +55,7 @@ public struct SourceControlScanner: Sendable {
 
     private func discoverRepositoryPaths(scope: SourceControlScanScope) throws -> [String] {
         let fileManager = FileManager.default
-        let scopeRoot: String
-        switch scope {
-        case .machine: scopeRoot = homeDirectoryPath()
-        case let .repository(path), let .directory(path): scopeRoot = path
-        }
-        let root = URL(fileURLWithPath: scopeRoot).standardizedFileURL
+        let root = URL(fileURLWithPath: scope.path).standardizedFileURL
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: root.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             throw SourceControlError.invalidScope
@@ -79,7 +65,7 @@ public struct SourceControlScanner: Sendable {
         case .repository:
             guard hasGitMarker(at: root) else { throw SourceControlError.notRepository }
             return [root.path]
-        case .machine, .directory:
+        case .directory:
             guard let enumerator = fileManager.enumerator(
                 at: root,
                 includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey],
@@ -93,14 +79,7 @@ public struct SourceControlScanner: Sendable {
             // any are found. The root remains available through single-repo
             // mode and is used as the directory result only when it has no
             // nested repositories.
-            var ignored = Set([".git", "node_modules", ".build", "build", "DerivedData", "Pods", ".swiftpm"])
-            if case .machine = scope {
-                // Whole-machine walks stay inside the user's data domain:
-                // macOS system volumes are SIP/TCC-gated noise, and home
-                // media/library trees hold no repositories but dominate the
-                // walk cost. Toolchain caches duplicate dependency folders.
-                ignored.formUnion(Self.machineExcludedDirectoryNames)
-            }
+            let ignored = Set([".git", "node_modules", ".build", "build", "DerivedData", "Pods", ".swiftpm"])
             let rootIsRepository = hasGitMarker(at: root)
             var result = Set<String>()
             while let item = enumerator.nextObject() as? URL {
@@ -111,10 +90,7 @@ public struct SourceControlScanner: Sendable {
                     continue
                 }
                 guard values.isDirectory == true else { continue }
-                // `go` keeps module caches under `<go root>/pkg`; only that
-                // subtree is dependency noise.
-                let isGoPackageCache = item.lastPathComponent == "pkg" && item.deletingLastPathComponent().lastPathComponent == "go"
-                if ignored.contains(item.lastPathComponent) || isGoPackageCache {
+                if ignored.contains(item.lastPathComponent) {
                     enumerator.skipDescendants()
                     continue
                 }
@@ -127,17 +103,6 @@ public struct SourceControlScanner: Sendable {
             return result.sorted()
         }
     }
-
-    /// Directory names skipped by `.machine` discovery in addition to the
-    /// shared workspace ignore list.
-    private static let machineExcludedDirectoryNames: Set<String> = [
-        // macOS data domains that never contain user repositories.
-        "Library", "Applications", "Movies", "Music", "Pictures", "Public", "Sites", ".Trash",
-        // Toolchain / package caches (multi-GB trees with nested VCS metadata).
-        ".cache", ".npm", ".cargo", ".rustup", ".pyenv", ".rbenv", ".nvm",
-        ".docker", ".colima", ".orbstack", ".gradle", ".m2", ".cocoapods",
-        ".conda", ".venv", "venv", "site-packages",
-    ]
 
     private func hasGitMarker(at url: URL) -> Bool {
         var isDirectory: ObjCBool = false

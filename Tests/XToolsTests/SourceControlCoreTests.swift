@@ -82,60 +82,6 @@ final class SourceControlCoreTests: XCTestCase {
         XCTAssertFalse(snapshot.repositories.first?.isFastForwardCandidate == true)
     }
 
-    // MARK: - Machine scope
-
-    private func makeMachineGitClient() -> MockGitClient {
-        MockGitClient { request in
-            switch request.kind {
-            case .branch: return GitProcessOutput(exitCode: 0, standardOutput: "main\n")
-            case .revision: return GitProcessOutput(exitCode: 0, standardOutput: "abc123\n")
-            case .remote: return GitProcessOutput(exitCode: 0, standardOutput: "origin\thttps://gitlab.example/acme/repo.git (fetch)\n")
-            case .upstream: return GitProcessOutput(exitCode: 0, standardOutput: "origin/main\n")
-            case .status: return GitProcessOutput(exitCode: 0, standardOutput: "")
-            case .divergence: return GitProcessOutput(exitCode: 0, standardOutput: "0\t0\n")
-            case .remoteRevision: return GitProcessOutput(exitCode: 0, standardOutput: "abc123\trefs/heads/main\n")
-            default: return GitProcessOutput(exitCode: 1)
-            }
-        }
-    }
-
-    func testMachineScopeDiscoversRepositoriesUnderInjectedHome() async throws {
-        let home = makeTemporaryDirectory()
-        for name in ["work/alpha", "work/beta", "code/gamma"] {
-            try FileManager.default.createDirectory(atPath: "\(home.path)/\(name)/.git", withIntermediateDirectories: true)
-        }
-        let scanner = SourceControlScanner(git: makeMachineGitClient(), homeDirectoryPath: { home.path })
-
-        let snapshot = try await scanner.scan(scope: .machine)
-        XCTAssertEqual(
-            snapshot.repositories.map(\.path).sorted(),
-            ["\(home.path)/code/gamma", "\(home.path)/work/alpha", "\(home.path)/work/beta"].sorted()
-        )
-        XCTAssertEqual(snapshot.scope, .machine)
-    }
-
-    func testMachineScopeIgnoresLibraryMediaAndToolchainCaches() async throws {
-        let home = makeTemporaryDirectory()
-        let excluded = ["Library/Application Support/thing", "Movies/clip", "Music/track", ".cargo/registry", ".npm/cache", "go/pkg/mod", ".Trash/deleted"]
-        for name in excluded {
-            try FileManager.default.createDirectory(atPath: "\(home.path)/\(name)/.git", withIntermediateDirectories: true)
-        }
-        try FileManager.default.createDirectory(atPath: "\(home.path)/work/real/.git", withIntermediateDirectories: true)
-        let scanner = SourceControlScanner(git: makeMachineGitClient(), homeDirectoryPath: { home.path })
-
-        let snapshot = try await scanner.scan(scope: .machine)
-        XCTAssertEqual(snapshot.repositories.map(\.path), ["\(home.path)/work/real"])
-    }
-
-    func testMachineScopeFallsBackToHomeRootRepository() async throws {
-        let home = makeTemporaryDirectory()
-        try FileManager.default.createDirectory(atPath: "\(home.path)/.git", withIntermediateDirectories: true)
-        let scanner = SourceControlScanner(git: makeMachineGitClient(), homeDirectoryPath: { home.path })
-
-        let snapshot = try await scanner.scan(scope: .machine)
-        XCTAssertEqual(snapshot.repositories.map(\.path), [home.path])
-    }
-
     // MARK: - Pull failure classification
 
     func testPullFailureClassifiesDirtyWorktreeDivergenceAndRemoteErrors() {
@@ -191,6 +137,49 @@ final class SourceControlCoreTests: XCTestCase {
             return XCTFail("Expected classified pull failure")
         }
         XCTAssertEqual(diagnostic.code, "pull-dirty-worktree")
+    }
+
+    // MARK: - Force update
+
+    /// 强制更新只放开「工作区必须干净」的预检：非快进候选默认跳过，
+    /// force 时执行 pull，且不再因脏状态中断（identity 校验仍保留）。
+    func testForceUpdateBypassesCleanWorktreeRequirement() async {
+        let root = makeTemporaryDirectory()
+        try? FileManager.default.createDirectory(atPath: "\(root.path)/.git", withIntermediateDirectories: true)
+        let repository = SourceControlRepository(
+            path: root.path,
+            branch: "main",
+            shortRevision: "abc",
+            remote: "origin",
+            status: .modified,
+            upstream: "origin/main",
+            revision: "abc123",
+            remoteState: .upToDate
+        )
+        let git = MockGitClient { request in
+            switch request.kind {
+            case .repositoryRoot: return GitProcessOutput(exitCode: 0, standardOutput: request.repositoryPath + "\n")
+            case .branch: return GitProcessOutput(exitCode: 0, standardOutput: "main\n")
+            case .revision: return GitProcessOutput(exitCode: 0, standardOutput: "abc123\n")
+            case .upstream: return GitProcessOutput(exitCode: 0, standardOutput: "origin/main\n")
+            case .status: return GitProcessOutput(exitCode: 0, standardOutput: " M file.swift\n")
+            case .pullFastForward: return GitProcessOutput(exitCode: 0, standardOutput: "Already up to date.\n")
+            default: return GitProcessOutput(exitCode: 0)
+            }
+        }
+        let executor = SourceControlUpdateExecutor(git: git)
+
+        let skipped = await executor.update(repositories: [repository])
+        guard case .skipped? = skipped.first?.outcome else {
+            return XCTFail("Expected dirty repository to be skipped without force")
+        }
+
+        let forced = await executor.update(repositories: [repository], force: true)
+        guard case .upToDate? = forced.first?.outcome else {
+            return XCTFail("Expected forced pull to run despite dirty worktree, got \(String(describing: forced.first?.outcome))")
+        }
+        let calls = await git.calls
+        XCTAssertEqual(calls.filter { $0 == .pullFastForward }.count, 1, "Only the forced run should pull")
     }
 
     func testUpdatesOnlyFastForwardCandidatesInInputOrder() async {
