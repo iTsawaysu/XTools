@@ -8,6 +8,9 @@ import XToolsCore
 /// `IndexReadOnlyTextSurface`.
 struct IndexMarkdownPreviewSurface: View {
     let text: String
+    // SwiftUI must re-evaluate this view for NFC/NFD-only changes even when no
+    // parent generation is supplied; String's canonical equality is too broad.
+    private let exactTextIdentity: JSONExactTextIdentity
     var placeholder: String = IndexEmptyStateCopy.outputWillShowHere
     var fillsHeight = false
     var remoteImagePolicy: MarkdownRemoteImagePolicy = .publicHTTPAndHTTPS
@@ -15,6 +18,22 @@ struct IndexMarkdownPreviewSurface: View {
     @Environment(\.markdownPreviewAuthorizationGeneration) private var authorizationGeneration
     @State private var remoteImageAuthorization = MarkdownRemoteImageAuthorizationState()
     @State private var remoteImageDetection = MarkdownRemoteImageDetectionState()
+    @State private var remoteImageLoader: MarkdownRemoteImageSession?
+
+    init(
+        text: String,
+        placeholder: String = IndexEmptyStateCopy.outputWillShowHere,
+        fillsHeight: Bool = false,
+        remoteImagePolicy: MarkdownRemoteImagePolicy = .publicHTTPAndHTTPS,
+        accessibilityTitle: String? = nil
+    ) {
+        self.text = text
+        self.exactTextIdentity = JSONExactTextIdentity(text)
+        self.placeholder = placeholder
+        self.fillsHeight = fillsHeight
+        self.remoteImagePolicy = remoteImagePolicy
+        self.accessibilityTitle = accessibilityTitle
+    }
 
     private var authorizationScope: MarkdownRemoteImageAuthorizationScope {
         MarkdownRemoteImageAuthorizationScope(
@@ -25,6 +44,7 @@ struct IndexMarkdownPreviewSurface: View {
 
     private var remoteImagesAuthorized: Bool {
         remoteImageAuthorization.isAuthorized(for: authorizationScope)
+            && remoteImageLoader?.isCancelled == false
     }
 
     private var containsRemoteImages: Bool {
@@ -44,15 +64,21 @@ struct IndexMarkdownPreviewSurface: View {
                         .markdownImageProvider(
                             MarkdownPreviewImageProvider(
                                 authorized: remoteImagesAuthorized,
-                                policy: remoteImagePolicy
+                                policy: remoteImagePolicy,
+                                session: remoteImageLoader
                             )
                         )
                         .markdownInlineImageProvider(
                             MarkdownPreviewInlineImageProvider(
                                 authorized: remoteImagesAuthorized,
-                                policy: remoteImagePolicy
+                                policy: remoteImagePolicy,
+                                session: remoteImageLoader
                             )
                         )
+                        // MarkdownUI caches inline images by inline nodes, not
+                        // provider identity. Refresh this read-only tree when
+                        // authorization changes so revoked images cannot linger.
+                        .id(remoteImagesAuthorized ? remoteImageLoader?.id : nil)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .topLeading)
                         .padding(14)
@@ -74,8 +100,9 @@ struct IndexMarkdownPreviewSurface: View {
 
         }
         .onChange(of: authorizationScope) { _ in
-            remoteImageAuthorization.revoke()
+            revokeRemoteImages()
         }
+        .onDisappear { revokeRemoteImages() }
         .task(id: authorizationScope) {
             let scope = authorizationScope
             guard remoteImageDetection.beginDetection(for: scope) else { return }
@@ -119,6 +146,8 @@ struct IndexMarkdownPreviewSurface: View {
                 .foregroundStyle(ToolTheme.textSecondary)
             Spacer(minLength: 0)
             Button("加载远程图片") {
+                remoteImageLoader?.cancel()
+                remoteImageLoader = MarkdownRemoteImageSession()
                 remoteImageAuthorization.authorize(authorizationScope)
             }
             .buttonStyle(IndexSmallButtonStyle())
@@ -132,6 +161,12 @@ struct IndexMarkdownPreviewSurface: View {
                 .strokeBorder(ToolTheme.accentBorder, lineWidth: 0.5)
         }
         .accessibilityElement(children: .contain)
+    }
+
+    private func revokeRemoteImages() {
+        remoteImageAuthorization.revoke()
+        remoteImageLoader?.cancel()
+        remoteImageLoader = nil
     }
 }
 
@@ -162,6 +197,20 @@ extension EnvironmentValues {
 struct MarkdownRemoteImageAuthorizationScope: Hashable, Sendable {
     let resultText: String
     let generation: Int
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.generation == rhs.generation && lhs.resultText.utf8.elementsEqual(rhs.resultText.utf8)
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(generation)
+        let combined: Void? = resultText.utf8.withContiguousStorageIfAvailable {
+            hasher.combine(bytes: UnsafeRawBufferPointer($0))
+        }
+        if combined == nil {
+            Data(resultText.utf8).withUnsafeBytes { hasher.combine(bytes: $0) }
+        }
+    }
 }
 
 /// A bounded one-result cache for the parser-backed remote-image scan. The
@@ -290,13 +339,14 @@ struct MarkdownPreviewImageProvider: ImageProvider {
     init(
         authorized: Bool,
         policy: MarkdownRemoteImagePolicy,
-        loader: @escaping Loader = { url in
-            AnyView(DefaultImageProvider.default.makeImage(url: url))
-        }
+        session: MarkdownRemoteImageSession? = nil,
+        loader: Loader? = nil
     ) {
         self.authorized = authorized
         self.policy = policy
-        self.loader = loader
+        self.loader = loader ?? { url in
+            AnyView(MarkdownRemoteImageView(url: url, session: session))
+        }
     }
 
     @ViewBuilder
@@ -326,13 +376,18 @@ struct MarkdownPreviewInlineImageProvider: InlineImageProvider {
     init(
         authorized: Bool,
         policy: MarkdownRemoteImagePolicy,
-        loader: @escaping Loader = { url, label in
-            try await DefaultInlineImageProvider.default.image(with: url, label: label)
-        }
+        session: MarkdownRemoteImageSession? = nil,
+        loader: Loader? = nil
     ) {
         self.authorized = authorized
         self.policy = policy
-        self.loader = loader
+        self.loader = loader ?? { url, label in
+            guard let session else { throw CancellationError() }
+            let image = try await session.image(for: url)
+            try Task.checkCancellation()
+            guard !session.isCancelled else { throw CancellationError() }
+            return Image(image.image, scale: 1, label: Text(label))
+        }
     }
 
     func image(with url: URL, label: String) async throws -> Image {
@@ -342,7 +397,15 @@ struct MarkdownPreviewInlineImageProvider: InlineImageProvider {
         case .deniedByPolicy:
             return blockedImage(accessibilityDescription: "图片地址未获准加载")
         case .load:
-            return try await loader(url, label)
+            do {
+                return try await loader(url, label)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                let message = (error as? MarkdownRemoteImageError)?.message
+                    ?? MarkdownRemoteImageError.requestFailed.message
+                return blockedImage(accessibilityDescription: message)
+            }
         }
     }
 

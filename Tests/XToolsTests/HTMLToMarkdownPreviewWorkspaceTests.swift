@@ -1,8 +1,46 @@
 import SwiftUI
 import Testing
 @testable import XTools
+@testable import XToolsCore
 
 struct HTMLToMarkdownPreviewWorkspaceTests {
+    @MainActor
+    @Test func productionProvidersKeepTheScopedLoaderIdleUntilAuthorization() async throws {
+        let url = try #require(URL(string: "https://images.example.com/diagram.png"))
+        let session = MarkdownRemoteImageSession(loader: { _ in
+            throw MarkdownRemoteImageError.requestFailed
+        })
+        let block = MarkdownPreviewImageProvider(authorized: false, policy: .httpAndHTTPSOnly, session: session)
+        let inline = MarkdownPreviewInlineImageProvider(authorized: false, policy: .httpAndHTTPSOnly, session: session)
+        _ = block.makeImage(url: url)
+        _ = try await inline.image(with: url, label: "diagram")
+        #expect(await session.resourceUsage.urlCount == 0)
+
+        let authorized = MarkdownPreviewInlineImageProvider(authorized: true, policy: .httpAndHTTPSOnly, session: session)
+        _ = try await authorized.image(with: url, label: "diagram")
+        #expect(await session.resourceUsage.urlCount == 1, "The default inline provider must enter the app-owned session")
+        session.cancel()
+    }
+
+    @Test func authorizationScopeDistinguishesCanonicallyEquivalentSourceBytes() {
+        let composed = MarkdownRemoteImageAuthorizationScope(resultText: "![é](https://example.com/a.png)", generation: 1)
+        let decomposed = MarkdownRemoteImageAuthorizationScope(resultText: "![e\u{301}](https://example.com/a.png)", generation: 1)
+        var authorization = MarkdownRemoteImageAuthorizationState()
+        authorization.authorize(composed)
+        #expect(composed != decomposed)
+        #expect(Set([composed, decomposed]).count == 2)
+        #expect(!authorization.isAuthorized(for: decomposed))
+    }
+
+    @Test func defaultProvidersDoNotBypassApplicationResourceBudgets() throws {
+        let source = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexMarkdownPreviewSurface.swift")
+        doesNotContain(source, "DefaultImageProvider.default", "Block images must not enter the third-party unbounded loader.")
+        doesNotContain(source, "DefaultInlineImageProvider.default", "Inline images must share the application loader budgets.")
+        contains(source, ".onDisappear", "Leaving preview must revoke and cancel the image scope.")
+        contains(source, "private let exactTextIdentity: JSONExactTextIdentity", "SwiftUI must not skip NFC/NFD-only result updates.")
+        contains(source, "self.exactTextIdentity = JSONExactTextIdentity(text)", "The exact snapshot must be captured when the preview value is built.")
+    }
+
     @Test func remoteImagePolicyBlocksRequestsUntilCurrentResultIsExplicitlyAuthorized() throws {
         let allowed = try #require(URL(string: "https://images.example.com/diagram.png"))
         let denied = try #require(URL(string: "file:///tmp/diagram.png"))

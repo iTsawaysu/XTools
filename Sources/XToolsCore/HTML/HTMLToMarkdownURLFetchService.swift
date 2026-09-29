@@ -92,6 +92,13 @@ public struct LiveHTMLToMarkdownURLFetchClient: HTMLToMarkdownURLFetchClient {
         try Task.checkCancellation()
 
         let configuration = configurationFactory()
+        // Fetches are explicit public-resource reads, with no shared browser
+        // credentials or cookies. The caller owns any bounded in-memory cache.
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.urlCredentialStorage = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.timeoutIntervalForRequest = request.timeoutInterval
         configuration.timeoutIntervalForResource = request.timeoutInterval
 
