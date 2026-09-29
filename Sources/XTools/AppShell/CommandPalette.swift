@@ -168,6 +168,18 @@ struct CommandPaletteView: View {
     @StateObject private var contentLifecycle: CommandPaletteContentLifecycle
     /// True when the active row was last set by keyboard arrows (not pointer).
     @State private var keyboardDrivenSession: Int?
+    /// Wave 2 row-arrival choreography: the session whose rows have started
+    /// their staggered entrance. Rows render hidden until the session flips
+    /// here one runloop tick after the open, so every open replays the 20ms
+    /// stagger while query filtering stays instant.
+    @State private var revealedSession: Int?
+    /// True only for keyboard-driven active-row changes: the floating
+    /// selection highlight springs between rows on ↑↓ moves and drops
+    /// instantly on list rebuilds (query reset, new session, pointer move).
+    @State private var highlightFlightAnimated = false
+    /// Row selection frames published by the list and resolved behind the
+    /// rows by the floating highlight layer.
+    @State private var rowAnchors: [String: Anchor<CGRect>] = [:]
     init(
         presentation: CommandPalettePresentationModel,
         registry: ToolRegistry,
@@ -212,6 +224,27 @@ struct CommandPaletteView: View {
         isPresented && sessionModel.session == presentationSession
     }
 
+    /// Wave 2 stagger gate: only the current session's rows have arrived.
+    /// Reduce Motion keeps rows permanently arrived so the palette opens
+    /// without choreography.
+    private var rowsArrived: Bool {
+        reduceMotion || revealedSession == sessionModel.session
+    }
+
+    /// Replays the row entrance stagger for a fresh presentation session.
+    /// The flip lands one runloop tick after the open render, so rows mount
+    /// hidden and animate in on their per-row delayed arcs; a close before
+    /// the tick cancels the reveal.
+    private func scheduleRowArrival() {
+        guard !reduceMotion else { return }
+        let session = sessionModel.session
+        guard revealedSession != session else { return }
+        DispatchQueue.main.async {
+            guard isPresented, sessionModel.session == session else { return }
+            revealedSession = session
+        }
+    }
+
     private func isLiveSession() -> Bool {
         isPresentationReady && canRequestSearchFocus()
     }
@@ -234,6 +267,7 @@ struct CommandPaletteView: View {
 
     private func updateQuery(_ query: String) {
         guard isLiveSession(), sessionModel.setQuery(query) else { return }
+        highlightFlightAnimated = false
         requestActiveReveal(for: .queryReset, in: sessionModel.snapshot)
     }
 
@@ -260,6 +294,8 @@ struct CommandPaletteView: View {
 
         switch moveDecision {
         case .move(let index), .alignToVisibleSelectableIndex(let index):
+            // Keyboard-driven move: the selection highlight springs.
+            highlightFlightAnimated = true
             sessionModel.navigationState.setActiveSelectableIndex(index, in: snapshot)
         case .revealCurrent:
             requestActiveReveal(for: .keyboard(delta: delta))
@@ -285,6 +321,7 @@ struct CommandPaletteView: View {
         guard isLiveSession() else { return }
         let snapshot = sessionModel.snapshot
         keyboardDrivenSession = nil
+        highlightFlightAnimated = false
         guard item.id != sessionModel.navigationState.activeRowID(in: snapshot) else { return }
         sessionModel.navigationState.setActiveRow(item, in: snapshot)
         requestActiveReveal(for: .pointerMove)
@@ -408,6 +445,82 @@ struct CommandPaletteView: View {
         }
     }
 
+    /// One list row: content plus list padding, its selection-frame anchor,
+    /// and the Wave 2 staggered entrance (selectable rows only).
+    private func arrivedRow(
+        for item: CommandPaletteRowProjection,
+        activeItemID: String?,
+        selectableIndex: Int?,
+        highlightQuery: String
+    ) -> some View {
+        paletteItemView(
+            for: item,
+            activeItemID: activeItemID,
+            selectableIndex: selectableIndex,
+            highlightQuery: highlightQuery
+        )
+        .padding(.horizontal, 9)
+        .padding(.vertical, 1)
+        .anchorPreference(key: CommandPaletteRowAnchorsKey.self, value: .bounds) { bounds in
+            Self.rowAnchors(
+                itemID: item.id,
+                isSelectable: selectableIndex != nil,
+                bounds: bounds
+            )
+        }
+        .modifier(CommandPaletteRowArrivalModifier(
+            arrived: rowsArrived,
+            index: selectableIndex,
+            reduceMotion: reduceMotion
+        ))
+        .id(item.id)
+    }
+
+    private static func rowAnchors(
+        itemID: String,
+        isSelectable: Bool,
+        bounds: Anchor<CGRect>
+    ) -> [String: Anchor<CGRect>] {
+        isSelectable ? [itemID: bounds] : [:]
+    }
+
+    /// The scrollable row list: staggered-arrival rows with the floating
+    /// selection highlight behind them.
+    private func rowsSection(
+        snapshot: CommandPaletteRowSnapshot,
+        activeItemID: String?
+    ) -> some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                // Trimmed once per section; every row shares this value
+                // instead of re-trimming the query in its renderer.
+                let highlightQuery = sessionModel.query.trimmingCharacters(in: .whitespaces)
+                ForEach(snapshot.rows) { item in
+                    arrivedRow(
+                        for: item,
+                        activeItemID: activeItemID,
+                        selectableIndex: snapshot.selectableIndex(of: item),
+                        highlightQuery: highlightQuery
+                    )
+                }
+            }
+            .padding(.vertical, 4)
+            // Floating selection highlight: resolves the active row's frame
+            // in list space and springs between rows on keyboard moves
+            // (geometry lives in `CommandPaletteSelectionHighlightHost`).
+            .background {
+                CommandPaletteSelectionHighlightHost(
+                    activeItemID: activeItemID,
+                    anchors: rowAnchors,
+                    animates: highlightFlightAnimated,
+                    reduceMotion: reduceMotion
+                )
+            }
+            .onPreferenceChange(CommandPaletteRowAnchorsKey.self) { rowAnchors = $0 }
+        }
+        .frame(maxHeight: 360)
+    }
+
     var body: some View {
         let _ = CommandPaletteTrace.count(.paletteBody, session: presentationSession)
         let _ = contentLifecycle.updateActions(actions)
@@ -486,26 +599,7 @@ struct CommandPaletteView: View {
 
             ToolDivider()
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Trimmed once per body; every row shares this value
-                    // instead of re-trimming the query in its renderer.
-                    let highlightQuery = sessionModel.query.trimmingCharacters(in: .whitespaces)
-                    ForEach(snapshot.rows) { item in
-                        paletteItemView(
-                            for: item,
-                            activeItemID: activeItemID,
-                            selectableIndex: snapshot.selectableIndex(of: item),
-                            highlightQuery: highlightQuery
-                        )
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 1)
-                            .id(item.id)
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-            .frame(maxHeight: 360)
+            rowsSection(snapshot: snapshot, activeItemID: activeItemID)
 
             CommandPaletteHintsBar()
         }
@@ -541,6 +635,9 @@ struct CommandPaletteView: View {
             presentation.installLifecycle(contentLifecycle)
             CommandPaletteTrace.appeared(session: presentationSession)
             preparePresentationIfNeeded()
+            if isPresented {
+                scheduleRowArrival()
+            }
         }
         .onDisappear {
             presentation.removeLifecycle(contentLifecycle)
@@ -548,9 +645,13 @@ struct CommandPaletteView: View {
         }
         .onChange(of: presentationSession) { _ in
             preparePresentationIfNeeded()
+            highlightFlightAnimated = false
         }
         .onChange(of: isPresented) { _ in
             preparePresentationIfNeeded()
+            if isPresented {
+                scheduleRowArrival()
+            }
         }
         .onChange(of: actions) { newActions in
             guard isPresentationReady else { return }
@@ -565,6 +666,11 @@ struct CommandPaletteVisibilityGeometry: Equatable {
     let scale: CGFloat
     let offsetY: CGFloat
 
+    /// Wave 2 prototype mapping (MOTION cmdkIn/cmdkOut): the panel rises
+    /// from `riseDistance` below while fading in, settling through the
+    /// `settleScale` scale; close reverses the same continuous function on
+    /// the exit arc. One shared mapping keeps rapid open/close reversals
+    /// continuous — the presentation never hard-switches geometry mid-flight.
     static func resolve(
         progress: CGFloat,
         reduceMotion: Bool
@@ -574,10 +680,10 @@ struct CommandPaletteVisibilityGeometry: Equatable {
             opacity: Double(progress),
             scale: reduceMotion
                 ? 1
-                : ToolMotion.Scale.modal + (1 - ToolMotion.Scale.modal) * progress,
+                : 1 - (1 - ToolMotion.PaletteMotion.settleScale) * (1 - progress),
             offsetY: reduceMotion
                 ? 0
-                : -ToolMotion.Distance.small * (1 - progress)
+                : ToolMotion.PaletteMotion.riseDistance * (1 - progress)
         )
     }
 }
@@ -844,15 +950,10 @@ private struct CommandPaletteRow: View {
             .padding(.horizontal, 8)
             .frame(height: 36)
             .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
-            .background(
-                isActive ? ToolTheme.selectionFill : Color.clear,
-                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-            )
+            // Selection fill/stroke live in the floating highlight layer
+            // (`CommandPaletteSelectionHighlightLayer`); the row keeps only
+            // the keyboard focus ring.
             .overlay {
-                if isActive {
-                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                        .strokeBorder(ToolTheme.selectionStroke, lineWidth: 1)
-                }
                 if isKeyboardActive {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
                         .strokeBorder(ToolTheme.focusRing, lineWidth: 1.5)
@@ -879,5 +980,36 @@ private struct CommandPaletteRow: View {
         return AttributedString(String(title[..<range.lowerBound]))
             + highlighted
             + AttributedString(String(title[range.upperBound...]))
+    }
+}
+
+// MARK: - Wave 2 row arrival
+
+/// Staggered open-time row entrance (prototype rowIn + cmdkRowsDelay +
+/// listStagger): each selectable row fades in while rising 4pt on a 150ms
+/// smoothOut arc, delayed by 60ms plus its 20ms stagger step. Only the
+/// `arrived` flip animates — rows inserted by query filtering mount at
+/// their final state. Section titles (nil index) never stagger.
+private struct CommandPaletteRowArrivalModifier: ViewModifier {
+    let arrived: Bool
+    let index: Int?
+    let reduceMotion: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let index {
+            content
+                .opacity(arrived ? 1 : 0)
+                .offset(y: arrived ? 0 : ToolMotion.PaletteMotion.rowRise)
+                .animation(
+                    ToolMotion.animation(
+                        ToolMotion.PaletteMotion.rowArrival(index: index),
+                        reduceMotion: reduceMotion
+                    ),
+                    value: arrived
+                )
+        } else {
+            content
+        }
     }
 }

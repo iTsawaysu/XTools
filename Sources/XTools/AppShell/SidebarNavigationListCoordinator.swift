@@ -29,6 +29,9 @@ final class SidebarNavigationListCoordinator {
     }
 
     private var tracksByID: [String: SidebarNavigationTrackView] = [:]
+    /// Wave 2: track IDs inserted during a search refinement pass, crossfaded
+    /// in after `applyImmediate` lands the layout (see `crossfadeRefinementInserts`).
+    private var refinementInsertedTrackIDs: Set<String> = []
     private var hostedContentKeysByTrackID: [String: HostedContentKey] = [:]
     private var currentConfiguration: SidebarNavigationListConfiguration?
     private var currentPlan: SidebarNavigationLayoutPlan?
@@ -124,6 +127,17 @@ final class SidebarNavigationListCoordinator {
         let mode = updateMode(configuration: configuration, plan: plan)
         let previousActiveIDs = Set(currentPlan?.targets.map(\.id) ?? [])
         let previousSelectedToolID = currentConfiguration?.selectedToolID
+        refinementInsertedTrackIDs.removeAll()
+        let wasSearchActive = currentConfiguration?.isSearchActive ?? false
+        // Wave 2 search-result arrival: only the no-filter→filter edge plays
+        // the staggered entrance; refinement crossfades per row and leaving
+        // search stays instant. Reduce Motion skips both.
+        let searchArrivalEdge = !wasSearchActive
+            && configuration.isSearchActive
+            && !configuration.reduceMotion
+        let searchRefinement = wasSearchActive
+            && configuration.isSearchActive
+            && !configuration.reduceMotion
 
         if mode != .contentOnly {
             beginScrollAnchorIfNeeded(configuration: configuration, plan: plan)
@@ -133,13 +147,22 @@ final class SidebarNavigationListCoordinator {
             configuration: configuration,
             plan: plan,
             mode: mode,
-            previousActiveIDs: previousActiveIDs
+            previousActiveIDs: previousActiveIDs,
+            searchRefinement: searchRefinement
         )
         currentConfiguration = configuration
 
         switch mode {
         case .immediate:
-            applyImmediate(plan: plan, configuration: configuration)
+            applyImmediate(
+                plan: plan,
+                configuration: configuration,
+                fadeOutRefine: searchRefinement && !searchArrivalEdge
+            )
+            crossfadeRefinementInserts()
+            if searchArrivalEdge {
+                runSearchArrivalStagger(plan: plan)
+            }
         case .animated:
             applyAnimated(plan: plan, configuration: configuration)
         case .contentOnly:
@@ -286,7 +309,8 @@ final class SidebarNavigationListCoordinator {
         configuration: SidebarNavigationListConfiguration,
         plan: SidebarNavigationLayoutPlan,
         mode: UpdateMode,
-        previousActiveIDs: Set<String>
+        previousActiveIDs: Set<String>,
+        searchRefinement: Bool
     ) {
         let entriesByID = Dictionary(
             uniqueKeysWithValues: configuration.entries.map { ($0.id, $0) }
@@ -321,6 +345,14 @@ final class SidebarNavigationListCoordinator {
                     : (target.kind == .header ? 1.0 : 0.0)
                 documentView.addSubview(track)
                 requiresLayout = true
+                if searchRefinement {
+                    refinementInsertedTrackIDs.insert(track.trackID)
+                }
+            } else if track.alphaValue < 0.99 {
+                // Reclaim a row that an interrupted refinement fade was
+                // sending away; land it at full alpha for the pass below.
+                track.layer?.removeAllAnimations()
+                track.alphaValue = 1
             }
 
             let interaction = interaction(
@@ -587,7 +619,8 @@ final class SidebarNavigationListCoordinator {
 
     private func applyImmediate(
         plan: SidebarNavigationLayoutPlan,
-        configuration: SidebarNavigationListConfiguration
+        configuration: SidebarNavigationListConfiguration,
+        fadeOutRefine: Bool = false
     ) {
         let target = SidebarNavigationAnimationTarget(plan: plan)
         animationGate.synchronize(target: target)
@@ -638,7 +671,7 @@ final class SidebarNavigationListCoordinator {
             track.applyInteraction(interaction)
         }
 
-        hideInactiveTracks(activeIDs: activeIDs)
+        hideInactiveTracks(activeIDs: activeIDs, fadeOutRefine: fadeOutRefine)
         currentPlan = plan
         positionSelectionIndicator(configuration: configuration, plan: plan, slide: false)
         finishScrollAnchor()
@@ -767,14 +800,83 @@ final class SidebarNavigationListCoordinator {
         reconcilePointerLocation()
     }
 
-    private func hideInactiveTracks(activeIDs: Set<String>) {
+    private func hideInactiveTracks(activeIDs: Set<String>, fadeOutRefine: Bool = false) {
         for track in tracksByID.values where !activeIDs.contains(track.trackID) {
             if hoveredTrackID == track.trackID {
                 setHoveredTrackID(nil)
             }
             hostedContentKeysByTrackID.removeValue(forKey: track.trackID)
             track.applyInteraction(.finalized(targetExpanded: false))
-            track.removeFromSuperview()
+            guard fadeOutRefine,
+                  track.superview === documentView,
+                  track.alphaValue > 0.01
+            else {
+                track.removeFromSuperview()
+                continue
+            }
+            // Wave 2: a row filtered out mid-search fades out once, then
+            // leaves the hierarchy; a later refinement that re-matches it
+            // reclaims the track at full alpha (see reconcileTracks).
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = ToolMotion.SearchArrival.rowCrossfade
+                context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                context.completionHandler = { [weak track] in
+                    guard let track, track.alphaValue < 0.99 else { return }
+                    track.removeFromSuperview()
+                }
+                track.animator().alphaValue = 0
+            })
+        }
+    }
+
+    /// Wave 2 first-filter entrance: visible rows fade in with a small rise,
+    /// staggered by `ToolMotion.SearchArrival` (fade-dominant so long result
+    /// lists stay calm). Any later update lands interrupted rows directly.
+    private func runSearchArrivalStagger(plan: SidebarNavigationLayoutPlan) {
+        let visible = plan.targets.filter { $0.frame.height > 0 }
+        for (index, target) in visible.enumerated() {
+            guard let track = tracksByID[target.id],
+                  track.superview === documentView
+            else { continue }
+            let delay = TimeInterval(min(index, ToolMotion.SearchArrival.rowCap))
+                * ToolMotion.SearchArrival.stagger
+            track.alphaValue = 0
+            if let layer = track.layer {
+                let rise = CABasicAnimation(keyPath: "transform.translation.y")
+                rise.fromValue = ToolMotion.SearchArrival.rise
+                rise.toValue = 0
+                rise.duration = ToolMotion.SearchArrival.rowIn
+                rise.beginTime = CACurrentMediaTime() + delay
+                rise.fillMode = .backwards
+                layer.add(rise, forKey: "sidebar.search.arrival.rise")
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak track] in
+                guard let track, track.superview != nil else { return }
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = ToolMotion.SearchArrival.rowIn
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    track.animator().alphaValue = 1
+                }
+            }
+        }
+    }
+
+    /// Wave 2 refinement entrance: rows that appear while a filter is already
+    /// active crossfade in; rows that stayed visible were never touched.
+    private func crossfadeRefinementInserts() {
+        guard !refinementInsertedTrackIDs.isEmpty else { return }
+        let ids = refinementInsertedTrackIDs
+        refinementInsertedTrackIDs.removeAll()
+        for id in ids {
+            guard let track = tracksByID[id],
+                  track.superview === documentView
+            else { continue }
+            track.alphaValue = 0
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = ToolMotion.SearchArrival.rowCrossfade
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                track.animator().alphaValue = 1
+            }
         }
     }
 

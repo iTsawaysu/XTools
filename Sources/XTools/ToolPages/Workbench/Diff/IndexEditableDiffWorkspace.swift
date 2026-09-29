@@ -435,6 +435,8 @@ private enum IndexDiffEditorMetrics {
     static let lineNumberTrailingPadding: CGFloat = 10
     static let gutterAccentWidth: CGFloat = 2
     static let gutterAccentLeadingPadding: CGFloat = 4
+    static let gutterAccentVerticalInset: CGFloat = 3
+    static let gutterAccentMinHeight: CGFloat = 8
 }
 
 struct IndexEditableDiffMergeView: NSViewRepresentable {
@@ -585,6 +587,13 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         var onDifferenceNavigationChange: ((DiffDifferenceNavigationProgress) -> Void)?
         var lastNavigationRequestID = 0
 
+        // Wave 2 locating wash: one block wash plus one slot-mark deepening
+        // per pane. Bumping the generation per successful jump keeps each
+        // wash a single arc; Reduce Motion leaves these silent (the jump
+        // still scrolls and selects).
+        private var blockWashes: [Side: ToolLocatingWashView] = [:]
+        private var locatingWashGeneration = 0
+
         /// Consecutive changed rows form one navigation unit. Keeping every
         /// visual line for each side lets a deletion move to the side that
         /// actually has source text instead of selecting an unrelated line
@@ -726,6 +735,13 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
                 rightPlaceholderLabel = placeholderLabel
                 rightLineNumberView = lineNumberView
             }
+
+            // Wave 2 locating wash surfaces: the block wash rides above the
+            // editor pane; the slot-mark deepening rides above the gutter
+            // overlay. Both stay non-interactive and animate opacity only.
+            let blockWash = ToolLocatingWashView()
+            container.addSubview(blockWash)
+            blockWashes[side] = blockWash
 
             // Set the delegate only after the side references are wired, so the
             // first `undoManager(for:)` query can resolve this view to its own
@@ -946,6 +962,49 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
                     total: differenceHunks.count
                 )
             )
+
+            // Wave 2 locating wash: one arc over the landed block (and its
+            // gutter slot marks) per jump; Reduce Motion keeps positioning
+            // only. The scroll/selection behavior above is untouched.
+            locatingWashGeneration += 1
+            playLocatingWash(for: hunk, generation: locatingWashGeneration)
+        }
+
+        /// Wave 2 locating wash (see `ToolMotion.LocatingWash`): after a jump
+        /// lands, every pane that carries the hunk sweeps one soft accent
+        /// wash across the block while its gutter slot mark deepens on the
+        /// same 360ms arc. Single element per pane, single arc per jump.
+        /// Reduce Motion skips the wash entirely — positioning is owned by
+        /// `navigateDifference(forward:)` and never changes here.
+        private func playLocatingWash(for hunk: DifferenceHunk, generation: Int) {
+            guard !ToolMotion.systemReduceMotionEnabled else { return }
+            for side in [Side.left, Side.right] {
+                let lines = side == .left ? hunk.leftLines : hunk.rightLines
+                guard !lines.isEmpty,
+                      let textView = editorTextView(for: side),
+                      let lineNumberView = side == .left ? leftLineNumberView : rightLineNumberView,
+                      let container = lineNumberView.superview,
+                      let blockWash = blockWashes[side] else {
+                    continue
+                }
+
+                let lineRects = IndexDiffTextLayoutGeometry.lineBlockRects(for: textView)
+                var block = NSRect.null
+                for line in lines {
+                    guard let rect = lineRects[line] else { continue }
+                    block = block.isNull ? rect : block.union(rect)
+                }
+                guard !block.isNull else { continue }
+
+                // The wash spans the pane width so wrapped or horizontally
+                // shifted rows stay covered; its height hugs the block.
+                var washRect = textView.convert(block, to: container)
+                washRect.origin.x = 0
+                washRect.size.width = container.bounds.width
+                blockWash.play(generation: generation, frame: washRect)
+
+
+            }
         }
 
         private func updateDifferenceHunks(resetNavigation: Bool) {
@@ -2044,9 +2103,12 @@ private final class IndexDiffLineNumberOverlayView: NSView {
     private func gutterAccentRect(y: CGFloat, height: CGFloat) -> NSRect {
         NSRect(
             x: IndexDiffEditorMetrics.gutterAccentLeadingPadding,
-            y: y + 3,
+            y: y + IndexDiffEditorMetrics.gutterAccentVerticalInset,
             width: IndexDiffEditorMetrics.gutterAccentWidth,
-            height: max(8, height - 6)
+            height: max(
+                IndexDiffEditorMetrics.gutterAccentMinHeight,
+                height - IndexDiffEditorMetrics.gutterAccentVerticalInset * 2
+            )
         )
     }
 

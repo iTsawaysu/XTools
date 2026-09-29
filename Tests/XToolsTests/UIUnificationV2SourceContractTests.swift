@@ -152,7 +152,9 @@ struct UIUnificationV2SourceContractTests {
     // MARK: 阴影配方单一真相源
 
     @Test func shadowsFlowThroughTheRecipeTokens() throws {
-        for (path, source) in try allSources() {
+        // ToolTheme.swift owns the recipe helpers themselves (toolShadow /
+        // toolShadowBehind), so the raw calls live there by design.
+        for (path, source) in try allSources(excluding: ["Sources/XTools/Shared/ToolTheme.swift"]) {
             let matches = Self.matches(in: source, pattern: #"\.shadow\(\s*color:"#)
             expectEmpty(matches, path, "must use .toolShadow(ToolTheme.Shadow...) recipes instead of raw shadow calls")
         }

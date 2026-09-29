@@ -278,8 +278,11 @@ struct MotionSourceContractTests {
         contains(workbench, "feedback.finish(generation: generation)", "Save reset completion must pass through the shared stale-generation gate")
         doesNotContain(workbench, "try? await Task.sleep(for: .seconds(1.2))", "Save feedback must not retain an unprotected local reset task")
 
-        contains(controls, ".toolMotionSuccessSwap(id: copied)", "Copy feedback must preserve the existing icon transition with the delight spring")
-        contains(controls, ".toolMotionTextSwap(id: copied)", "Copy feedback must preserve the existing text transition")
+        // Wave 2 d1 (复制确认 tick): the icon transition moved into the shared
+        // tick slot and the visible label is constant; 已复制 stays
+        // accessibility-facing only (see wave2CopyTick… below for the locks).
+        contains(controls, "IndexCopyTickIconSlot(generation: feedback.generation)", "Copy feedback must run the shared Wave 2 tick icon slot")
+        contains(controls, #"copied ? "已复制" : title"#, "Copy feedback must keep the 已复制 switch on the accessibility/help surface only")
         contains(workbench, ".toolMotionSuccessSwap(id: saved)", "Save feedback must preserve the existing icon transition with the delight spring")
         contains(workbench, ".toolMotionTextSwap(id: saved)", "Save feedback must preserve the existing text transition")
     }
@@ -520,5 +523,299 @@ struct MotionSourceContractTests {
         doesNotContain(chronometer, "ChronometerFormatter.format(currentTime(tick: context.date)))\n                            .toolMotionTextSwap", "Chronometer main 0.01s timer value must not animate")
         contains(timezone, "IndexDisclosure(", "Timezone disclosure motion is owned by the shared IndexDisclosure component")
         doesNotContain(timezone, "formatTime(for: group.cities[0].timezone, currentTime: currentTime))\n                        .toolMotionTextSwap", "Timezone per-second time text must not animate")
+    }
+
+    // MARK: - Wave 2 motion rollout (motion-wave2 prototype, terminal values)
+
+    @Test func wave2OutputBreathUsesTerminalEnvelope() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let shared = try readSource("Sources/XTools/Shared/Components/InteractionFeedback.swift")
+        contains(motion, "enum OutputBreath", "Wave 2 output breath must own one terminal-value namespace")
+        contains(motion, "static let outputBreathDelay: TimeInterval = 0.08", "Breath must start 80ms after the run so the text swap lands first")
+        contains(motion, "static let outputBreathHalfArc: TimeInterval = 0.32", "Breath must be a single 640ms arc (320 up + 320 down)")
+        contains(motion, "static let borderPeak: Double = 0.28", "Breath border layer must peak at the terminal 0.28 opacity")
+        contains(motion, "static let washPeak: Double = 0.015", "Breath wash layer must peak at 1.5% accent")
+        contains(motion, "static func exit(duration: TimeInterval)", "Exit half-arc must use the declared symmetric exit curve")
+        contains(shared, "breathTask?.cancel()", "Re-triggering the breath must restart the arc, never stack pulses")
+        contains(shared, "withAnimation(ToolMotion.OutputBreath.rise)", "Breath rise must be its own transaction")
+        contains(shared, "withAnimation(ToolMotion.OutputBreath.fall)", "Breath fall must be its own transaction")
+        contains(shared, "UInt64(seconds * 1_000_000_000)", "Breath timing must convert seconds to nanoseconds - a ms-scale value collapses the arc into a flash")
+    }
+
+    @Test func wave2PaneHoverIsCardLiftWithoutTransform() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let theme = try readSource("Sources/XTools/Shared/ToolTheme.swift")
+        let shared = try readSource("Sources/XTools/Shared/Components/InteractionFeedback.swift")
+        contains(motion, "enum PaneHover", "Card-lift pane hover must own one timing namespace")
+        contains(motion, "static let hoverIn: TimeInterval = 0.18", "Hover enter must be 180ms")
+        contains(motion, "static let hoverOut: TimeInterval = 0.24", "Hover leave must be 240ms")
+        contains(theme, "static let paneHoverResting = ShadowRecipe(color: paneHoverShadowResting, radius: 6, y: 2)", "Resting card shadow must flow through the restrained recipe token")
+        contains(theme, "static let paneHoverLifted = ShadowRecipe(color: paneHoverShadowLifted, radius: 20, y: 6)", "Lifted card shadow must flow through the restrained recipe token")
+        contains(theme, "paneHoverShadowLifted = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.12, darkAlpha: 0.34)", "Lifted shadow must stay neutral and restrained")
+        contains(shared, ".toolShadowBehind(recipe, cornerRadius: cornerRadius)", "Hover depth must cast from a backing shape so native gutter hairlines survive")
+        contains(shared, "withAnimation(hovering ? ToolMotion.PaneHover.inCurve : ToolMotion.PaneHover.outCurve)", "Hover enter/leave must run their own directional transactions")
+        let modifier = sourceSlice(shared, from: "private struct ToolPaneHoverChromeModifier", to: "struct ToolOutputBreathModifier")
+        doesNotContain(modifier, ".offset(", "Hover must not translate the pane (discipline: no hover transform)")
+        doesNotContain(modifier, ".scaleEffect(", "Hover must not scale the pane (discipline: no hover transform)")
+    }
+
+    @Test func wave2ErrorFeedbackShakesOnceAndNeverFlashes() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let shared = try readSource("Sources/XTools/Shared/Components/InteractionFeedback.swift")
+        let workbench = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexFormatWorkbench.swift")
+        let banner = try readSource("Sources/XTools/ToolPages/Workbench/Diagnostics/IndexFormatDiagnosticViews.swift")
+        contains(motion, "enum ErrorFeedback", "Error feedback must own one terminal-value namespace")
+        contains(motion, "static let shake: TimeInterval = 0.3", "Damped-sine shake must last 300ms")
+        contains(motion, "static let shakeAmplitude: CGFloat = 4", "Shake must start at the 4pt terminal amplitude")
+        contains(motion, "static let shakeDecay: Double = 0.68", "Shake envelope must decay at the terminal ratio")
+        contains(motion, "static let errorTintIn: TimeInterval = 0.24", "Warning tint must fade in over 240ms")
+        contains(motion, "static let errorTintOut: TimeInterval = 0.2", "Warning tint must fade out over 200ms")
+        contains(motion, "static let errorTintDelay: TimeInterval = 0.08", "Warning tint must lag the shake onset by 80ms")
+        contains(motion, "static let tintPeak: Double = 0.55", "Warning tint must hold at the 0.55 state peak")
+        contains(shared, "struct ToolShakeEffect: GeometryEffect", "Shake must be the shared damped-sine GeometryEffect")
+        contains(shared, "strokeBorder(ToolTheme.error, lineWidth: 1)", "Error border must keep a constant width; only opacity moves")
+        doesNotContain(shared, "opacity(ToolTheme.error.opacity(0.55))", "Tint must not blink through a conditional border swap")
+        contains(workbench, ".toolErrorShake(", "The format workbench must consume its attempt counter for the shake")
+        contains(workbench, ".toolErrorTint(active: showsErrorState", "The error chrome must be state-held, not conditionally laid out")
+        contains(banner, ".toolMotionTextSwap(id: message)", "Diagnostic banner text must crossfade, never snap")
+    }
+
+    @Test func wave2SidebarPillStretchesOnMultiRowJumps() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let track = try readSource("Sources/XTools/AppShell/SidebarNavigationTrackView.swift")
+        contains(motion, "static let pillStretchPerRow: CGFloat = 0.06", "Pill stretch must grow at the terminal per-row rate")
+        contains(motion, "static let pillStretchMax: CGFloat = 0.15", "Pill stretch must cap at the terminal maximum")
+        contains(motion, "static let pillStretchMinRows: CGFloat = 1.5", "Neighbor moves must never stretch the pill")
+        contains(track, "CAKeyframeAnimation(keyPath: \"transform.scale.y\")", "Stretch must ride a synchronized keyframe on the pill layer")
+        contains(track, "1 / sqrt(peak)", "Stretch must conserve volume through horizontal compensation")
+        contains(track, "addVelocityStretch(distance: distance, duration: spring.duration)", "Stretch must share the slide spring's duration")
+        let stretch = sourceSlice(track, from: "private func addVelocityStretch", to: "private func removeSlideAnimation")
+        doesNotContain(stretch, "prepareForStructuralMotion", "Structural motion paths must not pick up the stretch")
+    }
+
+    @Test func wave2SidebarSearchArrivalIsFadeDominantAndRefinementCalm() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let coordinator = try readSource("Sources/XTools/AppShell/SidebarNavigationListCoordinator.swift")
+        contains(motion, "enum SearchArrival", "Search arrival must own one terminal-value namespace")
+        contains(motion, "static let stagger: TimeInterval = 0.012", "First-filter stagger must be 12ms/row")
+        contains(motion, "static let rowCap = 7", "First-filter stagger must cap at 7 rows")
+        contains(motion, "static let rowIn: TimeInterval = 0.14", "Each arrival row must run 140ms")
+        contains(motion, "static let rowCrossfade: TimeInterval = 0.1", "Refinement rows must crossfade 100ms")
+        contains(motion, "static let rise: CGFloat = 4", "Arrival rise must be the 4pt fade-dominant value")
+        contains(coordinator, "searchArrivalEdge = !wasSearchActive", "Only the no-filter→filter edge may stagger")
+        contains(coordinator, "runSearchArrivalStagger(plan: plan)", "The first-filter edge must run the stagger entrance")
+        contains(coordinator, "crossfadeRefinementInserts()", "Refinement inserts must crossfade in")
+        contains(coordinator, "fadeOutRefine: searchRefinement && !searchArrivalEdge", "Filtered-out rows must fade out only mid-refinement")
+        contains(coordinator, "removeAllAnimations()", "A re-matched row must be reclaimed from an interrupted fade")
+    }
+
+    // MARK: - Wave 2 command palette (candidate 6, sixth-round terminal values)
+
+    @Test func wave2CommandPaletteChoreographyLocksOpenCloseStaggerAndSlide() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let root = try readSource("Sources/XTools/AppShell/RootView.swift")
+        let commandPalette = try readSource("Sources/XTools/AppShell/CommandPalette.swift")
+        let highlight = try readSource("Sources/XTools/AppShell/CommandPaletteSelectionHighlight.swift")
+
+        // Terminal tokens (prototype MOTION d/x/s.cmdk* + listStagger).
+        contains(motion, "enum PaletteMotion", "Palette choreography must own one terminal-value namespace")
+        contains(motion, "static let open = Animation.spring(\n            response: 0.24,", "Open must ride the 240ms spring-family rise")
+        contains(motion, "static let close = Animation.spring(\n            response: 0.2,", "Close must settle on the ~200ms critically damped exit spring")
+        contains(motion, "static let riseDistance: CGFloat = 8", "The unified open-rise/close-sink travel is 8pt (prototype splits 8 in / 6 out)")
+        contains(motion, "static let settleScale: CGFloat = 0.985", "Close terminal scale must be 0.985")
+        contains(motion, "static let rowsDelay: TimeInterval = 0.06", "Row stagger must start 60ms after the panel launch")
+        contains(motion, "static let rowStagger: TimeInterval = 0.02", "Row stagger cadence must be the shared 20ms listStagger")
+        contains(motion, "static let rowIn: TimeInterval = 0.15", "Each row entrance must run 150ms")
+        contains(motion, "static let rowRise: CGFloat = 4", "Row entrance rise must be 4pt")
+        contains(motion, "static let highlightSlide = Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0)", "The highlight must snap on the mature-launcher fast spring, never the laggy pill spring")
+                contains(motion, "static func rowArrival(index: Int) -> Animation", "Row arrival must derive its delayed arc from ToolMotion")
+
+        // Open/close share one directional animation owner; every close path
+        // lands on the same arc (prototype closeCmdk unification).
+        contains(root, "presentation.shows\n                    ? ToolMotion.PaletteMotion.open\n                    : ToolMotion.PaletteMotion.close,", "One directional selector must own open vs close arcs")
+        contains(root, "value: presentation.shows", "The palette arcs must stay keyed on the stable presentation state")
+
+        // The scrim dims on its own 200ms arc, independent of the panel.
+        contains(root, ".opacity(isPresented ? 1 : 0)", "The scrim must dim through presentation state, not the panel progress")
+        contains(root, "? ToolMotion.PaletteMotion.scrimIn\n                            : ToolMotion.PaletteMotion.scrimOut,", "The scrim must own its independent directional arcs")
+
+        // Geometry: one continuous mapping (no hard-switch on reversal).
+        contains(commandPalette, "ToolMotion.PaletteMotion.riseDistance * (1 - progress)", "Offset must derive from the shared 8pt travel")
+        contains(commandPalette, "1 - (1 - ToolMotion.PaletteMotion.settleScale) * (1 - progress)", "Scale must settle through the 0.985 terminal value")
+
+        // Staggered row arrival: session-scoped, query filtering stays instant.
+        contains(commandPalette, "revealedSession", "Row arrival must be gated per presentation session")
+        contains(commandPalette, "CommandPaletteRowArrivalModifier(", "Rows must arrive through the shared stagger modifier")
+        contains(commandPalette, "ToolMotion.PaletteMotion.rowArrival(index: index)", "Row arrival delay must come from the shared cadence")
+        contains(commandPalette, "reduceMotion || revealedSession == sessionModel.session", "Reduce Motion must keep rows permanently arrived")
+
+        // Selection highlight: keyboard-sprung slide + multi-row stretch.
+        contains(commandPalette, "@State private var highlightFlightAnimated = false", "The palette must track keyboard-driven highlight intent")
+        contains(commandPalette, "CommandPaletteSelectionHighlightHost(", "The list must host the floating selection highlight")
+        contains(commandPalette, "CommandPaletteRowAnchorsKey.self) { rowAnchors = $0 }", "Row frames must publish through the shared anchor preference")
+        contains(highlight, "struct CommandPaletteRowAnchorsKey: PreferenceKey", "Selectable-row bounds must publish through one preference key")
+        contains(highlight, "animates && !reduceMotion\n                ? ToolMotion.PaletteMotion.highlightSlide\n                : nil", "Keyboard moves must snap; rebuilds and Reduce Motion must drop instantly")
+        doesNotContain(highlight, "FlightEffect", "The stretch-flight machinery must stay removed (mature launchers never stretch the palette highlight)")
+    }
+
+    // MARK: - Wave 2 copy-confirmation tick (candidate d1, sixth-round terminal values)
+
+    @Test func wave2CopyTickKeepsLabelConstantAndDrawsTheCheckOnce() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
+
+        // Terminal tokens (prototype MOTION d.copyOut/copyDraw/copyBox/copyBack/
+        // copyHold + s.copyBoxFrom).
+        contains(motion, "enum CopyTick", "The copy tick must own one terminal-value namespace")
+        contains(motion, "static let out: TimeInterval = 0.12", "The copy glyph must fade out over 120ms")
+        contains(motion, "static let draw: TimeInterval = 0.22", "The checkmark must stroke-draw over 220ms")
+        contains(motion, "static let box: TimeInterval = 0.18", "The icon box must settle over 180ms")
+        contains(motion, "static let back: TimeInterval = 0.12", "The dwell exit must fade back over the symmetric 120ms")
+        contains(motion, "static let hold: TimeInterval = 1.2", "The copied glyph dwell must match the pinned 1.2s copied-state lifecycle")
+        contains(motion, "static let boxFrom: CGFloat = 0.94", "The icon-box settle must start from 0.94")
+        contains(motion, "static let boxSettle = Animation.timingCurve(0.25, 1.2, 0.45, 1.0, duration: box)", "The box settle must use the declared easeSettle curve exception (≤2% overshoot)")
+
+        // Zero-deformation discipline: the visible label never changes; only the
+        // accessibility-facing help/label keeps announcing 已复制.
+        doesNotContain(controls, #"Text(copied ? "已复制" : title)"#, "The copy button label must stay constant (no visual 已复制 swap)")
+        doesNotContain(controls, ".toolMotionTextSwap(id: copied)", "Copy feedback must not crossfade any visible text")
+        doesNotContain(controls, ".toolMotionSuccessSwap(id: copied)", "Copy feedback must use the tick choreography, not the generic swap")
+        contains(controls, #"copied ? "已复制" : title"#, "The 已复制 switch may live on the accessibility/help surface")
+        contains(controls, "Text(title)", "The copy button must render the constant title")
+        contains(controls, ".help(copied ? \"已复制\" : title)", "Hover help may keep announcing the copied state")
+
+        // Both copy presentations share one fixed tick slot; Reduce Motion cuts
+        // directly between the SF Symbols (no draw, no scale).
+        occurrenceCount(controls, "IndexCopyTickIconSlot(generation: feedback.generation)", 2, "Both copy presentations must route through the fixed tick icon slot")
+        occurrenceCount(controls, #"copied ? "checkmark" : IndexActionSymbol.copy"#, 2, "Both copy presentations must keep the Reduce Motion symbol cut")
+
+        // Draw choreography: trim stroke-draw, glyph fades, one-shot box settle.
+        let slot = sourceSlice(controls, from: "struct IndexCopyTickIconSlot: View", to: "/// Primary action with an optional keycap hint")
+        contains(slot, ".trim(from: 0, to: checkDraw)", "The check must draw through the shared stroke-draw shape")
+        contains(slot, "withAnimation(ToolMotion.CopyTick.fade) { isDwelling = true }", "The glyph cross-fade must ride the ToolMotion fade curve")
+        contains(slot, "withAnimation(ToolMotion.CopyTick.drawCurve) { checkDraw = 1 }", "The draw must ride the ToolMotion draw curve")
+        contains(slot, "withAnimation(ToolMotion.CopyTick.boxSettle) { boxScale = 1 }", "The box settle must ride the ToolMotion settle curve")
+        contains(slot, "boxScale = ToolMotion.CopyTick.boxFrom", "The pre-draw frame must park the box at 0.94")
+        contains(slot, "withAnimation(ToolMotion.CopyTick.fadeBack) { isDwelling = false }", "The exit must fade both glyphs back symmetrically")
+        contains(slot, "Task.sleep(for: .seconds(ToolMotion.CopyTick.hold))", "The dwell must read the ToolMotion hold token")
+
+        // Repeat clicks during the dwell only reset the timer; the draw never replays.
+        contains(slot, "if isDwelling {\n                resetDwell()", "An active dwell must only reset its hold timer on repeat clicks")
+    }
+
+    // MARK: - Wave 2 segmented sliding cursor (candidate 1, terminal values)
+
+    @Test func wave2SegmentedCursorSlidesOnTheFastSelectionSpring() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
+
+        // Terminal tokens (prototype MOTION d.segCursor / d.labelXfade +
+        // s.segCursorStretch + MOTION.springFast).
+        contains(motion, "enum SegmentedCursor", "The segmented cursor must own one terminal-value namespace")
+        contains(motion, "static let slide = Animation.spring(\n            response: 0.22,\n            dampingFraction: 0.85,", "The cursor must ride the 0.22 fast variant of the 0.3/0.85 selection-slide family")
+        contains(motion, "static let stretchPeak: CGFloat = 1.10", "The cursor stretch must peak at the terminal 1.10")
+        contains(motion, "static let labelXfade: TimeInterval = 0.12", "The active label must cross-fade over the terminal 120ms")
+        contains(motion, "static let labelXfade = Curve.smoothOut(duration: Duration.labelXfade)", "The label cross-fade must stay on the smoothOut family")
+
+        // Shared floating cursor: anchor-measured, one layer behind segments.
+        let segmented = sourceSlice(controls, from: "struct IndexSegmentedControl: View", to: "// MARK: - IndexSwitch")
+        contains(controls, "IndexSegmentedCursorAnchorKey: PreferenceKey", "Segment bounds must publish through one anchor preference key")
+        contains(segmented, ".anchorPreference(", "Each segment must publish its bounds to the shared cursor")
+        contains(segmented, "IndexSegmentedCursorLayer(", "The selected fill must float in the shared cursor layer behind the segments")
+        contains(segmented, "ToolMotion.SegmentedCursor.slide", "Cursor flights must ride the shared ToolMotion spring")
+        contains(segmented, "struct IndexSegmentedCursorFlightEffect: GeometryEffect", "The flight stretch must be a GeometryEffect for envelope math")
+        contains(segmented, "4 * progress * (1 - progress)", "The stretch envelope must follow the 4p(1-p) pill family curve")
+        contains(segmented, "ToolMotion.SegmentedCursor.stretchPeak", "The stretch peak must come from ToolMotion")
+        contains(segmented, "ToolTheme.elevatedBackground", "The cursor must keep the elevated selected fill")
+
+        // Segments no longer own the selected fill; the active label cross-fades.
+        contains(segmented, ".toolAnimation(ToolMotion.SegmentedCursor.labelXfade, value: isSelected)", "The active label color must cross-fade at the terminal 120ms")
+        doesNotContain(segmented, "ToolMotion.Preset.tabs", "Segment selection must not keep the legacy tabs timing")
+        contains(segmented, "if isSelected { return Color.clear }", "A selected segment must leave its fill to the shared cursor")
+        contains(controls, "ABOVE the tray's opaque editorBackground", "The cursor layer must stack above the opaque tray background, or it never renders")
+
+        // Reduce Motion: the cursor drops in place and the label cuts directly.
+        contains(segmented, "reduceMotion", "The cursor layer must gate its spring on Reduce Motion")
+    }
+
+    @Test func wave2ThemeToggleCrossfadesThroughOneEnvelope() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let root = try readSource("Sources/XTools/AppShell/RootView.swift")
+        contains(motion, "static let themeCrossfade: TimeInterval = 0.32", "Theme crossfade must run the terminal 320ms envelope")
+        contains(motion, "static let themeCrossfade = Curve.inOut(duration: Duration.themeCrossfade)", "Theme crossfade must stay on the shared inOut family")
+        contains(root, "withToolAnimation(ToolMotion.Preset.themeCrossfade, reduceMotion: reduceMotion) {\n            themeName = next.rawValue\n        }", "The theme flip must dissolve through one animated transaction, Reduce Motion collapsing to a direct switch")
+    }
+
+    @Test func wave2EmptyStateArrivesInStagedBeats() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let empty = try readSource("Sources/XTools/Shared/Components/IndexEmptyState.swift")
+        contains(motion, "enum EmptyArrival", "Empty-state arrival must own one terminal-value namespace")
+        contains(motion, "Animation.spring(response: 0.3, dampingFraction: 0.71)", "The icon must rise on the slight-overshoot spring variant")
+        contains(motion, "delay(0.06)", "The caption must follow one beat after the icon")
+        contains(motion, "delay(0.12)", "The message must follow a second beat")
+        contains(motion, "iconRiseDistance: CGFloat = 6", "The icon rise must be 6pt")
+        contains(motion, "textRiseDistance: CGFloat = 4", "The text rise must be 4pt")
+        contains(empty, "ToolMotion.EmptyArrival.iconRiseDistance", "The shared empty state must render the staged arrival")
+        contains(empty, "reduceMotion ? nil : ToolMotion.EmptyArrival.iconRise", "Reduce Motion must show the empty state directly")
+        let viewer = try readSource("Sources/XTools/Shared/Components/IndexCodeViewerSurface.swift")
+        contains(viewer, "ToolMotion.EmptyArrival.textRiseDistance", "The editor placeholder must rise in softly when content empties")
+        contains(viewer, ".frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)\n        .overlay(alignment: .leading)", "The placeholder must fill the pane before hosting the gutter hairline so the line spans full height")
+        contains(viewer, ".frame(width: 1)\n                    .opacity(0.5)", "The placeholder hairline must render 1pt at half opacity - 0.5pt frames round away in this hierarchy")
+        contains(motion, "static let elementArrival = Curve.smoothOut(duration: 0.3)", "The placeholder swap must share the empty-arrival family curve")
+    }
+
+    // MARK: - Wave 2 difference-block locating wash (candidate 5, sixth-round terminal values)
+
+    @Test func wave2DifferenceLocatingWashSweepsOneArcWithNoOutlineTreatment() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let shared = try readSource("Sources/XTools/Shared/Components/InteractionFeedback.swift")
+        let workspace = try readSource("Sources/XTools/ToolPages/Workbench/Diff/IndexEditableDiffWorkspace.swift")
+
+        // Terminal tokens — GitHub-style line fade (redone per review).
+        contains(motion, "enum LocatingWash", "The locating wash must own one terminal-value namespace")
+        contains(motion, "static let duration: TimeInterval = 0.9", "The wash must ride the long 900ms line-fade arc")
+        contains(motion, "static let washPeak: Double = 0.06", "The wash must peak at a restrained 6% accent")
+        contains(motion, "static let peakFraction: Double = 0.13", "The arc must attack fast and decay long")
+        contains(motion, "static func opacityKeyframe(peak: Double) -> CAKeyframeAnimation", "The AppKit arc must derive from one ToolMotion keyframe factory")
+
+        // Shared host: one AppKit component, one opacity arc per jump, keyed
+        // by a generation so identical triggers never replay; Reduce Motion
+        // keeps the jump positioning without the wash.
+        contains(shared, "class ToolLocatingWashView: NSView", "The locating wash must be the shared AppKit-hosted component")
+        contains(shared, "ToolMotion.LocatingWash.opacityKeyframe(peak: ToolMotion.LocatingWash.washPeak)", "The wash must ride the shared ToolMotion keyframe")
+        doesNotContain(shared, "gutterDeepen", "The gutter-deepening treatment must stay removed (one clean wash only)")
+        contains(shared, "guard generation != playedGeneration else { return }", "Repeated identical triggers must never replay the arc")
+        contains(shared, "guard !ToolMotion.systemReduceMotionEnabled else { return }", "Reduce Motion must skip the wash entirely")
+        doesNotContain(shared, "Ring", "No enclose-outline treatment may appear in the shared feedback components")
+
+        // No ring/stroke treatment in the wash vocabulary or the jump path
+        // ("String" ends in the same letters, so these run on the wash
+        // slices, which contain none).
+        let washTokens = sourceSlice(motion, from: "enum LocatingWash", to: "struct AppKitMotion")
+        doesNotContain(washTokens, "ring", "The wash namespace must not describe an outline treatment")
+        doesNotContain(washTokens, "stroke", "The wash must stay an opacity-only sweep")
+        let washPlay = sourceSlice(workspace, from: "private func playLocatingWash", to: "private func updateDifferenceHunks")
+        doesNotContain(washPlay, "ring", "The workspace jump path must not carry outline remnants")
+        doesNotContain(washPlay, "stroke", "The locating feedback must stay an opacity-only wash")
+
+        // Workspace wiring: each landed jump bumps the generation once and
+        // both panes host the shared wash surface; the gutter mark stays
+        // untouched.
+        contains(workspace, "ToolLocatingWashView()", "Each diff pane must host one wash surface")
+        contains(workspace, "locatingWashGeneration += 1", "Each successful jump must bump the wash generation once")
+        contains(workspace, "playLocatingWash(for: hunk, generation: locatingWashGeneration)", "A landed jump must fire the locating wash")
+        doesNotContain(workspace, "gutterDeepeningFrame(", "No gutter-deepening remnant may stay in the jump path")
+        contains(workspace, "guard !ToolMotion.systemReduceMotionEnabled else { return }", "Reduce Motion must keep jump positioning without the wash")
+    }
+
+    @Test func wave2DashboardTrendBarsSpringGrowOneBeatApart() throws {
+        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
+        let dashboard = try readSource("Sources/XTools/AppShell/DashboardView.swift")
+        contains(motion, "enum TrendBars", "Trend bars must own one terminal-value namespace")
+        contains(motion, "growth = Animation.spring(response: 0.3, dampingFraction: 0.85)", "Bars must grow on the shared 0.3/0.85 selection-slide spring family")
+        contains(dashboard, "struct DashboardTrendStrip", "The dashboard must own one trend strip")
+        contains(dashboard, "ToolMotion.TrendBars.growth.delay(Double(index) * ToolMotion.Duration.stagger)", "Bars must stagger on the shared 0.04s beat")
+        contains(dashboard, "store.sevenDayTrend", "The strip must read the persisted seven-day window")
+        contains(dashboard, "reduceMotion", "Reduce Motion must show final bar heights directly")
     }
 }

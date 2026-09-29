@@ -614,7 +614,12 @@ struct RootView: View {
 
     private func toggleTheme() {
         let next = themePreference.next
-        themeName = next.rawValue
+        // Wave 2 theme crossfade: the colorScheme flip dissolves through one
+        // shared envelope instead of hard-cutting (AppKit sidebar chrome still
+        // flips natively via WindowAppearanceOwner).
+        withToolAnimation(ToolMotion.Preset.themeCrossfade, reduceMotion: reduceMotion) {
+            themeName = next.rawValue
+        }
         toastCenter.show(next.toastMessage, tone: .success)
     }
 
@@ -765,6 +770,20 @@ private struct CommandPaletteOverlayHost: View {
                     }
                 }
             ))
+        // Wave 2 palette choreography: open rides the 240ms spring rise,
+        // every close path lands on the same ~200ms settle spring, and rapid
+        // reversals retarget the in-flight progress instead of queueing.
+        // Scoped deeper than the shared modal shell animation below so the
+        // directional arcs own the presentation interpolation.
+        .animation(
+            ToolMotion.animation(
+                presentation.shows
+                    ? ToolMotion.PaletteMotion.open
+                    : ToolMotion.PaletteMotion.close,
+                reduceMotion: reduceMotion
+            ),
+            value: presentation.shows
+        )
         .onAppear {
             CommandPaletteTrace.presentationShellMounted()
         }
@@ -816,10 +835,21 @@ private struct CommandPalettePresentationMotionModifier<
             content
                 .zIndex(0)
 
+            // Wave 2: the scrim dims on its own independent 200ms arc
+            // (prototype cmdkMask), separate from the panel's 240ms open.
             scrim
-                .opacity(geometry.opacity)
+                .opacity(isPresented ? 1 : 0)
                 .allowsHitTesting(isPresented)
                 .accessibilityHidden(!isPresented)
+                .animation(
+                    ToolMotion.animation(
+                        isPresented
+                            ? ToolMotion.PaletteMotion.scrimIn
+                            : ToolMotion.PaletteMotion.scrimOut,
+                        reduceMotion: reduceMotion
+                    ),
+                    value: isPresented
+                )
                 .zIndex(1)
 
             palette

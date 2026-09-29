@@ -25,6 +25,7 @@ private struct IndexCodeViewerText: Equatable {
 /// - Native macOS Find Bar support (`⌘F`)
 /// - Line spacing matching the input editor
 struct IndexCodeViewerSurface: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let text: IndexCodeViewerText
     var placeholder: String = IndexEmptyStateCopy.outputWillShowHere
     var lineNumbers: Bool = true
@@ -70,8 +71,18 @@ struct IndexCodeViewerSurface: View {
 
             if text.isEmpty {
                 placeholderView
+                    // Wave 2 empty-arrival: the editor placeholder rises in
+                    // softly when content empties (IndexEmptyState owns the
+                    // staged beats for whole-panel empty states).
+                    .transition(
+                        .opacity.combined(with: .offset(y: ToolMotion.EmptyArrival.textRiseDistance))
+                    )
             }
         }
+        .animation(
+            reduceMotion ? nil : ToolMotion.EmptyArrival.elementArrival,
+            value: text.isEmpty
+        )
         .frame(
             maxWidth: .infinity,
             minHeight: effectiveMinHeight,
@@ -112,12 +123,19 @@ struct IndexCodeViewerSurface: View {
         .padding(.vertical, 12)
         .padding(.trailing, 13)
         .padding(.leading, lineNumbers ? 0 : 13)
+        // Fill the pane first so the gutter hairline spans the full height
+        // like the native gutter instead of just the placeholder text block.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .leading) {
             if lineNumbers {
+                // 1pt at half opacity renders reliably where a 0.5pt frame
+                // gets rounded away in this overlay hierarchy, and reads
+                // identical to the native gutter hairline.
                 Rectangle()
                     .fill(ToolTheme.border)
-                    .frame(width: 0.5)
-                    .padding(.leading, IndexEditorLineNumberGutter.width)
+                    .frame(width: 1)
+                    .opacity(0.5)
+                    .padding(.leading, IndexEditorLineNumberGutter.width - 0.5)
             }
         }
     }

@@ -67,6 +67,7 @@ struct IndexDiagnosticBanner: View {
                     .foregroundStyle(ToolTheme.textPrimary)
                     .lineLimit(isExpanded ? nil : 2)
                     .fixedSize(horizontal: false, vertical: true)
+                    .toolMotionTextSwap(id: message)
 
                 Spacer(minLength: 8)
 

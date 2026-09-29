@@ -205,6 +205,7 @@ struct IndexCopyButton: View {
 
     @State private var feedback = IndexEphemeralActionFeedbackState()
     @Environment(\.toolToastCenter) private var toastCenter
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var copied: Bool { feedback.isPresented }
 
@@ -250,23 +251,134 @@ struct IndexCopyButton: View {
             feedback.trigger()
         } label: {
             if iconOnly {
-                Image(systemName: copied ? "checkmark" : IndexActionSymbol.copy)
-                    .font(ToolTypography.buttonSmall)
-                    .frame(width: 16, height: 16)
-                    .toolMotionSuccessSwap(id: copied)
-            } else {
-                Label {
-                    Text(copied ? "已复制" : title)
-                        .toolMotionTextSwap(id: copied)
-                } icon: {
-                    if showsIcon {
+                // Reduce Motion cuts directly between the SF Symbols; otherwise
+                // the Wave 2 tick draws the checkmark (no label/width change).
+                Group {
+                    if reduceMotion {
                         Image(systemName: copied ? "checkmark" : IndexActionSymbol.copy)
-                            .toolMotionSuccessSwap(id: copied)
+                    } else {
+                        IndexCopyTickIconSlot(generation: feedback.generation)
                     }
                 }
-                    .font(ToolTypography.buttonSmall)
+                .font(ToolTypography.buttonSmall)
+                .frame(width: 16, height: 16)
+            } else {
+                Label {
+                    // Zero-deformation copy feedback: the visible title never
+                    // changes (Wave 2 复制确认 tick); only the accessibility
+                    // label/help announces 已复制.
+                    Text(title)
+                } icon: {
+                    if showsIcon {
+                        Group {
+                            if reduceMotion {
+                                Image(systemName: copied ? "checkmark" : IndexActionSymbol.copy)
+                            } else {
+                                IndexCopyTickIconSlot(generation: feedback.generation)
+                            }
+                        }
+                    }
+                }
+                .font(ToolTypography.buttonSmall)
             }
         }
+    }
+}
+
+// MARK: - IndexCopyTickIconSlot (Wave 2 copy-confirmation tick)
+
+/// Fixed icon slot for the shared copy button (Wave 2 candidate d1): the copy
+/// glyph fades out while a checkmark stroke-draws in (`Shape.trim` mirrors the
+/// prototype's stroke-dashoffset), the icon box settles 0.94→1 once, the state
+/// dwells 1400ms, then both glyphs cross-fade back symmetrically. Repeat clicks
+/// during the dwell only reset the dwell timer — the draw never replays while
+/// active. Reduce Motion stays at the call site (plain symbol cut, no draw,
+/// no scale).
+private struct IndexCopyTickIconSlot: View {
+    let generation: Int
+
+    @State private var isDwelling = false
+    @State private var checkDraw: CGFloat = 0
+    @State private var boxScale: CGFloat = 1
+    @State private var dwellTask: Task<Void, Never>?
+
+    var body: some View {
+        ZStack {
+            Image(systemName: IndexActionSymbol.copy)
+                .opacity(isDwelling ? 0 : 1)
+
+            IndexCopyTickCheckGlyph()
+                .trim(from: 0, to: checkDraw)
+                .stroke(.foreground, style: IndexCopyTickCheckGlyph.strokeStyle)
+                .opacity(isDwelling ? 1 : 0)
+        }
+        .scaleEffect(boxScale)
+        .onChange(of: generation) { _ in
+            guard generation > 0 else { return }
+            if isDwelling {
+                resetDwell()
+            } else {
+                startDwell()
+            }
+        }
+        .onDisappear {
+            dwellTask?.cancel()
+        }
+    }
+
+    /// First copy of a cycle: park at the pre-draw frame (check undrawn, box
+    /// at 0.94) for one committed render — the SwiftUI analogue of the
+    /// prototype keyframe `from` values — then run the enter choreography.
+    private func startDwell() {
+        dwellTask?.cancel()
+        withTransaction(ToolMotion.disabledTransaction) {
+            checkDraw = 0
+            boxScale = ToolMotion.CopyTick.boxFrom
+        }
+        runDwell {
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            withAnimation(ToolMotion.CopyTick.fade) { isDwelling = true }
+            withAnimation(ToolMotion.CopyTick.drawCurve) { checkDraw = 1 }
+            withAnimation(ToolMotion.CopyTick.boxSettle) { boxScale = 1 }
+        }
+    }
+
+    /// Repeat click while the dwell is active: only the hold timer restarts;
+    /// the draw and the box settle never replay.
+    private func resetDwell() {
+        runDwell {}
+    }
+
+    /// One task owns the dwell tail: run `open`, hold for
+    /// `ToolMotion.CopyTick.hold`, then fade both glyphs back symmetrically.
+    private func runDwell(_ open: @escaping @MainActor () async -> Void) {
+        dwellTask?.cancel()
+        dwellTask = Task { @MainActor in
+            await open()
+            guard !Task.isCancelled else { return }
+            try? await Task.sleep(for: .seconds(ToolMotion.CopyTick.hold))
+            guard !Task.isCancelled else { return }
+            withAnimation(ToolMotion.CopyTick.fadeBack) { isDwelling = false }
+        }
+    }
+}
+
+/// Checkmark stroke glyph (prototype 16-unit check path), normalized to the
+/// icon slot so `.trim` can draw it as one continuous stroke.
+private struct IndexCopyTickCheckGlyph: Shape {
+    /// Prototype icon stroke: 1.5 units in the 16-unit glyph box, round caps.
+    static let strokeStyle = StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
+
+    func path(in rect: CGRect) -> Path {
+        // Prototype check path `M3 8.6l3.2 3L13 4.4` in a 16×16 viewBox.
+        let scaleX = rect.width / 16
+        let scaleY = rect.height / 16
+        var path = Path()
+        path.move(to: CGPoint(x: 3 * scaleX, y: 8.6 * scaleY))
+        path.addLine(to: CGPoint(x: 6.2 * scaleX, y: 11.6 * scaleY))
+        path.addLine(to: CGPoint(x: 13 * scaleX, y: 4.4 * scaleY))
+        return path
     }
 }
 
@@ -482,6 +594,10 @@ struct IndexSegmentedControl: View {
     @Binding var selection: String
     let density: Density
 
+    /// Segment bounds published to the shared cursor layer (same anchor
+    /// family as the command-palette selection highlight).
+    @State private var segmentAnchors: [String: Anchor<CGRect>] = [:]
+
     init(
         items: [(String, String)],
         selection: Binding<String>,
@@ -498,19 +614,35 @@ struct IndexSegmentedControl: View {
                 Item(label: item.1, isSelected: selection == item.0, density: density) {
                     selection = item.0
                 }
+                .anchorPreference(
+                    key: IndexSegmentedCursorAnchorKey.self,
+                    value: .bounds
+                ) { [item.0: $0] }
             }
         }
         .padding(2)
+        // Wave 2 sliding cursor: the selected fill floats behind the segments
+        // but ABOVE the tray's opaque editorBackground — stacking it outside
+        // that background would hide it completely.
+        .background {
+            GeometryReader { proxy in
+                IndexSegmentedCursorLayer(
+                    activeFrame: segmentAnchors[selection].map { proxy[$0] }
+                )
+            }
+        }
         .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
                 .strokeBorder(ToolTheme.border, lineWidth: 1)
         }
         .fixedSize(horizontal: true, vertical: false)
+        .onPreferenceChange(IndexSegmentedCursorAnchorKey.self) { segmentAnchors = $0 }
     }
 
     /// A single segment. Holds its own hover state so unselected segments give
-    /// feedback on pointer-over (the selected one already reads as active).
+    /// feedback on pointer-over; the selected fill belongs to the shared
+    /// cursor layer, so a selected segment keeps a transparent background.
     private struct Item: View {
         let label: String
         let isSelected: Bool
@@ -520,7 +652,7 @@ struct IndexSegmentedControl: View {
         @State private var isHovering = false
 
         private var background: Color {
-            if isSelected { return ToolTheme.elevatedBackground }
+            if isSelected { return Color.clear }
             return isHovering ? ToolTheme.hoverFill : Color.clear
         }
 
@@ -540,7 +672,111 @@ struct IndexSegmentedControl: View {
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             .onHover { isHovering = $0 }
             .toolAnimation(ToolMotion.Preset.controlFeedback, value: isHovering)
-            .toolAnimation(ToolMotion.Preset.tabs, value: isSelected)
+            .toolAnimation(ToolMotion.SegmentedCursor.labelXfade, value: isSelected)
+        }
+    }
+}
+
+/// Segment bounds, published once per segment and resolved by the cursor
+/// layer in tray coordinates (command-palette row-anchor family).
+private struct IndexSegmentedCursorAnchorKey: PreferenceKey {
+    static let defaultValue: [String: Anchor<CGRect>] = [:]
+
+    static func reduce(
+        value: inout [String: Anchor<CGRect>],
+        nextValue: () -> [String: Anchor<CGRect>]
+    ) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
+/// One cursor flight snapshot: the horizontal travel the cursor springs
+/// across, sampled for the mid-flight stretch envelope.
+private struct IndexSegmentedCursorFlight: Equatable {
+    let fromX: CGFloat
+    let toX: CGFloat
+
+    /// Flight progress at a sampled cursor position, clamped to [0, 1].
+    func progress(at x: CGFloat) -> CGFloat {
+        let travel = toX - fromX
+        guard travel != 0 else { return 1 }
+        return min(max((x - fromX) / travel, 0), 1)
+    }
+}
+
+/// Springs the cursor horizontally; mid-flight the capsule stretches to
+/// `ToolMotion.SegmentedCursor.stretchPeak` through the same 4p(1-p)
+/// envelope as the sidebar pill and palette highlight, settling to 1 on
+/// arrival. `x` is the animatable channel (driven by the shared spring).
+@MainActor
+private struct IndexSegmentedCursorFlightEffect: GeometryEffect {
+    let flight: IndexSegmentedCursorFlight?
+    var x: CGFloat
+
+    var animatableData: CGFloat {
+        get { x }
+        set { x = newValue }
+    }
+
+    nonisolated func effectValue(size: CGSize) -> ProjectionTransform {
+        var transform = CGAffineTransform(translationX: x, y: 0)
+        if let flight {
+            let progress = flight.progress(at: x)
+            let stretch = (ToolMotion.SegmentedCursor.stretchPeak - 1) * 4 * progress * (1 - progress)
+            transform = transform.translatedBy(x: size.width / 2, y: 0)
+            transform = transform.scaledBy(x: 1 + stretch, y: 1)
+            transform = transform.translatedBy(x: -size.width / 2, y: 0)
+        }
+        return ProjectionTransform(transform)
+    }
+}
+
+/// The floating selected-segment fill behind the segments. Selection changes
+/// spring the cursor to the new segment on the fast selection spring (width
+/// follows the target segment on the same arc); first placement and Reduce
+/// Motion drop it in place without motion.
+private struct IndexSegmentedCursorLayer: View {
+    let activeFrame: CGRect?
+
+    @State private var flight: IndexSegmentedCursorFlight?
+    @State private var settledFrame: CGRect?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            if let activeFrame {
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
+                    .fill(ToolTheme.elevatedBackground)
+                    .frame(width: activeFrame.width, height: activeFrame.height)
+                    .modifier(IndexSegmentedCursorFlightEffect(
+                        flight: flight,
+                        x: activeFrame.minX
+                    ))
+                    .offset(y: activeFrame.minY)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .animation(
+            !reduceMotion && settledFrame != nil
+                ? ToolMotion.SegmentedCursor.slide
+                : nil,
+            value: activeFrame
+        )
+        .onChange(of: activeFrame) { newFrame in
+            if !reduceMotion,
+               let previousFrame = settledFrame,
+               let newFrame,
+               previousFrame.minX != newFrame.minX {
+                flight = IndexSegmentedCursorFlight(
+                    fromX: previousFrame.minX,
+                    toX: newFrame.minX
+                )
+            } else {
+                flight = nil
+            }
+            settledFrame = newFrame
         }
     }
 }

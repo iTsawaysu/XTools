@@ -29,7 +29,7 @@ struct BasicAuthResultActionSourceContractTests {
 
         contains(copyButton, "copyButton.buttonStyle(IndexIconActionButtonStyle(", "Icon-only copy must use the shared icon action slot")
         contains(copyButton, "copyButton.buttonStyle(IndexSmallButtonStyle(done: copied, framed: framed))", "Labeled copy actions must retain their existing bordered button style")
-        contains(copyButton, ".toolMotionSuccessSwap(id: copied)", "Icon-only copy must retain checkmark feedback")
+        contains(copyButton, #"copied ? "checkmark" : IndexActionSymbol.copy"#, "Icon-only copy must keep the Reduce Motion checkmark cut")
         contains(iconButton, ".buttonStyle(IndexIconActionButtonStyle(", "General icon buttons must use the same action slot as icon-only copy")
     }
 

@@ -296,18 +296,17 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             ToolTheme.panelBackground,
             in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous)
         )
-        .overlay {
-            if showsErrorState {
-                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous)
-                    .strokeBorder(ToolTheme.error.opacity(0.55), lineWidth: 1)
-            }
-        }
+        .toolErrorTint(active: showsErrorState, cornerRadius: ToolMetrics.CornerRadius.panel)
         .toolShadow(
             showsErrorState
                 ? ToolTheme.ShadowRecipe(color: ToolTheme.errorSoft, radius: 3, y: 0)
                 : ToolTheme.Shadow.panel
         )
         .toolAnimation(ToolMotion.Preset.diagnostic, value: showsErrorState)
+        .toolErrorShake(
+            attempt: formatAttempt,
+            isActive: hasDiagnostic && diagnosticTone == .error
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
