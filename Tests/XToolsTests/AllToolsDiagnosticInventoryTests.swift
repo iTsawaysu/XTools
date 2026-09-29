@@ -33,8 +33,8 @@ struct AllToolsDiagnosticInventoryTests {
         let actual = registeredGroups.mapValues { $0[0].categoryID.rawValue }
         let expected = inventoryGroups.mapValues { $0[0].category }
 
-        #expect(actual.count == 44)
-        #expect(Self.inventory.count == 44)
+        #expect(actual.count == 43)
+        #expect(Self.inventory.count == 43)
         #expect(actual == expected)
     }
 
@@ -84,8 +84,7 @@ struct AllToolsDiagnosticInventoryTests {
         entry("password-generator", "crypto", .securityValidation, "Crypto/PasswordGeneratorPage.swift"),
 
         entry("formatter", "development", .errorAndWarning, "Development/FormatterHubPage.swift"),
-        entry("json-diff", "development", .errorAndWarning, "Development/JSONDiffPage.swift"),
-        entry("text-diff", "development", .inputValidation, "Development/TextDiffPage.swift"),
+        entry("diff", "development", .errorAndWarning, "Development/DiffHubPage.swift"),
         entry("regex-tester", "development", .inputValidation, "Development/RegexTesterPage.swift"),
         entry("docker-run-to-docker-compose-converter", "development", .errorAndWarning, "Development/DockerRunToComposePage.swift"),
         entry("html-to-markdown", "development", .errorAndWarning, "Development/HTMLToMarkdownPage.swift"),

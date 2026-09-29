@@ -106,6 +106,7 @@ struct TextWorkbenchSourceContractTests {
             "Sources/XTools/ToolPages/Development/RegexTesterPage.swift",
             "Sources/XTools/ToolPages/Development/TextDiffPage.swift",
             "Sources/XTools/ToolPages/Development/JSONDiffPage.swift",
+            "Sources/XTools/ToolPages/Development/DiffHubPage.swift",
             "Sources/XTools/ToolPages/Utility/DeviceInformationPage.swift",
             "Sources/XTools/ToolPages/Web/HTTPStatusCodesPage.swift",
             "Sources/XTools/ToolPages/Time/TimezoneViewerPage.swift",
@@ -124,6 +125,23 @@ struct TextWorkbenchSourceContractTests {
             doesNotContain(source, "IndexTextConversionWorkbench(", "\(path) must not opt into the text conversion editor workbench")
             doesNotContain(source, "workspaceSemantic: .copyTransformWorkspace", "\(path) must not inherit copy-transform workspace semantics")
             doesNotContain(source, "workspaceSemantic: .structuredEditorTransform", "\(path) must not inherit structured formatter workspace semantics")
+        }
+    }
+
+    @Test func diffHubShellCarriesSegmentedDiffWorkbenches() throws {
+        let diffHub = try readSource("Sources/XTools/ToolPages/Development/DiffHubPage.swift")
+        let jsonDiff = try readSource("Sources/XTools/ToolPages/Development/JSONDiffPage.swift")
+        let textDiff = try readSource("Sources/XTools/ToolPages/Development/TextDiffPage.swift")
+
+        // JSON 与文本对比合并为单入口「对比」后，IndexPage 页面壳统一
+        // 上移到 Hub；两分段只保留各自的对比工作台。
+        appearsBefore(diffHub, "IndexPage(", "IndexSegmentedControl(", "Diff hub body must open with the shared page shell before the segment control")
+        contains(diffHub, "IndexJSONDiffSegment()", "Diff hub must mount the JSON diff segment")
+        contains(diffHub, "IndexTextDiffSegment()", "Diff hub must mount the text diff segment")
+        contains(diffHub, "IndexPage(\"对比\", subtitle: workspace.segment.subtitle, workspaceSemantic: .editableDiffWorkspace)", "Diff hub must let the semantic resolve the editable diff workspace page shell")
+        for segment in [jsonDiff, textDiff] {
+            contains(segment, "IndexEditableDiffWorkspace(", "Diff segments must keep delegating their panes to the shared diff workbench")
+            doesNotContain(segment, "IndexPage(", "Diff segments must not nest a second page shell inside the hub")
         }
     }
 

@@ -305,22 +305,13 @@ extension ToolRegistry {
                 IndexFormatterHubPage()
             },
             RegisteredTool(
-                id: "json-diff",
-                title: "JSON 对比",
-                categoryID: .development,
-                systemImage: "curlybraces",
-                keywords: ["json", "diff", "compare", "difference", "对比"]
-            ) {
-                IndexJSONDiffPage()
-            },
-            RegisteredTool(
-                id: "text-diff",
-                title: "文本对比",
+                id: "diff",
+                title: "对比",
                 categoryID: .development,
                 systemImage: "square.split.2x1",
-                keywords: ["text", "diff", "compare", "difference", "对比"]
+                keywords: ["json", "text", "diff", "compare", "difference", "对比"]
             ) {
-                IndexTextDiffPage()
+                IndexDiffHubPage()
             },
             RegisteredTool(
                 id: "regex-tester",

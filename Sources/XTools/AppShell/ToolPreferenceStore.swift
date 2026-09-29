@@ -419,6 +419,12 @@ enum TextDevelopmentToolPreferenceKeys {
         default: "json",
         allowedValues: ["json", "xml", "yaml", "sql"]
     )
+    /// 「对比」Hub 上次使用的分段（json/text），重启后恢复。
+    static let diffSegment = ToolPreferenceKey<String>.string(
+        "tools.diff.segment.v1",
+        default: "json",
+        allowedValues: ["json", "text"]
+    )
     static let integerBase = ToolPreferenceKey<String>.string(
         "tools.integerBase.inputBase.v1",
         default: "10",

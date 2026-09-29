@@ -281,7 +281,7 @@ struct CodeViewerSurfaceTests {
     @Test func textDiffEditorViewportsFitMinimumRootWindowDetailWidth() {
         let defaults = UserDefaults(suiteName: "CodeViewerSurfaceTests.Layout.Diff.\(UUID().uuidString)")!
         let repository = ToolWorkspaceRepository(defaults: defaults)
-        let view = IndexTextDiffPage().environmentObject(repository)
+        let view = IndexTextDiffSegment().environmentObject(repository)
         let hostingView = NSHostingView(rootView: view)
         let rootWidth: CGFloat = 960
         let detailWidth: CGFloat = rootWidth - 220

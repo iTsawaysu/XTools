@@ -57,8 +57,7 @@ struct ToolRoutingSourceTests {
         ])
         #expect(try #require(groups.first { $0.category.id == .development }?.tools).map(\.title) == [
             "格式化",
-            "JSON 对比",
-            "文本对比",
+            "对比",
             "正则测试",
             "Docker Run ↔ Compose",
             "HTML → Markdown",

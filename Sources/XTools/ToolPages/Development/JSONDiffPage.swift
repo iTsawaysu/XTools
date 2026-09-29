@@ -100,7 +100,9 @@ final class DiffToolWorkspaceModel: ObservableObject {
     }
 }
 
-struct IndexJSONDiffPage: View {
+/// 「对比」Hub 的 JSON 分段。workspace key 沿用 toolID "json-diff"，
+/// 输入与执行状态由 ToolWorkspaceRepository 保活，分段切换不丢。
+struct IndexJSONDiffSegment: View {
     private static let key = ToolWorkspaceKey<DiffToolWorkspaceModel>(toolID: "json-diff") { _ in
         DiffToolWorkspaceModel(
             kind: .json(labels: .init(left: "原始 JSON", right: "对比 JSON"))
@@ -122,43 +124,37 @@ private struct IndexJSONDiffWorkspaceContent: View {
     @ObservedObject var execution: DiffExecutionSession
 
     var body: some View {
-        IndexPage(
-            "JSON 对比",
-            subtitle: "对比两段 JSON，以左右对齐视图显示差异。",
-            workspaceSemantic: .editableDiffWorkspace
-        ) {
-            IndexEditableDiffWorkspace(
-                inputTitle: "原始 JSON",
-                outputTitle: "对比 JSON",
-                leftPlaceholder: #"{"name":"Alice","age":30}"#,
-                rightPlaceholder: #"{"name":"Bob","age":30,"city":"NY"}"#,
-                leftDisplayText: execution.binding.leftDisplayText,
-                rightDisplayText: execution.binding.rightDisplayText,
-                left: $workspace.left,
-                right: $workspace.right,
-                rows: execution.binding.rows,
-                resultState: execution.resultState,
-                syntax: .json,
-                foldUnchanged: workspace.foldUnchanged,
-                error: execution.binding.error,
-                warning: execution.binding.warning,
-                onClear: workspace.clear,
-                clearDisabled: !workspace.hasAnyContent,
-                leadingControl: {
-                    HStack(spacing: 8) {
-                        IndexOptionSwitch(title: "忽略数组顺序", style: .button, isOn: $workspace.ignoreArrayOrder)
-                        IndexIconButton(
-                            systemImage: "chevron.up.chevron.down",
-                            help: "折叠未变更行",
-                            isActive: workspace.foldUnchanged
-                        ) {
-                            workspace.foldUnchanged.toggle()
-                        }
-                        .fixedSize(horizontal: true, vertical: false)
+        IndexEditableDiffWorkspace(
+            inputTitle: "原始 JSON",
+            outputTitle: "对比 JSON",
+            leftPlaceholder: #"{"name":"Alice","age":30}"#,
+            rightPlaceholder: #"{"name":"Bob","age":30,"city":"NY"}"#,
+            leftDisplayText: execution.binding.leftDisplayText,
+            rightDisplayText: execution.binding.rightDisplayText,
+            left: $workspace.left,
+            right: $workspace.right,
+            rows: execution.binding.rows,
+            resultState: execution.resultState,
+            syntax: .json,
+            foldUnchanged: workspace.foldUnchanged,
+            error: execution.binding.error,
+            warning: execution.binding.warning,
+            onClear: workspace.clear,
+            clearDisabled: !workspace.hasAnyContent,
+            leadingControl: {
+                HStack(spacing: 8) {
+                    IndexOptionSwitch(title: "忽略数组顺序", style: .button, isOn: $workspace.ignoreArrayOrder)
+                    IndexIconButton(
+                        systemImage: "chevron.up.chevron.down",
+                        help: "折叠未变更行",
+                        isActive: workspace.foldUnchanged
+                    ) {
+                        workspace.foldUnchanged.toggle()
                     }
+                    .fixedSize(horizontal: true, vertical: false)
                 }
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        }
+            }
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
