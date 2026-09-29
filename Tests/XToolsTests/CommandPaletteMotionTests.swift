@@ -107,6 +107,44 @@ struct CommandPaletteMotionTests {
     }
 
 #if DEBUG
+    @Test
+    func reversalDeadlineRequiresProgressInsteadOfARepeatedSetter() throws {
+        let requestedAt = ContinuousClock.now
+        for presented in [false, true] {
+            let repeated = Self.sample(progress: 0.5, presented: presented, at: requestedAt + .milliseconds(5))
+            let wrongDirection = Self.sample(
+                progress: presented ? 0.4 : 0.6, presented: presented,
+                at: requestedAt + .milliseconds(10)
+            )
+            let stalled = [repeated, wrongDirection]
+            #expect(Self.firstAdvancingSample(in: stalled[...], from: 0.5, towardPresented: presented) == nil)
+            // A prompt retarget setter cannot conceal movement that starts at
+            // or after the original 100ms deadline.
+            for delay in [99, 100, 101] {
+                let moving = Self.sample(
+                    progress: presented ? 0.6 : 0.4, presented: presented,
+                    at: requestedAt + .milliseconds(delay)
+                )
+                let samples = stalled + [moving]
+                let advancing = try #require(Self.firstAdvancingSample(
+                    in: samples[...], from: 0.5, towardPresented: presented
+                ))
+                #expect(advancing.timestamp == moving.timestamp)
+                #expect(Self.isWithinResponseBudget(advancing, requestedAt: requestedAt) == (delay < 100))
+            }
+        }
+    }
+
+    @Test
+    func reversalDeadlineStartsAtRequestAndRejectsPreRequestSamples() {
+        let requestedAt = ContinuousClock.now
+        let previous = Self.sample(progress: 0.5, presented: false, at: requestedAt - .milliseconds(200))
+        let response = Self.sample(progress: 0.6, presented: true, at: requestedAt + .milliseconds(20))
+        #expect(!Self.isWithinResponseBudget(previous, requestedAt: requestedAt))
+        #expect(Self.isWithinResponseBudget(response, requestedAt: requestedAt))
+        #expect(Self.milliseconds(from: previous.timestamp, to: response.timestamp) == 220)
+    }
+
     /// This observes SwiftUI's `Animatable.animatableData` setter in a real
     /// RootView/NSWindow. It proves that rapid reversals keep one in-flight
     /// interpolation and do not reset progress at session boundaries. It does
@@ -114,6 +152,12 @@ struct CommandPaletteMotionTests {
     @Test @MainActor
     func realRootWindowKeepsFirstAndWarmRapidReversalsContinuous() async throws {
         var samples: [TimedProgressSample] = []
+        var reversalTimingLines: [String] = []
+        defer {
+            // Logging must not occupy MainActor between a sampled progress and
+            // the next reversal request. Keep the full timing evidence instead.
+            FileHandle.standardError.write(Data(reversalTimingLines.joined().utf8))
+        }
         var shellMounted = false
         var fixtureForObserver: CommandPaletteWindowFixture?
         CommandPaletteTrace.observePresentationProgress { sample in
@@ -172,16 +216,22 @@ struct CommandPaletteMotionTests {
         }
         try await Self.waitForCondition(label: "first mount close interpolation") {
             Self.flushMotion(in: fixture)
-            return samples[firstMountCloseIndex...].contains { $0.observedShows == false }
+            return Self.firstAdvancingSample(
+                in: samples[firstMountCloseIndex...],
+                from: firstMountLastOpening.sample.progress,
+                towardPresented: false
+            ) != nil
         }
         let firstMountFirstClosing = try #require(
             samples[firstMountCloseIndex...].first { $0.observedShows == false }
         )
         #expect(Self.isIntermediate(firstMountFirstClosing.sample.progress))
-        Self.expectContinuousBoundary(
+        reversalTimingLines.append(try Self.expectContinuousBoundary(
             from: firstMountLastOpening,
-            to: firstMountFirstClosing
-        )
+            to: firstMountFirstClosing,
+            requestedAt: firstMountCloseRequestedAt,
+            followingSamples: samples[firstMountCloseIndex...]
+        ))
 
         let firstMountReopenIndex = samples.count
         let firstMountLastClosing = try #require(
@@ -196,16 +246,22 @@ struct CommandPaletteMotionTests {
         }
         try await Self.waitForCondition(label: "first mount reopen interpolation") {
             Self.flushMotion(in: fixture)
-            return samples[firstMountReopenIndex...].contains { $0.observedShows == true }
+            return Self.firstAdvancingSample(
+                in: samples[firstMountReopenIndex...],
+                from: firstMountLastClosing.sample.progress,
+                towardPresented: true
+            ) != nil
         }
         let firstMountFirstReopening = try #require(
             samples[firstMountReopenIndex...].first { $0.observedShows == true }
         )
         #expect(Self.isIntermediate(firstMountFirstReopening.sample.progress))
-        Self.expectContinuousBoundary(
+        reversalTimingLines.append(try Self.expectContinuousBoundary(
             from: firstMountLastClosing,
-            to: firstMountFirstReopening
-        )
+            to: firstMountFirstReopening,
+            requestedAt: firstMountReopenRequestedAt,
+            followingSamples: samples[firstMountReopenIndex...]
+        ))
         let firstField = try await Self.waitForReadyField(in: fixture, excluding: nil)
         try await Self.waitForCondition(label: "first mount reopen terminal interpolation") {
             Self.flushMotion(in: fixture)
@@ -256,18 +312,13 @@ struct CommandPaletteMotionTests {
 
             try await Task.sleep(for: .milliseconds(requestedDelayMilliseconds))
             Self.flushMotion(in: fixture)
-            let closeRequestedAt = ContinuousClock.now
             let closingStartIndex = samples.count
             let openingBeforeClose = Array(samples[cycleStartIndex..<closingStartIndex])
                 .filter { $0.observedShows == true }
-            Self.emitRawSamples(
-                label: "before_close_\(requestedDelayMilliseconds)",
-                samples: Array(samples[cycleStartIndex..<closingStartIndex]),
-                relativeTo: openRequestedAt
-            )
             let lastOpeningSample = try #require(openingBeforeClose.last)
             #expect(Self.isIntermediate(lastOpeningSample.sample.progress))
 
+            let closeRequestedAt = ContinuousClock.now
             withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
                 fixture.viewModel.closeCommandPalette()
             }
@@ -275,20 +326,15 @@ struct CommandPaletteMotionTests {
 
             try await Task.sleep(for: .milliseconds(requestedDelayMilliseconds))
             Self.flushMotion(in: fixture)
-            let reopenRequestedAt = ContinuousClock.now
             let reopeningStartIndex = samples.count
             let closingBeforeReopen = Array(samples[closingStartIndex..<reopeningStartIndex])
                 .filter { $0.observedShows == false }
-            Self.emitRawSamples(
-                label: "before_reopen_\(requestedDelayMilliseconds)",
-                samples: Array(samples[closingStartIndex..<reopeningStartIndex]),
-                relativeTo: closeRequestedAt
-            )
             let lastClosingSample = try #require(closingBeforeReopen.last)
             #expect(Self.isIntermediate(lastClosingSample.sample.progress))
             let firstClosingSample = try #require(closingBeforeReopen.first)
             #expect(Self.isIntermediate(firstClosingSample.sample.progress))
 
+            let reopenRequestedAt = ContinuousClock.now
             withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
                 fixture.viewModel.openCommandPalette()
             }
@@ -297,23 +343,29 @@ struct CommandPaletteMotionTests {
 
             try await Self.waitForCondition(label: "intermediate reopen interpolation") {
                 Self.flushMotion(in: fixture)
-                return samples[reopeningStartIndex...].contains {
-                    $0.observedShows == true && Self.isIntermediate($0.sample.progress)
-                }
+                return Self.firstAdvancingSample(
+                    in: samples[reopeningStartIndex...],
+                    from: lastClosingSample.sample.progress,
+                    towardPresented: true
+                ) != nil
             }
             let reopeningSamples = Array(samples[reopeningStartIndex...])
                 .filter { $0.observedShows == true }
             let firstReopeningSample = try #require(reopeningSamples.first)
             #expect(Self.isIntermediate(firstReopeningSample.sample.progress))
-            Self.expectContinuousBoundary(
+            reversalTimingLines.append(try Self.expectContinuousBoundary(
                 from: lastClosingSample,
-                to: firstReopeningSample
-            )
+                to: firstReopeningSample,
+                requestedAt: reopenRequestedAt,
+                followingSamples: samples[reopeningStartIndex...]
+            ))
 
-            Self.expectContinuousBoundary(
+            reversalTimingLines.append(try Self.expectContinuousBoundary(
                 from: lastOpeningSample,
-                to: firstClosingSample
-            )
+                to: firstClosingSample,
+                requestedAt: closeRequestedAt,
+                followingSamples: samples[closingStartIndex..<reopeningStartIndex]
+            ))
 
             // Inspect the first setter delivery after each direction change,
             // before filtering for intermediate values. An endpoint reset
@@ -339,6 +391,16 @@ struct CommandPaletteMotionTests {
             }
             #expect(fixture.viewModel.showsCommandPalette)
 
+            Self.emitRawSamples(
+                label: "before_close_\(requestedDelayMilliseconds)",
+                samples: Array(samples[cycleStartIndex..<closingStartIndex]),
+                relativeTo: openRequestedAt
+            )
+            Self.emitRawSamples(
+                label: "before_reopen_\(requestedDelayMilliseconds)",
+                samples: Array(samples[closingStartIndex..<reopeningStartIndex]),
+                relativeTo: closeRequestedAt
+            )
             let openToClose = Self.milliseconds(from: openRequestedAt, to: closeRequestedAt)
             let closeToOpen = Self.milliseconds(from: closeRequestedAt, to: reopenRequestedAt)
             let openToCloseText = String(format: "%.3f", openToClose)
@@ -542,21 +604,83 @@ struct CommandPaletteMotionTests {
         progress > 0.001 && progress < 0.999
     }
 
+    private static func firstAdvancingSample(
+        in samples: ArraySlice<TimedProgressSample>,
+        from progress: CGFloat,
+        towardPresented: Bool
+    ) -> TimedProgressSample? {
+        samples.first { sample in
+            guard sample.observedShows == towardPresented else { return false }
+            let distance = sample.sample.progress - progress
+            return towardPresented ? distance > 0.000_001 : distance < -0.000_001
+        }
+    }
+
     private static func expectContinuousBoundary(
         from lhs: TimedProgressSample,
-        to rhs: TimedProgressSample
-    ) {
+        to rhs: TimedProgressSample,
+        requestedAt: ContinuousClock.Instant,
+        followingSamples: ArraySlice<TimedProgressSample>
+    ) throws -> String {
         let progressDistance = abs(rhs.sample.progress - lhs.sample.progress)
         let offsetDistance = abs(rhs.sample.geometry.offsetY - lhs.sample.geometry.offsetY)
-        let elapsedMilliseconds = milliseconds(from: lhs.timestamp, to: rhs.timestamp)
-        #expect(lhs.timestamp <= rhs.timestamp)
-        #expect(elapsedMilliseconds < 100)
+        let sampleGapMilliseconds = milliseconds(from: lhs.timestamp, to: rhs.timestamp)
+        let firstResponseMilliseconds = milliseconds(from: requestedAt, to: rhs.timestamp)
+        let advancing = try #require(firstAdvancingSample(
+            in: followingSamples,
+            from: lhs.sample.progress,
+            towardPresented: try #require(rhs.observedShows)
+        ))
+        let advancingResponseMilliseconds = milliseconds(from: requestedAt, to: advancing.timestamp)
+        #expect(lhs.timestamp <= requestedAt)
+        #expect(requestedAt <= rhs.timestamp)
+        // The old sample-to-sample clock included the remainder of the PREVIOUS
+        // layout/display flush before a reversal was even requested. Keep its
+        // observation below, but apply the original 100ms response budget to
+        // the actual request. A repeated progress setter is not resumed motion:
+        // the first advance toward the new target must meet that budget too.
+        #expect(isWithinResponseBudget(rhs, requestedAt: requestedAt))
+        #expect(isWithinResponseBudget(advancing, requestedAt: requestedAt))
         #expect(progressDistance < 0.25)
+        #expect(isIntermediate(rhs.sample.progress))
         // Wave 2: one continuous 8pt rise/sink mapping serves both directions
         // (prototype cmdkRise; unified so reversals never switch geometry).
         #expect(
             offsetDistance
                 <= ToolMotion.PaletteMotion.riseDistance * progressDistance + 0.000_001
+        )
+        return String(
+            format: "COMMAND_PALETTE_REVERSAL_TIMING sample_gap_ms=%.3f pre_request_ms=%.3f request_to_setter_ms=%.3f request_to_advance_ms=%.3f from_p=%.6f to_p=%.6f advanced_p=%.6f\n",
+            sampleGapMilliseconds,
+            milliseconds(from: lhs.timestamp, to: requestedAt),
+            firstResponseMilliseconds,
+            advancingResponseMilliseconds,
+            lhs.sample.progress,
+            rhs.sample.progress,
+            advancing.sample.progress
+        )
+    }
+
+    private static func isWithinResponseBudget(
+        _ sample: TimedProgressSample,
+        requestedAt: ContinuousClock.Instant
+    ) -> Bool {
+        sample.timestamp >= requestedAt && sample.timestamp - requestedAt < .milliseconds(100)
+    }
+
+    private static func sample(
+        progress: CGFloat,
+        presented: Bool,
+        at timestamp: ContinuousClock.Instant
+    ) -> TimedProgressSample {
+        TimedProgressSample(
+            timestamp: timestamp,
+            sample: CommandPaletteTrace.PresentationProgressSample(
+                session: 1, isPresented: presented, progress: progress, reduceMotion: false,
+                geometry: CommandPaletteVisibilityGeometry.resolve(progress: progress, reduceMotion: false)
+            ),
+            observedShows: presented,
+            observedSession: 1
         )
     }
 
