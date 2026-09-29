@@ -7,6 +7,37 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct EditableDiffInteractionTests {
+    @Test func rejectedNativeFileDropReportsDiagnosticAndKeepsBothDrafts() async throws {
+        let left = MutableStringValue("existing left")
+        let right = MutableStringValue("existing right")
+        let coordinator = IndexEditableDiffMergeView.Coordinator(left: binding(to: left), right: binding(to: right))
+        let pane = coordinator.makeEditor(side: .left, placeholder: "Left")
+        let native = try #require(textView(in: pane) as? IndexDiffTextView)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView?.addSubview(pane)
+        coordinator.update(left: left.value, right: right.value, rows: [], syntax: .plain, foldUnchanged: false)
+        var diagnostic: String?
+        coordinator.onFileDropDiagnostic = { diagnostic = $0 }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("XToolsDiffDrop-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let malformed = directory.appendingPathComponent("invalid-utf8.txt")
+        try Data([0xC3]).write(to: malformed)
+        native.loadDroppedFile(from: malformed)
+        for _ in 0..<200 {
+            if diagnostic != nil { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(diagnostic == IndexDroppedTextRejection.invalidEncoding.message)
+        #expect(native.string == "existing left")
+        #expect(left.value == "existing left")
+        #expect(right.value == "existing right")
+        native.didChangeText()
+        #expect(diagnostic == nil)
+        #expect(native.window === window)
+    }
+
     @Test func navigationIsEnabledOnlyForCurrentResultsWithDifferences() {
         typealias Workspace = IndexEditableDiffWorkspace<EmptyView>
 
@@ -625,6 +656,29 @@ struct EditableDiffInteractionTests {
         #expect(rightTextView.string == rightDisplay)
         #expect(hasTemporaryBackground(in: leftTextView))
         #expect(hasTemporaryBackground(in: rightTextView))
+    }
+
+    @Test func unmountedEditorsReceiveBoundedInitialDiffDecorations() throws {
+        let left = (0..<128).map { "old value \($0)" }.joined(separator: "\n")
+        let right = (0..<128).map { "new value \($0)" }.joined(separator: "\n")
+        let rows = try LineDiffer.safeAlignedDiff(left: left, right: right)
+        let leftValue = MutableStringValue(left)
+        let rightValue = MutableStringValue(right)
+        let coordinator = IndexEditableDiffMergeView.Coordinator(
+            left: binding(to: leftValue), right: binding(to: rightValue)
+        )
+        let leftEditor = coordinator.makeEditor(side: .left, placeholder: "Left")
+        let rightEditor = coordinator.makeEditor(side: .right, placeholder: "Right")
+        let leftView = try #require(textView(in: leftEditor))
+        let rightView = try #require(textView(in: rightEditor))
+        coordinator.update(left: left, right: right, rows: rows, syntax: .plain, foldUnchanged: false)
+        for view in [leftView, rightView] {
+            let manager = try #require(view.layoutManager)
+            #expect(manager.temporaryAttribute(.backgroundColor, atCharacterIndex: 0, effectiveRange: nil) != nil)
+            let distant = (view.string as NSString).range(of: "value 100").location - 4
+            #expect(manager.temporaryAttribute(.backgroundColor, atCharacterIndex: distant, effectiveRange: nil) == nil,
+                    "An unmounted editor must not fall back to decorating the full document")
+        }
     }
 
     @Test func endingRightEditingFallbackStillReconciles() throws {

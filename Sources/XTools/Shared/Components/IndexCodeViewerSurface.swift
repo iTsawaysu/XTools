@@ -17,15 +17,14 @@ private struct IndexCodeViewerText: Equatable {
 /// `IndexEditorLineNumberGutterView`.
 ///
 /// Provides:
-/// - True viewport virtualization (instant rendering & 120 FPS scrolling on 100k+ lines)
-/// - Viewport-lazy syntax highlighting: only logical lines around the visible
-///   rect are colorized, so arbitrarily large outputs highlight without a
-///   per-page character budget
+/// - Viewport-lazy syntax highlighting with bounded line and pass budgets
+/// - Complete native text selection/copy when expensive coloring is skipped
 /// - Native First Responder support for `⌘A` (Select All) and `⌘C` (Copy)
 /// - Native macOS Find Bar support (`⌘F`)
 /// - Line spacing matching the input editor
 struct IndexCodeViewerSurface: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var highlightingLimited = false
     private let text: IndexCodeViewerText
     var placeholder: String = IndexEmptyStateCopy.outputWillShowHere
     var lineNumbers: Bool = true
@@ -58,25 +57,38 @@ struct IndexCodeViewerSurface: View {
     private var effectiveMinHeight: CGFloat { fillsHeight ? 60 : minHeight }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            IndexCodeViewerTextView(
-                text: text,
-                lineNumbers: lineNumbers,
-                syntax: syntax,
-                lineBreakMode: lineBreakMode,
-                embedsFlat: embedsFlat
-            )
-            .opacity(text.isEmpty ? 0 : 1)
-            .accessibilityHidden(text.isEmpty)
+        VStack(spacing: 0) {
+            ZStack(alignment: .topLeading) {
+                IndexCodeViewerTextView(
+                    text: text,
+                    lineNumbers: lineNumbers,
+                    syntax: syntax,
+                    lineBreakMode: lineBreakMode,
+                    embedsFlat: embedsFlat,
+                    onHighlightingDegradation: { limited in
+                        Task { @MainActor in highlightingLimited = limited }
+                    }
+                )
+                .opacity(text.isEmpty ? 0 : 1)
+                .accessibilityHidden(text.isEmpty)
 
-            if text.isEmpty {
-                placeholderView
-                    // Wave 2 empty-arrival: the editor placeholder rises in
-                    // softly when content empties (IndexEmptyState owns the
-                    // staged beats for whole-panel empty states).
-                    .transition(
-                        .opacity.combined(with: .offset(y: ToolMotion.EmptyArrival.textRiseDistance))
-                    )
+                if text.isEmpty {
+                    placeholderView
+                        // Wave 2 empty-arrival: the editor placeholder rises in
+                        // softly when content empties (IndexEmptyState owns the
+                        // staged beats for whole-panel empty states).
+                        .transition(
+                            .opacity.combined(with: .offset(y: ToolMotion.EmptyArrival.textRiseDistance))
+                        )
+                }
+            }
+            if highlightingLimited, !text.isEmpty {
+                Text("部分内容已简化着色；仍可选择和复制全文")
+                    .font(ToolTypography.monoCaption)
+                    .foregroundStyle(ToolTheme.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 4)
             }
         }
         .animation(
@@ -209,6 +221,7 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
     var syntax: IndexSyntaxKind?
     var lineBreakMode: NSLineBreakMode
     var embedsFlat: Bool
+    var onHighlightingDegradation: (Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
@@ -254,6 +267,7 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
 
         applyContent(to: textView)
 
+        context.coordinator.highlighting.onDegradationChange = onHighlightingDegradation
         context.coordinator.highlighting.install(
             scrollView: scrollView,
             textView: textView,
@@ -276,6 +290,7 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
         guard let customScrollView = scrollView as? IndexCodeViewerScrollView,
               let textView = customScrollView.documentView as? IndexCodeViewerTextViewInternal else { return }
         configure(textView)
+        context.coordinator.highlighting.onDegradationChange = onHighlightingDegradation
 
         if context.coordinator.lastText != text || context.coordinator.lastSyntax != syntax {
             context.coordinator.lastText = text
@@ -322,9 +337,8 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
         }
     }
 
-    /// Plain base attributes only; syntax colors are applied lazily by the
-    /// viewport highlighter, which keeps first paint O(visible) regardless of
-    /// document size.
+    /// The native document remains complete. Only tokenization and color
+    /// application are viewport bounded; TextKit's first layout is still O(n).
     private func applyContent(to textView: NSTextView) {
         let attributed = NSAttributedString(string: text.value, attributes: Self.baseAttributes(lineSpacing: 6))
         textView.textStorage?.setAttributedString(attributed)
@@ -368,6 +382,12 @@ final class IndexViewportHighlighting {
     private var lineRanges: [NSRange] = []
     private var highlightedLines: [Bool] = []
     private var isApplyingAttributes = false
+    private var continuationScheduled = false
+    private var unhighlightedLineCount = 0
+    private var degradationReported = false
+    var onDegradationChange: ((Bool) -> Void)?
+    private(set) var lastPassUTF16Count = 0
+    private(set) var lastPassTokenCount = 0
     private nonisolated(unsafe) var boundsObserver: (any NSObjectProtocol)?
 
     func install(
@@ -411,7 +431,9 @@ final class IndexViewportHighlighting {
         guard let textView else { return }
         let fullRange = NSRange(location: 0, length: (textView.string as NSString).length)
         textView.textStorage?.setAttributes(baseAttributes, range: fullRange)
-        highlightedLines = Array(repeating: false, count: lineRanges.count)
+        highlightedLines = lineRanges.map { $0.length > IndexSyntaxHighlightBudget.maximumLineUTF16 }
+        unhighlightedLineCount = highlightedLines.filter { !$0 }.count
+        reportDegradation(syntax != nil && highlightedLines.contains(true))
         highlightVisibleIfNeeded()
     }
 
@@ -436,7 +458,7 @@ final class IndexViewportHighlighting {
     }
 
     func highlightVisibleIfNeeded() {
-        guard !isApplyingAttributes else { return }
+        guard !isApplyingAttributes, unhighlightedLineCount > 0 else { return }
         guard let scrollView, let textView, let syntax,
               !lineRanges.isEmpty,
               let layoutManager = textView.layoutManager,
@@ -470,22 +492,42 @@ final class IndexViewportHighlighting {
         // Geometry is resolved above. TextKit coalesces the token edits and
         // notifies observers after every line has been marked as highlighted.
         isApplyingAttributes = true
+        lastPassUTF16Count = 0
+        lastPassTokenCount = 0
         textStorage.beginEditing()
         defer {
             textStorage.endEditing()
             isApplyingAttributes = false
         }
         for lineIndex in span where !highlightedLines[lineIndex] {
-            highlightedLines[lineIndex] = true
             let fullRange = lineRanges[lineIndex]
+            if lastPassUTF16Count + fullRange.length > IndexSyntaxHighlightBudget.maximumPassUTF16
+                || lastPassTokenCount >= IndexSyntaxHighlightBudget.maximumPassTokens {
+                scheduleContinuation()
+                break
+            }
+            highlightedLines[lineIndex] = true
+            unhighlightedLineCount -= 1
             let hasNewline = NSMaxRange(fullRange) > fullRange.location
                 && nsText.character(at: NSMaxRange(fullRange) - 1) == unichar(10)
             let contentLength = max(0, fullRange.length - (hasNewline ? 1 : 0))
             guard contentLength > 0 else { continue }
 
             let contentRange = NSRange(location: fullRange.location, length: contentLength)
+            lastPassUTF16Count += contentLength
             let line = nsText.substring(with: contentRange)
             let tokens = syntax.tokens(line: line)
+            guard tokens.count <= IndexSyntaxHighlightBudget.maximumLineTokens else {
+                reportDegradation(true)
+                continue
+            }
+            if lastPassTokenCount + tokens.count > IndexSyntaxHighlightBudget.maximumPassTokens {
+                highlightedLines[lineIndex] = false
+                unhighlightedLineCount += 1
+                scheduleContinuation()
+                break
+            }
+            lastPassTokenCount += tokens.count
             guard !tokens.isEmpty else { continue }
             let utf16Ranges = IndexSyntaxUTF16RangeMap(line: line)
             for token in tokens {
@@ -500,4 +542,24 @@ final class IndexViewportHighlighting {
             }
         }
     }
+
+    private func reportDegradation(_ limited: Bool) {
+        guard limited != degradationReported else { return }
+        degradationReported = limited
+        onDegradationChange?(limited)
+    }
+
+    private func scheduleContinuation() {
+        guard !continuationScheduled else { return }
+        continuationScheduled = true
+        Task { @MainActor [weak self] in
+            // Every continuation re-reads the current content/syntax/viewport;
+            // it never applies a captured range to a newer text revision.
+            await Task.yield()
+            guard let self else { return }
+            self.continuationScheduled = false
+            self.highlightVisibleIfNeeded()
+        }
+    }
+
 }

@@ -36,6 +36,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     var clearDisabled = false
     var leadingControl: () -> LeadingControl
 
+    @State private var droppedFileDiagnostic: String?
     @State private var navigationRequest: DiffDifferenceNavigationRequest?
     @State private var navigationProgress = DiffDifferenceNavigationProgress(current: nil, total: 0)
 
@@ -149,6 +150,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     }
 
     private var diagnosticText: String? {
+        if let droppedFileDiagnostic { return droppedFileDiagnostic }
         // Running/stale notes only make sense once there is something to
         // compare; toggling options on empty panes must stay visually quiet.
         let hasInput = !left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -179,6 +181,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     }
 
     private var diagnosticTone: ToolFeedbackTone {
+        if droppedFileDiagnostic != nil { return .error }
         guard resultState == .current else {
             return .info
         }
@@ -205,17 +208,16 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            if hasDiagnostic {
-                IndexDiagnosticBanner(
-                    diagnostic: nil,
-                    message: diagnosticText!,
-                    tone: diagnosticTone
-                )
-                .transition(.asymmetric(
-                    insertion: .move(edge: .top).combined(with: .opacity),
-                    removal: .opacity.combined(with: .move(edge: .top))
-                ))
+            ZStack {
+                if hasDiagnostic {
+                    IndexDiagnosticBanner(
+                        diagnostic: nil,
+                        message: diagnosticText!,
+                        tone: diagnosticTone
+                    )
+                }
             }
+            .frame(height: 36)
             IndexEditableDiffMergeView(
                 left: $left,
                 right: $right,
@@ -229,6 +231,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
                 syntax: syntax,
                 foldUnchanged: foldUnchanged,
                 differenceNavigationRequest: navigationRequest,
+                onFileDropDiagnostic: { droppedFileDiagnostic = $0 },
                 onDifferenceNavigationChange: { progress in
                     // This callback can be invoked while AppKit is handling a
                     // representable update initiated by a toolbar action.
@@ -247,7 +250,6 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
             .padding(.top, ToolMetrics.Spacing.sm)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: hasDiagnostic)
         .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))
         .background(
             ToolTheme.panelBackground,
@@ -331,7 +333,10 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
                             title: "清空对比",
                             showsIcon: false,
                             framed: true,
-                            action: onClear
+                            action: {
+                                droppedFileDiagnostic = nil
+                                onClear()
+                            }
                         )
                     }
                 }
@@ -452,6 +457,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
     let syntax: IndexDiffSyntax
     let foldUnchanged: Bool
     var differenceNavigationRequest: DiffDifferenceNavigationRequest? = nil
+    var onFileDropDiagnostic: ((String?) -> Void)? = nil
     var onDifferenceNavigationChange: ((DiffDifferenceNavigationProgress) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator {
@@ -471,6 +477,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         context.coordinator.hostView = hostView
         context.coordinator.outerScrollView = hostView.outerScrollView
         context.coordinator.onDifferenceNavigationChange = onDifferenceNavigationChange
+        context.coordinator.onFileDropDiagnostic = onFileDropDiagnostic
         hostView.onLayout = { [weak coordinator = context.coordinator] in
             coordinator?.refreshEditorLayout()
         }
@@ -514,6 +521,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         context.coordinator.hostView = hostView
         context.coordinator.outerScrollView = hostView.outerScrollView
         context.coordinator.onDifferenceNavigationChange = onDifferenceNavigationChange
+        context.coordinator.onFileDropDiagnostic = onFileDropDiagnostic
         context.coordinator.updateAccessibilityLabels(
             left: leftAccessibilityLabel,
             right: rightAccessibilityLabel
@@ -553,13 +561,28 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
 
         var left: Binding<String>
         var right: Binding<String>
+        var onFileDropDiagnostic: ((String?) -> Void)?
 
         private weak var leftTextView: NSTextView?
         private weak var rightTextView: NSTextView?
         private weak var leftScrollView: NSScrollView?
         private weak var rightScrollView: NSScrollView?
         fileprivate weak var hostView: IndexEditableDiffScrollHostView?
-        weak var outerScrollView: NSScrollView?
+        weak var outerScrollView: NSScrollView? {
+            didSet {
+                if let oldValue {
+                    NotificationCenter.default.removeObserver(self, name: NSView.boundsDidChangeNotification, object: oldValue.contentView)
+                }
+                if let outerScrollView {
+                    outerScrollView.contentView.postsBoundsChangedNotifications = true
+                    NotificationCenter.default.addObserver(self, selector: #selector(viewportDidChange(_:)), name: NSView.boundsDidChangeNotification, object: outerScrollView.contentView)
+                }
+            }
+        }
+        private var isRefreshingLayout = false
+        private var isApplyingViewportDecorations = false
+        private var decorationGeneration = 0
+        private var decorationsAreCurrent = false
         private weak var leftPlaceholderLabel: NSTextField?
         private weak var rightPlaceholderLabel: NSTextField?
         private weak var leftLineNumberView: IndexDiffLineNumberOverlayView?
@@ -651,9 +674,15 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             accessibilityLabel: String? = nil
         ) -> NSView {
             let textView = IndexDiffTextView(frame: .zero)
-            textView.onCompositionChange = { [weak self] _ in
+            textView.onCompositionChange = { [weak self] marked in
                 self?.refreshPlaceholders()
+                if marked { self?.clearDecorations() }
             }
+            textView.onAppearanceChange = { [weak self] in
+                self?.decorationGeneration &+= 1
+                self?.refreshViewportDecorations()
+            }
+            _ = textView.diffTextIndex
             configure(textView)
             textView.setAccessibilityLabel(accessibilityLabel ?? side.defaultAccessibilityLabel)
 
@@ -671,6 +700,9 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
                 self.refreshEditorLayout()
             }
             textView.onFileDrop = dropHandler
+            textView.onFileDropDiagnostic = { [weak self] message in
+                self?.onFileDropDiagnostic?(message)
+            }
             textView.registerForDraggedTypes([.fileURL, .string])
 
             let scrollView = IndexDiffEditorScrollView(frame: .zero)
@@ -886,7 +918,6 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             refreshEditorLayout()
             applyDecorations()
             refreshPlaceholders()
-            refreshEditorLayout()
         }
 
         private var latestAppliedLeftText = ""
@@ -988,7 +1019,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
                     continue
                 }
 
-                let lineRects = IndexDiffTextLayoutGeometry.lineBlockRects(for: textView)
+                let lineRects = IndexDiffTextLayoutGeometry.lineBlockRects(for: textView, visibleRect: viewportRect(for: textView))
                 var block = NSRect.null
                 for line in lines {
                     guard let rect = lineRects[line] else { continue }
@@ -1133,7 +1164,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             side: Side,
             in textView: NSTextView
         ) -> NSRange? {
-            let lineRanges = IndexDiffSourceText.lineRanges(in: textView.string)
+            let lineRanges = IndexDiffTextLayoutGeometry.lineRanges(for: textView)
             guard line >= 1, line <= lineRanges.count else { return nil }
             let lineRange = lineRanges[line - 1]
             let cell = currentRows.lazy.compactMap { row -> DiffAlignedCell? in
@@ -1209,6 +1240,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
                 return
             }
 
+            clearDecorations()
             if textView === leftTextView {
                 left.wrappedValue = textView.string
             } else if textView === rightTextView {
@@ -1336,9 +1368,9 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         }
 
         func refreshEditorLayout() {
-            guard let hostView else {
-                return
-            }
+            guard let hostView, !isRefreshingLayout else { return }
+            isRefreshingLayout = true
+            defer { isRefreshingLayout = false }
 
             updateEditorGeometry(leftTextView, in: leftScrollView)
             updateEditorGeometry(rightTextView, in: rightScrollView)
@@ -1349,6 +1381,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             updateEditorGeometry(rightTextView, in: rightScrollView)
             leftLineNumberView?.needsDisplay = true
             rightLineNumberView?.needsDisplay = true
+            refreshViewportDecorations()
         }
 
         private func updateEditorGeometry(_ textView: NSTextView?, in scrollView: NSScrollView?) {
@@ -1359,7 +1392,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             let width = max(1, scrollView.contentSize.width)
             let height = max(hostView?.contentHeight ?? 0, scrollView.contentSize.height)
             (scrollView as? IndexDiffEditorScrollView)?.minimumDocumentHeight = height
-            IndexTextKitGeometry.synchronizeTextGeometry(
+            IndexDiffTextLayoutGeometry.synchronizeTextGeometry(
                 for: textView,
                 visibleWidth: width,
                 minimumHeight: height,
@@ -1415,6 +1448,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
                 return
             }
 
+            decorationGeneration &+= 1
+            decorationsAreCurrent = true
             let decorations = DiffEditorDecorations(rows: currentRows)
             (leftTextView as? IndexDiffTextView)?.lineDecorations = decorations.left
             (rightTextView as? IndexDiffTextView)?.lineDecorations = decorations.right
@@ -1439,10 +1474,11 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         }
 
         private func clearDecorations() {
+            decorationsAreCurrent = false
             (leftTextView as? IndexDiffTextView)?.lineDecorations = [:]
             (rightTextView as? IndexDiffTextView)?.lineDecorations = [:]
-            clearTemporaryDecorations(in: leftTextView)
-            clearTemporaryDecorations(in: rightTextView)
+            clearTemporaryDecorations(in: leftTextView, entireDocument: true)
+            clearTemporaryDecorations(in: rightTextView, entireDocument: true)
             leftLineNumberView?.lineStatuses = [:]
             rightLineNumberView?.lineStatuses = [:]
             leftLineNumberView?.customLineNumbers = [:]
@@ -1474,21 +1510,29 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             foldPlaceholders: [Int: DiffFoldRegion]
         ) {
             guard let textView,
-                  let layoutManager = textView.layoutManager,
-                  let textContainer = textView.textContainer else {
-                return
-            }
+                  let layoutManager = textView.layoutManager else { return }
 
-            let text = textView.string
-            let nsText = text as NSString
-            layoutManager.ensureLayout(for: textContainer)
+            guard !textView.hasMarkedText() else { return }
+            let indexed = textView as? IndexDiffTextView
+            let lineRanges = IndexDiffTextLayoutGeometry.lineRanges(for: textView)
+            let viewport = viewportRect(for: textView)
+            let span = viewport.isEmpty ? 0..<min(32, lineRanges.count)
+                : IndexDiffTextLayoutGeometry.visibleLineSpan(for: textView, ranges: lineRanges, visibleRect: viewport)
+            let revision = indexed?.diffTextIndex.revision ?? 0
+            if indexed?.lastDecorationSpan == span,
+               indexed?.lastDecorationRevision == revision,
+               indexed?.lastDecorationGeneration == decorationGeneration { return }
             clearTemporaryDecorations(in: textView)
-
-            let lineRanges = IndexDiffSourceText.lineRanges(in: text)
-            for (index, range) in lineRanges.enumerated() {
+            indexed?.lastDecorationSpan = span
+            indexed?.lastDecorationRevision = revision
+            indexed?.lastDecorationGeneration = decorationGeneration
+            guard let first = span.first, let last = span.last else { return }
+            indexed?.decoratedRange = NSRange(location: lineRanges[first].location,
+                length: NSMaxRange(lineRanges[last]) - lineRanges[first].location)
+            let nsText = textView.string as NSString
+            for index in span {
+                let range = lineRanges[index]
                 let lineNumber = index + 1
-                let line = nsText.substring(with: range)
-
                 if let region = foldPlaceholders[lineNumber] {
                     layoutManager.addTemporaryAttribute(
                         .foregroundColor,
@@ -1506,8 +1550,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
                     continue
                 }
 
-                if syntax == .json {
-                    applyJSONSyntax(line, lineRange: range, layoutManager: layoutManager)
+                if syntax == .json, range.length <= 10_000 {
+                    applyJSONSyntax(nsText.substring(with: range), lineRange: range, layoutManager: layoutManager)
                 }
 
                 guard let decoration = lineDecorations[lineNumber] else {
@@ -1555,17 +1599,51 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             }
         }
 
-        private func clearTemporaryDecorations(in textView: NSTextView?) {
+        private func clearTemporaryDecorations(in textView: NSTextView?, entireDocument: Bool = false) {
             guard let textView,
                   let layoutManager = textView.layoutManager else {
                 return
             }
 
-            let fullRange = NSRange(location: 0, length: (textView.string as NSString).length)
+            let indexed = textView as? IndexDiffTextView
+            let length = (textView.string as NSString).length
+            // Native edits shift temporary ranges before the delegate callback.
+            // Clear all sparse attributes on invalidation, but only the old
+            // viewport during ordinary scrolling.
+            let previous = entireDocument ? NSRange(location: 0, length: length)
+                : indexed?.decoratedRange ?? NSRange(location: 0, length: 0)
+            let fullRange = NSIntersectionRange(previous, NSRange(location: 0, length: length))
+            indexed?.lastDecorationSpan = nil
+            indexed?.decoratedRange = nil
+            textView.textStorage?.removeAttribute(.link, range: fullRange)
             layoutManager.removeTemporaryAttribute(.foregroundColor, forCharacterRange: fullRange)
             layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: fullRange)
             layoutManager.removeTemporaryAttribute(.underlineStyle, forCharacterRange: fullRange)
             layoutManager.removeTemporaryAttribute(.underlineColor, forCharacterRange: fullRange)
+        }
+
+        @objc private func viewportDidChange(_ notification: Notification) {
+            refreshViewportDecorations()
+            leftLineNumberView?.needsDisplay = true
+            rightLineNumberView?.needsDisplay = true
+        }
+
+        private func viewportRect(for textView: NSTextView) -> NSRect {
+            if let outerScrollView {
+                return textView.convert(outerScrollView.contentView.bounds, from: outerScrollView.contentView).intersection(textView.bounds)
+            }
+            // Before the outer host is installed, AppKit may report a narrow
+            // provisional frame that cannot lay out even one glyph. Use the
+            // bounded initial decoration span until a real viewport exists.
+            return .zero
+        }
+
+        private func refreshViewportDecorations() {
+            guard decorationsAreCurrent, !isApplyingViewportDecorations else { return }
+            isApplyingViewportDecorations = true
+            defer { isApplyingViewportDecorations = false }
+            applyDecorations(to: leftTextView, lineDecorations: (leftTextView as? IndexDiffTextView)?.lineDecorations ?? [:], syntax: currentSyntax, foldPlaceholders: leftFoldPlaceholders)
+            applyDecorations(to: rightTextView, lineDecorations: (rightTextView as? IndexDiffTextView)?.lineDecorations ?? [:], syntax: currentSyntax, foldPlaceholders: rightFoldPlaceholders)
         }
 
         private func applyJSONSyntax(_ line: String, lineRange: NSRange, layoutManager: NSLayoutManager) {
@@ -1786,7 +1864,7 @@ private final class IndexDiffEditorScrollView: NSScrollView {
             return
         }
 
-        IndexTextKitGeometry.synchronizeTextGeometry(
+        IndexDiffTextLayoutGeometry.synchronizeTextGeometry(
             for: textView,
             visibleWidth: contentSize.width,
             minimumHeight: max(contentSize.height, minimumDocumentHeight),
@@ -1896,7 +1974,18 @@ private final class IndexDiffEditorPaneView: NSView {
     }
 }
 
-private final class IndexDiffTextView: NSTextView, IndexAsymmetricTextContainerSurface {
+final class IndexDiffTextView: NSTextView, IndexAsymmetricTextContainerSurface, IndexDiffIndexedTextSurface {
+    lazy var diffTextIndex = IndexDiffTextIndex(storage: textStorage)
+    var lastDecorationRevision = -1
+    var lastDecorationGeneration = -1
+    var lastDecorationSpan: Range<Int>?
+    var decoratedRange: NSRange?
+    var onAppearanceChange: (() -> Void)?
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        onAppearanceChange?()
+    }
     private var droppedFile: IndexDroppedTextFile?
     var leadingTextContainerInset: CGFloat {
         IndexDiffEditorMetrics.textInset.width
@@ -1912,9 +2001,11 @@ private final class IndexDiffTextView: NSTextView, IndexAsymmetricTextContainerS
 
     var onCompositionChange: ((Bool) -> Void)?
     var onFileDrop: ((String) -> Void)?
+    var onFileDropDiagnostic: ((String?) -> Void)?
 
     override func didChangeText() {
         droppedFile?.invalidate()
+        onFileDropDiagnostic?(nil)
         super.didChangeText()
     }
 
@@ -1925,7 +2016,11 @@ private final class IndexDiffTextView: NSTextView, IndexAsymmetricTextContainerS
 
     func loadDroppedFile(from url: URL) {
         if droppedFile == nil { droppedFile = IndexDroppedTextFile(view: self) }
-        droppedFile?.start(url: url) { [weak self] content in
+        onFileDropDiagnostic?(nil)
+        droppedFile?.start(url: url, onRejected: { [weak self] rejection in
+            self?.onFileDropDiagnostic?(rejection.message)
+        }) { [weak self] content in
+            self?.onFileDropDiagnostic?(nil)
             self?.onFileDrop?(content)
         }
     }
@@ -2033,7 +2128,7 @@ private final class IndexDiffLineNumberOverlayView: NSView {
         NSColor(ToolTheme.border).setFill()
         NSBezierPath(rect: hairline).fill()
 
-        let visibleRect = scrollView.contentView.bounds
+        let visibleRect = textView.visibleRect
         let lineRects = IndexDiffTextLayoutGeometry.lineBlockRects(for: textView, visibleRect: visibleRect)
 
         let paragraphStyle = NSMutableParagraphStyle()
@@ -2063,9 +2158,9 @@ private final class IndexDiffLineNumberOverlayView: NSView {
         }
 
         for lineNumber in lineRects.keys.sorted() {
-            guard let lineRect = lineRects[lineNumber] else { continue }
+            guard let lineRect = lineRects[lineNumber], lineRect.intersects(visibleRect) else { continue }
             let status = lineStatuses[lineNumber] ?? .unchanged
-            let y = lineRect.minY - visibleRect.minY
+            let y = lineRect.minY - scrollView.contentView.bounds.minY
             let height = max(1, lineRect.height)
 
             if status != .unchanged, NSRect(x: 0, y: y, width: bounds.width, height: height).intersects(bounds) {
