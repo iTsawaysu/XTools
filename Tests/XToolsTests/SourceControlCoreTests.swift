@@ -82,6 +82,117 @@ final class SourceControlCoreTests: XCTestCase {
         XCTAssertFalse(snapshot.repositories.first?.isFastForwardCandidate == true)
     }
 
+    // MARK: - Machine scope
+
+    private func makeMachineGitClient() -> MockGitClient {
+        MockGitClient { request in
+            switch request.kind {
+            case .branch: return GitProcessOutput(exitCode: 0, standardOutput: "main\n")
+            case .revision: return GitProcessOutput(exitCode: 0, standardOutput: "abc123\n")
+            case .remote: return GitProcessOutput(exitCode: 0, standardOutput: "origin\thttps://gitlab.example/acme/repo.git (fetch)\n")
+            case .upstream: return GitProcessOutput(exitCode: 0, standardOutput: "origin/main\n")
+            case .status: return GitProcessOutput(exitCode: 0, standardOutput: "")
+            case .divergence: return GitProcessOutput(exitCode: 0, standardOutput: "0\t0\n")
+            case .remoteRevision: return GitProcessOutput(exitCode: 0, standardOutput: "abc123\trefs/heads/main\n")
+            default: return GitProcessOutput(exitCode: 1)
+            }
+        }
+    }
+
+    func testMachineScopeDiscoversRepositoriesUnderInjectedHome() async throws {
+        let home = makeTemporaryDirectory()
+        for name in ["work/alpha", "work/beta", "code/gamma"] {
+            try FileManager.default.createDirectory(atPath: "\(home.path)/\(name)/.git", withIntermediateDirectories: true)
+        }
+        let scanner = SourceControlScanner(git: makeMachineGitClient(), homeDirectoryPath: { home.path })
+
+        let snapshot = try await scanner.scan(scope: .machine)
+        XCTAssertEqual(
+            snapshot.repositories.map(\.path).sorted(),
+            ["\(home.path)/code/gamma", "\(home.path)/work/alpha", "\(home.path)/work/beta"].sorted()
+        )
+        XCTAssertEqual(snapshot.scope, .machine)
+    }
+
+    func testMachineScopeIgnoresLibraryMediaAndToolchainCaches() async throws {
+        let home = makeTemporaryDirectory()
+        let excluded = ["Library/Application Support/thing", "Movies/clip", "Music/track", ".cargo/registry", ".npm/cache", "go/pkg/mod", ".Trash/deleted"]
+        for name in excluded {
+            try FileManager.default.createDirectory(atPath: "\(home.path)/\(name)/.git", withIntermediateDirectories: true)
+        }
+        try FileManager.default.createDirectory(atPath: "\(home.path)/work/real/.git", withIntermediateDirectories: true)
+        let scanner = SourceControlScanner(git: makeMachineGitClient(), homeDirectoryPath: { home.path })
+
+        let snapshot = try await scanner.scan(scope: .machine)
+        XCTAssertEqual(snapshot.repositories.map(\.path), ["\(home.path)/work/real"])
+    }
+
+    func testMachineScopeFallsBackToHomeRootRepository() async throws {
+        let home = makeTemporaryDirectory()
+        try FileManager.default.createDirectory(atPath: "\(home.path)/.git", withIntermediateDirectories: true)
+        let scanner = SourceControlScanner(git: makeMachineGitClient(), homeDirectoryPath: { home.path })
+
+        let snapshot = try await scanner.scan(scope: .machine)
+        XCTAssertEqual(snapshot.repositories.map(\.path), [home.path])
+    }
+
+    // MARK: - Pull failure classification
+
+    func testPullFailureClassifiesDirtyWorktreeDivergenceAndRemoteErrors() {
+        XCTAssertEqual(
+            SourceControlDiagnostic.pullFailure(standardError: "error: Your local changes to the following files would be overwritten by merge:\n\tfile.swift\nPlease commit your changes or stash them before you merge.").code,
+            "pull-dirty-worktree"
+        )
+        XCTAssertEqual(
+            SourceControlDiagnostic.pullFailure(standardError: "fatal: Not possible to fast-forward, aborting.").code,
+            "pull-diverged"
+        )
+        XCTAssertEqual(
+            SourceControlDiagnostic.pullFailure(standardError: "git@gitlab.example: Permission denied (publickey).\nfatal: Could not read from remote repository.").code,
+            "pull-remote-unavailable"
+        )
+        XCTAssertEqual(
+            SourceControlDiagnostic.pullFailure(standardError: "fatal: unable to access 'https://gitlab.example/acme/repo.git/': timed out").code,
+            "pull-remote-unavailable"
+        )
+    }
+
+    func testPullFailureFallbackCarriesFirstStderrLine() {
+        let diagnostic = SourceControlDiagnostic.pullFailure(standardError: "\nfatal: weird failure\nsecond line")
+        XCTAssertEqual(diagnostic.code, "pull-failed")
+        XCTAssertTrue(diagnostic.summary.contains("fatal: weird failure"))
+        XCTAssertFalse(diagnostic.summary.contains("second line"))
+    }
+
+    func testExecutorSurfacesClassifiedPullFailureDiagnostic() async {
+        let repository = SourceControlRepository(
+            path: "/tmp/pull-failure",
+            branch: "main",
+            shortRevision: "abc",
+            remote: "origin",
+            status: .clean,
+            upstream: "origin/main",
+            revision: "abc123",
+            remoteState: .upToDate
+        )
+        let git = MockGitClient { request in
+            switch request.kind {
+            case .pullFastForward:
+                return GitProcessOutput(
+                    exitCode: 1,
+                    standardError: "error: Your local changes to the following files would be overwritten by merge"
+                )
+            default: return GitProcessOutput(exitCode: 0)
+            }
+        }
+
+        let results = await SourceControlUpdateExecutor(git: git).update(repositories: [repository])
+        guard case let .failed(diagnostic)? = results.first?.outcome else {
+            return XCTFail("Expected classified pull failure")
+        }
+        XCTAssertEqual(diagnostic.code, "pull-dirty-worktree")
+    }
+
     func testUpdatesOnlyFastForwardCandidatesInInputOrder() async {
         let first = SourceControlRepository(path: "/tmp/one", branch: "main", shortRevision: "a", remote: "origin", status: .clean)
         let skipped = SourceControlRepository(path: "/tmp/two", branch: "main", shortRevision: "b", remote: "origin", status: .modified)

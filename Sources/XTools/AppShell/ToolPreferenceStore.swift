@@ -396,6 +396,30 @@ enum MediaToolPreferenceKeys {
 }
 
 @MainActor
+enum SourceControlToolPreferenceKeys {
+    /// User-approved persistence (2026-09-28 task 09-28-source-control-sync-ux):
+    /// the scan scope choice survives launches. Unlike workflow direction in
+    /// general, re-selecting the scan root on every launch is exactly the
+    /// friction this preference removes, and the value is a non-sensitive
+    /// local directory path. Token / GitLab URL / project paths stay
+    /// session-memory-only.
+    static let scanMode = ToolPreferenceKey<String>.string(
+        "tools.sourceControl.scanMode.v1",
+        default: "machine",
+        allowedValues: ["machine", "directory"]
+    )
+    static let scanDirectory = ToolPreferenceKey<String>.string(
+        "tools.sourceControl.scanDirectory.v1",
+        default: ""
+    )
+
+    static let allRawKeys = [
+        scanMode.rawKey,
+        scanDirectory.rawKey
+    ]
+}
+
+@MainActor
 enum TextDevelopmentToolPreferenceKeys {
     static let integerBase = ToolPreferenceKey<String>.string(
         "tools.integerBase.inputBase.v1",

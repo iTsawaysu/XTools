@@ -90,11 +90,16 @@ public enum SourceControlRepositoryStatus: String, Codable, CaseIterable, Sendab
 }
 
 public enum SourceControlScanScope: Hashable, Sendable {
+    /// Whole-machine discovery: the scanner walks the user's home directory
+    /// with the machine exclusion profile. Spotlight is not used — its index
+    /// is unreliable for hidden `.git` directories and honors user excludes.
+    case machine
     case repository(path: String)
     case directory(path: String)
 
-    public var path: String {
+    public var path: String? {
         switch self {
+        case .machine: return nil
         case let .repository(path), let .directory(path): return path
         }
     }
@@ -156,6 +161,58 @@ public struct SourceControlDiagnostic: Error, Codable, Equatable, Hashable, Send
         self.summary = summary
         self.recovery = recovery
         self.statusCode = statusCode
+    }
+
+    /// Classifies a failed `git pull --ff-only` from the process stderr so the
+    /// failure summary can state an actionable cause instead of a generic
+    /// "command failed". Matching is on git's stable LC_ALL=C phrasing.
+    public static func pullFailure(standardError: String) -> SourceControlDiagnostic {
+        let message = standardError.localizedLowercase
+        if message.contains("would be overwritten by merge")
+            || message.contains("your local changes to the following files would be overwritten")
+            || message.contains("please commit your changes or stash them before you merge") {
+            return SourceControlDiagnostic(
+                code: "pull-dirty-worktree",
+                summary: "工作区有未提交改动，拉取会被覆盖。",
+                recovery: "请在仓库中提交或暂存改动后重试。"
+            )
+        }
+        if message.contains("not possible to fast-forward") || message.contains("diverged") {
+            return SourceControlDiagnostic(
+                code: "pull-diverged",
+                summary: "本地与远端分叉，无法快进合并。",
+                recovery: "请先手动合并或变基该仓库，再回来同步。"
+            )
+        }
+        if message.contains("authentication failed")
+            || message.contains("could not read from remote repository")
+            || message.contains("permission denied")
+            || message.contains("fatal: unable to access")
+            || message.contains("connection was closed")
+            || message.contains("timed out") {
+            return SourceControlDiagnostic(
+                code: "pull-remote-unavailable",
+                summary: "无法访问远端仓库（网络或认证失败）。",
+                recovery: "请检查网络、SSH 密钥或凭据后重试。"
+            )
+        }
+        if message.contains("conflict") || message.contains("merge conflict") {
+            return SourceControlDiagnostic(
+                code: "pull-conflict",
+                summary: "合并时出现冲突。",
+                recovery: "请手动解决冲突后重试。"
+            )
+        }
+        let firstLine = standardError
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty }
+        let suffix = firstLine.map { "（\($0.prefix(160))）" } ?? ""
+        return SourceControlDiagnostic(
+            code: "pull-failed",
+            summary: "拉取未完成\(suffix)。",
+            recovery: "请检查仓库状态和远端配置后重试。"
+        )
     }
 }
 

@@ -41,7 +41,7 @@ public struct SourceControlUpdateExecutor: Sendable {
             do {
                 let output = try await git.run(GitCommandRequest(kind: .pullFastForward, repositoryPath: repository.path), timeout: .seconds(120))
                 guard output.exitCode == 0 else {
-                    let result = SourceControlOperationResult(repository: repository, outcome: .failed(SourceControlError.commandFailed.diagnostic)); results.append(result); await onResult?(result); continue
+                    let result = SourceControlOperationResult(repository: repository, outcome: .failed(SourceControlDiagnostic.pullFailure(standardError: output.standardError))); results.append(result); await onResult?(result); continue
                 }
                 let text = output.standardOutput.localizedLowercase
                 let outcome: SourceControlOperationOutcome = text.contains("already up to date") || text.contains("already up-to-date") ? .upToDate : .updated
