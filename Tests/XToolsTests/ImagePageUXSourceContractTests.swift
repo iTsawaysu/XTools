@@ -26,12 +26,13 @@ struct ImagePageUXSourceContractTests {
     }
 
     @Test func imagePreviewPagesKeepCanonicalEmptyStateAndPreviewSurface() throws {
+        // 格式转换/压缩合并进「图片处理」Hub 后，页面壳断言改锚 Hub 文件。
+        let imageHub = try readSource("Sources/XTools/ToolPages/Image/ImageHubPage.swift")
         let converter = try readSource("Sources/XTools/ToolPages/Image/ImageConverterPage.swift")
         let compressor = try readSource("Sources/XTools/ToolPages/Image/ImageCompressorPage.swift")
         let watermark = try readSource("Sources/XTools/ToolPages/Image/ImageWatermarkPage.swift")
 
-        contains(converter, "workspaceSemantic: .imagePreviewStage", "Image converter must keep the image preview workspace semantic")
-        contains(compressor, "workspaceSemantic: .imagePreviewStage", "Image compressor must keep the image preview workspace semantic")
+        contains(imageHub, "workspaceSemantic: .imagePreviewStage", "Image hub must keep the image preview workspace semantic")
         contains(watermark, "workspaceSemantic: .liveImagePreviewStage", "Image watermark must keep the live preview workspace semantic")
 
         for source in [converter, watermark] {

@@ -431,6 +431,12 @@ enum TextDevelopmentToolPreferenceKeys {
         default: "token",
         allowedValues: ["token", "uuid", "password"]
     )
+    /// 「图片处理」Hub 上次使用的分段（convert/compress/grayscale/favicon），重启后恢复。
+    static let imageSegment = ToolPreferenceKey<String>.string(
+        "tools.image.segment.v1",
+        default: "convert",
+        allowedValues: ["convert", "compress", "grayscale", "favicon"]
+    )
     static let integerBase = ToolPreferenceKey<String>.string(
         "tools.integerBase.inputBase.v1",
         default: "10",

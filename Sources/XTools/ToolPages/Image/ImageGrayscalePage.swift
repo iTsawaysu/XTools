@@ -1,7 +1,7 @@
 import XToolsCore
 import SwiftUI
 
-struct IndexImageGrayscalePage: View {
+struct IndexImageGrayscaleSegment: View {
     var body: some View {
         ToolWorkspaceHost(key: ImageProcessedOutputSession.grayscaleWorkspaceKey) { session, _ in
             IndexImageGrayscaleWorkspaceContent(session: session)
@@ -23,15 +23,13 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
     }
 
     var body: some View {
-        IndexPage("图片灰阶生成器", subtitle: "将彩色图片转为灰度图。", workspaceSemantic: .imagePreviewStage) {
-            Group {
-                if session.source == nil {
-                    emptyUploadPanel
-                        .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
-                } else {
-                    comparisonWorkspacePanel
-                        .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
-                }
+        Group {
+            if session.source == nil {
+                emptyUploadPanel
+                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
+            } else {
+                comparisonWorkspacePanel
+                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
             }
         }
     }

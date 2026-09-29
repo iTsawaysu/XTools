@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class ImageCompressorToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicting {
-    static let key = ToolWorkspaceKey<ImageCompressorToolWorkspaceModel>(toolID: "image-compressor") { preferences in
+    static let key = ToolWorkspaceKey<ImageCompressorToolWorkspaceModel>(toolID: "image-tools", slot: "compressor") { preferences in
         ImageCompressorToolWorkspaceModel(preferences: preferences)
     }
 
@@ -33,7 +33,7 @@ final class ImageCompressorToolWorkspaceModel: ObservableObject, ToolWorkspacePa
     }
 }
 
-struct IndexImageCompressorPage: View {
+struct IndexImageCompressorSegment: View {
     var body: some View {
         ToolWorkspaceHost(key: ImageCompressorToolWorkspaceModel.key) { workspace, bindings in
             IndexImageCompressorWorkspaceContent(
@@ -78,42 +78,40 @@ private struct IndexImageCompressorWorkspaceContent: View {
     }
 
     var body: some View {
-        IndexPage("智能压缩图片", subtitle: "自动优化图片体积，可按偏好和尺寸限制调整输出。", workspaceSemantic: .imagePreviewStage) {
-            IndexActionBar {
-                IndexOptionGroup {
-                    IndexOptionLabel("优化偏好")
-                    IndexInlinePicker(
-                        items: ImageCompressionPreference.allCases.map { ($0, $0.displayName) },
-                        selection: $compressionPreference
-                    )
-                    .onChange(of: compressionPreference) { _ in compress() }
-                }
-
-                IndexOptionGroup {
-                    IndexOptionSwitch(title: "限制尺寸", isOn: $limitsDimensions)
-                        .onChange(of: limitsDimensions) { _ in compress() }
-                    if limitsDimensions {
-                        Text("输出尺寸不超过")
-                            .font(ToolTypography.label)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                        IndexNumberInput(value: $maxPixelLength, range: 128...12000, fieldWidth: 62)
-                            .accessibilityLabel("输出最大像素边长")
-                            .onChange(of: maxPixelLength) { _ in compress() }
-                        Text("px")
-                            .font(ToolTypography.monoCaption)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                    }
-                }
+        IndexActionBar {
+            IndexOptionGroup {
+                IndexOptionLabel("优化偏好")
+                IndexInlinePicker(
+                    items: ImageCompressionPreference.allCases.map { ($0, $0.displayName) },
+                    selection: $compressionPreference
+                )
+                .onChange(of: compressionPreference) { _ in compress() }
             }
 
-            Group {
-                if session.source == nil {
-                    emptyUploadPanel
-                        .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
-                } else {
-                    comparisonWorkspacePanel
-                        .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
+            IndexOptionGroup {
+                IndexOptionSwitch(title: "限制尺寸", isOn: $limitsDimensions)
+                    .onChange(of: limitsDimensions) { _ in compress() }
+                if limitsDimensions {
+                    Text("输出尺寸不超过")
+                        .font(ToolTypography.label)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                    IndexNumberInput(value: $maxPixelLength, range: 128...12000, fieldWidth: 62)
+                        .accessibilityLabel("输出最大像素边长")
+                        .onChange(of: maxPixelLength) { _ in compress() }
+                    Text("px")
+                        .font(ToolTypography.monoCaption)
+                        .foregroundStyle(ToolTheme.textSecondary)
                 }
+            }
+        }
+
+        Group {
+            if session.source == nil {
+                emptyUploadPanel
+                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
+            } else {
+                comparisonWorkspacePanel
+                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
             }
         }
     }

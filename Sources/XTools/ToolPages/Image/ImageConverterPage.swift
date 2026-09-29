@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class ImageConverterToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicting {
-    static let key = ToolWorkspaceKey<ImageConverterToolWorkspaceModel>(toolID: "image-converter") { preferences in
+    static let key = ToolWorkspaceKey<ImageConverterToolWorkspaceModel>(toolID: "image-tools", slot: "converter") { preferences in
         ImageConverterToolWorkspaceModel(preferences: preferences)
     }
 
@@ -52,7 +52,7 @@ final class ImageConverterToolWorkspaceModel: ObservableObject, ToolWorkspacePay
     }
 }
 
-struct IndexImageConverterPage: View {
+struct IndexImageConverterSegment: View {
     var body: some View {
         ToolWorkspaceHost(key: ImageConverterToolWorkspaceModel.key) { workspace, bindings in
             IndexImageConverterWorkspaceContent(
@@ -106,147 +106,145 @@ private struct IndexImageConverterWorkspaceContent: View {
     }
 
     var body: some View {
-        IndexPage("图片格式转换", subtitle: "把图片另存为不同格式；不用于压缩体积。", workspaceSemantic: .imagePreviewStage) {
-            IndexActionBar {
+        IndexActionBar {
+            IndexOptionGroup {
+                IndexOptionLabel("目标格式")
+                if outputFormats.isEmpty {
+                    Text(session.sourceMetadata == nil ? "选择图片后显示" : "无可转换目标")
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                        .fixedSize(horizontal: true, vertical: false)
+                } else {
+                    IndexInlinePicker(
+                        items: outputFormats.map { ($0, $0.displayName) },
+                        selection: $targetFormat
+                    )
+                    .accessibilityLabel("目标格式")
+                    .accessibilityValue(targetFormat.displayName)
+                    .help("选择输出格式")
+                    .onChange(of: targetFormat) { _ in
+                        applyDefaultQualityForTarget()
+                        convert()
+                    }
+                }
+            }
+
+            if canConvert && targetFormat.supportsLossyQuality {
                 IndexOptionGroup {
-                    IndexOptionLabel("目标格式")
-                    if outputFormats.isEmpty {
-                        Text(session.sourceMetadata == nil ? "选择图片后显示" : "无可转换目标")
-                            .font(ToolTypography.caption)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                            .fixedSize(horizontal: true, vertical: false)
-                    } else {
-                        IndexInlinePicker(
-                            items: outputFormats.map { ($0, $0.displayName) },
-                            selection: $targetFormat
-                        )
-                        .accessibilityLabel("目标格式")
-                        .accessibilityValue(targetFormat.displayName)
-                        .help("选择输出格式")
-                        .onChange(of: targetFormat) { _ in
-                            applyDefaultQualityForTarget()
-                            convert()
-                        }
-                    }
+                    IndexOptionLabel("质量")
+                    IndexSlider(value: $quality, range: 0.1...1.0, step: 0)
+                        .frame(width: 160)
+                        .accessibilityLabel("转换质量")
+                        .accessibilityValue("\(Int(quality * 100))%")
+                        .onChange(of: quality) { _ in convert() }
+                    Text("\(Int(quality * 100))%")
+                        .font(ToolTypography.monoCaption)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                        .frame(width: 40)
                 }
+            }
 
-                if canConvert && targetFormat.supportsLossyQuality {
-                    IndexOptionGroup {
-                        IndexOptionLabel("质量")
-                        IndexSlider(value: $quality, range: 0.1...1.0, step: 0)
-                            .frame(width: 160)
-                            .accessibilityLabel("转换质量")
-                            .accessibilityValue("\(Int(quality * 100))%")
-                            .onChange(of: quality) { _ in convert() }
-                        Text("\(Int(quality * 100))%")
-                            .font(ToolTypography.monoCaption)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                            .frame(width: 40)
-                    }
-                }
-
-                if requiresTransparencyFill {
-                    IndexOptionGroup {
-                        IndexOptionLabel("透明填充")
-                        IndexInlinePicker(
-                            items: [
-                                (ImageTransparencyFillMode.white, "白色"),
-                                (.black, "黑色"),
-                                (.custom, "自定义")
-                            ],
-                            selection: $transparencyFillMode
-                        )
-                        .accessibilityLabel("透明区域填充颜色")
-                        .accessibilityValue(transparencyFillAccessibilityValue)
-                        .help("选择转换前用于填充透明像素的颜色")
-                        .onChange(of: transparencyFillMode) { _ in convert() }
-
-                        if transparencyFillMode == .custom {
-                            IndexTextInput(
-                                placeholder: "#RRGGBB",
-                                text: $customTransparencyFillHex,
-                                height: 30,
-                                alignment: .center,
-                                selectAllOnFocus: true,
-                                onSubmit: normalizeCustomTransparencyFillHex
-                            )
-                            .frame(width: 92)
-                            .accessibilityLabel("自定义透明区域填充颜色")
-                            .accessibilityValue(customTransparencyFillAccessibilityValue)
-                            .help("输入十六进制颜色")
-                            .onChange(of: customTransparencyFillHex) { _ in convert() }
-                        }
-                    }
-                    .accessibilityElement(children: .contain)
+            if requiresTransparencyFill {
+                IndexOptionGroup {
+                    IndexOptionLabel("透明填充")
+                    IndexInlinePicker(
+                        items: [
+                            (ImageTransparencyFillMode.white, "白色"),
+                            (.black, "黑色"),
+                            (.custom, "自定义")
+                        ],
+                        selection: $transparencyFillMode
+                    )
                     .accessibilityLabel("透明区域填充颜色")
                     .accessibilityValue(transparencyFillAccessibilityValue)
-                    .help("JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。")
-                }
+                    .help("选择转换前用于填充透明像素的颜色")
+                    .onChange(of: transparencyFillMode) { _ in convert() }
 
-            }
-
-            IndexPanel("上传图片") {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                    imageSelectionActions
-
-                    if session.sourceImage != nil {
-                        IndexImagePreviewStage(
-                            image: session.sourceImage,
-                            accessibilityLabel: "待转换的原图",
-                            maxDisplayWidth: 560,
-                            maxDisplayHeight: 260,
-                            spacing: ToolMetrics.Spacing.md
-                        ) {
-                            if let sourceMetadata = session.sourceMetadata {
-                                Text("原图: \(ImageOutputPresentation.sourceSummary(sourceMetadata))")
-                                    .font(ToolTypography.caption)
-                                    .foregroundStyle(ToolTheme.textSecondary)
-                            }
-
-                            if session.isProcessing {
-                                IndexProgressSpinner()
-                            }
-
-                            if let convertedAssessment {
-                                Text("输出: \(ImageOutputPresentation.processingOutputSummary(convertedAssessment))\(transparencyFillOutputSuffix)")
-                                    .font(ToolTypography.caption)
-                                    .foregroundStyle(convertedAssessment.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textSecondary)
-                            }
-
-                            Button {
-                                saveConverted()
-                            } label: {
-                                Label(saveButtonTitle, systemImage: IndexActionSymbol.save)
-                                    .font(ToolTypography.buttonSmall)
-                            }
-                            .buttonStyle(IndexSmallButtonStyle())
-                            .disabled(session.output == nil || session.isProcessing)
-                        }
-                    } else if session.isProcessing {
-                        IndexProgressLabel(message: "正在读取图片…")
-                            .foregroundStyle(ToolTheme.textSecondary)
-                            .accessibilityLabel("正在读取图片")
-                    } else {
-                        IndexEmptyState(
-                            title: "选择图片开始转换",
-                            systemImage: "photo.on.rectangle.angled",
-                            message: IndexEmptyStateCopy.autoGenerate("图片"),
-                            density: .list
+                    if transparencyFillMode == .custom {
+                        IndexTextInput(
+                            placeholder: "#RRGGBB",
+                            text: $customTransparencyFillHex,
+                            height: 30,
+                            alignment: .center,
+                            selectAllOnFocus: true,
+                            onSubmit: normalizeCustomTransparencyFillHex
                         )
-                        .frame(maxWidth: .infinity, minHeight: 128)
+                        .frame(width: 92)
+                        .accessibilityLabel("自定义透明区域填充颜色")
+                        .accessibilityValue(customTransparencyFillAccessibilityValue)
+                        .help("输入十六进制颜色")
+                        .onChange(of: customTransparencyFillHex) { _ in convert() }
                     }
                 }
-                .indexWorkspaceDiagnostic(session.error)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, ToolMetrics.Spacing.sm)
-                .indexDropZone(
-                    isTargeted: $isImageDropTargeted,
-                    onFile: receiveImageURL,
-                    onMultipleFiles: rejectMultipleImageDrop
-                )
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("透明区域填充颜色")
+                .accessibilityValue(transparencyFillAccessibilityValue)
+                .help("JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。")
             }
-            .verticallyFilling()
+
         }
+
+        IndexPanel("上传图片") {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+                imageSelectionActions
+
+                if session.sourceImage != nil {
+                    IndexImagePreviewStage(
+                        image: session.sourceImage,
+                        accessibilityLabel: "待转换的原图",
+                        maxDisplayWidth: 560,
+                        maxDisplayHeight: 260,
+                        spacing: ToolMetrics.Spacing.md
+                    ) {
+                        if let sourceMetadata = session.sourceMetadata {
+                            Text("原图: \(ImageOutputPresentation.sourceSummary(sourceMetadata))")
+                                .font(ToolTypography.caption)
+                                .foregroundStyle(ToolTheme.textSecondary)
+                        }
+
+                        if session.isProcessing {
+                            IndexProgressSpinner()
+                        }
+
+                        if let convertedAssessment {
+                            Text("输出: \(ImageOutputPresentation.processingOutputSummary(convertedAssessment))\(transparencyFillOutputSuffix)")
+                                .font(ToolTypography.caption)
+                                .foregroundStyle(convertedAssessment.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textSecondary)
+                        }
+
+                        Button {
+                            saveConverted()
+                        } label: {
+                            Label(saveButtonTitle, systemImage: IndexActionSymbol.save)
+                                .font(ToolTypography.buttonSmall)
+                        }
+                        .buttonStyle(IndexSmallButtonStyle())
+                        .disabled(session.output == nil || session.isProcessing)
+                    }
+                } else if session.isProcessing {
+                    IndexProgressLabel(message: "正在读取图片…")
+                        .foregroundStyle(ToolTheme.textSecondary)
+                        .accessibilityLabel("正在读取图片")
+                } else {
+                    IndexEmptyState(
+                        title: "选择图片开始转换",
+                        systemImage: "photo.on.rectangle.angled",
+                        message: IndexEmptyStateCopy.autoGenerate("图片"),
+                        density: .list
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 128)
+                }
+            }
+            .indexWorkspaceDiagnostic(session.error)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, ToolMetrics.Spacing.sm)
+            .indexDropZone(
+                isTargeted: $isImageDropTargeted,
+                onFile: receiveImageURL,
+                onMultipleFiles: rejectMultipleImageDrop
+            )
+        }
+        .verticallyFilling()
         .onAppear(perform: ensureSupportedTargetFormat)
     }
 

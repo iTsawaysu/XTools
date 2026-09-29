@@ -408,22 +408,18 @@ extension ToolRegistry {
 
             // MARK: - 图像与颜色
             RegisteredTool(
-                id: "image-converter",
-                title: "图片格式转换",
+                id: "image-tools",
+                title: "图片处理",
                 categoryID: .image,
                 systemImage: "photo.on.rectangle.angled",
-                keywords: ["image", "convert", "format", "png", "jpg", "webp", "图片", "转换"]
+                keywords: [
+                    "image", "convert", "format", "png", "jpg", "webp", "图片", "转换",
+                    "compress", "optimize", "压缩",
+                    "grayscale", "filter", "灰度",
+                    "favicon", "icon", "generate", "图标", "生成"
+                ]
             ) {
-                IndexImageConverterPage()
-            },
-            RegisteredTool(
-                id: "image-compressor",
-                title: "智能压缩图片",
-                categoryID: .image,
-                systemImage: "arrow.down.right.and.arrow.up.left",
-                keywords: ["compress", "image", "optimize", "压缩", "图片"]
-            ) {
-                IndexImageCompressorPage()
+                IndexImageHubPage()
             },
             RegisteredTool(
                 id: "image-watermark",
@@ -433,24 +429,6 @@ extension ToolRegistry {
                 keywords: ["watermark", "image", "photo", "水印", "图片"]
             ) {
                 IndexImageWatermarkPage()
-            },
-            RegisteredTool(
-                id: "image-grayscale",
-                title: "图片灰阶生成器",
-                categoryID: .image,
-                systemImage: "circle.lefthalf.filled",
-                keywords: ["grayscale", "image", "filter", "灰度", "图片"]
-            ) {
-                IndexImageGrayscalePage()
-            },
-            RegisteredTool(
-                id: "favicon-generator",
-                title: "Favicon 生成器",
-                categoryID: .image,
-                systemImage: "app.badge",
-                keywords: ["favicon", "icon", "generate", "图标", "生成"]
-            ) {
-                IndexFaviconGeneratorPage()
             },
             RegisteredTool(
                 id: "color-picker",

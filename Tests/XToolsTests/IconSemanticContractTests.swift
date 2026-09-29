@@ -178,11 +178,8 @@ struct IconSemanticContractTests {
         "http-status-codes": "network",
         "useragent-parser": "rectangle.and.text.magnifyingglass",
         "keycode-info": "keyboard",
-        "image-converter": "photo.on.rectangle.angled",
-        "image-compressor": "arrow.down.right.and.arrow.up.left",
+        "image-tools": "photo.on.rectangle.angled",
         "image-watermark": "text.below.photo",
-        "image-grayscale": "circle.lefthalf.filled",
-        "favicon-generator": "app.badge",
         "color-picker": "paintpalette",
         "date-time-converter": "calendar",
         "timezone-viewer": "globe.americas",
@@ -405,9 +402,10 @@ struct IconSemanticContractTests {
         doesNotContain(workbench, "IndexTextConversionFocusMode", "Text workbenches must not restore removed pane enlargement state")
         doesNotContain(workbench, "keyboardMonitor", "Text workbenches must not restore the hidden Escape listener")
         doesNotContain(combinedSource, "arrow.up.left.and.arrow.down.right", "The removed workbench enlargement action symbol must stay absent")
-        #expect(
-            combinedSource.components(separatedBy: #"systemImage: "arrow.down.right.and.arrow.up.left""#).count - 1 == 1,
-            "The inward-arrow symbol must remain only the Image Compressor tool identity"
+        doesNotContain(
+            combinedSource,
+            "arrow.down.right.and.arrow.up.left",
+            "The retired Image Compressor identity symbol must stay absent after the image hub merge"
         )
 
         let explicitTextSaveConsumers = sources

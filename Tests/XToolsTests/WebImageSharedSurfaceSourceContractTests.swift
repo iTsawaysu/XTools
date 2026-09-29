@@ -19,12 +19,11 @@ struct WebImageSharedSurfaceSourceContractTests {
     }
 
     @Test func imageAndConverterPagesKeepSemanticPreviewAndTransformSurfaces() throws {
-        let favicon = try readSource("Sources/XTools/ToolPages/Image/FaviconGeneratorPage.swift")
-        let grayscale = try readSource("Sources/XTools/ToolPages/Image/ImageGrayscalePage.swift")
+        // Favicon/灰度合并进「图片处理」Hub 后，页面壳断言改锚 Hub 文件。
+        let imageHub = try readSource("Sources/XTools/ToolPages/Image/ImageHubPage.swift")
         let converter = try readSource("Sources/XTools/ToolPages/Workbench/Converter/IndexConverterPage.swift")
 
-        contains(favicon, "workspaceSemantic: .imagePreviewStage", "Favicon must use the shared image preview stage")
-        contains(grayscale, "workspaceSemantic: .imagePreviewStage", "Grayscale must use the shared image preview stage")
+        contains(imageHub, "workspaceSemantic: .imagePreviewStage", "The image hub must use the shared image preview stage")
         contains(converter, "workspaceSemantic: .copyTransformWorkspace", "Generic converters must use the shared copy-transform shell")
         contains(converter, "IndexTextConversionWorkbench(", "Generic converters must render through the shared input/output workbench")
     }

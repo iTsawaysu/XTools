@@ -113,6 +113,7 @@ struct ImageWorkflowSourceContractTests {
 
     @Test func imageToolsUseNonScrollingPreviewStagesWithDisplayBounds() throws {
         let stage = try readSource("Sources/XTools/ToolPages/Image/ImagePreviewStage.swift")
+        let imageHub = try readSource("Sources/XTools/ToolPages/Image/ImageHubPage.swift")
         let favicon = try readSource("Sources/XTools/ToolPages/Image/FaviconGeneratorPage.swift")
         let converter = try readSource("Sources/XTools/ToolPages/Image/ImageConverterPage.swift")
         let compressor = try readSource("Sources/XTools/ToolPages/Image/ImageCompressorPage.swift")
@@ -145,12 +146,11 @@ struct ImageWorkflowSourceContractTests {
         contains(stage, ".toolAnimation(ToolMotion.Preset.controlFeedback, value: isTargeted)", "Image drop targeting feedback must honor the shared motion contract")
         doesNotContain(stage, "ScrollView {", "Image preview stages must not create an internal scroll container")
 
-        for page in [favicon, converter, compressor, grayscale] {
-            contains(page, "workspaceSemantic: .imagePreviewStage", "Image pages must declare the image preview stage workspace semantic at the page shell")
-        }
+        // 四个图片工具合并为单入口「图片处理」后，workspaceSemantic 页面壳断言统一改锚 Hub。
+        contains(imageHub, "workspaceSemantic: .imagePreviewStage", "The image hub must declare the image preview stage workspace semantic at the page shell")
         contains(watermark, "workspaceSemantic: .liveImagePreviewStage", "Image watermark must declare the fixed live preview workspace semantic")
 
-        contains(favicon, "IndexImagePreviewStage(\n                                image: image", "Favicon upload preview must use the non-scrolling image preview stage")
+        contains(favicon, "IndexImagePreviewStage(\n                            image: image", "Favicon upload preview must use the non-scrolling image preview stage")
         contains(favicon, "maxDisplayWidth: 120", "Favicon source preview must stay compact so generated assets remain primary")
         contains(favicon, "private var faviconSourceSummary", "Favicon source must publish a compact factual summary instead of a second large workspace")
         contains(workflow, "case partiallySaved(savedCount: Int, totalCount: Int)", "Image save outcomes must preserve partial Favicon progress structurally")
@@ -160,7 +160,7 @@ struct ImageWorkflowSourceContractTests {
         contains(favicon, "已保存 \\(savedCount)/\\(totalCount) 个部署文件。", "Favicon partial-save feedback must keep the safe count concise")
         doesNotContain(favicon, "其余图标保存失败", "Favicon partial-save feedback must not restate what the warning tone and count already show")
         contains(favicon, "tone: .warning", "Favicon partial saves must use warning feedback")
-        contains(converter, "IndexImagePreviewStage(\n                            image: session.sourceImage", "Image converter source preview must use the non-scrolling image preview stage")
+        contains(converter, "IndexImagePreviewStage(\n                        image: session.sourceImage", "Image converter source preview must use the non-scrolling image preview stage")
         contains(converter, ".indexWorkspaceDiagnostic(session.error)", "Image converter errors must remain visible through the non-displacing diagnostic anchor")
         doesNotContain(converter, "IndexPanel(\"转换预览\")", "Image converter must not keep the separate lower conversion preview panel")
         doesNotContain(converter, "IndexImagePreviewStage(image: session.outputImage", "Image converter must not replace the removed preview panel with another output preview")

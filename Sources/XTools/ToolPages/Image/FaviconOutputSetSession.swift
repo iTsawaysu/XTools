@@ -11,7 +11,7 @@ typealias FaviconIconSetGenerator = @Sendable (_ data: Data, _ sizes: [Int]) thr
 
 @MainActor
 final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvicting {
-    static let workspaceKey = ToolWorkspaceKey<FaviconOutputSetSession>(toolID: "favicon-generator") { _ in
+    static let workspaceKey = ToolWorkspaceKey<FaviconOutputSetSession>(toolID: "image-tools", slot: "favicon") { _ in
         FaviconOutputSetSession()
     }
 

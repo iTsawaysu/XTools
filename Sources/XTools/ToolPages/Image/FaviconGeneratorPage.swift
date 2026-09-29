@@ -1,7 +1,7 @@
 import XToolsCore
 import SwiftUI
 
-struct IndexFaviconGeneratorPage: View {
+struct IndexFaviconGeneratorSegment: View {
     var body: some View {
         ToolWorkspaceHost(key: FaviconOutputSetSession.workspaceKey) { session, _ in
             IndexFaviconGeneratorWorkspaceContent(session: session)
@@ -19,65 +19,63 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     @State private var isImageDropTargeted = false
 
     var body: some View {
-        IndexPage("Favicon 生成器", subtitle: "上传图片，生成可直接放入站点根目录的五文件 Favicon 部署包。", workspaceSemantic: .imagePreviewStage) {
-            IndexPanel("上传图片", fillsHeight: session.sourceImage == nil) {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                    imageSelectionActions
+        IndexPanel("上传图片", fillsHeight: session.sourceImage == nil) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+                imageSelectionActions
 
-                    if let image = session.sourceImage {
-                        HStack(alignment: .center, spacing: 14) {
-                            IndexImagePreviewStage(
-                                image: image,
-                                accessibilityLabel: "Favicon 源图片预览",
-                                accessibilityValue: faviconSourceAccessibilityValue,
-                                maxDisplayWidth: 120,
-                                maxDisplayHeight: 96,
-                                spacing: 0
-                            )
-                            .frame(width: 140)
-
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(session.sourceURL?.lastPathComponent ?? "源图片")
-                                    .font(ToolTypography.bodyMedium)
-                                    .foregroundStyle(ToolTheme.textPrimary)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-
-                                Text(faviconSourceSummary)
-                                    .font(ToolTypography.caption)
-                                    .foregroundStyle(ToolTheme.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    } else if session.isProcessing {
-                        IndexProgressLabel(message: "正在读取图片…")
-                            .foregroundStyle(ToolTheme.textSecondary)
-                            .accessibilityLabel("正在读取图片")
-                    } else {
-                        IndexEmptyState(
-                            title: "选择图片开始生成 Favicon",
-                            systemImage: "photo.on.rectangle.angled",
-                            message: IndexEmptyStateCopy.autoGenerate("图片"),
-                            density: .list
+                if let image = session.sourceImage {
+                    HStack(alignment: .center, spacing: 14) {
+                        IndexImagePreviewStage(
+                            image: image,
+                            accessibilityLabel: "Favicon 源图片预览",
+                            accessibilityValue: faviconSourceAccessibilityValue,
+                            maxDisplayWidth: 120,
+                            maxDisplayHeight: 96,
+                            spacing: 0
                         )
-                        .frame(maxWidth: .infinity, minHeight: 128)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, ToolMetrics.Spacing.sm)
-                .indexDropZone(
-                    isTargeted: $isImageDropTargeted,
-                    onFile: receiveImageURL,
-                    onMultipleFiles: rejectMultipleImageDrop
-                )
-            }
+                        .frame(width: 140)
 
-            Group {
-                if session.sourceImage != nil {
-                    faviconOutputPanel
-                        .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text(session.sourceURL?.lastPathComponent ?? "源图片")
+                                .font(ToolTypography.bodyMedium)
+                                .foregroundStyle(ToolTheme.textPrimary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+
+                            Text(faviconSourceSummary)
+                                .font(ToolTypography.caption)
+                                .foregroundStyle(ToolTheme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                } else if session.isProcessing {
+                    IndexProgressLabel(message: "正在读取图片…")
+                        .foregroundStyle(ToolTheme.textSecondary)
+                        .accessibilityLabel("正在读取图片")
+                } else {
+                    IndexEmptyState(
+                        title: "选择图片开始生成 Favicon",
+                        systemImage: "photo.on.rectangle.angled",
+                        message: IndexEmptyStateCopy.autoGenerate("图片"),
+                        density: .list
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 128)
                 }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, ToolMetrics.Spacing.sm)
+            .indexDropZone(
+                isTargeted: $isImageDropTargeted,
+                onFile: receiveImageURL,
+                onMultipleFiles: rejectMultipleImageDrop
+            )
+        }
+
+        Group {
+            if session.sourceImage != nil {
+                faviconOutputPanel
+                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
             }
         }
     }

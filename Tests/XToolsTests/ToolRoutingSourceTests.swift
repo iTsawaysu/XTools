@@ -72,11 +72,8 @@ struct ToolRoutingSourceTests {
             "键盘事件"
         ])
         #expect(try #require(groups.first { $0.category.id == .image }?.tools).map(\.title) == [
-            "图片格式转换",
-            "智能压缩图片",
+            "图片处理",
             "图片水印",
-            "图片灰阶生成器",
-            "Favicon 生成器",
             "颜色转换"
         ])
         #expect(try #require(groups.first { $0.category.id == .time }?.tools).map(\.title) == [

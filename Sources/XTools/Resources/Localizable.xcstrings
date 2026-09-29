@@ -871,6 +871,9 @@
     "图片压缩失败。" : {
       "extractionState" : "manual"
     },
+    "图片处理" : {
+      "extractionState" : "manual"
+    },
     "图片处理失败。" : {
       "extractionState" : "manual"
     },
@@ -1874,6 +1877,9 @@
       "extractionState" : "manual"
     },
     "格式无效，请输入井号和六位十六进制颜色" : {
+      "extractionState" : "manual"
+    },
+    "格式转换" : {
       "extractionState" : "manual"
     },
     "检查命令是否包含有效的容器参数和镜像名称。" : {

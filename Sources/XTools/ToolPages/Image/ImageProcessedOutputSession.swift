@@ -7,7 +7,7 @@ import UniformTypeIdentifiers
 @MainActor
 final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadEvicting {
     static let grayscaleWorkspaceKey = ToolWorkspaceKey<ImageProcessedOutputSession>(
-        toolID: "image-grayscale"
+        toolID: "image-tools", slot: "grayscale"
     ) { _ in
         ImageProcessedOutputSession()
     }

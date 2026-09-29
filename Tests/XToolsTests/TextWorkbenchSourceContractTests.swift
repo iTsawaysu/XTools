@@ -164,6 +164,27 @@ struct TextWorkbenchSourceContractTests {
         }
     }
 
+    @Test func imageHubShellCarriesSegmentedImageWorkbenches() throws {
+        let hub = try readSource("Sources/XTools/ToolPages/Image/ImageHubPage.swift")
+        let converter = try readSource("Sources/XTools/ToolPages/Image/ImageConverterPage.swift")
+        let compressor = try readSource("Sources/XTools/ToolPages/Image/ImageCompressorPage.swift")
+        let grayscale = try readSource("Sources/XTools/ToolPages/Image/ImageGrayscalePage.swift")
+        let favicon = try readSource("Sources/XTools/ToolPages/Image/FaviconGeneratorPage.swift")
+
+        // 格式转换/压缩/灰度/Favicon 合并为单入口「图片处理」后，IndexPage 页面壳统一
+        // 上移到 Hub；四分段只保留各自的图片工作台（会话仍按 slot 独立保活）。
+        appearsBefore(hub, "IndexPage(", "IndexSegmentedControl(", "Image hub body must open with the shared page shell before the segment control")
+        contains(hub, "IndexImageConverterSegment()", "Image hub must mount the converter segment")
+        contains(hub, "IndexImageCompressorSegment()", "Image hub must mount the compressor segment")
+        contains(hub, "IndexImageGrayscaleSegment()", "Image hub must mount the grayscale segment")
+        contains(hub, "IndexFaviconGeneratorSegment()", "Image hub must mount the favicon segment")
+        contains(hub, "IndexPage(\"图片处理\", subtitle: workspace.segment.subtitle, workspaceSemantic: .imagePreviewStage)", "Image hub must let the semantic resolve the image preview stage page shell")
+        for segment in [converter, compressor, grayscale, favicon] {
+            contains(segment, "ToolWorkspaceHost(key:", "Image segments must keep resolving their repository-retained workspace sessions")
+            doesNotContain(segment, "IndexPage(", "Image segments must not nest a second page shell inside the hub")
+        }
+    }
+
     @Test func urlCoderReusesAutomaticConverterShell() throws {
         let source = try readSource("Sources/XTools/ToolPages/Converter/URLCoderPage.swift")
 
