@@ -163,6 +163,84 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
         XCTAssertTrue(model.canScan)
     }
 
+    func testManualRescanClearsStaleOperationResults() async throws {
+        let fixture = makeFixtureHome(repositories: ["work/alpha", "work/beta"])
+        let model = makeModel(home: fixture.home, git: fixture.git)
+        model.scan()
+        await waitUntil { !model.isScanning }
+        model.update()
+        await waitUntil { !model.isUpdating && !model.isScanning }
+        XCTAssertFalse(model.operationResults.isEmpty, "更新运行后应有行内结果")
+
+        model.scan()
+        await waitUntil { !model.isScanning }
+
+        XCTAssertTrue(model.operationResults.isEmpty, "手动重扫应清空上次运行的结果徽章")
+        XCTAssertTrue(model.failureSummary.isEmpty)
+    }
+
+    func testResolveScanProgressNeverRegressesFromReadPhaseToWalkPhase() {
+        let walk = SourceControlScanProgress(discoveredCount: 12, readCompletedCount: 0, readTotalCount: nil)
+        let read = SourceControlScanProgress(discoveredCount: 12, readCompletedCount: 3, readTotalCount: 12)
+        let lateWalk = SourceControlScanProgress(discoveredCount: 12, readCompletedCount: 0, readTotalCount: nil)
+
+        XCTAssertEqual(SourceControlWorkspaceModel.resolveScanProgress(current: nil, incoming: walk), walk)
+        XCTAssertEqual(SourceControlWorkspaceModel.resolveScanProgress(current: walk, incoming: read), read)
+        // 读数期开始后，迟到的遍历期事件不得把文案回退成「已发现 N 个仓库」。
+        XCTAssertNil(SourceControlWorkspaceModel.resolveScanProgress(current: read, incoming: lateWalk))
+        // 遍历期内部只接受单调递增的发现计数。
+        XCTAssertNil(SourceControlWorkspaceModel.resolveScanProgress(current: walk, incoming: .init(discoveredCount: 8, readCompletedCount: 0, readTotalCount: nil)))
+        XCTAssertEqual(
+            SourceControlWorkspaceModel.resolveScanProgress(current: walk, incoming: .init(discoveredCount: 15, readCompletedCount: 0, readTotalCount: nil))?.discoveredCount,
+            15
+        )
+    }
+
+    func testScanOfEmptyDirectoryDistinguishesFoundNothingFromNotScanned() async throws {
+        let fixture = makeFixtureHome(repositories: [])
+        let model = makeModel(home: fixture.home, git: fixture.git)
+        XCTAssertFalse(model.lastScanFoundNothing, "未扫描时不应显示空目录空态")
+
+        model.scan()
+        await waitUntil { !model.isScanning }
+
+        XCTAssertTrue(model.repositories.isEmpty)
+        XCTAssertTrue(model.lastScanFoundNothing, "合法目录扫描无结果应标记为空目录")
+
+        model.setPath(fixture.home.path)
+        XCTAssertFalse(model.lastScanFoundNothing, "改路径应复位空目录标记")
+
+        let populated = makeFixtureHome(repositories: ["work/alpha"])
+        let found = makeModel(home: populated.home, git: populated.git)
+        found.scan()
+        await waitUntil { !found.isScanning }
+        XCTAssertFalse(found.lastScanFoundNothing)
+        XCTAssertEqual(found.repositories.count, 1)
+    }
+
+    func testExpandedDirectoryPathExpandsLeadingTildeOnly() {
+        XCTAssertEqual(SourceControlWorkspaceModel.expandedDirectoryPath("/absolute/path"), "/absolute/path")
+        XCTAssertEqual(SourceControlWorkspaceModel.expandedDirectoryPath("/Users/sun/work"), "/Users/sun/work")
+        XCTAssertTrue(SourceControlWorkspaceModel.expandedDirectoryPath("~/work").hasPrefix("/Users/"), "前导 ~ 应展开为用户主目录")
+        XCTAssertNotEqual(SourceControlWorkspaceModel.expandedDirectoryPath("~/work"), "~/work")
+    }
+
+    func testUpdateVisibleScopeOnlyPullsVisibleRepositories() async throws {
+        let fixture = makeFixtureHome(repositories: ["work/alpha", "work/beta", "work/gamma"])
+        let model = makeModel(home: fixture.home, git: fixture.git)
+        model.scan()
+        await waitUntil { !model.isScanning }
+        XCTAssertEqual(model.selectedPaths.count, 3, "默认全选")
+
+        // 模拟筛选后只更新可见的两行。
+        let visible = Array(model.repositories.prefix(2))
+        model.update(visible: visible)
+        await waitUntil { !model.isUpdating && !model.isScanning }
+
+        XCTAssertEqual(model.operationResults.count, 2, "只应更新可见的仓库")
+        XCTAssertFalse(model.operationResults.contains { $0.repository.path == model.repositories[2].path })
+    }
+
     func testRemoteHostParsesHTTPSAndSCPLikeRemotes() {
         XCTAssertEqual(SourceControlWorkspaceModel.remoteHost(from: "https://github.com/acme/repo.git"), "GitHub")
         XCTAssertEqual(SourceControlWorkspaceModel.remoteHost(from: "https://gitlab.com/acme/repo.git"), "GitLab")
@@ -170,6 +248,43 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
         XCTAssertEqual(SourceControlWorkspaceModel.remoteHost(from: "ssh://git@github.com/acme/repo.git"), "GitHub")
         XCTAssertNil(SourceControlWorkspaceModel.remoteHost(from: nil))
         XCTAssertNil(SourceControlWorkspaceModel.remoteHost(from: "/local/path"))
+    }
+
+    func testDisplayOrderPrioritizesAttentionStatesOverUpToDate() {
+        func repository(_ name: String, behind: Int = 0, modified: Bool = false) -> SourceControlRepository {
+            SourceControlRepository(
+                path: "/tmp/repos/\(name)",
+                branch: "main",
+                shortRevision: "abc1234",
+                remote: "https://git.example.com/group/\(name).git",
+                status: modified ? .modified : .clean,
+                behind: behind,
+                hasUpstream: true,
+                upstream: "origin/main",
+                revision: "abc1234",
+                remoteState: behind > 0 ? .updateAvailable : .upToDate
+            )
+        }
+        let failed = repository("failed", behind: 2)
+        let outdated = repository("outdated", behind: 3)
+        let attention = repository("attention", modified: true)
+        let updated = repository("updated")
+        let latest = repository("latest")
+        let zetaLatest = repository("zeta-latest")
+        let results = [
+            SourceControlOperationResult(
+                repository: failed,
+                outcome: .failed(SourceControlDiagnostic(code: "pull-failed", summary: "拉取失败", recovery: "稍后重试"))
+            ),
+            SourceControlOperationResult(repository: updated, outcome: .updated)
+        ]
+
+        let ordered = SourceControlWorkspaceModel.displayOrder(
+            of: [latest, updated, attention, zetaLatest, failed, outdated],
+            results: results
+        )
+
+        XCTAssertEqual(ordered, [failed, outdated, attention, updated, latest, zetaLatest])
     }
 
     // MARK: - Helpers
@@ -192,6 +307,7 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
     private func makeFixtureHome(repositories: [String]) -> Fixture {
         let path = "/tmp/xtools-source-control-model-tests-\(UUID().uuidString)"
         let home = URL(fileURLWithPath: path)
+        try? FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
         for repository in repositories {
             try? FileManager.default.createDirectory(atPath: "\(path)/\(repository)/.git", withIntermediateDirectories: true)
         }
@@ -222,7 +338,7 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
     }
 }
 
-/// 扫描 + 更新共用的 Git 桩：扫描命令返回干净的快进候选数据，
+/// 扫描 + 更新共用的 Git 桩：单次 porcelain v2 返回干净的快进候选数据，
 /// `.repositoryRoot` 必须回显请求路径（执行器的快照校验依赖它），
 /// pull 是否失败由可变集合控制。
 private actor WorkspaceMockGitClient: GitProcessClient {
@@ -241,23 +357,14 @@ private actor WorkspaceMockGitClient: GitProcessClient {
         switch request.kind {
         case .repositoryRoot:
             return GitProcessOutput(exitCode: 0, standardOutput: request.repositoryPath + "\n")
-        case .branch:
-            return GitProcessOutput(exitCode: 0, standardOutput: "main\n")
-        case .revision:
-            return GitProcessOutput(exitCode: 0, standardOutput: "abc123\n")
+        case .statusV2:
+            var output = "# branch.oid abc123\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +0 -0\n"
+            if dirtyStatusPaths.contains(request.repositoryPath) {
+                output += "1 .M N... 100644 100644 100644 h1 h2 file.swift\n"
+            }
+            return GitProcessOutput(exitCode: 0, standardOutput: output)
         case .remote:
             return GitProcessOutput(exitCode: 0, standardOutput: "origin\thttps://gitlab.example/acme/repo.git (fetch)\n")
-        case .upstream:
-            return GitProcessOutput(exitCode: 0, standardOutput: "origin/main\n")
-        case .status:
-            if dirtyStatusPaths.contains(request.repositoryPath) {
-                return GitProcessOutput(exitCode: 0, standardOutput: " M file.swift\n")
-            }
-            return GitProcessOutput(exitCode: 0, standardOutput: "")
-        case .divergence:
-            return GitProcessOutput(exitCode: 0, standardOutput: "0\t0\n")
-        case .remoteRevision:
-            return GitProcessOutput(exitCode: 0, standardOutput: "abc123\trefs/heads/main\n")
         case .pullFastForward:
             if failingPullPaths.contains(request.repositoryPath) {
                 return GitProcessOutput(

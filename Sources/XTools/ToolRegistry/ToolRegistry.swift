@@ -408,7 +408,7 @@ extension ToolRegistry {
                 title: "源码管理",
                 categoryID: .development,
                 systemImage: "arrow.triangle.branch",
-                keywords: ["git", "repository", "pull", "merge request", "source control", "源码", "仓库"]
+                keywords: ["git", "repository", "pull", "source control", "源码", "仓库"]
             ) {
                 IndexSourceControlPage()
             },

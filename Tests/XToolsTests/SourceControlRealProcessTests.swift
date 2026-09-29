@@ -14,12 +14,16 @@ final class SourceControlRealProcessTests: XCTestCase {
 
         let client = SystemGitProcessClient()
         let output = try await client.run(
-            GitCommandRequest(kind: .branch, repositoryPath: repositoryURL.path),
+            GitCommandRequest(kind: .statusV2, repositoryPath: repositoryURL.path),
             timeout: .seconds(10)
         )
 
         XCTAssertEqual(output.exitCode, 0)
-        XCTAssertEqual(output.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines), "main")
+        // 真实 git 的 porcelain v2 输出必须能被快照解析器完整还原。
+        let snapshot = GitStatusV2Snapshot(statusV2: output.standardOutput)
+        XCTAssertEqual(snapshot.branch, "main")
+        XCTAssertEqual(snapshot.worktreeStatus, .clean)
+        XCTAssertNotNil(snapshot.revision)
     }
 
     /// Regression test: scanning several repositories concurrently used to
@@ -65,7 +69,7 @@ final class SourceControlRealProcessTests: XCTestCase {
         let started = Date()
         do {
             _ = try await client.run(
-                GitCommandRequest(kind: .status, repositoryPath: "/tmp"),
+                GitCommandRequest(kind: .statusV2, repositoryPath: "/tmp"),
                 timeout: .seconds(1)
             )
             XCTFail("Expected timeout")
@@ -83,7 +87,7 @@ final class SourceControlRealProcessTests: XCTestCase {
         let started = Date()
         let task = Task {
             try await client.run(
-                GitCommandRequest(kind: .status, repositoryPath: "/tmp"),
+                GitCommandRequest(kind: .statusV2, repositoryPath: "/tmp"),
                 timeout: .seconds(30)
             )
         }

@@ -22,10 +22,12 @@ struct IconSemanticContractTests {
     private let reviewedMacOS13Symbols: Set<String> = [
         "01.square",
         "app.badge",
+        "exclamationmark.circle.fill",
         "exclamationmark.triangle",
         "minus",
         "plus",
         "arrow.clockwise",
+        "arrow.down",
         "arrow.down.circle",
         "arrow.counterclockwise",
         "arrow.triangle.branch",

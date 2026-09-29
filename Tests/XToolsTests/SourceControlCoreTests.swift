@@ -11,11 +11,8 @@ final class SourceControlCoreTests: XCTestCase {
 
         let git = MockGitClient { request in
             switch request.kind {
-            case .branch: return GitProcessOutput(exitCode: 0, standardOutput: "main\n")
-            case .revision: return GitProcessOutput(exitCode: 0, standardOutput: "abc123\n")
+            case .statusV2: return GitProcessOutput(exitCode: 0, standardOutput: "# branch.oid abc123\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +0 -2\n")
             case .remote: return GitProcessOutput(exitCode: 0, standardOutput: "https://gitlab.example/acme/repo.git\n")
-            case .status: return GitProcessOutput(exitCode: 0, standardOutput: "")
-            case .divergence: return GitProcessOutput(exitCode: 0, standardOutput: "2\t0\n")
             default: return GitProcessOutput(exitCode: 1)
             }
         }
@@ -36,10 +33,8 @@ final class SourceControlCoreTests: XCTestCase {
 
         let git = MockGitClient { request in
             switch request.kind {
-            case .branch: return GitProcessOutput(exitCode: 0, standardOutput: "main\n")
-            case .revision: return GitProcessOutput(exitCode: 0, standardOutput: "abc123\n")
+            case .statusV2: return GitProcessOutput(exitCode: 0, standardOutput: "# branch.oid abc123\n# branch.head main\n")
             case .remote: return GitProcessOutput(exitCode: 1)
-            case .status: return GitProcessOutput(exitCode: 0, standardOutput: "")
             default: return GitProcessOutput(exitCode: 1)
             }
         }
@@ -54,9 +49,7 @@ final class SourceControlCoreTests: XCTestCase {
 
         let git = MockGitClient { request in
             switch request.kind {
-            case .branch: return GitProcessOutput(exitCode: 0, standardOutput: "main\n")
-            case .revision: return GitProcessOutput(exitCode: 0, standardOutput: "abc123\n")
-            case .status: return GitProcessOutput(exitCode: 0)
+            case .statusV2: return GitProcessOutput(exitCode: 0, standardOutput: "# branch.oid abc123\n# branch.head main\n")
             default: return GitProcessOutput(exitCode: 1)
             }
         }
@@ -68,10 +61,8 @@ final class SourceControlCoreTests: XCTestCase {
     func testScannerClassifiesConflictsAndUntrackedFiles() async throws {
         let git = MockGitClient { request in
             switch request.kind {
-            case .branch: return GitProcessOutput(exitCode: 0, standardOutput: "main\n")
-            case .revision: return GitProcessOutput(exitCode: 0, standardOutput: "abc\n")
+            case .statusV2: return GitProcessOutput(exitCode: 0, standardOutput: "# branch.oid abc\n# branch.head main\nu AA 3 000000 100644 100644 h1 h2 file.txt\n? other.txt\n")
             case .remote: return GitProcessOutput(exitCode: 0, standardOutput: "origin\n")
-            case .status: return GitProcessOutput(exitCode: 0, standardOutput: "UU file.txt\n")
             default: return GitProcessOutput(exitCode: 1)
             }
         }
@@ -91,11 +82,8 @@ final class SourceControlCoreTests: XCTestCase {
         }
         let git = MockGitClient { request in
             switch request.kind {
-            case .branch: return GitProcessOutput(exitCode: 0, standardOutput: "main\n")
-            case .revision: return GitProcessOutput(exitCode: 0, standardOutput: "abc123\n")
+            case .statusV2: return GitProcessOutput(exitCode: 0, standardOutput: "# branch.oid abc123\n# branch.head main\n")
             case .remote: return GitProcessOutput(exitCode: 1)
-            case .upstream: return GitProcessOutput(exitCode: 1)
-            case .status: return GitProcessOutput(exitCode: 0, standardOutput: "")
             default: return GitProcessOutput(exitCode: 1)
             }
         }
@@ -131,15 +119,8 @@ final class SourceControlCoreTests: XCTestCase {
         try FileManager.default.createDirectory(atPath: "\(root.path)/.git", withIntermediateDirectories: true)
         let git = MockGitClient { request in
             switch request.kind {
-            case .branch: return GitProcessOutput(exitCode: 0, standardOutput: "main\n")
-            case .revision: return GitProcessOutput(exitCode: 0, standardOutput: "abc123\n")
+            case .statusV2: return GitProcessOutput(exitCode: 0, standardOutput: "# branch.oid abc123\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +0 -0\n")
             case .remote: return GitProcessOutput(exitCode: 0, standardOutput: "origin\thttps://gitlab.example/acme/repo.git (fetch)\n")
-            case .upstream: return GitProcessOutput(exitCode: 0, standardOutput: "origin/main\n")
-            case .status: return GitProcessOutput(exitCode: 0, standardOutput: "")
-            case .divergence: return GitProcessOutput(exitCode: 0, standardOutput: "0\t0\n")
-            case .remoteRevision:
-                // ls-remote 若被调用即视为失败（离线扫描契约）。
-                return GitProcessOutput(exitCode: 1)
             default: return GitProcessOutput(exitCode: 1)
             }
         }
@@ -148,7 +129,37 @@ final class SourceControlCoreTests: XCTestCase {
         XCTAssertEqual(snapshot.repositories.first?.remoteState, .upToDate)
         XCTAssertTrue(snapshot.repositories.first?.isFastForwardCandidate == true)
         let calls = await git.calls
-        XCTAssertFalse(calls.contains(.remoteRevision), "扫描不应发起网络请求（ls-remote）")
+        // 单仓扫描只允许这四条命令；不再有逐项查询，也不发起任何网络请求。
+        XCTAssertEqual(Set(calls), [.statusV2, .remote, .branches, .defaultBranch], "扫描命令面应为固定的四条白名单命令")
+        XCTAssertEqual(calls.count, 4, "每仓恰好四条命令")
+    }
+
+    // MARK: - Porcelain v2 snapshot parsing
+
+    func testStatusV2SnapshotParsesDetachedInitialAndRecordPrecedence() {
+        let detached = GitStatusV2Snapshot(statusV2: "# branch.oid deadbeef\n# branch.head (detached)\n")
+        XCTAssertEqual(detached.branch, "HEAD")
+        XCTAssertEqual(detached.worktreeStatus, .detached, "分离头指针优先于工作区条目")
+
+        let initial = GitStatusV2Snapshot(statusV2: "# branch.oid (initial)\n# branch.head main\n")
+        XCTAssertNil(initial.revision, "尚无提交的仓库 HEAD 为空而非读取失败")
+        XCTAssertEqual(initial.worktreeStatus, .clean)
+        XCTAssertNil(initial.upstream)
+
+        let diverged = GitStatusV2Snapshot(
+            statusV2: "# branch.oid abc\n# branch.head feat\n# branch.upstream origin/feat\n# branch.ab +3 -5\n? new.txt\n1 .M N... 100644 100644 100644 h1 h2 a.swift\n"
+        )
+        XCTAssertEqual(diverged.branch, "feat")
+        XCTAssertEqual(diverged.revision, "abc")
+        XCTAssertEqual(diverged.upstream, "origin/feat")
+        XCTAssertEqual(diverged.ahead, 3)
+        XCTAssertEqual(diverged.behind, 5)
+        XCTAssertEqual(diverged.worktreeStatus, .untracked, "untracked 优先于 modified")
+
+        let conflicted = GitStatusV2Snapshot(
+            statusV2: "# branch.oid abc\n# branch.head main\nu AA 3 000000 100644 100644 h1 h2 file.txt\n? other.txt\n"
+        )
+        XCTAssertEqual(conflicted.worktreeStatus, .conflicted, "未合并记录优先级最高")
     }
 
     func testDiagnosticShortLabelMapsCommonCodes() {
@@ -235,10 +246,7 @@ final class SourceControlCoreTests: XCTestCase {
         let git = MockGitClient { request in
             switch request.kind {
             case .repositoryRoot: return GitProcessOutput(exitCode: 0, standardOutput: request.repositoryPath + "\n")
-            case .branch: return GitProcessOutput(exitCode: 0, standardOutput: "main\n")
-            case .revision: return GitProcessOutput(exitCode: 0, standardOutput: "abc123\n")
-            case .upstream: return GitProcessOutput(exitCode: 0, standardOutput: "origin/main\n")
-            case .status: return GitProcessOutput(exitCode: 0, standardOutput: " M file.swift\n")
+            case .statusV2: return GitProcessOutput(exitCode: 0, standardOutput: "# branch.oid abc123\n# branch.head main\n# branch.upstream origin/main\n1 .M N... 100644 100644 100644 h1 h2 file.swift\n")
             case .pullFastForward: return GitProcessOutput(exitCode: 0, standardOutput: "Already up to date.\n")
             default: return GitProcessOutput(exitCode: 0)
             }
@@ -296,88 +304,6 @@ final class SourceControlCoreTests: XCTestCase {
         XCTAssertTrue(repository.isFastForwardCandidate)
     }
 
-    func testGitLabPreflightEncodesProjectPathAndUsesTokenOnlyAsHeader() async throws {
-        let transport = MockGitLabTransport { request in
-            let path = request.url?.path ?? ""
-            if path.hasSuffix("/merge_requests") { return GitLabHTTPResponse(statusCode: 200, data: Data("[]".utf8)) }
-            return GitLabHTTPResponse(statusCode: 200, data: Data("{}".utf8))
-        }
-        let input = GitLabMergeRequestInput(
-            gitLabURL: URL(string: "https://gitlab.example")!,
-            projectPath: "acme/mobile-app",
-            sourceBranch: "feature/login",
-            targetBranch: "main",
-            title: "登录"
-        )
-        let result = try await GitLabMergeRequestClient(transport: transport).preflight(input, token: "secret-token")
-        XCTAssertEqual(result, .ready)
-        let request = await transport.requests.last
-        XCTAssertTrue(request?.url?.absoluteString.contains("acme%2Fmobile-app") == true)
-        XCTAssertEqual(request?.value(forHTTPHeaderField: "PRIVATE-TOKEN"), "secret-token")
-    }
-
-    func testGitLabCreateReconcilesTimeoutWithExistingMergeRequest() async throws {
-        let existingJSON = "[{\"iid\":42,\"title\":\"登录\",\"source_branch\":\"feature/login\",\"target_branch\":\"main\",\"web_url\":\"https://gitlab.example/acme/mobile/-/merge_requests/42\"}]"
-        let transport = MockGitLabTransport { request in
-            if request.httpMethod == "POST" { throw URLError(.timedOut) }
-            return GitLabHTTPResponse(statusCode: 200, data: Data(existingJSON.utf8))
-        }
-        let input = GitLabMergeRequestInput(
-            gitLabURL: URL(string: "https://gitlab.example")!,
-            projectPath: "acme/mobile",
-            sourceBranch: "feature/login",
-            targetBranch: "main",
-            title: "登录"
-        )
-        let request = try await GitLabMergeRequestClient(transport: transport).create(input, token: "token")
-        XCTAssertEqual(request.iid, 42)
-    }
-
-    func testGitLabPreflightReportsDuplicateOpenedMergeRequest() async throws {
-        let existingJSON = "[{\"iid\":7,\"title\":\"已有请求\",\"source_branch\":\"feature/login\",\"target_branch\":\"main\"}]"
-        let transport = MockGitLabTransport { request in
-            if request.url?.path.hasSuffix("/merge_requests") == true {
-                return GitLabHTTPResponse(statusCode: 200, data: Data(existingJSON.utf8))
-            }
-            return GitLabHTTPResponse(statusCode: 200, data: Data("{}".utf8))
-        }
-        let input = GitLabMergeRequestInput(
-            gitLabURL: URL(string: "https://gitlab.example")!,
-            projectPath: "acme/mobile",
-            sourceBranch: "feature/login",
-            targetBranch: "main",
-            title: "登录"
-        )
-
-        let result = try await GitLabMergeRequestClient(transport: transport).preflight(input, token: "token")
-        guard case let .duplicate(request) = result else {
-            return XCTFail("Expected duplicate opened merge request")
-        }
-        XCTAssertEqual(request.iid, 7)
-    }
-
-    func testGitLabRejectsEmptyTokenBeforeNetworkRequest() async throws {
-        let transport = MockGitLabTransport { _ in
-            return GitLabHTTPResponse(statusCode: 500)
-        }
-        let input = GitLabMergeRequestInput(
-            gitLabURL: URL(string: "https://gitlab.example.com")!,
-            projectPath: "acme/mobile",
-            sourceBranch: "feature/login",
-            targetBranch: "main",
-            title: "登录"
-        )
-
-        do {
-            _ = try await GitLabMergeRequestClient(transport: transport).preflight(input, token: "  ")
-            XCTFail("Expected invalid token")
-        } catch let error as SourceControlError {
-            XCTAssertEqual(error, .invalidToken)
-        }
-        let requests = await transport.requests
-        XCTAssertTrue(requests.isEmpty)
-    }
-
     private func makeTemporaryDirectory() -> URL {
         let path = "/tmp/xtools-source-control-tests-\(UUID().uuidString)"
         let url = URL(fileURLWithPath: path)
@@ -397,19 +323,5 @@ private actor MockGitClient: GitProcessClient {
     func run(_ request: GitCommandRequest, timeout: Duration) async throws -> GitProcessOutput {
         calls.append(request.kind)
         return handler(request)
-    }
-}
-
-private actor MockGitLabTransport: GitLabHTTPTransport {
-    private let handler: @Sendable (URLRequest) throws -> GitLabHTTPResponse
-    private(set) var requests: [URLRequest] = []
-
-    init(handler: @escaping @Sendable (URLRequest) throws -> GitLabHTTPResponse) {
-        self.handler = handler
-    }
-
-    func send(_ request: URLRequest) async throws -> GitLabHTTPResponse {
-        requests.append(request)
-        return try handler(request)
     }
 }

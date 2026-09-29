@@ -89,6 +89,73 @@ public enum SourceControlRepositoryStatus: String, Codable, CaseIterable, Sendab
     case unknown
 }
 
+/// `git status --porcelain=v2 --branch` 的单次解析结果。一条命令同时给出
+/// 分支、HEAD、upstream、ahead/behind 与工作区状态，取代过去五个独立
+/// 子进程（branch/revision/upstream/status/divergence）。
+/// LC_ALL=C 保证头行以 `# ` 前缀稳定输出。
+public struct GitStatusV2Snapshot: Sendable, Equatable {
+    public var branch: String
+    /// 尚无提交的仓库为 nil（`# branch.oid (initial)`）。
+    public var revision: String?
+    public var upstream: String?
+    public var ahead: Int
+    public var behind: Int
+    public var worktreeStatus: SourceControlRepositoryStatus
+
+    public init(statusV2 output: String) {
+        var branch = ""
+        var revision: String?
+        var upstream: String?
+        var ahead = 0
+        var behind = 0
+        var sawUnmerged = false
+        var sawUntracked = false
+        var sawModified = false
+        for rawLine in output.split(separator: "\n", omittingEmptySubsequences: true) {
+            let line = String(rawLine)
+            if line.hasPrefix("# branch.oid ") {
+                let value = String(line.dropFirst("# branch.oid ".count))
+                revision = value == "(initial)" ? nil : value.split(whereSeparator: \.isWhitespace).first.map(String.init)
+            } else if line.hasPrefix("# branch.head ") {
+                let value = String(line.dropFirst("# branch.head ".count)).trimmingCharacters(in: .whitespaces)
+                branch = value == "(detached)" ? "HEAD" : value
+            } else if line.hasPrefix("# branch.upstream ") {
+                upstream = line.dropFirst("# branch.upstream ".count)
+                    .split(whereSeparator: \.isWhitespace).first.map(String.init)
+            } else if line.hasPrefix("# branch.ab ") {
+                let fields = line.split(whereSeparator: \.isWhitespace)
+                if fields.count >= 4 {
+                    ahead = Int(fields[2].dropFirst()) ?? 0
+                    behind = Int(fields[3].dropFirst()) ?? 0
+                }
+            } else if line.hasPrefix("u ") {
+                sawUnmerged = true
+            } else if line.hasPrefix("? ") {
+                sawUntracked = true
+            } else if line.hasPrefix("1 ") || line.hasPrefix("2 ") {
+                sawModified = true
+            }
+        }
+        self.branch = branch
+        self.revision = revision
+        self.upstream = (upstream?.isEmpty == true) ? nil : upstream
+        self.ahead = max(0, ahead)
+        self.behind = max(0, behind)
+        // 与旧 v1 解析保持一致：分离头指针优先于任何工作区条目。
+        if branch.isEmpty || branch == "HEAD" {
+            self.worktreeStatus = .detached
+        } else if sawUnmerged {
+            self.worktreeStatus = .conflicted
+        } else if sawUntracked {
+            self.worktreeStatus = .untracked
+        } else if sawModified {
+            self.worktreeStatus = .modified
+        } else {
+            self.worktreeStatus = .clean
+        }
+    }
+}
+
 public enum SourceControlScanScope: Hashable, Sendable {
     case repository(path: String)
     case directory(path: String)
@@ -251,16 +318,6 @@ public enum SourceControlError: Error, Equatable, Sendable {
     case operationInProgress
     case timedOut
     case cancelled
-    case invalidGitLabURL
-    case insecureGitLabURL
-    case invalidProjectPath
-    case invalidBranch
-    case invalidTitle
-    case invalidToken
-    case httpStatus(Int)
-    case invalidResponse
-    case mergeRequestAlreadyExists
-    case pullRequestUnsupported
 }
 
 public extension SourceControlError {
@@ -282,26 +339,6 @@ public extension SourceControlError {
             return SourceControlDiagnostic(code: "timed-out", summary: "操作超时。", recovery: "请检查网络或仓库状态后重试。")
         case .cancelled:
             return SourceControlDiagnostic(code: "cancelled", summary: "操作已取消。", recovery: "可以从当前页面重新开始。")
-        case .invalidGitLabURL:
-            return SourceControlDiagnostic(code: "invalid-gitlab-url", summary: "GitLab 地址无效。", recovery: "请输入包含主机名的 GitLab HTTPS 地址。")
-        case .insecureGitLabURL:
-            return SourceControlDiagnostic(code: "insecure-gitlab-url", summary: "GitLab 地址必须使用 HTTPS。", recovery: "请改用 https:// 开头的地址。")
-        case .invalidProjectPath:
-            return SourceControlDiagnostic(code: "invalid-project", summary: "项目路径无效。", recovery: "请输入 GitLab 项目的完整路径。")
-        case .invalidBranch:
-            return SourceControlDiagnostic(code: "invalid-branch", summary: "分支名称不能为空。", recovery: "请填写源分支和目标分支。")
-        case .invalidTitle:
-            return SourceControlDiagnostic(code: "invalid-title", summary: "Merge Request 标题不能为空。", recovery: "请填写一个简短明确的标题。")
-        case .invalidToken:
-            return SourceControlDiagnostic(code: "invalid-token", summary: "GitLab Token 不能为空。", recovery: "请输入有权限访问项目并创建 Merge Request 的 Token。")
-        case let .httpStatus(status):
-            return SourceControlDiagnostic(code: "http-status", summary: "GitLab 请求未成功。", recovery: "请检查地址、Token 和项目权限后重试。", statusCode: status)
-        case .invalidResponse:
-            return SourceControlDiagnostic(code: "invalid-response", summary: "GitLab 返回的数据无法识别。", recovery: "请确认服务器版本和网络状态后重试。")
-        case .mergeRequestAlreadyExists:
-            return SourceControlDiagnostic(code: "duplicate-merge-request", summary: "已经存在相同的开放 Merge Request。", recovery: "请打开现有请求，或修改源分支后再创建。")
-        case .pullRequestUnsupported:
-            return SourceControlDiagnostic(code: "pull-request-unsupported", summary: "GitHub 项目暂不支持创建 Pull Request。", recovery: "当前仅支持 GitLab Merge Request；GitHub 项目可以先扫描和选择，创建能力在后续版本提供。")
         }
     }
 }

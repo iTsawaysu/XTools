@@ -121,46 +121,51 @@ public struct SourceControlScanner: Sendable {
         }
     }
 
+    /// `.git` 可能是目录（普通仓库）也可能是文件（子模块/worktree 指针），存在即算仓库。
     private func hasGitMarker(at url: URL) -> Bool {
-        var isDirectory: ObjCBool = false
-        return FileManager.default.fileExists(atPath: url.appendingPathComponent(".git").path, isDirectory: &isDirectory)
+        FileManager.default.fileExists(atPath: url.appendingPathComponent(".git").path)
     }
 }
 
 private func readRepository(path: String, git: any GitProcessClient) async throws -> SourceControlRepository {
-    async let branchOutput = requiredOutput(git: git, kind: .branch, path: path)
-    async let revisionOutput = requiredOutput(git: git, kind: .revision, path: path)
+    // 单次 porcelain v2 覆盖 branch/revision/upstream/ahead-behind/工作区状态，
+    // 再并行取远端与分支列表：每仓 4 个子进程（旧形态 8 个）。
+    async let statusOutput = requiredOutput(git: git, kind: .statusV2, path: path)
     async let remoteOutput = optionalOutput(git: git, kind: .remote, path: path)
-    async let upstreamOutput = optionalOutput(git: git, kind: .upstream, path: path)
-    async let statusOutput = requiredOutput(git: git, kind: .status, path: path)
-    async let divergenceOutput = optionalOutput(git: git, kind: .divergence, path: path)
     async let branchesOutput = optionalOutput(git: git, kind: .branches, path: path)
-    let branchResult = try await branchOutput
-    let branch = cleanLine(branchResult.standardOutput)
-    let fullRevision = cleanLine((try await revisionOutput).standardOutput)
+    let snapshot = GitStatusV2Snapshot(statusV2: try await statusOutput.standardOutput)
     let remoteInfo = parseRemote(cleanLines((try await remoteOutput)?.standardOutput))
-    let upstreamResult = try await upstreamOutput
-    let upstream = cleanLine(upstreamResult?.standardOutput)
-    let divergenceResult = try await divergenceOutput
-    let hasUpstream = upstreamResult != nil || divergenceResult != nil
-    let statusText = try await statusOutput.standardOutput
-    let divergence = parseDivergence(divergenceResult?.standardOutput)
-    // Scanning stays offline: no per-repository `ls-remote`. Divergence against
-    // the local tracking refs classifies the row, and `git pull --ff-only`
-    // reveals the true remote state at update time. One network round trip per
-    // repository made large workspaces crawl when remotes were slow/unreachable.
-    let remoteState: SourceControlRemoteState
-    if !hasUpstream { remoteState = .noUpstream }
-    else if divergence.ahead > 0, divergence.behind > 0 { remoteState = .diverged }
-    else if divergence.ahead > 0 { remoteState = .localAhead }
-    else if divergence.behind > 0 { remoteState = .updateAvailable }
-    else { remoteState = .upToDate }
     var defaultBranch: String?
     if let name = remoteInfo.name {
         defaultBranch = cleanLine((try await optionalOutput(git: git, kind: .defaultBranch, path: path, argument: name))?.standardOutput)
         if defaultBranch?.hasPrefix("\(name)/") == true { defaultBranch = String(defaultBranch!.dropFirst(name.count + 1)) }
     }
-    return SourceControlRepository(path: URL(fileURLWithPath: path).standardizedFileURL.path, branch: branch, shortRevision: String(fullRevision.prefix(8)), remote: remoteInfo.url, status: parseStatus(statusText, branch: branch), ahead: divergence.ahead, behind: divergence.behind, hasUpstream: hasUpstream, upstream: upstream.isEmpty ? nil : upstream, revision: fullRevision.isEmpty ? nil : fullRevision, remoteState: remoteState, branches: parseBranches((try await branchesOutput)?.standardOutput, remoteName: remoteInfo.name), defaultBranch: defaultBranch)
+    // Scanning stays offline: no per-repository `ls-remote`. Divergence against
+    // the local tracking refs classifies the row, and `git pull --ff-only`
+    // reveals the true remote state at update time. One network round trip per
+    // repository made large workspaces crawl when remotes were slow/unreachable.
+    let hasUpstream = snapshot.upstream != nil
+    let remoteState: SourceControlRemoteState
+    if !hasUpstream { remoteState = .noUpstream }
+    else if snapshot.ahead > 0, snapshot.behind > 0 { remoteState = .diverged }
+    else if snapshot.ahead > 0 { remoteState = .localAhead }
+    else if snapshot.behind > 0 { remoteState = .updateAvailable }
+    else { remoteState = .upToDate }
+    return SourceControlRepository(
+        path: URL(fileURLWithPath: path).standardizedFileURL.path,
+        branch: snapshot.branch,
+        shortRevision: String(snapshot.revision?.prefix(8) ?? ""),
+        remote: remoteInfo.url,
+        status: snapshot.worktreeStatus,
+        ahead: snapshot.ahead,
+        behind: snapshot.behind,
+        hasUpstream: hasUpstream,
+        upstream: snapshot.upstream,
+        revision: snapshot.revision,
+        remoteState: remoteState,
+        branches: parseBranches((try await branchesOutput)?.standardOutput, remoteName: remoteInfo.name),
+        defaultBranch: defaultBranch
+    )
 }
 
 private func requiredOutput(git: any GitProcessClient, kind: GitCommandKind, path: String) async throws -> GitProcessOutput {
@@ -212,25 +217,4 @@ private func parseBranches(_ value: String?, remoteName: String?) -> [String] {
         let parts = value.split(separator: "/", maxSplits: 1).map(String.init)
         return parts.count == 2 && parts[0] == (remoteName ?? "origin") ? parts[1] : value
     }.filter { !$0.isEmpty && !$0.contains("->") }
-}
-
-private func parseStatus(_ value: String, branch: String) -> SourceControlRepositoryStatus {
-    if branch.isEmpty || branch == "HEAD" { return .detached }
-    let lines = value.split(whereSeparator: \.isNewline)
-    guard !lines.isEmpty else { return .clean }
-    if lines.contains(where: { line in
-        let text = String(line)
-        guard text.count >= 2 else { return false }
-        let pair = Array(text.prefix(2))
-        return pair.contains("U") || text.hasPrefix("AA") || text.hasPrefix("DD")
-    }) { return .conflicted }
-    if lines.contains(where: { $0.hasPrefix("??") }) { return .untracked }
-    return .modified
-}
-
-private func parseDivergence(_ value: String?) -> (behind: Int, ahead: Int) {
-    guard let value else { return (0, 0) }
-    let fields = value.split(whereSeparator: \.isWhitespace)
-    guard fields.count >= 2, let behind = Int(fields[0]), let ahead = Int(fields[1]) else { return (0, 0) }
-    return (max(0, behind), max(0, ahead))
 }

@@ -77,33 +77,20 @@ public struct SourceControlUpdateExecutor: Sendable {
         guard FileManager.default.fileExists(atPath: repository.path) else { return }
         let root = try await required(.repositoryRoot, repository.path)
         guard URL(fileURLWithPath: cleanLine(root.standardOutput)).standardizedFileURL.path == URL(fileURLWithPath: repository.path).standardizedFileURL.path else { throw SourceControlError.staleSnapshot }
-        let branch = try await required(.branch, repository.path)
-        guard cleanLine(branch.standardOutput) == repository.branch else { throw SourceControlError.staleSnapshot }
-        let revision = try await required(.revision, repository.path)
-        if let expected = repository.revision { guard cleanLine(revision.standardOutput) == expected else { throw SourceControlError.staleSnapshot } }
-        let status = try await required(.status, repository.path)
+        // 单次 porcelain v2 同时复核分支、HEAD、upstream 与工作区状态。
+        let snapshot = GitStatusV2Snapshot(statusV2: try await required(.statusV2, repository.path).standardOutput)
+        guard snapshot.branch == repository.branch else { throw SourceControlError.staleSnapshot }
+        if let expected = repository.revision { guard snapshot.revision == expected else { throw SourceControlError.staleSnapshot } }
         if !allowDirtyWorktree {
-            guard status.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw SourceControlError.staleSnapshot }
+            guard snapshot.worktreeStatus == .clean else { throw SourceControlError.staleSnapshot }
         }
-        let upstream = try await optional(.upstream, repository.path)
         if repository.hasUpstream, let expectedUpstream = repository.upstream {
-            guard cleanLine(upstream?.standardOutput ?? "") == expectedUpstream else { throw SourceControlError.staleSnapshot }
+            guard snapshot.upstream == expectedUpstream else { throw SourceControlError.staleSnapshot }
         }
     }
 
     private func required(_ kind: GitCommandKind, _ path: String) async throws -> GitProcessOutput {
         let output = try await git.run(GitCommandRequest(kind: kind, repositoryPath: path), timeout: .seconds(30)); guard output.exitCode == 0 else { throw SourceControlError.staleSnapshot }; return output
-    }
-    private func optional(_ kind: GitCommandKind, _ path: String) async throws -> GitProcessOutput? {
-        do {
-            return try await git.run(GitCommandRequest(kind: kind, repositoryPath: path), timeout: .seconds(30))
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let error as SourceControlError where error == .cancelled {
-            throw error
-        } catch {
-            return nil
-        }
     }
     private func cleanLine(_ value: String) -> String { value.split(whereSeparator: \.isNewline).first.map(String.init) ?? "" }
 }

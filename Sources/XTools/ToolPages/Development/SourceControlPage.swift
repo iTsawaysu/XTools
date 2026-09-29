@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import XToolsCore
 
 @MainActor
@@ -37,39 +38,18 @@ final class SourceControlWorkspaceModel: ObservableObject {
     @Published private(set) var lastCompletion: UpdateCompletionSummary?
     /// 持久保留的最近一次批量结果计数（汇总条数据源）；新扫描/改路径清除。
     @Published private(set) var lastRunSummary: UpdateCompletionSummary?
+    /// 最近一次扫描在合法目录下一无所获：用于区分「未扫描」与「空目录」空态。
+    @Published private(set) var lastScanFoundNothing = false
     /// Repository currently being pulled (serial run) for the row spinner.
     @Published private(set) var activeUpdatePath: String?
     @Published private(set) var updateRunCompleted = 0
     @Published private(set) var updateRunTotal = 0
-    @Published var gitLabURL = "https://gitlab.example.com"
-    @Published var projectPath = ""
-    @Published var mergeRepositoryPath = ""
-    @Published var sourceBranch = ""
-    @Published var targetBranch = "main"
-    @Published var mergeTitle = ""
-    @Published var mergeDescription = ""
-    @Published var token = ""
-    @Published private(set) var mergeDiagnostic: SourceControlDiagnostic?
-    @Published private(set) var preflight: GitLabPreflightResult?
-    @Published private(set) var createdMergeRequest: GitLabMergeRequest?
-    @Published private(set) var isCheckingMerge = false
-    @Published private(set) var isCreatingMerge = false
-    @Published private(set) var discoveredProjects: [RemoteRepositorySummary] = []
-    @Published private(set) var discoveredService: RemoteRepositoryService?
-    @Published private(set) var selectedDiscoveredID: RemoteRepositorySummary.ID?
-    @Published private(set) var isDiscovering = false
-    @Published private(set) var discoveryDiagnostic: SourceControlDiagnostic?
-
     private let preferences: ToolPreferenceStore
     private let scanner: SourceControlScanner
     private let updater: SourceControlUpdateExecutor
     private var hasScannedInSession = false
     private var task: Task<Void, Never>?
     private var generation = 0
-    private var discoveryTask: Task<Void, Never>?
-    private var discoveryGeneration = 0
-    private let mergeClient = GitLabMergeRequestClient()
-    private let discoveryClient = RemoteRepositoryDiscoveryClient()
 
     init(
         preferences: ToolPreferenceStore = ToolPreferenceStore(),
@@ -86,35 +66,9 @@ final class SourceControlWorkspaceModel: ObservableObject {
         repositories.filter { selectedPaths.contains($0.path) }
     }
 
-    var mergeRepository: SourceControlRepository? {
-        repositories.first { $0.path == mergeRepositoryPath }
-    }
-
-    var targetBranchOptions: [String] {
-        var options: [String] = []
-        if let defaultBranch = mergeRepository?.defaultBranch, !defaultBranch.isEmpty {
-            options.append(defaultBranch)
-        }
-        options.append(contentsOf: mergeRepository?.branches ?? [])
-        options.append(contentsOf: ["main", "develop", "release"])
-        options = options.reduce(into: []) { result, branch in
-            if !branch.isEmpty, !result.contains(branch) { result.append(branch) }
-        }
-        if !targetBranch.isEmpty, !options.contains(targetBranch) { options.insert(targetBranch, at: 0) }
-        return options
-    }
-
-    func selectMergeRepository(_ path: String) {
-        mergeRepositoryPath = path
-        guard let repository = repositories.first(where: { $0.path == path }) else { return }
-        sourceBranch = repository.branch == "HEAD" ? "" : repository.branch
-        if projectPath.isEmpty, let remote = repository.remote {
-            let reference = Self.gitLabReference(from: remote)
-            if let host = reference.host, gitLabURL == "https://gitlab.example.com" {
-                gitLabURL = "https://\(host)"
-            }
-            if let project = reference.projectPath { projectPath = project }
-        }
+    /// 扫描用目录：展开前导 `~`（占位符示例即 ~/work，输入必须可直接使用）。
+    static func expandedDirectoryPath(_ raw: String) -> String {
+        (raw as NSString).expandingTildeInPath
     }
 
     /// 行内远端平台徽章：GitHub / GitLab / 自建 host（HTTPS 与 scp-like 均解析）。
@@ -135,39 +89,13 @@ final class SourceControlWorkspaceModel: ObservableObject {
         }
     }
 
-    private static func gitLabReference(from remote: String) -> (host: String?, projectPath: String?) {
-        if let url = URL(string: remote), let host = url.host {
-            var path = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            if path.hasSuffix(".git") { path.removeLast(4) }
-            return (host, path.isEmpty ? nil : path)
-        }
-        guard let at = remote.firstIndex(of: "@"), let colon = remote[at...].firstIndex(of: ":") else {
-            return (nil, nil)
-        }
-        let host = String(remote[remote.index(after: at)..<colon])
-        var path = String(remote[remote.index(after: colon)...])
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        if path.hasSuffix(".git") { path.removeLast(4) }
-        return (host.isEmpty ? nil : host, path.isEmpty ? nil : path)
-    }
-
     var canScan: Bool {
         !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !isScanning && !isUpdating && !isCheckingMerge && !isCreatingMerge
+            && !isScanning && !isUpdating
     }
     var canUpdate: Bool {
         !selectedRepositories.isEmpty
-            && !isScanning && !isUpdating && !isCheckingMerge && !isCreatingMerge
-    }
-    var canDiscover: Bool {
-        guard let url = URL(string: gitLabURL.trimmingCharacters(in: .whitespacesAndNewlines)) else { return false }
-        return url.host != nil && !isDiscovering
-    }
-
-    /// 选中项目是否来自 GitHub 发现：PR 创建是 GitLab 专属 API，提前拦下。
-    private var selectedDiscoveredProjectIsGitHub: Bool {
-        discoveredProjects.first { $0.id == selectedDiscoveredID }?.service == .github
+            && !isScanning && !isUpdating
     }
 
     func appendOperationResult(_ result: SourceControlOperationResult, generation expectedGeneration: Int? = nil) {
@@ -181,8 +109,6 @@ final class SourceControlWorkspaceModel: ObservableObject {
         generation &+= 1
         isScanning = false
         isUpdating = false
-        isCheckingMerge = false
-        isCreatingMerge = false
         path = value
         preferences.set(value, for: SourceControlToolPreferenceKeys.scanDirectory)
         resetScanDerivedState()
@@ -196,69 +122,11 @@ final class SourceControlWorkspaceModel: ObservableObject {
         operationResults = []
         failureSummary = []
         lastRunSummary = nil
-        preflight = nil
-        createdMergeRequest = nil
-        mergeDiagnostic = nil
+        lastScanFoundNothing = false
         activeUpdatePath = nil
         updateRunCompleted = 0
         updateRunTotal = 0
         updateOrder = []
-    }
-
-    /// 回车或按钮触发：扫描当前 Git 服务地址上 Token 有权限访问的项目。
-    /// 独立于同步任务（discoveryTask），不与扫描/更新互相打断。
-    func discoverProjects() {
-        guard canDiscover else { return }
-        let hostURL = URL(string: gitLabURL.trimmingCharacters(in: .whitespacesAndNewlines))
-        guard let hostURL else {
-            discoveryDiagnostic = SourceControlError.invalidGitLabURL.diagnostic
-            return
-        }
-        guard !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            discoveryDiagnostic = SourceControlError.invalidToken.diagnostic
-            return
-        }
-        discoveryTask?.cancel()
-        discoveryGeneration &+= 1
-        let operationGeneration = discoveryGeneration
-        isDiscovering = true
-        discoveryDiagnostic = nil
-        discoveryTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                let result = try await discoveryClient.discover(hostURL: hostURL, token: token)
-                guard !Task.isCancelled, discoveryGeneration == operationGeneration else { return }
-                discoveredProjects = result.projects
-                discoveredService = result.service
-                selectedDiscoveredID = nil
-            } catch is CancellationError {
-                return
-            } catch let error as SourceControlError {
-                guard discoveryGeneration == operationGeneration else { return }
-                discoveryDiagnostic = error.diagnostic
-            } catch {
-                guard discoveryGeneration == operationGeneration else { return }
-                discoveryDiagnostic = SourceControlError.invalidResponse.diagnostic
-            }
-            if discoveryGeneration == operationGeneration {
-                isDiscovering = false
-            }
-        }
-    }
-
-    /// 点击发现列表中的一行：预填项目路径，并把目标分支设为项目默认分支。
-    func selectDiscoveredProject(_ summary: RemoteRepositorySummary) {
-        selectedDiscoveredID = summary.id
-        projectPath = summary.pathWithNamespace
-        if let branch = summary.defaultBranch, !branch.isEmpty {
-            targetBranch = branch
-        }
-    }
-
-    func cancelDiscovery() {
-        discoveryTask?.cancel()
-        discoveryGeneration &+= 1
-        isDiscovering = false
     }
 
     // MARK: - Scan
@@ -275,7 +143,7 @@ final class SourceControlWorkspaceModel: ObservableObject {
         task?.cancel()
         generation &+= 1
         let operationGeneration = generation
-        let scope = SourceControlScanScope.directory(path: path.trimmingCharacters(in: .whitespacesAndNewlines))
+        let scope = SourceControlScanScope.directory(path: Self.expandedDirectoryPath(path.trimmingCharacters(in: .whitespacesAndNewlines)))
         isScanning = true
         scanProgress = nil
         diagnostic = nil
@@ -283,6 +151,10 @@ final class SourceControlWorkspaceModel: ObservableObject {
         selectedPaths = []
         failureSummary = []
         lastRunSummary = nil
+        lastScanFoundNothing = false
+        // 手动重扫意味着重新观察现场：上次运行的行内结果徽章一并作废，
+        // 避免展示与新鲜扫描数据矛盾的「已更新/已跳过」。
+        operationResults = []
         task = Task { [weak self] in
             guard let self else { return }
             do {
@@ -298,15 +170,11 @@ final class SourceControlWorkspaceModel: ObservableObject {
                 )
                 guard !Task.isCancelled, generation == operationGeneration else { return }
                 repositories = snapshot.repositories
+                lastScanFoundNothing = snapshot.repositories.isEmpty
                 // 默认全选：成熟工具（SourceTree / JetBrains Update Project /
                 // gita）在发现后都作用于全部结果；不可安全快进的仓库在
                 // 更新时按安全规则跳过并在行内说明原因。
                 selectedPaths = Set(snapshot.repositories.map(\.path))
-                if mergeRepositoryPath.isEmpty || !snapshot.repositories.contains(where: { $0.path == mergeRepositoryPath }) {
-                    if let first = snapshot.repositories.first {
-                        selectMergeRepository(first.path)
-                    }
-                }
             } catch let error as SourceControlError {
                 guard generation == operationGeneration else { return }
                 diagnostic = error.diagnostic
@@ -332,13 +200,23 @@ final class SourceControlWorkspaceModel: ObservableObject {
 
     private func recordScanProgress(_ progress: SourceControlScanProgress, generation expectedGeneration: Int) {
         guard expectedGeneration == generation else { return }
-        // 目录遍历期的发现计数经无序 Task 投递，只接受单调递增，避免回跳。
-        if let current = scanProgress,
-           progress.readTotalCount == nil, current.readTotalCount == nil,
-           progress.discoveredCount < current.discoveredCount {
-            return
+        if let resolved = Self.resolveScanProgress(current: scanProgress, incoming: progress) {
+            scanProgress = resolved
         }
-        scanProgress = progress
+    }
+
+    /// 目录遍历期的发现计数经无序 Task 投递：只接受单调递增，且读数期
+    /// 一旦开始就不再被迟到的遍历期事件回退。返回 nil 表示保留现状。
+    static func resolveScanProgress(
+        current: SourceControlScanProgress?,
+        incoming: SourceControlScanProgress
+    ) -> SourceControlScanProgress? {
+        guard let current else { return incoming }
+        if incoming.readTotalCount == nil {
+            if current.readTotalCount != nil { return nil }
+            if incoming.discoveredCount < current.discoveredCount { return nil }
+        }
+        return incoming
     }
 
     // MARK: - Selection
@@ -362,18 +240,6 @@ final class SourceControlWorkspaceModel: ObservableObject {
         else { selectedPaths.subtract(paths) }
     }
 
-    func invalidateMergePreflight() {
-        if isCheckingMerge || isCreatingMerge {
-            task?.cancel()
-            generation &+= 1
-            isCheckingMerge = false
-            isCreatingMerge = false
-        }
-        preflight = nil
-        createdMergeRequest = nil
-        mergeDiagnostic = nil
-    }
-
     // MARK: - Update
 
     func update() {
@@ -381,21 +247,30 @@ final class SourceControlWorkspaceModel: ObservableObject {
         startUpdate(selectedRepositories, resetResults: true)
     }
 
+    /// 更新作用域跟随当前可见（搜索/筛选后）的行——与三态全选框同一语义：
+    /// 筛选出「需处理」后点更新，只更新可见的这些仓库。
+    func update(visible: [SourceControlRepository]) {
+        guard canUpdate else { return }
+        let targets = visible.filter { selectedPaths.contains($0.path) }
+        guard !targets.isEmpty else { return }
+        startUpdate(targets, resetResults: true)
+    }
+
     func retry(_ repository: SourceControlRepository) {
-        guard !isScanning, !isUpdating, !isCheckingMerge, !isCreatingMerge else { return }
+        guard !isScanning, !isUpdating else { return }
         startUpdate([repository], resetResults: false)
     }
 
     /// 跳过行的强制更新：放开「工作区必须干净」的预检，让 `git pull
     /// --ff-only` 自行决定（改动会被覆盖或无法快进时 git 仍会拒绝）。
     func forceUpdate(_ repository: SourceControlRepository) {
-        guard !isScanning, !isUpdating, !isCheckingMerge, !isCreatingMerge else { return }
+        guard !isScanning, !isUpdating else { return }
         startUpdate([repository], resetResults: false, force: true)
     }
 
     /// 汇总条「强制更新跳过项」：批量重跑上次被跳过的仓库。
     func forceUpdateSkipped() {
-        guard !isScanning, !isUpdating, !isCheckingMerge, !isCreatingMerge else { return }
+        guard !isScanning, !isUpdating else { return }
         let targets = repositories.filter { repository in
             guard let outcome = operationResults.last(where: { $0.repository.id == repository.id })?.outcome else { return false }
             if case .skipped = outcome { return true }
@@ -410,7 +285,7 @@ final class SourceControlWorkspaceModel: ObservableObject {
     /// 快照——执行器拉取前会重新对磁盘做安全校验，不会绕过保护。
     func retryFailures() {
         guard !failureSummary.isEmpty,
-              !isScanning, !isUpdating, !isCheckingMerge, !isCreatingMerge else { return }
+              !isScanning, !isUpdating else { return }
         let targets = failureSummary.map { summary -> SourceControlRepository in
             if let fresh = repositories.first(where: { $0.path == summary.repository.path }),
                fresh.isFastForwardCandidate {
@@ -472,6 +347,32 @@ final class SourceControlWorkspaceModel: ObservableObject {
         return next < updateOrder.count ? updateOrder[next] : nil
     }
 
+    /// 列表展示排序：需要用户关注的状态靠前，已最新垫底。
+    /// 失败 > 待更新 > 需处理（含被跳过）> 已更新 > 已最新，同级按路径自然序。
+    func sortedForDisplay(_ repositories: [SourceControlRepository]) -> [SourceControlRepository] {
+        Self.displayOrder(of: repositories, results: operationResults)
+    }
+
+    static func displayOrder(
+        of repositories: [SourceControlRepository],
+        results: [SourceControlOperationResult]
+    ) -> [SourceControlRepository] {
+        let outcomesByID = Dictionary(results.map { ($0.repository.id, $0.outcome) }, uniquingKeysWith: { _, last in last })
+        func attentionRank(_ repository: SourceControlRepository) -> Int {
+            if case .failed = outcomesByID[repository.id] { return 0 }
+            if repository.isFastForwardCandidate, repository.behind > 0 { return 1 }
+            if !repository.isFastForwardCandidate { return 2 }
+            if case .updated = outcomesByID[repository.id] { return 3 }
+            return 4
+        }
+        return repositories.sorted {
+            let lhs = attentionRank($0), rhs = attentionRank($1)
+            return lhs == rhs
+                ? $0.path.localizedStandardCompare($1.path) == .orderedAscending
+                : lhs < rhs
+        }
+    }
+
     /// 从本次运行的目标推导类型化完成计数与失败汇总。
     private func publishCompletion(for targets: [SourceControlRepository]) {
         let outcomesByID = Dictionary(operationResults.map { ($0.repository.id, $0.outcome) }, uniquingKeysWith: { _, last in last })
@@ -506,7 +407,7 @@ final class SourceControlWorkspaceModel: ObservableObject {
     /// 更新完成后的状态重扫：不清失败汇总与结果行，选择恢复为全选。
     private func refreshAfterUpdate() {
         let operationGeneration = generation
-        let scope = SourceControlScanScope.directory(path: path.trimmingCharacters(in: .whitespacesAndNewlines))
+        let scope = SourceControlScanScope.directory(path: Self.expandedDirectoryPath(path.trimmingCharacters(in: .whitespacesAndNewlines)))
         isScanning = true
         scanProgress = nil
         task = Task { [weak self] in
@@ -524,11 +425,6 @@ final class SourceControlWorkspaceModel: ObservableObject {
                 guard !Task.isCancelled, generation == operationGeneration else { return }
                 repositories = snapshot.repositories
                 selectedPaths = Set(snapshot.repositories.map(\.path))
-                if mergeRepositoryPath.isEmpty || !snapshot.repositories.contains(where: { $0.path == mergeRepositoryPath }) {
-                    if let first = snapshot.repositories.first {
-                        selectMergeRepository(first.path)
-                    }
-                }
             } catch {
                 // 刷新失败不打断刚完成的更新结果；保留现有列表。
             }
@@ -549,80 +445,9 @@ final class SourceControlWorkspaceModel: ObservableObject {
         isScanning = false
         scanProgress = nil
         isUpdating = false
-        isCheckingMerge = false
-        isCreatingMerge = false
         activeUpdatePath = nil
-        cancelDiscovery()
     }
 
-    func checkMergeRequest() {
-        guard !isCheckingMerge, !isCreatingMerge, !isScanning, !isUpdating else { return }
-        if selectedDiscoveredProjectIsGitHub {
-            mergeDiagnostic = SourceControlError.pullRequestUnsupported.diagnostic
-            return
-        }
-        guard let url = URL(string: gitLabURL.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            mergeDiagnostic = SourceControlError.invalidGitLabURL.diagnostic
-            return
-        }
-        let input = GitLabMergeRequestInput(gitLabURL: url, projectPath: projectPath, sourceBranch: sourceBranch, targetBranch: targetBranch, title: mergeTitle, description: mergeDescription)
-        isCheckingMerge = true
-        mergeDiagnostic = nil
-        preflight = nil
-        task?.cancel()
-        generation &+= 1
-        let operationGeneration = generation
-        task = Task { [weak self] in
-            guard let self else { return }
-            do {
-                let result = try await mergeClient.preflight(input, token: token)
-                guard generation == operationGeneration else { return }
-                preflight = result
-            } catch let error as SourceControlError {
-                guard generation == operationGeneration else { return }
-                mergeDiagnostic = error.diagnostic
-            } catch {
-                guard generation == operationGeneration else { return }
-                mergeDiagnostic = SourceControlError.invalidResponse.diagnostic
-            }
-            if generation == operationGeneration { isCheckingMerge = false }
-        }
-    }
-
-    func createMergeRequest() {
-        guard case .ready? = preflight, !isCreatingMerge, !isScanning, !isUpdating else { return }
-        guard let url = URL(string: gitLabURL.trimmingCharacters(in: .whitespacesAndNewlines)) else { return }
-        let input = GitLabMergeRequestInput(gitLabURL: url, projectPath: projectPath, sourceBranch: sourceBranch, targetBranch: targetBranch, title: mergeTitle, description: mergeDescription)
-        isCreatingMerge = true
-        mergeDiagnostic = nil
-        task?.cancel()
-        generation &+= 1
-        let operationGeneration = generation
-        task = Task { [weak self] in
-            guard let self else { return }
-            do {
-                // Re-run the opened-MR check after the user confirmation. The
-                // preflight shown on screen may be stale by the time POST runs.
-                let latestPreflight = try await mergeClient.preflight(input, token: token)
-                guard case .ready = latestPreflight else {
-                    guard generation == operationGeneration else { return }
-                    preflight = latestPreflight
-                    isCreatingMerge = false
-                    return
-                }
-                let result = try await mergeClient.create(input, token: token)
-                guard generation == operationGeneration else { return }
-                createdMergeRequest = result
-            } catch let error as SourceControlError {
-                guard generation == operationGeneration else { return }
-                mergeDiagnostic = error.diagnostic
-            } catch {
-                guard generation == operationGeneration else { return }
-                mergeDiagnostic = SourceControlError.invalidResponse.diagnostic
-            }
-            if generation == operationGeneration { isCreatingMerge = false }
-        }
-    }
 }
 
 struct IndexSourceControlPage: View {
@@ -637,17 +462,15 @@ private struct SourceControlWorkspaceContent: View {
     @Environment(\.fileInputPanelClient) private var fileInputPanelClient
     @Environment(\.toolToastCenter) private var toastCenter
     @ObservedObject var workspace: SourceControlWorkspaceModel
-    @State private var section = "sync"
-    @State private var showsToken = false
     @State private var repositoryQuery = ""
     @State private var repositoryFilter = "all"
-    @State private var showsUpdateConfirmation = false
-    @State private var showsMergeConfirmation = false
+    /// Shift 范围选择的锚点行。
+    @State private var lastClickedPath: String?
     @State private var showsFailureSheet = false
 
     private var visibleRepositories: [SourceControlRepository] {
         let query = repositoryQuery.trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase
-        return workspace.repositories.filter { repository in
+        let filtered = workspace.repositories.filter { repository in
             let matchesQuery = query.isEmpty
                 || repository.path.localizedLowercase.contains(query)
                 || repository.branch.localizedLowercase.contains(query)
@@ -661,19 +484,27 @@ private struct SourceControlWorkspaceContent: View {
             }
             return matchesQuery && matchesFilter
         }
+        // 扫描流式到达期间保持稳定顺序，结束后按状态优先重排。
+        return workspace.isScanning ? filtered : workspace.sortedForDisplay(filtered)
     }
 
-    /// 可见行整体的勾选状态：false 全空 / true 全选 / nil 部分（三态）。
-    private var visibleSelectionState: Bool? {
-        let visiblePaths = Set(visibleRepositories.map(\.path))
-        guard !visiblePaths.isEmpty else { return false }
+    /// 可见性一次性求值：筛选 + 排序 + 三态勾选每轮渲染只算一遍，
+    /// 供工具栏与列表共用（此前作为多个计算属性被重复求值 4 次）。
+    private struct RepositoryVisibility {
+        let items: [SourceControlRepository]
+        /// false 全空 / true 全选 / nil 部分（三态）。
+        let selectionState: Bool?
+        let selectedVisibleCount: Int
+    }
+
+    private var repositoryVisibility: RepositoryVisibility {
+        let items = visibleRepositories
+        let visiblePaths = Set(items.map(\.path))
         let selectedCount = workspace.selectedPaths.intersection(visiblePaths).count
-        if selectedCount == 0 { return false }
-        return selectedCount == visiblePaths.count ? true : nil
-    }
-
-    private var selectedVisibleCount: Int {
-        workspace.selectedPaths.intersection(Set(visibleRepositories.map(\.path))).count
+        let state: Bool? = visiblePaths.isEmpty
+            ? false
+            : (selectedCount == 0 ? false : (selectedCount == visiblePaths.count ? true : nil))
+        return RepositoryVisibility(items: items, selectionState: state, selectedVisibleCount: selectedCount)
     }
 
     /// 细线进度读数：本次运行已处理 / 目标仓库数。
@@ -683,30 +514,20 @@ private struct SourceControlWorkspaceContent: View {
     }
 
     var body: some View {
-        IndexPage("源码管理", subtitle: "同步本地 Git 仓库，并创建 GitLab Merge Request。", workspaceSemantic: .queryListWorkspace) {
-            IndexSegmentedControl(
-                items: [("sync", "仓库同步"), ("merge", "创建 Merge Request")],
-                selection: $section,
-                density: .regular
-            )
-            if section == "sync" {
-                syncSection
-                    .task { workspace.scanOnAppearIfNeeded() }
-            } else {
-                mergeSection
-            }
+        IndexPage("源码管理", subtitle: "同步本地 Git 仓库的最新代码。", workspaceSemantic: .queryListWorkspace) {
+            syncSection
+                .task { workspace.scanOnAppearIfNeeded() }
         }
-        .alert("确认更新仓库？", isPresented: $showsUpdateConfirmation) {
-            Button("取消", role: .cancel) {}
-            Button("确认更新") { workspace.update() }
-        } message: {
-            Text("将按顺序对所选仓库执行 git pull --ff-only。有未提交改动、没有 upstream 或无法快进的仓库会自动跳过（跳过的仓库可单独强制更新），失败不会影响其余仓库。")
-        }
-        .alert("确认创建 Merge Request？", isPresented: $showsMergeConfirmation) {
-            Button("取消", role: .cancel) {}
-            Button("创建") { workspace.createMergeRequest() }
-        } message: {
-            Text("创建前会再次查询相同源分支和目标分支的 opened MR，避免重复请求。Token 只用于当前请求。")
+        // Esc 取消正在运行的扫描/更新；⌘R 触发扫描。空闲时不拦截按键。
+        .background {
+            Button("") { workspace.cancel() }
+                .keyboardShortcut(.cancelAction)
+                .disabled(!(workspace.isScanning || workspace.isUpdating))
+                .accessibilityHidden(true)
+            Button("") { workspace.scan() }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(!workspace.canScan)
+                .accessibilityHidden(true)
         }
         .sheet(isPresented: $showsFailureSheet) {
             SourceControlFailureSummarySheet(failures: workspace.failureSummary) {
@@ -742,29 +563,7 @@ private struct SourceControlWorkspaceContent: View {
     private var scopePanel: some View {
         IndexPanel("同步范围") {
             VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    IndexTextInput(
-                        placeholder: "工作区目录，例如 ~/work",
-                        text: Binding(get: { workspace.path }, set: workspace.setPath),
-                        onSubmit: { workspace.scan() }
-                    )
-                    Button { chooseDirectory() } label: { Label("选择", systemImage: "folder") }
-                        .buttonStyle(IndexSmallButtonStyle())
-                        .disabled(workspace.isScanning || workspace.isUpdating)
-                    Button { workspace.scan() } label: {
-                        IndexProgressMotionLabel(
-                            title: workspace.isScanning ? "扫描中…" : "扫描仓库",
-                            systemImage: "arrow.clockwise",
-                            isProcessing: workspace.isScanning,
-                            id: workspace.isScanning
-                        )
-                    }
-                    .buttonStyle(IndexButtonStyle())
-                    .disabled(!workspace.canScan)
-                    if workspace.isScanning || workspace.isUpdating {
-                        Button("取消") { workspace.cancel() }.buttonStyle(IndexSmallButtonStyle())
-                    }
-                }
+                directoryField
                 Text("扫描该目录（含子目录）下的所有 Git 仓库。目录会被记住，下次打开时自动恢复。")
                     .font(ToolTypography.caption)
                     .foregroundStyle(ToolTheme.textTertiary)
@@ -772,11 +571,50 @@ private struct SourceControlWorkspaceContent: View {
         } accessory: { Text("只执行 git pull --ff-only").font(ToolTypography.caption).foregroundStyle(ToolTheme.textSecondary) }
     }
 
+    /// 目录栏：路径输入 + 尾部内嵌的目录选择与扫描/取消图标按钮，
+    /// 与 IndexSearchInput 的清空按钮同一形态，避免扫描动作独占一个按钮位。
+    private var directoryField: some View {
+        let isBusy = workspace.isScanning || workspace.isUpdating
+        return IndexTextInput(
+            placeholder: "工作区目录，例如 ~/work",
+            text: Binding(get: { workspace.path }, set: workspace.setPath),
+            trailingInset: 80,
+            onSubmit: { workspace.scan() }
+        )
+        .overlay(alignment: .trailing) {
+            HStack(spacing: 2) {
+                IndexIconButton(
+                    systemImage: "folder",
+                    help: "选择目录",
+                    action: chooseDirectory
+                )
+                .frame(width: 32, height: 32)
+                .disabled(isBusy)
+                IndexIconButton(
+                    systemImage: isBusy ? "xmark" : "arrow.clockwise",
+                    help: isBusy ? "取消" : "扫描仓库",
+                    action: { isBusy ? workspace.cancel() : workspace.scan() }
+                )
+                .frame(width: 32, height: 32)
+                .toolMotionIconSwap(id: isBusy)
+                .disabled(!isBusy && !workspace.canScan)
+            }
+            .padding(.trailing, 5)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
     private var repositoryPanel: some View {
         IndexPanel("仓库（\(workspace.repositories.count)）") {
             if workspace.repositories.isEmpty {
                 if workspace.isScanning {
                     IndexProgressLabel(message: "正在扫描工作目录…", layout: .centered)
+                } else if workspace.lastScanFoundNothing {
+                    IndexEmptyState(
+                        title: "该目录下没有 Git 仓库",
+                        systemImage: "shippingbox",
+                        message: "换个目录，或确认子目录中包含 Git 仓库后重新扫描"
+                    )
                 } else {
                     IndexEmptyState(
                         title: "尚未扫描仓库",
@@ -785,42 +623,60 @@ private struct SourceControlWorkspaceContent: View {
                     )
                 }
             } else {
+                let visibility = repositoryVisibility
                 VStack(spacing: 6) {
-                    repositoryToolbar
+                    repositoryToolbar(visibility)
                     if let summary = runSummary {
                         runSummaryBar(summary)
                     }
+                    // 进度读数紧跟各自的细线进度条；列表占据剩余空间，
+                    // 不再有任何元素排在 ScrollView 之后被推到面板底部。
                     if workspace.isScanning, let progress = workspace.scanProgress, let total = progress.readTotalCount {
-                        IndexProgressHairline(fraction: Double(progress.readCompletedCount) / Double(max(total, 1)))
-                        Text("正在读取仓库状态 \(progress.readCompletedCount) / \(total)…")
-                            .font(ToolTypography.caption)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(spacing: 4) {
+                            IndexProgressHairline(fraction: Double(progress.readCompletedCount) / Double(max(total, 1)))
+                            Text("正在读取仓库状态 \(progress.readCompletedCount) / \(total)…")
+                                .font(ToolTypography.caption)
+                                .foregroundStyle(ToolTheme.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     } else if workspace.isScanning {
-                        IndexProgressHairline(isIndeterminate: true)
-                        Text("正在扫描目录…已发现 \(workspace.scanProgress?.discoveredCount ?? 0) 个仓库")
-                            .font(ToolTypography.caption)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    if workspace.isUpdating {
-                        IndexProgressHairline(fraction: updateFraction)
-                    }
-                    ScrollView {
-                        VStack(spacing: 6) {
-                            ForEach(visibleRepositories) { repository in
-                                repositoryRow(repository)
-                            }
+                        VStack(spacing: 4) {
+                            IndexProgressHairline(isIndeterminate: true)
+                            Text("正在扫描目录…已发现 \(workspace.scanProgress?.discoveredCount ?? 0) 个仓库")
+                                .font(ToolTypography.caption)
+                                .foregroundStyle(ToolTheme.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
                     if workspace.isUpdating {
-                        Text("已处理 \(workspace.updateRunCompleted) / \(workspace.updateRunTotal) 个仓库")
-                            .font(ToolTypography.caption)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(spacing: 4) {
+                            IndexProgressHairline(fraction: updateFraction)
+                            Text("已处理 \(workspace.updateRunCompleted) / \(workspace.updateRunTotal) 个仓库")
+                                .font(ToolTypography.caption)
+                                .foregroundStyle(ToolTheme.textSecondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
-                    if visibleRepositories.isEmpty {
-                        IndexEmptyState(title: "没有匹配的仓库", systemImage: "line.3.horizontal.decrease.circle", message: "试试清空搜索或切换筛选条件")
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            // 懒加载：几百仓的工作区只布局可见行。
+                            LazyVStack(spacing: 6) {
+                                ForEach(visibility.items) { repository in
+                                    repositoryRow(repository)
+                                        .id(repository.path)
+                                }
+                                if visibility.items.isEmpty {
+                                    IndexEmptyState(title: "没有匹配的仓库", systemImage: "line.3.horizontal.decrease.circle", message: "试试清空搜索或切换筛选条件")
+                                        .frame(maxWidth: .infinity)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                        }
+                        .onChange(of: workspace.activeUpdatePath) { activePath in
+                            // 串行更新时把正在拉取的行滚入视野。
+                            guard let activePath else { return }
+                            withAnimation { proxy.scrollTo(activePath, anchor: .top) }
+                        }
                     }
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
@@ -859,7 +715,6 @@ private struct SourceControlWorkspaceContent: View {
                 Button("强制更新跳过项") { workspace.forceUpdateSkipped() }
                     .buttonStyle(IndexSmallButtonStyle())
                     .disabled(workspace.isUpdating || workspace.isScanning)
-                    .help("跳过的仓库直接尝试 git pull --ff-only，改动会被覆盖或无法快进时 Git 仍会拒绝")
             }
             if summary.failedCount > 0 {
                 Button("重试失败项（\(summary.failedCount)）") { workspace.retryFailures() }
@@ -875,37 +730,49 @@ private struct SourceControlWorkspaceContent: View {
         )
     }
 
-    private var repositoryToolbar: some View {
-        HStack(spacing: 8) {
-            SourceControlSelectAllCheckbox(
-                state: visibleSelectionState,
-                label: "已选 \(selectedVisibleCount)/\(visibleRepositories.count)"
-            ) {
-                let visiblePaths = Set(visibleRepositories.map(\.path))
-                workspace.setVisibleSelection(visiblePaths, selected: visibleSelectionState != true)
+    private func repositoryToolbar(_ visibility: RepositoryVisibility) -> some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 8) {
+                SourceControlSelectAllCheckbox(
+                    state: visibility.selectionState,
+                    label: "已选 \(visibility.selectedVisibleCount)/\(visibility.items.count)"
+                ) {
+                    let visiblePaths = Set(visibility.items.map(\.path))
+                    workspace.setVisibleSelection(visiblePaths, selected: visibility.selectionState != true)
+                }
+                .disabled(workspace.isUpdating)
+                IndexSearchInput(placeholder: "搜索仓库或分支", text: $repositoryQuery, height: 30)
+                    .frame(maxWidth: 220)
+                Spacer()
+                Button { workspace.update(visible: visibility.items) } label: {
+                    IndexProgressMotionLabel(
+                        title: workspace.isUpdating
+                            ? "更新中 \(workspace.updateRunCompleted)/\(workspace.updateRunTotal)…"
+                            : "更新所选（\(visibility.selectedVisibleCount)）",
+                        systemImage: "arrow.down.circle",
+                        isProcessing: workspace.isUpdating,
+                        id: workspace.isUpdating
+                    )
+                }
+                .buttonStyle(IndexButtonStyle(primary: true))
+                .disabled(!workspace.canUpdate || visibility.selectedVisibleCount == 0)
             }
-            .disabled(workspace.isUpdating)
-            IndexSearchInput(placeholder: "搜索仓库或分支", text: $repositoryQuery, height: 30)
-                .frame(maxWidth: 220)
-            IndexOptionMenu(
-                items: [("all", "全部"), ("update", "待更新"), ("latest", "已最新"), ("attention", "需处理")],
-                selection: $repositoryFilter,
-                title: "筛选"
-            )
-            Spacer()
-            Button { showsUpdateConfirmation = true } label: {
-                IndexProgressMotionLabel(
-                    title: workspace.isUpdating
-                        ? "更新中 \(workspace.updateRunCompleted)/\(workspace.updateRunTotal)…"
-                        : "更新所选（\(workspace.selectedPaths.count)）",
-                    systemImage: "arrow.down.circle",
-                    isProcessing: workspace.isUpdating,
-                    id: workspace.isUpdating
-                )
-            }
-            .buttonStyle(IndexButtonStyle(primary: true))
-            .disabled(!workspace.canUpdate)
+            // 筛选一键可达且带实时计数：待更新/需处理的规模一眼可见。
+            IndexSegmentedControl(items: filterItems, selection: $repositoryFilter, density: .compact)
         }
+    }
+
+    private var filterItems: [(String, String)] {
+        let repositories = workspace.repositories
+        let pending = repositories.filter { $0.isFastForwardCandidate && $0.behind > 0 }.count
+        let attention = repositories.filter { !$0.isFastForwardCandidate }.count
+        let latest = repositories.count - pending - attention
+        return [
+            ("all", "全部 \(repositories.count)"),
+            ("update", "待更新 \(pending)"),
+            ("attention", "需处理 \(attention)"),
+            ("latest", "已最新 \(latest)")
+        ]
     }
 
     private func repositoryRow(_ repository: SourceControlRepository) -> some View {
@@ -916,7 +783,7 @@ private struct SourceControlWorkspaceContent: View {
         let hasFailure = failedResult?.outcome.isFailure == true
         return HStack(spacing: 8) {
             Button {
-                workspace.toggleSelection(repository)
+                handleRowClick(repository)
             } label: {
                 HStack(spacing: 10) {
                     SourceControlRowCheckbox(isChecked: isSelected)
@@ -962,7 +829,6 @@ private struct SourceControlWorkspaceContent: View {
                     Spacer()
                     if isActive {
                         IndexProgressSpinner()
-                            .help("正在拉取")
                     }
                     if repository.behind > 0 {
                         IndexBadge("落后 \(repository.behind)", systemImage: "arrow.down", tone: .accent)
@@ -984,7 +850,9 @@ private struct SourceControlWorkspaceContent: View {
             .buttonStyle(IndexBareButtonStyle())
             .disabled(workspace.isUpdating)
             .hoverHighlight(enabled: !isSelected && !workspace.isUpdating)
-            .help("切换选中：\(URL(fileURLWithPath: repository.path).lastPathComponent)")
+            // 双击整行 = 在 Finder 中定位（单次单击仍会触发两次切换，净效果不变）。
+            .simultaneousGesture(TapGesture(count: 2).onEnded { revealInFinder(repository) })
+            .contextMenu { rowContextMenu(repository) }
             if let failedResult, failedResult.outcome.isFailure {
                 Button("重试") { workspace.retry(failedResult.repository) }
                     .buttonStyle(IndexSmallButtonStyle())
@@ -993,35 +861,91 @@ private struct SourceControlWorkspaceContent: View {
                 Button("强制更新") { workspace.forceUpdate(skipped.repository) }
                     .buttonStyle(IndexSmallButtonStyle())
                     .disabled(workspace.isUpdating || workspace.isScanning)
-                    .help("跳过干净预检直接尝试 git pull --ff-only；本地改动会被覆盖或无法快进时 Git 仍会拒绝")
             }
         }
     }
 
-    private func discoveredProjectRow(_ project: RemoteRepositorySummary) -> some View {
-        let isSelected = workspace.selectedDiscoveredID == project.id
-        return Button { workspace.selectDiscoveredProject(project) } label: {
-            HStack(spacing: 9) {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? ToolTheme.accent : ToolTheme.textTertiary)
-                    .font(.system(size: ToolMetrics.IconSize.large))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(project.name).font(ToolTypography.bodyMedium).lineLimit(1)
-                    Text(project.pathWithNamespace).font(ToolTypography.caption).foregroundStyle(ToolTheme.textTertiary).lineLimit(1)
-                }
-                Spacer()
-                if project.service == .github {
-                    IndexBadge("GitHub", tone: .neutral)
-                }
-                if let branch = project.defaultBranch, !branch.isEmpty {
-                    IndexBadge(branch, tone: .neutral)
-                }
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .hoverHighlight()
+    /// 单击切换选中；Shift 单击以锚点行为界做范围选择（Finder/备忘录惯例）。
+    private func handleRowClick(_ repository: SourceControlRepository) {
+        defer { lastClickedPath = repository.path }
+        let shiftPressed = NSEvent.modifierFlags
+            .intersection(.deviceIndependentFlagsMask)
+            .contains(.shift)
+        guard shiftPressed, let anchor = lastClickedPath,
+              let anchorIndex = visibleRepositories.firstIndex(where: { $0.path == anchor }),
+              let currentIndex = visibleRepositories.firstIndex(where: { $0.path == repository.path })
+        else {
+            workspace.toggleSelection(repository)
+            return
         }
-        .buttonStyle(IndexBareButtonStyle())
+        let range = visibleRepositories[min(anchorIndex, currentIndex)...max(anchorIndex, currentIndex)].map(\.path)
+        // 范围的目标状态跟随被点击行：未选中 → 选中整段，已选中 → 取消整段。
+        let targetSelected = !workspace.selectedPaths.contains(repository.path)
+        workspace.setVisibleSelection(Set(range), selected: targetSelected)
+    }
+
+    private func revealInFinder(_ repository: SourceControlRepository) {
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: repository.path)])
+    }
+
+    private func copyRepositoryPath(_ repository: SourceControlRepository) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(repository.path, forType: .string)
+        toastCenter?.show("已拷贝仓库路径", tone: .info)
+    }
+
+    /// 远端地址转可浏览的网页地址（HTTPS/HTTP 原样、scp-like 与 ssh 转 https）。
+    private func remoteWebURL(_ repository: SourceControlRepository) -> URL? {
+        guard let remote = repository.remote, !remote.isEmpty else { return nil }
+        if let components = URLComponents(string: remote),
+           let scheme = components.scheme?.lowercased(),
+           scheme == "https" || scheme == "http",
+           components.host != nil {
+            var web = components
+            web.query = nil
+            web.fragment = nil
+            var path = web.path
+            if path.hasSuffix(".git") { path.removeLast(4) }
+            web.path = path
+            return web.url
+        }
+        guard let at = remote.firstIndex(of: "@") else { return nil }
+        let rest = String(remote[remote.index(after: at)...])
+        var host: String?
+        var path: String?
+        if !remote.contains("://"), let colon = rest.firstIndex(of: ":") {
+            host = String(rest[..<colon])
+            path = String(rest[rest.index(after: colon)...])
+        } else if let components = URLComponents(string: remote), components.scheme == "ssh", let parsedHost = components.host {
+            host = parsedHost
+            path = components.path
+        }
+        guard let host, var path else { return nil }
+        path = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if path.hasSuffix(".git") { path.removeLast(4) }
+        guard !path.isEmpty else { return nil }
+        return URL(string: "https://\(host)/\(path)")
+    }
+
+    @ViewBuilder
+    private func rowContextMenu(_ repository: SourceControlRepository) -> some View {
+        Button { revealInFinder(repository) } label: { Label("在 Finder 中显示", systemImage: "folder") }
+        Button { copyRepositoryPath(repository) } label: { Label("拷贝仓库路径", systemImage: "doc.on.clipboard") }
+        if remoteWebURL(repository) != nil {
+            Button { openRemoteHomepage(repository) } label: { Label("打开远端主页", systemImage: "globe") }
+        }
+        Divider()
+        Button { workspace.retry(repository) } label: { Label("更新此仓库", systemImage: "arrow.down.circle") }
+            .disabled(workspace.isScanning || workspace.isUpdating)
+        if !repository.isFastForwardCandidate {
+            Button { workspace.forceUpdate(repository) } label: { Label("强制更新此仓库", systemImage: "exclamationmark.triangle") }
+                .disabled(workspace.isScanning || workspace.isUpdating)
+        }
+    }
+
+    private func openRemoteHomepage(_ repository: SourceControlRepository) {
+        guard let url = remoteWebURL(repository) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     /// 行尾「强制更新」入口只挂在被跳过的行上（结果类型驱动，不解析文案）。
@@ -1087,130 +1011,6 @@ private struct SourceControlWorkspaceContent: View {
         return repository.behind > 0 ? .accent : .success
     }
 
-    // MARK: - Merge
-
-    private var mergeSection: some View {
-        // .fill 布局无外层滚动，merge 段面板多于视口时自行滚动。
-        ScrollView {
-            VStack(spacing: ToolMetrics.Spacing.md) {
-                connectionSection
-                mergeRequestForm
-            }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-        }
-    }
-
-    // ① 地址 + Token → 回车 → 扫描有权限的项目（细线加载动画 + 可点选列表）
-    private var connectionSection: some View {
-        IndexPanel("连接 Git 服务") {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    IndexTextInput(
-                        placeholder: "Git 服务地址（GitLab / GitHub）",
-                        text: $workspace.gitLabURL,
-                        onSubmit: { workspace.discoverProjects() }
-                    )
-                    Button { workspace.discoverProjects() } label: {
-                        IndexProgressMotionLabel(
-                            title: workspace.isDiscovering ? "扫描中…" : "查找项目",
-                            systemImage: "magnifyingglass",
-                            isProcessing: workspace.isDiscovering,
-                            id: workspace.isDiscovering
-                        )
-                    }
-                    .buttonStyle(IndexButtonStyle())
-                    .disabled(!workspace.canDiscover)
-                }
-                IndexSecureInput(
-                    placeholder: "访问 Token（仅保留在当前页面）",
-                    text: $workspace.token,
-                    showsSecret: $showsToken,
-                    secretNoun: "Token"
-                )
-                if !workspace.token.isEmpty {
-                    HStack {
-                        Spacer()
-                        Button("清除 Token") { workspace.token = ""; showsToken = false }
-                            .buttonStyle(IndexSmallButtonStyle())
-                    }
-                }
-                if workspace.isDiscovering {
-                    IndexProgressHairline(isIndeterminate: true)
-                    Text("正在扫描有权限的项目…")
-                        .font(ToolTypography.caption)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                } else if !workspace.discoveredProjects.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(discoverySummaryTitle)
-                            .font(ToolTypography.caption)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                        ScrollView {
-                            VStack(spacing: 4) {
-                                ForEach(workspace.discoveredProjects) { project in
-                                    discoveredProjectRow(project)
-                                }
-                            }
-                        }
-                        .frame(maxHeight: discoveryListHeight)
-                    }
-                }
-            }
-        } accessory: {
-            Text("填好地址和 Token 后回车").font(ToolTypography.caption).foregroundStyle(ToolTheme.textSecondary)
-        }
-        .indexWorkspaceDiagnostic(workspace.discoveryDiagnostic?.summary)
-    }
-
-    private var discoverySummaryTitle: String {
-        let service = workspace.discoveredService == .github ? "GitHub" : "GitLab"
-        return "找到 \(workspace.discoveredProjects.count) 个有权限的项目（\(service)），点击选择："
-    }
-
-    /// 最多露出约 5 行，其余滚动查看。
-    private var discoveryListHeight: CGFloat {
-        CGFloat(min(max(workspace.discoveredProjects.count, 1), 5)) * 48 + 4
-    }
-
-    // ② MR 表单：项目路径（可由发现预填）、分支、标题、预检与创建
-    private var mergeRequestForm: some View {
-        IndexPanel("Merge Request") {
-            VStack(alignment: .leading, spacing: 10) {
-                if !workspace.repositories.isEmpty {
-                    IndexOptionMenu(
-                        items: workspace.repositories.map { ($0.path, URL(fileURLWithPath: $0.path).lastPathComponent) },
-                        selection: Binding(get: { workspace.mergeRepositoryPath }, set: workspace.selectMergeRepository),
-                        title: "本地仓库"
-                    )
-                }
-                IndexTextInput(placeholder: "项目路径，例如 group/project（可由上方发现预填）", text: $workspace.projectPath)
-                HStack(spacing: 8) {
-                    IndexTextInput(placeholder: "源分支", text: $workspace.sourceBranch)
-                    IndexOptionMenu(items: workspace.targetBranchOptions.map { ($0, $0) }, selection: $workspace.targetBranch, title: "目标分支")
-                }
-                IndexTextInput(placeholder: "标题", text: $workspace.mergeTitle)
-                IndexTextInput(placeholder: "描述（可选）", text: $workspace.mergeDescription, height: 64)
-                HStack(spacing: 8) {
-                    Button { workspace.checkMergeRequest() } label: { IndexProgressMotionLabel(title: workspace.isCheckingMerge ? "预检中…" : "预检", systemImage: "checkmark.shield", isProcessing: workspace.isCheckingMerge, id: workspace.isCheckingMerge) }.buttonStyle(IndexSmallButtonStyle()).disabled(workspace.token.isEmpty)
-                    Button { showsMergeConfirmation = true } label: { IndexProgressMotionLabel(title: workspace.isCreatingMerge ? "创建中…" : "创建 Merge Request", systemImage: "arrow.up.right.square", isProcessing: workspace.isCreatingMerge, id: workspace.isCreatingMerge) }.buttonStyle(IndexButtonStyle()).disabled(workspace.isCreatingMerge || workspace.preflight != .ready)
-                    if workspace.isCheckingMerge || workspace.isCreatingMerge {
-                        Button("取消") { workspace.cancel() }.buttonStyle(IndexSmallButtonStyle())
-                    }
-                }
-                if case let .duplicate(existing) = workspace.preflight {
-                    Text("已存在开放请求 !\(existing.iid)，请打开现有请求或修改分支。")
-                        .font(ToolTypography.caption).foregroundStyle(ToolTheme.warning)
-                }
-                if let created = workspace.createdMergeRequest {
-                    Text("已创建 !\(created.iid)").font(ToolTypography.bodyMedium).foregroundStyle(ToolTheme.success)
-                }
-            }
-        }
-        .indexWorkspaceDiagnostic(workspace.mergeDiagnostic?.summary)
-        .onChange(of: [workspace.gitLabURL, workspace.projectPath, workspace.sourceBranch, workspace.targetBranch, workspace.mergeTitle, workspace.token, workspace.mergeRepositoryPath]) { _ in
-            workspace.invalidateMergePreflight()
-        }
-    }
-
     private func chooseDirectory() {
         Task { @MainActor in
             do {
@@ -1244,7 +1044,6 @@ private struct SourceControlSelectAllCheckbox: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(IndexBareButtonStyle())
-        .help("切换当前列表的全选状态")
         .accessibilityLabel("全选当前列表")
         .accessibilityValue(state == true ? "已全选" : (state == false ? "未选择" : "部分选择"))
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: state)

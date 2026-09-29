@@ -1,16 +1,15 @@
 import Foundation
 
+/// 执行器固定允许的 Git 命令白名单（不经过 shell）。扫描期每仓只发
+/// statusV2/remote/branches/defaultBranch 四条；更新期再加 repositoryRoot
+/// 与 pullFastForward。历史上逐条查询 branch/revision/upstream/divergence
+/// 的形态已由单次 porcelain v2 合并，白名单随之一并收缩。
 public enum GitCommandKind: Sendable, Equatable, Hashable {
     case repositoryRoot
-    case branch
-    case revision
     case remote
-    case upstream
-    case remoteRevision
     case branches
     case defaultBranch
-    case status
-    case divergence
+    case statusV2
     case pullFastForward
 }
 
@@ -117,18 +116,10 @@ private extension GitCommandRequest {
         let common = ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "pull.rebase=false", "-c", "rebase.autoStash=false", "-C", path]
         switch kind {
         case .repositoryRoot: return common + ["rev-parse", "--show-toplevel"]
-        case .branch: return common + ["rev-parse", "--abbrev-ref", "HEAD"]
-        case .revision: return common + ["rev-parse", "HEAD"]
         case .remote: return common + ["remote", "-v"]
-        case .upstream: return common + ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]
-        case .remoteRevision:
-            let parts = (argument ?? "").split(separator: "/", maxSplits: 1).map(String.init)
-            let remote = parts.first ?? "origin"; let branch = parts.count > 1 ? parts[1] : (argument ?? "")
-            return common + ["ls-remote", remote, "refs/heads/\(branch)"]
         case .branches: return common + ["for-each-ref", "--format=%(refname:short)", "refs/heads", "refs/remotes"]
         case .defaultBranch: return common + ["symbolic-ref", "--short", "refs/remotes/\(argument ?? "origin")/HEAD"]
-        case .status: return common + ["status", "--porcelain=v1", "--untracked-files=normal"]
-        case .divergence: return common + ["rev-list", "--left-right", "--count", "@{upstream}...HEAD"]
+        case .statusV2: return common + ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"]
         case .pullFastForward: return common + ["pull", "--ff-only"]
         }
     }
