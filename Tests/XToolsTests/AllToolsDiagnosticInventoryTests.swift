@@ -33,8 +33,8 @@ struct AllToolsDiagnosticInventoryTests {
         let actual = registeredGroups.mapValues { $0[0].categoryID.rawValue }
         let expected = inventoryGroups.mapValues { $0[0].category }
 
-        #expect(actual.count == 43)
-        #expect(Self.inventory.count == 43)
+        #expect(actual.count == 41)
+        #expect(Self.inventory.count == 41)
         #expect(actual == expected)
     }
 
@@ -79,9 +79,7 @@ struct AllToolsDiagnosticInventoryTests {
         entry("hash-text", "crypto", .none, "Crypto/HashTextPage.swift", "任意文本和受支持算法都能产生摘要。"),
         entry("text-encryption", "crypto", .securityValidation, "Crypto/TextEncryptionPage.swift"),
         entry("string-obfuscator", "crypto", .none, "Crypto/StringObfuscatorPage.swift", "任意文本和受控参数都能产生确定性遮蔽结果。"),
-        entry("token-generator", "crypto", .securityValidation, "Crypto/TokenGeneratorPage.swift"),
-        entry("uuid-generator", "crypto", .none, "Crypto/UUIDGeneratorPage.swift", "受支持数量范围由控件约束，生成过程无用户输入解析错误。"),
-        entry("password-generator", "crypto", .securityValidation, "Crypto/PasswordGeneratorPage.swift"),
+        entry("generator", "crypto", .securityValidation, "Crypto/GeneratorHubPage.swift"),
 
         entry("formatter", "development", .errorAndWarning, "Development/FormatterHubPage.swift"),
         entry("diff", "development", .errorAndWarning, "Development/DiffHubPage.swift"),

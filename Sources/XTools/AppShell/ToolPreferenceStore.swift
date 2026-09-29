@@ -425,6 +425,12 @@ enum TextDevelopmentToolPreferenceKeys {
         default: "json",
         allowedValues: ["json", "text"]
     )
+    /// 「生成器」Hub 上次使用的分段（token/uuid/password），重启后恢复。
+    static let generatorSegment = ToolPreferenceKey<String>.string(
+        "tools.generator.segment.v1",
+        default: "token",
+        allowedValues: ["token", "uuid", "password"]
+    )
     static let integerBase = ToolPreferenceKey<String>.string(
         "tools.integerBase.inputBase.v1",
         default: "10",

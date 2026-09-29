@@ -51,9 +51,7 @@ struct ToolRoutingSourceTests {
             "Hash 文本",
             "文本加密",
             "字符串遮蔽",
-            "Token 生成器",
-            "UUID 生成器",
-            "密码生成器"
+            "生成器"
         ])
         #expect(try #require(groups.first { $0.category.id == .development }?.tools).map(\.title) == [
             "格式化",

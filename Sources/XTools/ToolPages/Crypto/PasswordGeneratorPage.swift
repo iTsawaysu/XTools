@@ -90,7 +90,7 @@ final class PasswordGeneratorToolWorkspaceModel: ObservableObject {
     }
 }
 
-struct IndexPasswordGeneratorPage: View {
+struct IndexPasswordGeneratorSegment: View {
     var body: some View {
         ToolWorkspaceHost(key: PasswordGeneratorToolWorkspaceModel.key) { workspace, _ in
             IndexPasswordGeneratorWorkspaceContent(workspace: workspace)
@@ -105,19 +105,17 @@ private struct IndexPasswordGeneratorWorkspaceContent: View {
     @State private var motionGeneration = 0
 
     var body: some View {
-        IndexPage("密码生成器", subtitle: "生成网站兼容的随机密码，可设置长度与字符类别。", workspaceSemantic: .queryListWorkspace) {
-            VStack(spacing: ToolMetrics.Spacing.md) {
-                parameterCard
+        VStack(spacing: ToolMetrics.Spacing.md) {
+            parameterCard
 
-                IndexGeneratedValueRowList(
-                    rows: passwordResultRows,
-                    emptyText: workspace.error ?? resultEmptyText,
-                    motionGeneration: motionGeneration,
-                    wrapsValues: true
-                )
-                .indexSurface(.card, fill: ToolTheme.panelBackground)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            IndexGeneratedValueRowList(
+                rows: passwordResultRows,
+                emptyText: workspace.error ?? resultEmptyText,
+                motionGeneration: motionGeneration,
+                wrapsValues: true
+            )
+            .indexSurface(.card, fill: ToolTheme.panelBackground)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
             if !workspace.hasAttemptedGeneration { generate() }

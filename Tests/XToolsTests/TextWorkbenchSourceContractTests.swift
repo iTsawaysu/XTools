@@ -145,6 +145,25 @@ struct TextWorkbenchSourceContractTests {
         }
     }
 
+    @Test func generatorHubShellCarriesSegmentedGeneratorWorkbenches() throws {
+        let hub = try readSource("Sources/XTools/ToolPages/Crypto/GeneratorHubPage.swift")
+        let token = try readSource("Sources/XTools/ToolPages/Crypto/TokenGeneratorPage.swift")
+        let uuid = try readSource("Sources/XTools/ToolPages/Crypto/UUIDGeneratorPage.swift")
+        let password = try readSource("Sources/XTools/ToolPages/Crypto/PasswordGeneratorPage.swift")
+
+        // Token/UUID/密码生成器合并为单入口「生成器」后，IndexPage 页面壳统一
+        // 上移到 Hub；三分段只保留各自的生成工作台。
+        appearsBefore(hub, "IndexPage(", "IndexSegmentedControl(", "Generator hub body must open with the shared page shell before the segment control")
+        contains(hub, "IndexTokenGeneratorSegment()", "Generator hub must mount the token segment")
+        contains(hub, "IndexUUIDGeneratorSegment()", "Generator hub must mount the UUID segment")
+        contains(hub, "IndexPasswordGeneratorSegment()", "Generator hub must mount the password segment")
+        contains(hub, "IndexPage(\"生成器\", subtitle: workspace.segment.subtitle, workspaceSemantic: .queryListWorkspace)", "Generator hub must let the semantic resolve the query-list workspace page shell")
+        for segment in [token, uuid, password] {
+            contains(segment, "IndexGeneratedValueRowList(", "Generator segments must keep delegating their results to the shared value row list")
+            doesNotContain(segment, "IndexPage(", "Generator segments must not nest a second page shell inside the hub")
+        }
+    }
+
     @Test func urlCoderReusesAutomaticConverterShell() throws {
         let source = try readSource("Sources/XTools/ToolPages/Converter/URLCoderPage.swift")
 

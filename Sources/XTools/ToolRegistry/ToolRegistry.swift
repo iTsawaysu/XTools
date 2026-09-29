@@ -267,31 +267,13 @@ extension ToolRegistry {
                 IndexStringObfuscatorPage()
             },
             RegisteredTool(
-                id: "token-generator",
-                title: "Token 生成器",
+                id: "generator",
+                title: "生成器",
                 categoryID: .crypto,
                 systemImage: "shuffle",
-                keywords: ["token", "random", "password", "secret", "随机"]
+                keywords: ["token", "uuid", "password", "random", "secret", "generate", "guid", "unique", "identifier", "随机", "生成", "密码", "强度"]
             ) {
-                IndexTokenPage()
-            },
-            RegisteredTool(
-                id: "uuid-generator",
-                title: "UUID 生成器",
-                categoryID: .crypto,
-                systemImage: "barcode",
-                keywords: ["uuid", "guid", "unique", "identifier"]
-            ) {
-                IndexUUIDPage()
-            },
-            RegisteredTool(
-                id: "password-generator",
-                title: "密码生成器",
-                categoryID: .crypto,
-                systemImage: "lock.rectangle",
-                keywords: ["password", "random", "generate", "密码", "生成", "强度"]
-            ) {
-                IndexPasswordGeneratorPage()
+                IndexGeneratorHubPage()
             },
 
             // MARK: - 开发

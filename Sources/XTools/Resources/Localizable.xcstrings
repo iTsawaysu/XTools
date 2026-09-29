@@ -2239,6 +2239,9 @@
     "生成、解析并执行有限的本地 JWT 检查，所有处理均在本地完成。" : {
       "extractionState" : "manual"
     },
+    "生成器" : {
+      "extractionState" : "manual"
+    },
     "生成密码（⌘↩）" : {
       "extractionState" : "manual"
     },

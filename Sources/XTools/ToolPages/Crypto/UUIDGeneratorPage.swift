@@ -42,7 +42,7 @@ final class UUIDGeneratorToolWorkspaceModel: ObservableObject {
     }
 }
 
-struct IndexUUIDPage: View {
+struct IndexUUIDGeneratorSegment: View {
     var body: some View {
         ToolWorkspaceHost(key: UUIDGeneratorToolWorkspaceModel.key) { workspace, _ in
             IndexUUIDWorkspaceContent(workspace: workspace)
@@ -68,18 +68,16 @@ private struct IndexUUIDWorkspaceContent: View {
     }()
 
     var body: some View {
-        IndexPage("UUID 生成器", subtitle: "批量生成 UUID v4 或按时间排序的 UUID v7，支持单个复制与全部复制。", workspaceSemantic: .queryListWorkspace) {
-            VStack(spacing: ToolMetrics.Spacing.md) {
-                parameterBar
+        VStack(spacing: ToolMetrics.Spacing.md) {
+            parameterBar
 
-                IndexGeneratedValueRowList(
-                    rows: resultRows,
-                    emptyText: IndexEmptyStateCopy.noResults,
-                    motionGeneration: motionGeneration
-                )
-                .indexSurface(.card, fill: ToolTheme.panelBackground)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            IndexGeneratedValueRowList(
+                rows: resultRows,
+                emptyText: IndexEmptyStateCopy.noResults,
+                motionGeneration: motionGeneration
+            )
+            .indexSurface(.card, fill: ToolTheme.panelBackground)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
             if workspace.values.isEmpty {

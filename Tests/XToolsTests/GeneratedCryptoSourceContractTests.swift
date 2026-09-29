@@ -8,9 +8,10 @@ struct GeneratedCryptoSourceContractTests {
         // The whole generator family graduated to the prototype v3 layout:
         // one wrapping parameter card (recipe + facts + 全部复制/生成 ⌘↩)
         // above the shared value row list under the query-list shell.
+        let hub = try readSource("Sources/XTools/ToolPages/Crypto/GeneratorHubPage.swift")
+        contains(hub, "workspaceSemantic: .queryListWorkspace", "The generator hub must pin parameters above an internally scrolling value list for all three segments")
         for path in ["TokenGeneratorPage.swift", "PasswordGeneratorPage.swift"] {
             let source = try readSource("Sources/XTools/ToolPages/Crypto/\(path)")
-            contains(source, "workspaceSemantic: .queryListWorkspace", "\(path) must pin parameters above an internally scrolling value list")
             contains(source, "IndexGeneratedValueRowList(", "\(path) results must use the shared value row list")
             contains(source, "wrapsValues: true", "\(path) values are long and must wrap instead of truncating")
             contains(source, "IndexStepperInput(value: $workspace.quantity, range: 1...20)", "\(path) quantity must use the joined prototype stepper")
@@ -56,23 +57,23 @@ struct GeneratedCryptoSourceContractTests {
 
     @Test func uuidGeneratorUsesPrototypeParameterRowAndValueRows() throws {
         let source = try readSource("Sources/XTools/ToolPages/Crypto/UUIDGeneratorPage.swift")
+        let hub = try readSource("Sources/XTools/ToolPages/Crypto/GeneratorHubPage.swift")
         let generator = try readSource("Sources/XToolsCore/Crypto/UUIDGenerator.swift")
         let emptyStates = try readSource("Sources/XTools/Shared/Components/IndexEmptyState.swift")
         let rowList = try readSource("Sources/XTools/ToolPages/Workbench/Diagnostics/IndexGeneratedValueRowList.swift")
         let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexStepperInput.swift")
 
         doesNotContain(source, "Stepper(\"", "UUID generator must not use the native Stepper")
-        contains(source, "workspaceSemantic: .queryListWorkspace", "UUID must pin parameters above an internally scrolling value list")
         contains(source, "IndexStepperInput(value: $workspace.quantity, range: Self.quantityRange)", "UUID quantity must use the joined prototype stepper")
         contains(controls, "struct IndexStepperInput: View", "The prototype stepper must be a shared control")
         contains(source, "IndexSegmentedControl(", "UUID version must use the shared segmented control")
         contains(source, "range: Self.quantityRange", "UUID quantity must clamp through the stepper range")
         contains(source, "quantityRange = 1...32", "Prototype parameter bounds stay 1...32")
         contains(source, ".onChange(of: workspace.quantity) { _ in generate() }", "UUID output must refresh when the retained quantity changes")
-        contains(source, "IndexGeneratedValueRowList(\n                    rows: resultRows,\n                    emptyText: IndexEmptyStateCopy.noResults,\n                    motionGeneration: motionGeneration", "UUID results must use the shared value row list")
+        contains(source, "IndexGeneratedValueRowList(\n                rows: resultRows,\n                emptyText: IndexEmptyStateCopy.noResults,\n                motionGeneration: motionGeneration", "UUID results must use the shared value row list")
         contains(source, "UUIDGenerationVersion", "UUID page must delegate version semantics to Core")
         contains(source, ".onChange(of: workspace.version) { _ in generate() }", "UUID output must refresh when the retained version changes")
-        contains(source, "UUID v4 或按时间排序的 UUID v7", "UUID subtitle must distinguish identifiers from security tokens")
+        contains(hub, "UUID v4 或按时间排序的 UUID v7", "UUID subtitle must distinguish identifiers from security tokens")
         contains(source, "emptyText: IndexEmptyStateCopy.noResults", "UUID empty state must remain factual through the canonical shared copy")
         contains(emptyStates, "public static let noResults = \"暂无匹配结果\"", "The canonical no-results copy must stay defined in the shared empty-state component")
         doesNotContain(source, "安全 Token", "UUID UI must not describe identifiers as security tokens")

@@ -92,7 +92,7 @@ final class TokenGeneratorToolWorkspaceModel: ObservableObject {
     }
 }
 
-struct IndexTokenPage: View {
+struct IndexTokenGeneratorSegment: View {
     var body: some View {
         ToolWorkspaceHost(key: TokenGeneratorToolWorkspaceModel.key) { workspace, _ in
             IndexTokenWorkspaceContent(workspace: workspace)
@@ -108,19 +108,17 @@ private struct IndexTokenWorkspaceContent: View {
     @State private var motionGeneration = 0
 
     var body: some View {
-        IndexPage("Token 生成器", subtitle: "使用系统安全随机数生成 Base64url、Hex 或字符集 Token。", workspaceSemantic: .queryListWorkspace) {
-            VStack(spacing: ToolMetrics.Spacing.md) {
-                parameterCard
+        VStack(spacing: ToolMetrics.Spacing.md) {
+            parameterCard
 
-                IndexGeneratedValueRowList(
-                    rows: resultRows,
-                    emptyText: workspace.error ?? resultEmptyText,
-                    motionGeneration: motionGeneration,
-                    wrapsValues: true
-                )
-                .indexSurface(.card, fill: ToolTheme.panelBackground)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            IndexGeneratedValueRowList(
+                rows: resultRows,
+                emptyText: workspace.error ?? resultEmptyText,
+                motionGeneration: motionGeneration,
+                wrapsValues: true
+            )
+            .indexSurface(.card, fill: ToolTheme.panelBackground)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .onAppear {
             if !workspace.hasAttemptedGeneration { generate() }
