@@ -56,7 +56,7 @@ extension DockerRunToDockerComposeService {
             for mount in service.mounts {
                 lines.append("      - type: \(mount.kind.rawValue)")
                 if let source = mount.source {
-                    lines.append("        source: \(yamlScalar(normalizeVolumePath(source)))")
+                    lines.append("        source: \(yamlScalar(source))")
                 }
                 lines.append("        target: \(yamlScalar(mount.target))")
                 if mount.readOnly {
@@ -336,7 +336,10 @@ extension DockerRunToDockerComposeService {
         return namedVolumes
     }
 
-    static func yamlScalar(_ value: String) -> String {
+    static func yamlScalar(_ literalValue: String) -> String {
+        // All mapped Run tokens have known literal values by this boundary.
+        // Compose interpolation is separate from YAML quoting.
+        let value = literalValue.replacingOccurrences(of: "$", with: "$$")
         if value.isEmpty {
             return "\"\""
         }

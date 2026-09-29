@@ -15,6 +15,8 @@ struct DockerRunToComposePageSourceTests {
         #expect(result.diagnostic?.suggestion == "部分命令行参数未能转换，请检查原命令与生成的 Compose 配置。")
         #expect(result.diagnostic?.suggestion?.contains(secret) == false)
         #expect(result.diagnostic?.message.contains(secret) == false)
+        #expect(result.diagnostic?.details.contains { $0.contains("--token") } == true)
+        #expect(result.diagnostic?.details.allSatisfy { !$0.contains(secret) } == true)
     }
 
     @Test func dockerPageRoutesConversionWarningsAndTypedErrorsIntoWorkbenchDiagnostics() throws {

@@ -216,16 +216,6 @@ extension DockerRunToDockerComposeService {
         return allowed.isEmpty ? "app" : allowed
     }
 
-    static func normalizeVolumePath(_ volumeString: String) -> String {
-        var normalized = volumeString.replacingOccurrences(of: "$(pwd)", with: "./")
-        normalized = normalized.replacingOccurrences(of: "${PWD}", with: "./")
-        normalized = normalized.replacingOccurrences(of: "$PWD", with: "./")
-
-        normalized = normalized.replacingOccurrences(of: ".//", with: "./")
-
-        return normalized
-    }
-
     static func parseMount(_ mountString: String) -> (mount: ComposeMount?, unsupported: [String]) {
         var mountType: ComposeMount.Kind?
         var source: String?
@@ -363,14 +353,6 @@ extension DockerRunToDockerComposeService {
     static func normalizePort(_ port: String) -> String {
         if port.hasSuffix("/tcp") {
             return String(port.dropLast(4))
-        }
-
-        if port.contains("/") {
-            return port
-        }
-
-        if !port.contains(":") {
-            return "\(port):\(port)"
         }
 
         return port

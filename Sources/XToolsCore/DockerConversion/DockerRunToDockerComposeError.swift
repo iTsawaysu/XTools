@@ -8,6 +8,7 @@ public enum DockerRunToDockerComposeError: LocalizedError {
     case invalidBooleanValue(String)
     case conflictingHealthcheckOptions
     case unterminatedQuote
+    case unresolvedShellExpression(String)
 
     public var errorDescription: String? {
         switch self {
@@ -25,6 +26,8 @@ public enum DockerRunToDockerComposeError: LocalizedError {
             return "禁用健康检查不能与健康检查设置同时使用。"
         case .unterminatedQuote:
             return "命令包含未闭合的引号。"
+        case .unresolvedShellExpression(let field):
+            return "`\(field)` 包含尚未求值的 Shell 表达式，无法等价转换。"
         }
     }
 }

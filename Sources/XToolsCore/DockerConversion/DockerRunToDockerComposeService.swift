@@ -26,7 +26,8 @@ public enum DockerRunToDockerComposeService {
     }
 
     public static func convert(_ command: String) throws -> Result {
-        let tokens = try tokenize(command)
+        let sourceTokens = try tokenizeWithOrigins(command)
+        let tokens = sourceTokens.map(\.value)
         guard tokens.count >= 2,
               tokens[0] == "docker",
               tokens[1] == "run" else {
@@ -54,7 +55,7 @@ public enum DockerRunToDockerComposeService {
             let token = tokens[index]
 
             if imageFound {
-                service.command.append(token)
+                service.command.append(try sourceTokens[index].resolvedValue(for: "command"))
                 index += 1
                 continue
             }
@@ -63,18 +64,19 @@ public enum DockerRunToDockerComposeService {
                 // `--` 终止选项解析。按 docker 语义，其后的第一个 token 是镜像，
                 // 其余才是命令；此前把整段都当成 command，导致 `docker run -- alpine echo hi`
                 // 报「缺少镜像名称」。
-                let remaining = tokens[(index + 1)...]
-                if let image = remaining.first {
+                let remaining = sourceTokens[(index + 1)...]
+                if let imageToken = remaining.first {
+                    let image = try imageToken.resolvedValue(for: "image")
                     service.image = image
                     service.name = sanitizedServiceName(from: service.containerName ?? image)
                     imageFound = true
-                    service.command.append(contentsOf: remaining.dropFirst())
+                    service.command.append(contentsOf: try remaining.dropFirst().map { try $0.resolvedValue(for: "command") })
                 }
                 break
             }
 
             if !token.hasPrefix("-") {
-                service.image = token
+                service.image = try sourceTokens[index].resolvedValue(for: "image")
                 service.name = sanitizedServiceName(from: service.containerName ?? token)
                 imageFound = true
                 index += 1
@@ -86,10 +88,16 @@ public enum DockerRunToDockerComposeService {
 
             func takeValue() throws -> String {
                 if let inlineValue {
+                    let value = try sourceTokens[index].resolvedValue(
+                        for: flag,
+                        droppingPrefix: token.unicodeScalars.count - inlineValue.unicodeScalars.count
+                    )
                     index += 1
-                    return inlineValue
+                    return value
                 }
-                return try requireValue(after: token, in: tokens, index: &index)
+                let valueIndex = index + 1
+                _ = try requireValue(after: token, in: tokens, index: &index)
+                return try sourceTokens[valueIndex].resolvedValue(for: flag)
             }
 
             func skipFlag(_ hasValue: Bool) {
@@ -138,7 +146,7 @@ public enum DockerRunToDockerComposeService {
             case "--expose":
                 service.expose.append(try takeValue())
             case "--volume":
-                service.volumes.append(normalizeVolumePath(try takeValue()))
+                service.volumes.append(try takeValue())
             case "--env":
                 service.environment.append(try takeValue())
             case "--env-file":
@@ -443,8 +451,9 @@ public enum DockerRunToDockerComposeService {
     private static func warnings(for options: [String], kind: Warning.Kind) -> [Warning] {
         var seen: Set<String> = []
         return options.compactMap { option in
-            guard seen.insert(option).inserted else { return nil }
-            return Warning(kind: kind, option: option)
+            let name = DockerRunToDockerComposeDiagnostics.safeOptionName(option)
+            guard seen.insert(name).inserted else { return nil }
+            return Warning(kind: kind, option: name)
         }
     }
 }

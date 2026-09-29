@@ -38,7 +38,10 @@ final class HTMLToMarkdownSession: ObservableObject {
     @Published private(set) var inputHTML = ""
     @Published private(set) var markdown = ""
     @Published private(set) var error: String?
-    @Published private(set) var warning: String?
+    @Published private(set) var warning: String? {
+        didSet { if warning == nil { diagnostic = nil } }
+    }
+    @Published private(set) var diagnostic: FormatDiagnostic?
     @Published private(set) var phase: HTMLToMarkdownSessionPhase = .idle
     @Published private(set) var formatAttempt = 0
     @Published private(set) var previewAuthorizationGeneration = 0
@@ -149,6 +152,7 @@ final class HTMLToMarkdownSession: ObservableObject {
                 self.warning = HTMLToMarkdownDiagnostics.conversionWarningMessage(
                     for: result.warnings
                 )
+                self.diagnostic = HTMLToMarkdownDiagnostics.conversionWarningDiagnostic(for: result.warnings)
                 self.phase = .ready
             } catch is CancellationError {
                 // A new action, clear, or session deallocation owns the replacement state.
@@ -214,6 +218,7 @@ final class HTMLToMarkdownSession: ObservableObject {
                 self.warning = HTMLToMarkdownDiagnostics.conversionWarningMessage(
                     for: result.warnings
                 )
+                self.diagnostic = HTMLToMarkdownDiagnostics.conversionWarningDiagnostic(for: result.warnings)
                 self.phase = .ready
             } catch is CancellationError {
                 // Superseded generation or explicit cancel — do not publish markdown.

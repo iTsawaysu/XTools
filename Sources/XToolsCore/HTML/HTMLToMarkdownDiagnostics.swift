@@ -4,14 +4,6 @@ public enum HTMLToMarkdownDiagnostics {
     public static func conversionWarningMessage(for warnings: [HTMLToMarkdownWarning]) -> String? {
         guard !warnings.isEmpty else { return nil }
 
-        let largestInputLimit = warnings.compactMap { warning -> Int? in
-            if case .completedInputExceedsThreshold(let limit) = warning { return limit }
-            return nil
-        }.max()
-        if let largestInputLimit {
-            return warningText(for: .completedInputExceedsThreshold(largestInputLimit))
-        }
-
         if warnings.contains(.emptyVisibleContent) {
             return warningText(for: .emptyVisibleContent)
         }
@@ -32,8 +24,50 @@ public enum HTMLToMarkdownDiagnostics {
             return warningText(for: .flattenedTableSpan)
         }
 
+        let largestInputLimit = warnings.compactMap { warning -> Int? in
+            if case .completedInputExceedsThreshold(let limit) = warning { return limit }
+            return nil
+        }.max()
+        if let largestInputLimit {
+            return warningText(for: .completedInputExceedsThreshold(largestInputLimit))
+        }
+
         return nil
     }
+
+    public static func conversionWarningDiagnostic(for warnings: [HTMLToMarkdownWarning]) -> FormatDiagnostic? {
+        guard let message = conversionWarningMessage(for: warnings) else { return nil }
+        var seen = Set<String>()
+        var details: [String] = []
+        for warning in warnings {
+            let detail: String
+            switch warning {
+            case .unsupportedElement(let element):
+                detail = "\(safeElementName(element))：无等价 Markdown 元素，已保留可转换的文字或链接。"
+            case .droppedUnsafeElement(let element):
+                detail = "\(safeElementName(element))：已移除，未写入 Markdown。"
+            case .flattenedTableSpan:
+                detail = "表格合并单元格已展开，rowspan / colspan 布局未保留。"
+            case .emptyVisibleContent, .completedInputExceedsThreshold:
+                detail = warningText(for: warning)
+            }
+            if seen.insert(detail).inserted { details.append(detail) }
+        }
+        if details.count > 32 {
+            let omitted = details.count - 32
+            details = Array(details.prefix(32)) + ["另有 \(omitted) 项转换提示，未展开显示。"]
+        }
+        return FormatDiagnostic(formatName: "HTML 转换", message: message, details: details)
+    }
+
+    private static func safeElementName(_ element: String) -> String {
+        knownElementNames.contains(element) ? "<\(element)>" : "其他 HTML 元素"
+    }
+
+    private static let knownElementNames: Set<String> = [
+        "script", "style", "template", "noscript", "iframe", "canvas", "video", "audio", "svg", "math",
+        "object", "embed", "img", "input", "button", "select", "textarea", "form"
+    ]
 
     public static func warningText(for warning: HTMLToMarkdownWarning) -> String {
         switch warning {

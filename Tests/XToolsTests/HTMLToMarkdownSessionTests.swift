@@ -5,6 +5,26 @@ import Testing
 
 @MainActor
 struct HTMLToMarkdownSessionTests {
+    @Test func conversionDetailsFollowTheCurrentResultAndClearWithInput() async throws {
+        let session = HTMLToMarkdownSession(
+            manualOperation: { _ in
+                HTMLToMarkdownConversionResult(markdown: "visible", warnings: [
+                    .completedInputExceedsThreshold(512_000), .unsupportedElement("canvas")
+                ])
+            },
+            manualDebounce: .milliseconds(10)
+        )
+        session.userEditedHTML("<canvas>visible</canvas>")
+        try await Self.waitUntil { session.phase == .ready }
+        #expect(session.diagnostic?.details.count == 2)
+        #expect(session.diagnostic?.message == session.warning)
+        session.userEditedHTML("<p>new</p>")
+        #expect(session.diagnostic == nil)
+        session.clear()
+        try await Task.sleep(for: .milliseconds(30))
+        #expect(session.diagnostic == nil)
+    }
+
     @Test func urlRunPublishesStagesAndCleanedResult() async throws {
         let recorder = HTMLSessionStageRecorder()
         let result = Self.urlResult(title: "Article", marker: "ready")

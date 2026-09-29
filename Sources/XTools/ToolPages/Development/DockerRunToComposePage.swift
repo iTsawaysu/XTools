@@ -181,7 +181,8 @@ struct IndexDockerWorkspaceContent: View {
                 diagnostic = FormatDiagnostic(
                     formatName: "Docker 转换",
                     message: warningText,
-                    suggestion: "部分命令行参数未能转换，请检查原命令与生成的 Compose 配置。"
+                    suggestion: "部分命令行参数未能转换，请检查原命令与生成的 Compose 配置。",
+                    details: DockerRunToDockerComposeDiagnostics.warningDetails(for: result.warnings)
                 )
             } else {
                 diagnostic = nil
@@ -194,10 +195,16 @@ struct IndexDockerWorkspaceContent: View {
             )
         } catch let error as DockerRunToDockerComposeError {
             let msg = error.errorDescription ?? "无法转换 docker run 命令。"
+            let suggestion: String
+            if case .unresolvedShellExpression = error {
+                suggestion = "使用明确的参数值；字面美元可用单引号或反斜杠保护，转换器不会执行 Shell。"
+            } else {
+                suggestion = "确认输入以 docker run 开头，且镜像名与参数格式正确。"
+            }
             let diagnostic = FormatDiagnostic(
                 formatName: "Docker 转换",
                 message: msg,
-                suggestion: "确认输入以 docker run 开头，且镜像名与参数格式正确。"
+                suggestion: suggestion
             )
             return FormatBinding(error: msg, diagnostic: diagnostic)
         } catch {
@@ -223,7 +230,8 @@ struct IndexDockerWorkspaceContent: View {
                 diagnostic = FormatDiagnostic(
                     formatName: "Compose 转换",
                     message: warningText,
-                    suggestion: "部分 Compose 声明在单一 docker run 中无法直接表达，请在命令生成后检查网络与存储卷配置。"
+                    suggestion: "部分 Compose 声明在单一 docker run 中无法直接表达，请在命令生成后检查网络与存储卷配置。",
+                    details: result.warningDetails
                 )
             } else {
                 diagnostic = nil

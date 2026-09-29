@@ -5,6 +5,8 @@ public enum DockerComposeToRunError: Error, Equatable, Sendable, LocalizedError 
     case invalidYAML(FormatDiagnostic)
     case missingServicesSection
     case noServices
+    case unresolvedInterpolation(String)
+    case configurationTooDeep
 
     /// 单一真相源在 `DockerComposeToRunDiagnostics`，避免页面与错误类型各写一份文案后漂移。
     public var errorDescription: String? {
@@ -17,10 +19,12 @@ public struct DockerComposeToRunResult: Equatable, Sendable {
     /// service order.
     public let commands: [String]
     public let warnings: [String]
+    public let warningDetails: [String]
 
-    public init(commands: [String], warnings: [String]) {
+    public init(commands: [String], warnings: [String], warningDetails: [String] = []) {
         self.commands = commands
         self.warnings = warnings
+        self.warningDetails = warningDetails
     }
 }
 
@@ -32,6 +36,27 @@ public enum DockerComposeToRunDiagnostics {
     /// 与 JSONDiffValidation / 顶栏横幅一致的可读上限；单条与合成共用。
     private static let maximumMessageCharacters = 180
     private static let collapsedFieldPreviewCount = 5
+
+    static func safeFieldName(_ field: String) -> String {
+        let suffixes = ["(结构无法映射)", "(exec-form 无法等价映射)", "(无法映射空命令)", "(值冲突)"]
+        let suffix = suffixes.first(where: field.hasSuffix) ?? ""
+        let path = suffix.isEmpty ? field : String(field.dropLast(suffix.count))
+        guard path.utf8.count <= 96,
+              path.range(of: #"^[A-Za-z0-9_.:/\[\]-]+$"#, options: .regularExpression) != nil else {
+            return "未知字段"
+        }
+        return path + suffix
+    }
+
+    static func boundedDetails(_ details: [String]) -> [String] {
+        var seen = Set<String>()
+        let unique = details.filter { seen.insert($0).inserted }
+        var visible = Array(unique.prefix(256))
+        if unique.count > visible.count {
+            visible.append("另有 \(unique.count - visible.count) 项转换提示，未展开显示。")
+        }
+        return visible
+    }
 
     /// 服务内未映射字段的一句话归因；字段过多时折叠列表，保持事实型单段，
     /// 且不超横幅可读上限。字段路径保留 Compose 官方英文名——目标用户要
@@ -70,6 +95,10 @@ public enum DockerComposeToRunDiagnostics {
             return missingServicesMessage
         case .noServices:
             return noServicesMessage
+        case .unresolvedInterpolation(let field):
+            return "`\(field)` 包含尚未求值的 Compose 插值，无法等价转换。"
+        case .configurationTooDeep:
+            return "Compose 配置嵌套超过 64 层，未进行转换。"
         }
     }
 
@@ -88,6 +117,14 @@ public enum DockerComposeToRunDiagnostics {
                 formatName: "Compose 转换",
                 message: noServicesMessage,
                 suggestion: "在 services 下至少定义一个服务，例如 web: {image: nginx}。"
+            )
+        case .unresolvedInterpolation, .configurationTooDeep:
+            return FormatDiagnostic(
+                formatName: "Compose 转换",
+                message: message(for: error),
+                suggestion: error == .configurationTooDeep
+                    ? "请减少配置嵌套后重试。"
+                    : "使用已解析的配置，或将需要保留的字面美元写成 $$；转换器不会读取本机环境。"
             )
         }
     }
@@ -155,6 +192,7 @@ public enum DockerComposeToRunService {
         }
 
         var warnings: [String] = []
+        var details: [String] = []
         var commands: [String] = []
 
         // Top-level definitions (networks/volumes/configs/secrets) cannot be
@@ -164,25 +202,38 @@ public enum DockerComposeToRunService {
         let definitionNotes = ["networks", "volumes", "configs", "secrets"].filter { root[$0] != nil }
         if !definitionNotes.isEmpty {
             warnings.append("顶层 \(definitionNotes.joined(separator: "、")) 定义不会写入命令（服务内引用已映射，需预先创建）")
+            details.append(contentsOf: warnings)
         }
         let ignoredTopLevel = root.keys
             .filter { !["services", "version", "name"].contains($0) && !definitionNotes.contains($0) }
             .filter { !$0.hasPrefix("x-") }
             .sorted()
         if !ignoredTopLevel.isEmpty {
-            warnings.append("忽略顶层字段：\(ignoredTopLevel.joined(separator: "、"))")
+            warnings.append("有 \(ignoredTopLevel.count) 个顶层字段未映射。")
+            details.append(contentsOf: ignoredTopLevel.map { "顶层 \(DockerComposeToRunDiagnostics.safeFieldName($0))：未映射。" })
         }
 
         for (name, body) in services.sorted(by: { $0.key < $1.key }) {
-            guard let service = body as? [String: Any] else {
-                warnings.append("服务 \(name) 结构无效")
+            let safeName = DockerComposeToRunDiagnostics.safeFieldName(name)
+            guard var service = body as? [String: Any] else {
+                let warning = "服务 \(safeName) 结构无效"
+                warnings.append(warning)
+                details.append(warning)
                 continue
+            }
+            let ignoredInterpolationPaths = inactiveInterpolationPaths(in: service)
+            for key in service.keys.sorted() where handledKeys.contains(key) {
+                if let value = service[key] {
+                    service[key] = try DockerComposeInterpolation.literalValues(value, field: key, ignoredPaths: ignoredInterpolationPaths)
+                }
             }
             guard let image = scalarString(service["image"]), !image.isEmpty else {
-                warnings.append("服务 \(name) 缺少 image")
+                let warning = "服务 \(safeName) 缺少 image"
+                warnings.append(warning)
+                details.append(warning)
                 continue
             }
-            commands.append(buildCommand(name: name, image: image, service: service, warnings: &warnings))
+            commands.append(buildCommand(name: safeName, image: image, service: service, warnings: &warnings, details: &details))
         }
 
         guard !commands.isEmpty else {
@@ -193,7 +244,32 @@ public enum DockerComposeToRunService {
         // per-service lines are intentionally distinct for attribution.
         var seen = Set<String>()
         warnings.removeAll { !seen.insert($0).inserted }
-        return DockerComposeToRunResult(commands: commands, warnings: warnings)
+        return DockerComposeToRunResult(
+            commands: commands,
+            warnings: warnings,
+            warningDetails: DockerComposeToRunDiagnostics.boundedDetails(details)
+        )
+    }
+
+    /// Keep interpolation aligned with branches consumed by command assembly.
+    /// Inactive alternatives still reach its existing loss diagnostics unchanged.
+    private static func inactiveInterpolationPaths(in service: [String: Any]) -> Set<String> {
+        var paths = Set<String>()
+        if scalarString(service["network_mode"]) != nil { paths.insert("networks") }
+        if scalarString(service["mem_limit"]) != nil { paths.insert("memory") }
+        if scalarString(service["cpuset"]) != nil { paths.insert("cpuset_cpus") }
+        if scalarString(service["restart"]) == nil { paths.insert("deploy.restart_policy") }
+        if scalarString(service["gpus"]) != nil { paths.insert("deploy.resources.reservations.devices") }
+        if let healthcheck = service["healthcheck"] as? [String: Any] {
+            if healthcheck["disable"] as? Bool == true || healthcheck["disabled"] as? Bool == true {
+                paths.insert("healthcheck")
+            } else if let test = healthcheck["test"] as? [Any],
+                      let kind = test.first as? String, kind == "CMD" || (kind == "NONE" && test.count == 1) {
+                // CMD is explicitly unsupported; NONE exits before interval fields.
+                paths.insert("healthcheck")
+            }
+        }
+        return paths
     }
 
     // MARK: - Command assembly
@@ -202,7 +278,8 @@ public enum DockerComposeToRunService {
         name: String,
         image: String,
         service: [String: Any],
-        warnings: inout [String]
+        warnings: inout [String],
+        details: inout [String]
     ) -> String {
         var skipped: [String] = []
 
@@ -453,8 +530,10 @@ public enum DockerComposeToRunService {
         // a service (e.g. several networks with addresses) collapse first.
         if !skipped.isEmpty {
             var seenSkipped = Set<String>()
+            skipped = skipped.map(DockerComposeToRunDiagnostics.safeFieldName)
             skipped.removeAll { !seenSkipped.insert($0).inserted }
             warnings.append(DockerComposeToRunDiagnostics.unmappedFieldsMessage(service: name, fields: skipped.sorted()))
+            details.append(contentsOf: skipped.sorted().map { "服务 \(name)：\($0) 未映射，未写入命令。" })
         }
 
         var tokens = ["docker", "run", "-d"] + args + [shellToken(image)]

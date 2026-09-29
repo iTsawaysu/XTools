@@ -2,6 +2,27 @@ import XToolsCore
 import Testing
 
 struct HTMLToMarkdownDiagnosticsTests {
+    @Test func sizeNoticeDoesNotOverrideConversionLoss() {
+        let warning = HTMLToMarkdownDiagnostics.conversionWarningMessage(for: [
+            .completedInputExceedsThreshold(512_000), .unsupportedElement("canvas"), .flattenedTableSpan
+        ])
+        #expect(warning == "部分 HTML 内容无法完整转换。")
+    }
+
+    @Test func safeDetailsPreserveLossAndSizeFactsTogether() throws {
+        let diagnostic = try #require(HTMLToMarkdownDiagnostics.conversionWarningDiagnostic(for: [
+            .completedInputExceedsThreshold(512_000), .unsupportedElement("canvas"),
+            .droppedUnsafeElement("script"), .flattenedTableSpan,
+            .unsupportedElement("PRIVATE_SENTINEL"), .unsupportedElement("PRIVATE_SENTINEL")
+        ]))
+        #expect(diagnostic.details.contains { $0.contains("500 KB") })
+        #expect(diagnostic.details.contains { $0.contains("canvas") })
+        #expect(diagnostic.details.contains { $0.contains("script") && $0.contains("已移除") })
+        #expect(diagnostic.details.contains { $0.contains("rowspan") })
+        #expect(diagnostic.details.count == 5)
+        #expect(diagnostic.details.allSatisfy { !$0.contains("PRIVATE_SENTINEL") })
+    }
+
     @Test func emptyWarningsYieldNil() {
         #expect(HTMLToMarkdownDiagnostics.conversionWarningMessage(for: []) == nil)
     }
