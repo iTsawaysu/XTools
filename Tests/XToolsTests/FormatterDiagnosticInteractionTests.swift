@@ -164,7 +164,7 @@ struct FormatterDiagnosticInteractionTests {
         #expect(overflowing.omittedCount == 43)
     }
 
-    @Test func hostedWorkbenchKeepsEditorIdentityAndGeometryAcrossDiagnosticStates() async throws {
+    @Test func hostedWorkbenchCollapsesAbsentDiagnosticAndKeepsEditorIdentity() async throws {
         let model = DiagnosticLayoutProbeModel()
         let hosting = NSHostingView(rootView: DiagnosticLayoutProbe(model: model))
         hosting.frame = NSRect(x: 0, y: 0, width: 1000, height: 500)
@@ -172,12 +172,25 @@ struct FormatterDiagnosticInteractionTests {
         let editor = try #require(findEditor(hosting))
         let viewport = try #require(editor.enclosingScrollView)
         let originalFrame = viewport.convert(viewport.bounds, to: hosting)
+        let originalText = editor.string
+        let originalUndoManager = editor.undoManager
+        editor.setSelectedRange(NSRange(location: 1, length: 2))
+        // The toolbar is 44pt; only the normal 8pt pane inset may follow it.
+        let topInset = hosting.isFlipped ? originalFrame.minY : hosting.bounds.maxY - originalFrame.maxY
+        #expect(abs(topInset - 52) < 0.5, "No diagnostic must leave no reserved status row")
         for message in ["输入有误", String(repeating: "很长的错误消息", count: 100), ""] {
             model.message = message
             try await Task.sleep(for: .milliseconds(60))
             hosting.layoutSubtreeIfNeeded()
             #expect(findEditor(hosting) === editor)
-            #expect(viewport.convert(viewport.bounds, to: hosting) == originalFrame)
+            let frame = viewport.convert(viewport.bounds, to: hosting)
+            let expectedHeight = originalFrame.height - (message.isEmpty ? 0 : 36)
+            #expect(abs(frame.height - expectedHeight) < 0.5)
+            #expect(frame.minX == originalFrame.minX && frame.width == originalFrame.width)
+            if message.isEmpty { #expect(frame == originalFrame) }
+            #expect(editor.string == originalText)
+            #expect(editor.selectedRange() == NSRange(location: 1, length: 2))
+            #expect(editor.undoManager === originalUndoManager)
         }
     }
 

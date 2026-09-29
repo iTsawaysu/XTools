@@ -67,7 +67,19 @@ struct WorkbenchAccessibilityTests {
         try await wait("Command-Return dispatch") { model.formatCount == 1 }
         try await wait("diagnostic accessibility publication") { findAction("查看诊断详情", in: window) != nil }
         #expect(findEditor(hosting) === editor)
-        #expect(scrollView.convert(scrollView.bounds, to: hosting) == originalFrame)
+        let expectedDiagnosticFrame = NSRect(
+            x: originalFrame.minX,
+            y: originalFrame.minY + (hosting.isFlipped ? 36 : 0),
+            width: originalFrame.width,
+            height: originalFrame.height - 36
+        )
+        // Capture the settled frame, not a subpixel intermediate animation
+        // value that would falsely implicate the subsequent details popover.
+        try await wait("visible diagnostic geometry") {
+            scrollView.convert(scrollView.bounds, to: hosting) == expectedDiagnosticFrame
+        }
+        let diagnosticFrame = scrollView.convert(scrollView.bounds, to: hosting)
+        #expect(diagnosticFrame.minX == originalFrame.minX && diagnosticFrame.width == originalFrame.width)
         #expect(editor.selectedRange() == NSRange(location: 0, length: 0))
         let summaryTexts = accessibleText(in: window)
         #expect(summaryTexts.contains { $0.contains("错误：缺少右括号") })
@@ -93,10 +105,13 @@ struct WorkbenchAccessibilityTests {
         // Do not replace that check with a direct closure call or a fake button.
         #expect(!accessibleText(in: window).contains { $0.contains("PRIVATE_DIAGNOSTIC_EXCERPT") })
         #expect(findEditor(hosting) === editor)
-        #expect(scrollView.convert(scrollView.bounds, to: hosting) == originalFrame)
+        #expect(scrollView.convert(scrollView.bounds, to: hosting) == diagnosticFrame)
 
         model.showsDiagnostic = false
-        try await wait("diagnostic cleared") { findAction("查看诊断详情", in: window) == nil }
+        try await wait("diagnostic cleared and space reclaimed") {
+            findAction("查看诊断详情", in: window) == nil
+                && scrollView.convert(scrollView.bounds, to: hosting) == originalFrame
+        }
         #expect(findEditor(hosting) === editor)
         #expect(scrollView.convert(scrollView.bounds, to: hosting) == originalFrame)
         #expect(editor.string.utf8.elementsEqual(originalText.utf8))

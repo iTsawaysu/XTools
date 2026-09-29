@@ -10,8 +10,9 @@ import XToolsCore
 /// inline diagnostic (anchored to the cluster so it never shifts), and the
 /// framed copy/clear actions plus the primary format action on the right —
 /// above a fixed two-pane code split with line-number gutters. A failed
-/// format tints the panel outline; diagnostics occupy one stable status row
-/// and details open without changing editor geometry.
+/// format tints the panel outline; a status row appears only for a current
+/// diagnostic or import rejection. Its details open without changing editor
+/// geometry, and the native editors retain their identity as the row changes.
 struct IndexFormatWorkbench<LeadingControl: View>: View {
     let inputTitle: String
     let outputTitle: String
@@ -272,7 +273,9 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            diagnosticStatusSlot
+            if hasDiagnostic || droppedFile.rejection != nil {
+                diagnosticStatusSlot
+            }
             HStack(spacing: ToolMetrics.Spacing.sm) {
                 inputPaneWithHeader
                     .toolPaneHoverChrome()
