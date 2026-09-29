@@ -622,11 +622,12 @@ struct JSONFormattingTests {
         #expect(diagnostic.message.contains("超过最大安全深度"))
     }
 
-    @Test func unclosedNestedObjectReportsContainerKey() throws {
+    @Test func unclosedNestedObjectKeepsContainerKeysPrivate() throws {
         let sample = #"{"matrix": {"level_1": {"target": 1"#
         let diagnostic = try invalidJSONDiagnostic(for: sample)
         #expect(diagnostic.message.contains("对象没有完整闭合"))
-        #expect(diagnostic.message.contains("level_1") || diagnostic.message.contains("matrix"))
+        #expect(!diagnostic.message.contains("level_1"))
+        #expect(!diagnostic.message.contains("matrix"))
     }
 
     @Test func minifySupportsKeySorting() throws {

@@ -10,6 +10,7 @@ final class IndexFormatExecutionSession: ObservableObject {
     @Published private(set) var binding: FormatBinding
     @Published private(set) var isRunning = false
     @Published private(set) var isOutputFresh: Bool
+    @Published private(set) var diagnosticMarker: IndexTextAreaDiagnosticMarker?
 
     private let execution: SupersedingExecutionSession
 
@@ -36,23 +37,30 @@ final class IndexFormatExecutionSession: ObservableObject {
 
     func schedule<Snapshot: Sendable>(
         snapshot: Snapshot,
+        sourceText: String? = nil,
         delay: Duration = .milliseconds(200),
         operation: @escaping @Sendable (Snapshot) -> FormatBinding
     ) {
         let requestOperation: @Sendable (
             _ shouldCancel: @escaping @Sendable () -> Bool
-        ) throws -> FormatBinding = { shouldCancel in
+        ) throws -> (FormatBinding, IndexTextAreaDiagnosticMarker?) = { shouldCancel in
             if shouldCancel() {
                 throw CancellationError()
             }
-            return operation(snapshot)
+            let binding = operation(snapshot)
+            let marker = sourceText.flatMap { source in
+                binding.diagnostic.flatMap { IndexTextAreaDiagnosticMarker(diagnostic: $0, sourceText: source) }
+            }
+            return (binding, marker)
         }
 
         isRunning = true
         isOutputFresh = false
-        execution.schedule(debounce: delay, operation: requestOperation) { [weak self] _, completedBinding in
+        diagnosticMarker = nil
+        execution.schedule(debounce: delay, operation: requestOperation) { [weak self] _, result in
             guard let self else { return }
-            self.binding = completedBinding
+            self.binding = result.0
+            self.diagnosticMarker = result.1
             self.isRunning = false
             self.isOutputFresh = true
         }
@@ -61,12 +69,14 @@ final class IndexFormatExecutionSession: ObservableObject {
     /// Invalidates in-flight work when its source changes while preserving the
     /// last result as a visibly stale reference until the next run completes.
     func sourceDidChange() {
+        diagnosticMarker = nil
         isRunning = false
         isOutputFresh = !hasResult
         execution.invalidate()
     }
 
     func invalidate(resetTo binding: FormatBinding = FormatBinding()) {
+        diagnosticMarker = nil
         self.binding = binding
         isRunning = false
         isOutputFresh = true

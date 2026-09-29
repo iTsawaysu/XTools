@@ -9,7 +9,7 @@ final class YAMLPrettifyToolWorkspaceModel: ObservableObject {
 
     @Published var input = "" {
         didSet {
-            guard input != oldValue else { return }
+            guard !JSONExactTextIdentity.isExactlyEqual(input, oldValue) else { return }
             execution.sourceDidChange()
         }
     }
@@ -66,6 +66,7 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
                 diagnostic: execution.binding.error ?? execution.binding.warning,
                 diagnosticTone: execution.binding.error == nil ? .warning : .error,
                 diagnosticDetail: execution.diagnostic,
+                diagnosticMarker: execution.diagnosticMarker,
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
                 outputSyntax: .yaml,
@@ -98,7 +99,7 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
             sortKeys: workspace.sortKeys
         )
         let snapshot = (input: workspace.input, options: options)
-        execution.schedule(snapshot: snapshot, delay: .zero) { snapshot in
+        execution.schedule(snapshot: snapshot, sourceText: snapshot.input, delay: .zero) { snapshot in
             FormatRunner.run(snapshot.input) {
                 try YAMLPrettifier.formatValidated($0, options: snapshot.options)
             }

@@ -7,6 +7,11 @@ public struct FormatDiagnostic: Equatable, Sendable, LocalizedError {
     public let column: Int?
     public let excerpt: String?
     public let suggestion: String?
+    /// Safe, bounded conversion-loss facts. Never put source values or excerpts here.
+    public let details: [String]
+    /// An exact range in the parser's source, in UTF-16 units. Nil means only
+    /// the line is reliable; consumers must not infer a range from `column`.
+    public let sourceUTF16Range: NSRange?
 
     public init(
         formatName: String,
@@ -14,7 +19,9 @@ public struct FormatDiagnostic: Equatable, Sendable, LocalizedError {
         line: Int? = nil,
         column: Int? = nil,
         excerpt: String? = nil,
-        suggestion: String? = nil
+        suggestion: String? = nil,
+        details: [String] = [],
+        sourceUTF16Range: NSRange? = nil
     ) {
         self.formatName = formatName
         self.message = message
@@ -22,6 +29,8 @@ public struct FormatDiagnostic: Equatable, Sendable, LocalizedError {
         self.column = column
         self.excerpt = excerpt
         self.suggestion = suggestion
+        self.details = details
+        self.sourceUTF16Range = sourceUTF16Range
     }
 
     public var errorDescription: String? {
@@ -50,13 +59,19 @@ extension FormatDiagnostic {
         suggestion: String? = nil
     ) {
         let position = Self.position(in: input, at: index)
+        let offset = index.utf16Offset(in: input)
+        let source = input as NSString
+        let range = offset < source.length
+            ? source.rangeOfComposedCharacterSequence(at: offset)
+            : NSRange(location: source.length, length: 0)
         self.init(
             formatName: formatName,
             message: message,
             line: position.line,
             column: position.column,
             excerpt: Self.lineExcerpt(in: input, line: position.line, column: position.column),
-            suggestion: suggestion
+            suggestion: suggestion,
+            sourceUTF16Range: range
         )
     }
 

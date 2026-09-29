@@ -116,6 +116,12 @@ final class IndexCaretTextView: NSTextView, IndexAsymmetricTextContainerSurface 
     }
 
     nonisolated static func readDroppedContent(from url: URL) -> String? {
+        if case .loaded(let content) = readDroppedOutcome(from: url) { return content }
+        return nil
+    }
+
+    nonisolated static func readDroppedOutcome(from url: URL) -> IndexDroppedTextOutcome {
+        guard url.isFileURL else { return .rejected(.unreadable) }
         let scopedOriginal = url.startAccessingSecurityScopedResource()
         let resolvedURL = url.resolvingSymlinksInPath()
         let scopedResolved = resolvedURL != url
@@ -125,37 +131,88 @@ final class IndexCaretTextView: NSTextView, IndexAsymmetricTextContainerSurface 
             if scopedResolved { resolvedURL.stopAccessingSecurityScopedResource() }
             if scopedOriginal { url.stopAccessingSecurityScopedResource() }
         }
-        guard let values = try? resolvedURL.resourceValues(
-            forKeys: [.isRegularFileKey, .fileSizeKey]
-        ), values.isRegularFile == true else {
-            return nil
+        let values: URLResourceValues
+        do {
+            values = try resolvedURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+        } catch {
+            return .rejected(.unreadable)
         }
-        if let fileSize = values.fileSize, fileSize > 15_000_000 {
-            return nil
+        guard values.isRegularFile == true else {
+            return .rejected(.notRegularFile)
         }
-        guard let data = try? BoundedFileReader.read(from: resolvedURL, maxBytes: 15_000_000) else {
-            return nil
+        if let fileSize = values.fileSize, fileSize > IndexDroppedTextRejection.maximumBytes {
+            return .rejected(.tooLarge)
         }
-        return decodeDroppedContent(data)
+        do {
+            let data = try BoundedFileReader.read(from: resolvedURL, maxBytes: IndexDroppedTextRejection.maximumBytes)
+            guard let content = decodeDroppedContent(data) else { return .rejected(.invalidEncoding) }
+            return .loaded(content)
+        } catch is CancellationError {
+            return .cancelled
+        } catch BoundedFileReader.ReadError.tooLarge {
+            return .rejected(.tooLarge)
+        } catch {
+            return .rejected(.unreadable)
+        }
     }
 
     nonisolated static func decodeDroppedContent(_ data: Data) -> String? {
-        return String(data: data, encoding: .utf8) ?? String(data: data, encoding: .utf16)
+        if let utf8 = String(data: data, encoding: .utf8) { return utf8 }
+        // Foundation's UTF-16 decoder silently ignores a trailing odd byte.
+        // Reject a partial code unit instead of importing truncated source.
+        guard data.count.isMultiple(of: 2) else { return nil }
+        return String(data: data, encoding: .utf16)
     }
 }
 
+enum IndexDroppedTextRejection: Equatable, Sendable {
+    static let maximumBytes = 15_000_000
+    case notRegularFile, tooLarge, invalidEncoding, unreadable
+
+    var message: String {
+        switch self {
+        case .notRegularFile: return "只能导入普通文本文件，原输入已保留。"
+        case .tooLarge: return "文件超过 15 MB 导入上限，原输入已保留。"
+        case .invalidEncoding: return "文件不是有效的 UTF-8 或 UTF-16 文本，原输入已保留。"
+        case .unreadable: return "无法读取文件，原输入已保留。"
+        }
+    }
+}
+
+enum IndexDroppedTextOutcome: Sendable {
+    case loaded(String)
+    case rejected(IndexDroppedTextRejection)
+    case cancelled
+}
+
 @MainActor
-final class IndexDroppedTextFile {
+final class IndexDroppedTextFile: ObservableObject {
+    @Published private(set) var rejection: IndexDroppedTextRejection?
     private weak var view: NSTextView?
     private let gate = AsyncWorkGate()
-    private let reader: @Sendable (URL) async -> String?
+    private let reader: @Sendable (URL) async -> IndexDroppedTextOutcome
 
     init(
         view: NSTextView? = nil,
-        reader: @escaping @Sendable (URL) async -> String? = { IndexCaretTextView.readDroppedContent(from: $0) }
+        outcomeReader: @escaping @Sendable (URL) async -> IndexDroppedTextOutcome = { IndexCaretTextView.readDroppedOutcome(from: $0) }
     ) {
         self.view = view
-        self.reader = reader
+        self.reader = outcomeReader
+    }
+
+    convenience init(view: NSTextView? = nil, reader: @escaping @Sendable (URL) async -> String?) {
+        self.init(view: view, outcomeReader: { url in
+            if let text = await reader(url) { return .loaded(text) }
+            return .rejected(.unreadable)
+        })
+    }
+
+    func dismissRejection() {
+        rejection = nil
+    }
+
+    func rejectUnreadableDrop() {
+        rejection = .unreadable
     }
 
     func attach(to view: NSTextView) {
@@ -174,15 +231,26 @@ final class IndexDroppedTextFile {
 
     func isCurrent(_ token: Int) -> Bool { gate.isCurrent(token) }
 
-    func start(url: URL, publish: @escaping @MainActor (String) -> Void) {
+    func start(
+        url: URL,
+        onRejected: (@MainActor (IndexDroppedTextRejection) -> Void)? = nil,
+        publish: @escaping @MainActor (String) -> Void
+    ) {
         guard let view, view.window != nil else { return }
+        rejection = nil
         gate.invalidate()
         let reader = reader
         gate.runDetached {
             await reader(url)
-        } publish: { [weak view] content in
-            guard let view, view.window != nil, let content else { return }
-            publish(content)
+        } publish: { [weak self, weak view] outcome in
+            guard let self, let view, view.window != nil else { return }
+            switch outcome {
+            case .loaded(let content): publish(content)
+            case .rejected(let rejection):
+                self.rejection = rejection
+                onRejected?(rejection)
+            case .cancelled: break
+            }
         }
     }
 }
@@ -599,6 +667,10 @@ enum IndexTextAreaCharacterRangeProjection {
 struct IndexTextAreaTemporaryHighlights: Equatable {
     let sourceText: String
     let ranges: [NSRange]
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.ranges == rhs.ranges && JSONExactTextIdentity.isExactlyEqual(lhs.sourceText, rhs.sourceText)
+    }
 }
 
 @MainActor
@@ -610,7 +682,7 @@ enum IndexTextAreaTemporaryHighlightRenderer {
     static func apply(_ highlights: IndexTextAreaTemporaryHighlights?, to textView: NSTextView) -> Bool {
         clear(in: textView)
         guard let highlights,
-              textView.string == highlights.sourceText,
+              JSONExactTextIdentity.isExactlyEqual(textView.string, highlights.sourceText),
               !textView.hasMarkedText(),
               let layoutManager = textView.layoutManager else {
             return highlights == nil
@@ -670,6 +742,8 @@ struct IndexTextArea: View {
     var autoFocus = false
     var caretPlacementRequestToken: Int? = nil
     var temporaryHighlights: IndexTextAreaTemporaryHighlights? = nil
+    var diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil
+    var diagnosticNavigationToken = 0
     var inputPolicy: IndexTextAreaInputPolicy? = nil
     /// Prototype v3 embedded-code presentation: drop the editor's own field
     /// box so the owning workbench panel supplies the surface edge to edge.
@@ -684,6 +758,49 @@ struct IndexTextArea: View {
     @Environment(\.pageAvailableHeight) private var pageAvailableHeight
     @State private var isComposing = false
     @State private var measuredTextHeight: CGFloat = 0
+
+    private let exactTextIdentity: JSONExactTextIdentity
+
+    init(
+        placeholder: String,
+        text: Binding<String>,
+        minHeight: CGFloat = 220,
+        maxHeightRatio: CGFloat? = nil,
+        fillsHeight: Bool = false,
+        expandsWithContent: Bool = false,
+        renderingMode: IndexTextAreaRenderingMode = .measuredContent,
+        lineBreakMode: NSLineBreakMode = .byCharWrapping,
+        autoFocus: Bool = false,
+        caretPlacementRequestToken: Int? = nil,
+        temporaryHighlights: IndexTextAreaTemporaryHighlights? = nil,
+        diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
+        diagnosticNavigationToken: Int = 0,
+        inputPolicy: IndexTextAreaInputPolicy? = nil,
+        embedsFlat: Bool = false,
+        lineNumbers: Bool = false,
+        onFileDrop: ((String) -> Void)? = nil,
+        droppedFile: IndexDroppedTextFile? = nil
+    ) {
+        self.placeholder = placeholder
+        self._text = text
+        self.minHeight = minHeight
+        self.maxHeightRatio = maxHeightRatio
+        self.fillsHeight = fillsHeight
+        self.expandsWithContent = expandsWithContent
+        self.renderingMode = renderingMode
+        self.lineBreakMode = lineBreakMode
+        self.autoFocus = autoFocus
+        self.caretPlacementRequestToken = caretPlacementRequestToken
+        self.temporaryHighlights = temporaryHighlights
+        self.diagnosticMarker = diagnosticMarker
+        self.diagnosticNavigationToken = diagnosticNavigationToken
+        self.inputPolicy = inputPolicy
+        self.embedsFlat = embedsFlat
+        self.lineNumbers = lineNumbers
+        self.onFileDrop = onFileDrop
+        self.droppedFile = droppedFile
+        self.exactTextIdentity = JSONExactTextIdentity(text.wrappedValue)
+    }
 
     var growsWithContent: Bool {
         expandsWithContent
@@ -714,6 +831,7 @@ struct IndexTextArea: View {
                 if renderingMode == .textKit2Viewport {
                     IndexTextKit2ViewportTextView(
                         text: $text,
+                        exactTextIdentity: exactTextIdentity,
                         lineBreakMode: lineBreakMode,
                         autoFocus: autoFocus,
                         caretPlacementRequestToken: caretPlacementRequestToken,
@@ -725,12 +843,15 @@ struct IndexTextArea: View {
                 } else {
                     IndexUndoableTextView(
                         text: $text,
+                        exactTextIdentity: exactTextIdentity,
                         growsWithContent: growsWithContent,
                         lineBreakMode: lineBreakMode,
                         measuredHeight: $measuredTextHeight,
                         autoFocus: autoFocus,
                         caretPlacementRequestToken: caretPlacementRequestToken,
                         temporaryHighlights: temporaryHighlights,
+                        diagnosticMarker: diagnosticMarker,
+                        diagnosticNavigationToken: diagnosticNavigationToken,
                         inputPolicy: inputPolicy,
                         embedsFlat: embedsFlat,
                         lineNumbers: lineNumbers,
@@ -790,6 +911,7 @@ struct IndexTextAreaInputRejection {
 /// layout manager opts the view into TextKit 1 compatibility mode and forces a
 struct IndexTextKit2ViewportTextView: NSViewRepresentable {
     @Binding var text: String
+    var exactTextIdentity: JSONExactTextIdentity? = nil
     var lineBreakMode: NSLineBreakMode
     var autoFocus = false
     var caretPlacementRequestToken: Int? = nil
@@ -856,7 +978,7 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
         (textView as? IndexCaretTextView)?.sharedDroppedFile = droppedFile
 
         // Do not rewrite marked text during Chinese IME composition. The
-        if textView.string != text && !textView.hasMarkedText() {
+        if !JSONExactTextIdentity.isExactlyEqual(textView.string, text) && !textView.hasMarkedText() {
             (textView as? IndexCaretTextView)?.invalidateDroppedFile()
             let selectedRanges = textView.selectedRanges
             textView.setStringWithoutUndoRegistration(text)
@@ -991,7 +1113,7 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
-            if text.wrappedValue != textView.string {
+            if !JSONExactTextIdentity.isExactlyEqual(text.wrappedValue, textView.string) {
                 text.wrappedValue = textView.string
             }
             textView.scrollRangeToVisible(clampedSelectedRange(for: textView))
@@ -1054,12 +1176,15 @@ private final class IndexTextKit2ViewportScrollView: NSScrollView {
 
 struct IndexUndoableTextView: NSViewRepresentable {
     @Binding var text: String
+    var exactTextIdentity: JSONExactTextIdentity? = nil
     var growsWithContent: Bool
     var lineBreakMode: NSLineBreakMode
     @Binding var measuredHeight: CGFloat
     var autoFocus = false
     var caretPlacementRequestToken: Int? = nil
     var temporaryHighlights: IndexTextAreaTemporaryHighlights? = nil
+    var diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil
+    var diagnosticNavigationToken = 0
     var inputPolicy: IndexTextAreaInputPolicy? = nil
     var embedsFlat = false
     var lineNumbers = false
@@ -1105,6 +1230,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
             installLineNumberGutter(in: scrollView, for: textView, coordinator: context.coordinator)
         }
         IndexTextAreaTemporaryHighlightRenderer.apply(temporaryHighlights, to: textView)
+        context.coordinator.diagnosticController.update(diagnosticMarker, requestToken: diagnosticNavigationToken, in: textView, gutter: context.coordinator.lineNumberGutter)
         scrollView.synchronizeTextGeometry()
         context.coordinator.measure(textView)
         if context.coordinator.placeCaretAtEndIfRequested(caretPlacementRequestToken, in: textView) {
@@ -1137,9 +1263,10 @@ struct IndexUndoableTextView: NSViewRepresentable {
 
         // `textView.string` already contains the marked (组字) text but `text`
         // back would wipe the marked text and abort the composition (Chinese
-        if textView.string != text && !textView.hasMarkedText() {
+        if !JSONExactTextIdentity.isExactlyEqual(textView.string, text) && !textView.hasMarkedText() {
             (textView as? IndexCaretTextView)?.invalidateDroppedFile()
             let selectedRanges = textView.selectedRanges
+            context.coordinator.diagnosticController.clear(in: textView, gutter: context.coordinator.lineNumberGutter)
             textView.setStringWithoutUndoRegistration(text)
             let stringLength = (text as NSString).length
             let validRanges = selectedRanges.filter { $0.rangeValue.upperBound <= stringLength }
@@ -1151,6 +1278,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
             IndexTextAreaScrollPositioning.revealInsertionPoint(in: textView, growsWithContent: growsWithContent)
         }
         context.coordinator.refreshTemporaryHighlights(temporaryHighlights, in: textView)
+        context.coordinator.diagnosticController.update(diagnosticMarker, requestToken: diagnosticNavigationToken, in: textView, gutter: context.coordinator.lineNumberGutter)
         context.coordinator.measure(textView)
         keepContentGrowingScrollOriginStable(in: scrollView)
     }
@@ -1219,6 +1347,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
             }
         }
         weak var lineNumberGutter: IndexEditorLineNumberGutterView?
+        let diagnosticController = IndexTextAreaDiagnosticController()
         private var didFocus = false
         private var caretPlacementState = IndexTextAreaCaretPlacementState(processedRequestToken: nil)
         private let privateUndo = IndexPrivateUndoStack()
@@ -1235,7 +1364,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
             if lastTemporaryHighlightApplyReachedTarget,
                highlights == lastAppliedTemporaryHighlights {
                 if let highlights {
-                    if textView.string == highlights.sourceText { return }
+                    if JSONExactTextIdentity.isExactlyEqual(textView.string, highlights.sourceText) { return }
                 } else {
                     return
                 }
@@ -1288,7 +1417,10 @@ struct IndexUndoableTextView: NSViewRepresentable {
             shouldChangeTextIn affectedCharRange: NSRange,
             replacementString: String?
         ) -> Bool {
-            guard let maxUTF8Bytes = inputPolicy?.maxUTF8Bytes else { return true }
+            guard let maxUTF8Bytes = inputPolicy?.maxUTF8Bytes else {
+                diagnosticController.clear(in: textView, gutter: lineNumberGutter)
+                return true
+            }
             let currentText = textView.string
             let currentNSString = currentText as NSString
             guard affectedCharRange.location >= 0,
@@ -1308,6 +1440,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
                 )
                 return false
             }
+            diagnosticController.clear(in: textView, gutter: lineNumberGutter)
             return true
         }
 
@@ -1320,8 +1453,9 @@ struct IndexUndoableTextView: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             IndexTextAreaTemporaryHighlightRenderer.clear(in: textView)
+            diagnosticController.clear(in: textView, gutter: lineNumberGutter)
             refreshLineNumberGutter()
-            if text.wrappedValue != textView.string {
+            if !JSONExactTextIdentity.isExactlyEqual(text.wrappedValue, textView.string) {
                 text.wrappedValue = textView.string
             }
             measure(textView)
@@ -1370,6 +1504,7 @@ final class IndexEditorLineNumberGutterView: NSView {
 
     weak var scrollView: NSScrollView?
     weak var textView: NSTextView?
+    var diagnosticLine: Int? { didSet { if oldValue != diagnosticLine { needsDisplay = true } } }
     private var newlineOffsetsDirty = true
     private var newlineOffsets: [Int] = []
     private nonisolated(unsafe) var boundsObserver: NSObjectProtocol?
@@ -1494,7 +1629,8 @@ final class IndexEditorLineNumberGutterView: NSView {
             height: visibleRect.height
         )
         let glyphRange = layoutManager.glyphRange(forBoundingRect: containerRect, in: textContainer)
-        guard glyphRange.length > 0 || nsText.length == 0 else { return }
+        let terminal = terminalLineNumberFragment()
+        guard glyphRange.length > 0 || nsText.length == 0 || terminal != nil else { return }
 
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .right
@@ -1529,30 +1665,55 @@ final class IndexEditorLineNumberGutterView: NSView {
             let height = max(1, fragmentRect.height)
             guard y + height >= 0, y <= bounds.height else { return }
 
-            let lineNumber = self.lineNumber(at: characterIndex)
-            let label = "\(lineNumber)" as NSString
-            label.draw(
-                in: NSRect(
-                    x: 6,
-                    y: y + 3,
-                    width: Self.numberColumnWidth - 6,
-                    height: height
-                ),
-                withAttributes: attributes
-            )
+            self.drawLineNumber(self.lineNumber(at: characterIndex), y: y, height: height, attributes: attributes)
         }
+        if let terminal {
+            let y = terminal.rect.minY - visibleRect.minY
+            if y + terminal.rect.height >= 0, y <= bounds.height {
+                drawLineNumber(terminal.line, y: y, height: terminal.rect.height, attributes: attributes)
+            }
+        }
+    }
+
+    private func drawLineNumber(_ line: Int, y: CGFloat, height: CGFloat,
+                                attributes: [NSAttributedString.Key: Any]) {
+        var attributes = attributes
+        if line == diagnosticLine {
+            attributes[.foregroundColor] = NSColor(ToolTheme.error)
+            NSColor(ToolTheme.error).setFill()
+            NSBezierPath(ovalIn: NSRect(x: 1, y: y + 7, width: 4, height: 4)).fill()
+        }
+        ("\(line)" as NSString).draw(
+            in: NSRect(x: 6, y: y + 3, width: Self.numberColumnWidth - 6, height: max(1, height)),
+            withAttributes: attributes
+        )
+    }
+
+    /// TextKit's terminal empty line has no glyphs to enumerate. Its native
+    /// extra fragment also owns the diagnostic at EOF after a newline.
+    func terminalLineNumberFragment() -> (line: Int, rect: NSRect)? {
+        guard let textView, let manager = textView.layoutManager,
+              let container = textView.textContainer,
+              manager.extraLineFragmentTextContainer === container else { return nil }
+        let text = textView.string as NSString
+        if newlineOffsetsDirty { rebuildNewlineOffsets(for: text) }
+        guard text.length > 0, newlineOffsets.last == text.length - 1,
+              manager.extraLineFragmentRect.height > 0 else { return nil }
+        let origin = textView.textContainerOrigin
+        return (newlineOffsets.count + 1, manager.extraLineFragmentRect.offsetBy(dx: origin.x, dy: origin.y))
     }
 
     private func rebuildNewlineOffsets(for nsText: NSString) {
         var offsets: [Int] = []
         offsets.reserveCapacity(nsText.length / 32 + 1)
-        var searchRange = NSRange(location: 0, length: nsText.length)
-        while searchRange.location < nsText.length {
-            let found = nsText.range(of: "\n", options: [], range: searchRange)
-            guard found.location != NSNotFound else { break }
-            offsets.append(found.location)
-            searchRange.location = found.location + 1
-            searchRange.length = nsText.length - searchRange.location
+        var start = 0
+        while start < nsText.length {
+            var end = 0, contentsEnd = 0
+            nsText.getLineStart(nil, end: &end, contentsEnd: &contentsEnd,
+                                for: NSRange(location: start, length: 0))
+            guard end > start else { break }
+            if end > contentsEnd { offsets.append(end - 1) }
+            start = end
         }
         newlineOffsets = offsets
         newlineOffsetsDirty = false
@@ -1561,7 +1722,8 @@ final class IndexEditorLineNumberGutterView: NSView {
     private func isLogicalLineStart(at characterIndex: Int, in nsText: NSString) -> Bool {
         guard characterIndex > 0 else { return true }
         guard characterIndex <= nsText.length else { return false }
-        return nsText.character(at: characterIndex - 1) == unichar(10)
+        let line = lineNumber(at: characterIndex)
+        return line > 1 && newlineOffsets[line - 2] == characterIndex - 1
     }
 
     private func lineNumber(at characterIndex: Int) -> Int {

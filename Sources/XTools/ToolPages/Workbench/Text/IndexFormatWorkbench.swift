@@ -10,18 +10,20 @@ import XToolsCore
 /// inline diagnostic (anchored to the cluster so it never shifts), and the
 /// framed copy/clear actions plus the primary format action on the right —
 /// above a fixed two-pane code split with line-number gutters. A failed
-/// format tints the panel outline, rings it in the error tone, and shakes
-/// once per attempt; a warning shows the inline diagnostic only.
+/// format tints the panel outline; diagnostics occupy one stable status row
+/// and details open without changing editor geometry.
 struct IndexFormatWorkbench<LeadingControl: View>: View {
     let inputTitle: String
     let outputTitle: String
     @Binding var input: String
+    private let exactInputIdentity: JSONExactTextIdentity
     let output: String
     var inputPlaceholder = ""
     var diagnostic: String? = nil
     var diagnosticTone: ToolFeedbackTone = .error
     var diagnosticDetail: FormatDiagnostic? = nil
-    /// Bump per format attempt so a repeated identical error re-shakes.
+    var diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil
+    /// Retained for call-site compatibility and per-attempt feedback identity.
     var formatAttempt = 0
     var outputLineNumbers = true
     var outputSyntax: IndexSyntaxKind? = nil
@@ -50,7 +52,8 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     var workspaceSemantic: IndexWorkspaceSemantic = .structuredEditorTransform
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var droppedFile = IndexDroppedTextFile()
+    @StateObject private var droppedFile = IndexDroppedTextFile()
+    @State private var diagnosticNavigationToken = 0
     /// Output-breath generation: bumps once per explicit run that lands a
     /// fresh, non-empty, error-free result — each bump pulses the output
     /// pane's accent border exactly once (see `toolOutputBreath`).
@@ -65,6 +68,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         diagnostic: String? = nil,
         diagnosticTone: ToolFeedbackTone = .error,
         diagnosticDetail: FormatDiagnostic? = nil,
+        diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
         outputSyntax: IndexSyntaxKind? = nil,
@@ -94,6 +98,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             diagnostic: diagnostic,
             diagnosticTone: diagnosticTone,
             diagnosticDetail: diagnosticDetail,
+            diagnosticMarker: diagnosticMarker,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
             outputSyntax: outputSyntax,
@@ -126,6 +131,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         diagnostic: String? = nil,
         diagnosticTone: ToolFeedbackTone = .error,
         diagnosticDetail: FormatDiagnostic? = nil,
+        diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
         outputSyntax: IndexSyntaxKind? = nil,
@@ -156,6 +162,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             diagnostic: diagnostic,
             diagnosticTone: diagnosticTone,
             diagnosticDetail: diagnosticDetail,
+            diagnosticMarker: diagnosticMarker,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
             outputSyntax: outputSyntax,
@@ -188,6 +195,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         diagnostic: String?,
         diagnosticTone: ToolFeedbackTone,
         diagnosticDetail: FormatDiagnostic?,
+        diagnosticMarker: IndexTextAreaDiagnosticMarker?,
         formatAttempt: Int,
         outputLineNumbers: Bool,
         outputSyntax: IndexSyntaxKind?,
@@ -212,11 +220,13 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         self.inputTitle = inputTitle
         self.outputTitle = outputTitle
         self._input = input
+        self.exactInputIdentity = JSONExactTextIdentity(input.wrappedValue)
         self.output = output
         self.inputPlaceholder = inputPlaceholder
         self.diagnostic = diagnostic
         self.diagnosticTone = diagnosticTone
         self.diagnosticDetail = diagnosticDetail
+        self.diagnosticMarker = diagnosticMarker
         self.formatAttempt = formatAttempt
         self.outputLineNumbers = outputLineNumbers
         self.outputSyntax = outputSyntax
@@ -262,17 +272,7 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            if hasDiagnostic {
-                IndexDiagnosticBanner(
-                    diagnostic: diagnosticDetail,
-                    message: diagnostic!,
-                    tone: diagnosticTone
-                )
-                .transition(.asymmetric(
-                    insertion: .move(edge: .top).combined(with: .opacity),
-                    removal: .opacity.combined(with: .move(edge: .top))
-                ))
-            }
+            diagnosticStatusSlot
             HStack(spacing: ToolMetrics.Spacing.sm) {
                 inputPaneWithHeader
                     .toolPaneHoverChrome()
@@ -290,7 +290,6 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                 outputBreathGeneration += 1
             }
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: hasDiagnostic)
         .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))
         .background(
             ToolTheme.panelBackground,
@@ -303,11 +302,29 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                 : ToolTheme.Shadow.panel
         )
         .toolAnimation(ToolMotion.Preset.diagnostic, value: showsErrorState)
-        .toolErrorShake(
-            attempt: formatAttempt,
-            isActive: hasDiagnostic && diagnosticTone == .error
-        )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var diagnosticStatusSlot: some View {
+        ZStack(alignment: .leading) {
+            if let rejection = droppedFile.rejection {
+                HStack(spacing: 0) {
+                    IndexDiagnosticBanner(diagnostic: nil, message: rejection.message)
+                    IndexIconButton(systemImage: "xmark", help: "关闭导入提示", action: droppedFile.dismissRejection)
+                        .padding(.trailing, 8)
+                }
+            } else if hasDiagnostic, let diagnostic {
+                IndexDiagnosticBanner(
+                    diagnostic: diagnosticDetail,
+                    message: diagnostic,
+                    tone: diagnosticTone,
+                    onLocate: diagnosticMarker == nil ? nil : { diagnosticNavigationToken &+= 1 }
+                )
+            }
+        }
+        .frame(height: 36)
+        .frame(maxWidth: .infinity)
+        .toolAnimation(ToolMotion.Preset.diagnostic, value: hasDiagnostic)
     }
 
     // MARK: Toolbar
@@ -468,6 +485,8 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             text: $input,
             fillsHeight: true,
             autoFocus: autoFocus,
+            diagnosticMarker: hasDiagnostic ? diagnosticMarker : nil,
+            diagnosticNavigationToken: diagnosticNavigationToken,
             embedsFlat: inputHeader != nil,
             lineNumbers: true,
             onFileDrop: { content in
@@ -483,7 +502,11 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             let token = droppedFile.invalidate()
             _ = provider.loadObject(ofClass: URL.self) { url, _ in
                 Task { @MainActor in
-                    guard let url, droppedFile.isCurrent(token) else { return }
+                    guard droppedFile.isCurrent(token) else { return }
+                    guard let url else {
+                        droppedFile.rejectUnreadableDrop()
+                        return
+                    }
                     droppedFile.start(url: url) { content in
                         input = content
                         onFormat?()
@@ -492,7 +515,10 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             }
             return true
         }
-        .onChange(of: input) { _ in droppedFile.invalidate() }
+        .onChange(of: JSONExactTextIdentity(input)) { _ in
+            droppedFile.invalidate()
+            droppedFile.dismissRejection()
+        }
         .onDisappear { droppedFile.invalidate() }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .accessibilityLabel(inputTitle)
@@ -546,6 +572,7 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
         diagnostic: String? = nil,
         diagnosticTone: ToolFeedbackTone = .error,
         diagnosticDetail: FormatDiagnostic? = nil,
+        diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
         outputSyntax: IndexSyntaxKind? = nil,
@@ -573,6 +600,7 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
             diagnostic: diagnostic,
             diagnosticTone: diagnosticTone,
             diagnosticDetail: diagnosticDetail,
+            diagnosticMarker: diagnosticMarker,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
             outputSyntax: outputSyntax,
@@ -604,6 +632,7 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
         diagnostic: String? = nil,
         diagnosticTone: ToolFeedbackTone = .error,
         diagnosticDetail: FormatDiagnostic? = nil,
+        diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
         outputSyntax: IndexSyntaxKind? = nil,
@@ -632,6 +661,7 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView {
             diagnostic: diagnostic,
             diagnosticTone: diagnosticTone,
             diagnosticDetail: diagnosticDetail,
+            diagnosticMarker: diagnosticMarker,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
             outputSyntax: outputSyntax,

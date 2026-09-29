@@ -1,133 +1,118 @@
-import AppKit
 import SwiftUI
 import XToolsCore
 
-// MARK: - 顶栏诊断通栏横幅 (Top Banner)
+/// Summary and bounded safe details deliberately exclude source excerpts.
+/// The same projection backs the visible detail view and its copy action.
+struct IndexDiagnosticPresentation {
+    // Docker supplies at most 256 facts plus one explicit omission notice.
+    static let maximumDetails = 257
+    static let maximumDetailCharacters = 512
+    let summary: String
+    let suggestion: String?
+    let details: [String]
+    let omittedCount: Int
+    let location: String?
 
+    init(diagnostic: FormatDiagnostic?, message: String) {
+        summary = Self.bounded(message)
+        suggestion = diagnostic?.suggestion.flatMap { $0.isEmpty ? nil : Self.bounded($0) }
+        let sourceDetails = diagnostic?.details ?? []
+        details = sourceDetails.prefix(Self.maximumDetails).map(Self.bounded)
+        omittedCount = max(0, sourceDetails.count - details.count)
+        location = diagnostic?.line.map { line in
+            if let column = diagnostic?.column { return "第 \(line) 行，第 \(column) 列" }
+            return "第 \(line) 行"
+        }
+    }
+
+    var copyPayload: String {
+        var lines = [summary]
+        if let location { lines.append(location) }
+        if let suggestion { lines.append(suggestion) }
+        lines.append(contentsOf: details)
+        if omittedCount > 0 { lines.append("另有 \(omittedCount) 项未展示。") }
+        return lines.joined(separator: "\n")
+    }
+
+    private static func bounded(_ text: String) -> String {
+        let prefix = text.prefix(maximumDetailCharacters)
+        return prefix.endIndex == text.endIndex ? text : String(prefix) + "…"
+    }
+}
+
+/// One stable summary row; longer guidance lives in a popover so it cannot
+/// resize the editors or move their primary actions.
 struct IndexDiagnosticBanner: View {
     let diagnostic: FormatDiagnostic?
     let message: String
     var tone: ToolFeedbackTone = .error
-    @State private var isExpanded = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var onLocate: (() -> Void)? = nil
+    @State private var showsDetails = false
 
-    init(
-        diagnostic: FormatDiagnostic?,
-        message: String,
-        tone: ToolFeedbackTone = .error
-    ) {
-        self.diagnostic = diagnostic
-        self.message = message
-        self.tone = tone
-    }
-
-    private var hasSuggestion: Bool {
-        guard let suggestion = diagnostic?.suggestion else { return false }
-        return !suggestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private var fullCopyPayload: String {
-        var lines: [String] = []
-        let title = diagnostic?.formatName.isEmpty == false ? "\(diagnostic!.formatName) 格式化" : "提示"
-        lines.append("【\(title)】\(tone.accessibilityPrefix): \(message)")
-        if let line = diagnostic?.line {
-            let col = diagnostic?.column != nil ? ", 列 \(diagnostic!.column!)" : ""
-            lines.append("位置: 第 \(line) 行\(col)")
-        }
-        if let suggestion = diagnostic?.suggestion, !suggestion.isEmpty {
-            lines.append("修复建议: \(suggestion)")
-        }
-        return lines.joined(separator: "\n")
+    private var presentation: IndexDiagnosticPresentation {
+        IndexDiagnosticPresentation(diagnostic: diagnostic, message: message)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: tone.systemImage)
-                    .font(.system(size: ToolMetrics.IconSize.medium, weight: .semibold))
-                    .foregroundStyle(tone.tint)
-                    .accessibilityHidden(true)
-
-                if let line = diagnostic?.line {
-                    HStack(spacing: 3) {
-                        Text("行 \(line)")
-                        if let column = diagnostic?.column {
-                            Text(":\(column)")
-                        }
-                    }
+        HStack(spacing: 8) {
+            Image(systemName: tone.systemImage)
+                .font(.system(size: ToolMetrics.IconSize.medium, weight: .semibold))
+                .foregroundStyle(tone.tint)
+                .accessibilityHidden(true)
+            if let line = diagnostic?.line {
+                Text("行 \(line)")
                     .font(ToolTypography.monoLabel)
                     .foregroundStyle(tone.tint)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(tone.tint.opacity(0.12), in: Capsule())
-                }
-
-                Text(message)
-                    .font(ToolTypography.label)
-                    .foregroundStyle(ToolTheme.textPrimary)
-                    .lineLimit(isExpanded ? nil : 2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .toolMotionTextSwap(id: message)
-
-                Spacer(minLength: 8)
-
-                HStack(spacing: 6) {
-                    if hasSuggestion {
-                        Button {
-                            withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-                                isExpanded.toggle()
+                    .fixedSize()
+            }
+            Text(presentation.summary)
+                .font(ToolTypography.label)
+                .foregroundStyle(ToolTheme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .accessibilityLabel("\(tone.accessibilityPrefix)：\(presentation.summary)")
+            Spacer(minLength: 0)
+            if let onLocate {
+                Button("定位", action: onLocate)
+                    .buttonStyle(IndexSmallButtonStyle())
+                    .help("在当前输入中定位问题")
+                    .accessibilityLabel("定位问题，\(presentation.location ?? "当前输入")")
+            }
+            Button("详情") { showsDetails.toggle() }
+                .buttonStyle(IndexSmallButtonStyle())
+                .accessibilityLabel("查看诊断详情")
+                .popover(isPresented: $showsDetails, arrowEdge: .bottom) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(presentation.summary).font(ToolTypography.label)
+                            if let location = presentation.location {
+                                Text(location).font(ToolTypography.monoLabel).foregroundStyle(tone.tint)
                             }
-                        } label: {
-                            HStack(spacing: 3) {
-                                Text(isExpanded ? "收起建议" : "修复建议")
-                                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                                    .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
+                            if let suggestion = presentation.suggestion {
+                                Text(suggestion).font(ToolTypography.caption)
                             }
-                            .font(ToolTypography.caption)
-                            .foregroundStyle(tone.tint)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(tone.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
+                            ForEach(Array(presentation.details.enumerated()), id: \.offset) { _, detail in
+                                Text(detail).font(ToolTypography.caption)
+                            }
+                            if presentation.omittedCount > 0 {
+                                Text("另有 \(presentation.omittedCount) 项未展示。")
+                                    .font(ToolTypography.caption).foregroundStyle(ToolTheme.textSecondary)
+                            }
+                            IndexCopyButton(text: presentation.copyPayload, title: "复制诊断", showsIcon: false, framed: true)
                         }
-                        .buttonStyle(.plain)
-                        .help(isExpanded ? "收起建议" : "查看针对该问题的智能修复建议")
-                    }
-
-                    IndexCopyButton(
-                        text: fullCopyPayload,
-                        title: "复制",
-                        showsIcon: false,
-                        framed: true
-                    )
-                }
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-
-            if isExpanded, let suggestion = diagnostic?.suggestion {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "lightbulb.fill")
-                        .font(.system(size: ToolMetrics.IconSize.small))
-                        .foregroundStyle(ToolTheme.warning)
-                        .padding(.top, 1)
-                    Text(suggestion)
-                        .font(ToolTypography.caption)
-                        .foregroundStyle(ToolTheme.textPrimary)
-                        .lineSpacing(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
-                    Spacer(minLength: 0)
+                        .padding(14)
+                    }
+                    .frame(width: 380, height: 250)
                 }
-                .padding(9)
-                .background(ToolTheme.warningSoft.opacity(0.65), in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
-                .padding(.horizontal, 14)
-                .padding(.bottom, 9)
-                .transition(.opacity.combined(with: .move(edge: .top)))
-            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, minHeight: 36, maxHeight: 36, alignment: .leading)
         .background(tone.softFill)
         .overlay(alignment: .bottom) {
             Rectangle().fill(tone.tint.opacity(0.25)).frame(height: 0.5)
         }
+        .onChange(of: message) { _ in showsDetails = false }
     }
 }

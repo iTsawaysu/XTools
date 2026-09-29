@@ -252,7 +252,7 @@ struct XMLFormattingTests {
         }
 
         #expect(diagnostic.line != nil)
-        #expect(diagnostic.column != nil)
+        #expect(diagnostic.column == nil, "Foundation only supplies a reliable source line")
         #expect(diagnostic.excerpt?.contains("</root>") == true)
         #expect(diagnostic.localizedDescription == diagnostic.message)
         #expect(diagnostic.formatName == "XML")
@@ -271,7 +271,7 @@ struct XMLFormattingTests {
         }
 
         #expect(diagnostic.line == 1)
-        #expect(diagnostic.column == 27)
+        #expect(diagnostic.column == nil, "Do not advertise parser read-ahead as a precise source column")
         #expect(diagnostic.localizedDescription == "属性值必须使用引号")
         #expect(diagnostic.displayMessage == "属性值必须使用引号")
         #expect(!diagnostic.localizedDescription.contains("NSXMLParserErrorDomain"))

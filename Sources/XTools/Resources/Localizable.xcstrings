@@ -3027,6 +3027,48 @@
     },
     "（空）" : {
       "extractionState" : "manual"
+    },
+    "使用明确的参数值；字面美元可用单引号或反斜杠保护，转换器不会执行 Shell。" : {
+      "extractionState" : "manual"
+    },
+    "关闭导入提示" : {
+      "extractionState" : "manual"
+    },
+    "只能导入普通文本文件，原输入已保留。" : {
+      "extractionState" : "manual"
+    },
+    "图片加载会话已结束。" : {
+      "extractionState" : "manual"
+    },
+    "在当前输入中定位问题" : {
+      "extractionState" : "manual"
+    },
+    "复制诊断" : {
+      "extractionState" : "manual"
+    },
+    "定位" : {
+      "extractionState" : "manual"
+    },
+    "文件不是有效的 UTF-8 或 UTF-16 文本，原输入已保留。" : {
+      "extractionState" : "manual"
+    },
+    "文件超过 15 MB 导入上限，原输入已保留。" : {
+      "extractionState" : "manual"
+    },
+    "无法读取文件，原输入已保留。" : {
+      "extractionState" : "manual"
+    },
+    "查看诊断详情" : {
+      "extractionState" : "manual"
+    },
+    "正在加载图片…" : {
+      "extractionState" : "manual"
+    },
+    "详情" : {
+      "extractionState" : "manual"
+    },
+    "部分内容已简化着色；仍可选择和复制全文" : {
+      "extractionState" : "manual"
     }
   },
   "version" : "1.0"

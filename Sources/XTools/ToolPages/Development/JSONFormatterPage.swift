@@ -24,7 +24,7 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
 
     @Published var input = "" {
         didSet {
-            guard input != oldValue else { return }
+            guard !JSONExactTextIdentity.isExactlyEqual(input, oldValue) else { return }
             execution.sourceDidChange()
         }
     }
@@ -119,6 +119,7 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                 diagnostic: execution.binding.error ?? execution.binding.warning,
                 diagnosticTone: execution.binding.error == nil ? .warning : .error,
                 diagnosticDetail: execution.diagnostic,
+                diagnosticMarker: execution.diagnosticMarker,
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
                 outputSyntax: .json,
@@ -223,7 +224,7 @@ private struct IndexJSONFormatterWorkspaceContent: View {
             unescape: workspace.unescape,
             escape: workspace.escape
         )
-        execution.schedule(snapshot: snapshot, delay: .zero) { snapshot in
+        execution.schedule(snapshot: snapshot, sourceText: snapshot.unescape ? nil : snapshot.input, delay: .zero) { snapshot in
             var textToFormat = snapshot.input
             if snapshot.unescape {
                 textToFormat = JSONFormatting.unescapeJSON(textToFormat)

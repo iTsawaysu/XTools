@@ -59,9 +59,9 @@ public enum SQLFormatting {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return "" }
 
-        var lexer = SQLLexer(trimmed)
+        var lexer = SQLLexer(input)
         let positionedTokens = try lexer.tokenizeWithPositions()
-        try validate(positionedTokens, input: trimmed)
+        try validate(positionedTokens, input: input)
 
         var formatter = SQLFormatter(tokens: positionedTokens.map(\.token), options: options)
         return formatter.render()

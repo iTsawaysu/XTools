@@ -34,8 +34,12 @@ public enum XMLFormatting {
         }
 
         let normalizedInput = normalizeStringEncodingDeclaration(in: trimmed)
+        let originalStart = input.firstIndex(where: { !$0.isWhitespace }) ?? input.endIndex
+        let leadingLines = input[..<originalStart].reduce(0) { $0 + ($1.isNewline ? 1 : 0) }
         do {
-            if let syntaxDiagnostic = syntaxDiagnostic(for: normalizedInput) {
+            if let syntaxDiagnostic = syntaxDiagnostic(
+                for: normalizedInput, originalInput: input, leadingLines: leadingLines
+            ) {
                 throw FormattingError.invalidXML(syntaxDiagnostic)
             }
 
@@ -98,7 +102,9 @@ public enum XMLFormatting {
         try format(input, indentWidth: 0, minify: true)
     }
 
-    private static func syntaxDiagnostic(for input: String) -> FormatDiagnostic? {
+    private static func syntaxDiagnostic(
+        for input: String, originalInput: String, leadingLines: Int
+    ) -> FormatDiagnostic? {
         guard let data = input.data(using: .utf8) else {
             return FormatDiagnostic(
                 formatName: "XML",
@@ -129,28 +135,28 @@ public enum XMLFormatting {
         // 解析失败后检查最后一个 CDATA 是否有配对的 ]]>：把这类输入归因到
         // CDATA 起始处。合法文档中每个 CDATA 都必有闭合标记，该检查只在
         // 失败路径执行，不影响成功解析的成本。
-        if let lastCDATAStart = input.range(of: "<![CDATA[", options: .backwards),
-           input.range(of: "]]>", range: lastCDATAStart.upperBound..<input.endIndex) == nil {
+        if let lastCDATAStart = originalInput.range(of: "<![CDATA[", options: .backwards),
+           originalInput.range(of: "]]>", range: lastCDATAStart.upperBound..<originalInput.endIndex) == nil {
             return FormatDiagnostic(
                 formatName: "XML",
                 message: "CDATA 区域没有闭合",
-                input: input,
+                input: originalInput,
                 index: lastCDATAStart.lowerBound,
                 suggestion: "补上 CDATA 结尾的 ]]>。"
             )
         }
 
-        let line = max(1, parser.lineNumber)
-        let column = max(1, parser.columnNumber)
+        let line = max(1, parser.lineNumber) + leadingLines
         let sourceError = delegate.error ?? parser.parserError
         let message = xmlMessage(from: sourceError)
 
         return FormatDiagnostic(
             formatName: "XML",
             message: message,
-            input: input,
             line: line,
-            column: column,
+            // Foundation's column unit and the rewritten encoding declaration
+            // do not provide a reliable original character range. Mark the line.
+            excerpt: FormatDiagnostic.lineExcerpt(in: originalInput, line: line, column: 1),
             suggestion: xmlSuggestion(from: sourceError)
         )
     }

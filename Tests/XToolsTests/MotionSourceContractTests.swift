@@ -166,10 +166,12 @@ struct MotionSourceContractTests {
         contains(shared, ".toolAnimation(ToolMotion.Preset.diagnostic, value: text)", "Workspace diagnostic regions must animate through ToolMotion")
         doesNotContain(shared, ".easeInOut(duration: 0.15)", "Workspace diagnostics must not keep hard-coded diagnostic animation durations")
 
-        // 4c996aa：诊断提示统一为顶栏通栏横幅并刻意移除错误抖动；横幅出现
-        // 的 spring 必须继续绑定 hasDiagnostic（值作用域），不得退回无条件
-        // 隐式动画或 withAnimation。
-        contains(workbench, ".animation(.spring(response: 0.32, dampingFraction: 0.84), value: hasDiagnostic)", "The diagnostic banner reveal must stay scoped to hasDiagnostic changes")
+        // Other conversion workbenches retain their existing transition contract.
+        contains(workbench, ".animation(.spring(response: 0.32, dampingFraction: 0.84), value: hasDiagnostic)", "Existing conversion banner reveal must stay scoped to its state")
+        let formatWorkbench = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexFormatWorkbench.swift")
+        contains(formatWorkbench, ".toolAnimation(ToolMotion.Preset.diagnostic, value: hasDiagnostic)", "Formatter feedback must respect shared Reduce Motion policy")
+        contains(formatWorkbench, ".frame(height: 36)", "The formatter diagnostic slot must keep editor geometry stable")
+        doesNotContain(formatWorkbench, ".animation(.spring", "Formatter diagnostics must not bypass ToolMotion")
         doesNotContain(workbench, "withAnimation(", "The fixed text conversion workbench must not retain a focus-mode animation path")
         doesNotContain(commandPalette, "withAnimation(.easeInOut(duration: 0.12))", "Command palette row reveal must remain unanimated")
         doesNotContain(commandPalette, "GeometryReader", "Command palette row reveal must not add continuous geometry measurement")
@@ -559,7 +561,7 @@ struct MotionSourceContractTests {
         doesNotContain(modifier, ".scaleEffect(", "Hover must not scale the pane (discipline: no hover transform)")
     }
 
-    @Test func wave2ErrorFeedbackShakesOnceAndNeverFlashes() throws {
+    @Test func errorFeedbackKeepsFormatterGeometryStableAndNeverFlashes() throws {
         let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
         let shared = try readSource("Sources/XTools/Shared/Components/InteractionFeedback.swift")
         let workbench = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexFormatWorkbench.swift")
@@ -575,9 +577,11 @@ struct MotionSourceContractTests {
         contains(shared, "struct ToolShakeEffect: GeometryEffect", "Shake must be the shared damped-sine GeometryEffect")
         contains(shared, "strokeBorder(ToolTheme.error, lineWidth: 1)", "Error border must keep a constant width; only opacity moves")
         doesNotContain(shared, "opacity(ToolTheme.error.opacity(0.55))", "Tint must not blink through a conditional border swap")
-        contains(workbench, ".toolErrorShake(", "The format workbench must consume its attempt counter for the shake")
+        doesNotContain(workbench, ".toolErrorShake(", "Formatter errors must not shake the editor workspace")
         contains(workbench, ".toolErrorTint(active: showsErrorState", "The error chrome must be state-held, not conditionally laid out")
-        contains(banner, ".toolMotionTextSwap(id: message)", "Diagnostic banner text must crossfade, never snap")
+        contains(banner, ".popover(isPresented: $showsDetails", "Diagnostic details must not change editor geometry")
+        contains(banner, "minHeight: 36, maxHeight: 36", "Diagnostic summaries must occupy one stable row")
+        doesNotContain(banner, "withAnimation(", "Diagnostic details must not bypass system motion preferences")
     }
 
     @Test func wave2SidebarPillStretchesOnMultiRowJumps() throws {

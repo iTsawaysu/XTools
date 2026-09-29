@@ -24,7 +24,7 @@ final class XMLFormatterToolWorkspaceModel: ObservableObject {
 
     @Published var input = "" {
         didSet {
-            guard input != oldValue else { return }
+            guard !JSONExactTextIdentity.isExactlyEqual(input, oldValue) else { return }
             execution.sourceDidChange()
         }
     }
@@ -82,6 +82,7 @@ private struct IndexXMLFormatWorkspaceContent: View {
                 diagnostic: execution.binding.error ?? execution.binding.warning,
                 diagnosticTone: execution.binding.error == nil ? .warning : .error,
                 diagnosticDetail: execution.diagnostic,
+                diagnosticMarker: execution.diagnosticMarker,
                 formatAttempt: formatAttempt,
                 outputLineNumbers: true,
                 outputSyntax: .xml,
@@ -124,7 +125,7 @@ private struct IndexXMLFormatWorkspaceContent: View {
         let indentWidth = workspace.formatMode == .four ? 4 : 2
         let minify = workspace.formatMode == .compact
         let snapshot = (input: workspace.input, indentWidth: indentWidth, minify: minify)
-        execution.schedule(snapshot: snapshot, delay: .zero) { snapshot in
+        execution.schedule(snapshot: snapshot, sourceText: snapshot.input, delay: .zero) { snapshot in
             FormatRunner.run(snapshot.input) {
                 try XMLFormatting.format($0, indentWidth: snapshot.indentWidth, minify: snapshot.minify)
             }

@@ -24,7 +24,7 @@ final class SQLPrettifyToolWorkspaceModel: ObservableObject {
 
     @Published var input = "" {
         didSet {
-            guard input != oldValue else { return }
+            guard !JSONExactTextIdentity.isExactlyEqual(input, oldValue) else { return }
             execution.sourceDidChange()
         }
     }
@@ -90,6 +90,7 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
                 diagnostic: execution.binding.error ?? execution.binding.warning,
                 diagnosticTone: execution.binding.error == nil ? .warning : .error,
                 diagnosticDetail: execution.diagnostic,
+                diagnosticMarker: execution.diagnosticMarker,
                 formatAttempt: formatAttempt,
                 // SQL output is line-oriented; keep the gutter aligned with syntax colors.
                 outputLineNumbers: true,
@@ -160,7 +161,7 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
                 minify: minify
             )
         )
-        execution.schedule(snapshot: snapshot, delay: .zero) { snapshot in
+        execution.schedule(snapshot: snapshot, sourceText: snapshot.input, delay: .zero) { snapshot in
             FormatRunner.run(snapshot.input) {
                 try SQLFormatting.format($0, options: snapshot.options)
             }

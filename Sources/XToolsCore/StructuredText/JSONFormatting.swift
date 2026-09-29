@@ -987,10 +987,7 @@ private struct OrderedJSONParser {
             return "数组元素之间多了逗号或缺少元素"
         case .arrayNotClosed:
             return "数组没有完整闭合"
-        case .containerNotClosed(let kind, _, let key):
-            if let key, !key.isEmpty {
-                return "\(kind == .object ? "对象" : "数组")没有完整闭合（键名 \"\(key)\" 缺少匹配的 '\(kind == .object ? "}" : "]")'）"
-            }
+        case .containerNotClosed(let kind, _, _):
             return "\(kind == .object ? "对象" : "数组")没有完整闭合（缺少匹配的 '\(kind == .object ? "}" : "]")'）"
         case .exceededMaxDepth:
             return "JSON 嵌套层级过深，超过最大安全深度 (32 层)"

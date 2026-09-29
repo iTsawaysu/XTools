@@ -11,6 +11,8 @@ struct IndexWorkspaceTextArea: View {
     var autoFocus = false
     var caretPlacementRequestToken: Int? = nil
     var temporaryHighlights: IndexTextAreaTemporaryHighlights? = nil
+    var diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil
+    var diagnosticNavigationToken = 0
     var inputRenderingMode: IndexTextAreaRenderingMode? = nil
     var inputPolicy: IndexTextAreaInputPolicy? = nil
     /// Prototype v3 embedded-code presentation (owning panel supplies the
@@ -20,6 +22,47 @@ struct IndexWorkspaceTextArea: View {
     var onFileDrop: ((String) -> Void)? = nil
     var droppedFile: IndexDroppedTextFile? = nil
     var workspaceSemantic: IndexWorkspaceSemantic = .unmigratedPageDefault
+
+    private let exactTextIdentity: JSONExactTextIdentity
+
+    init(
+        placeholder: String,
+        text: Binding<String>,
+        minHeight: CGFloat = 220,
+        maxHeightRatio: CGFloat? = nil,
+        fillsHeight: Bool = false,
+        autoFocus: Bool = false,
+        caretPlacementRequestToken: Int? = nil,
+        temporaryHighlights: IndexTextAreaTemporaryHighlights? = nil,
+        diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
+        diagnosticNavigationToken: Int = 0,
+        inputRenderingMode: IndexTextAreaRenderingMode? = nil,
+        inputPolicy: IndexTextAreaInputPolicy? = nil,
+        embedsFlat: Bool = false,
+        lineNumbers: Bool = false,
+        onFileDrop: ((String) -> Void)? = nil,
+        droppedFile: IndexDroppedTextFile? = nil,
+        workspaceSemantic: IndexWorkspaceSemantic = .unmigratedPageDefault
+    ) {
+        self.placeholder = placeholder
+        self._text = text
+        self.minHeight = minHeight
+        self.maxHeightRatio = maxHeightRatio
+        self.fillsHeight = fillsHeight
+        self.autoFocus = autoFocus
+        self.caretPlacementRequestToken = caretPlacementRequestToken
+        self.temporaryHighlights = temporaryHighlights
+        self.diagnosticMarker = diagnosticMarker
+        self.diagnosticNavigationToken = diagnosticNavigationToken
+        self.inputRenderingMode = inputRenderingMode
+        self.inputPolicy = inputPolicy
+        self.embedsFlat = embedsFlat
+        self.lineNumbers = lineNumbers
+        self.onFileDrop = onFileDrop
+        self.droppedFile = droppedFile
+        self.workspaceSemantic = workspaceSemantic
+        self.exactTextIdentity = JSONExactTextIdentity(text.wrappedValue)
+    }
 
     private var resolution: IndexWorkspaceResolution {
         workspaceSemantic.resolvedWorkspace
@@ -42,6 +85,8 @@ struct IndexWorkspaceTextArea: View {
             autoFocus: autoFocus,
             caretPlacementRequestToken: caretPlacementRequestToken,
             temporaryHighlights: temporaryHighlights,
+            diagnosticMarker: diagnosticMarker,
+            diagnosticNavigationToken: diagnosticNavigationToken,
             inputPolicy: inputPolicy,
             embedsFlat: embedsFlat,
             lineNumbers: lineNumbers,
