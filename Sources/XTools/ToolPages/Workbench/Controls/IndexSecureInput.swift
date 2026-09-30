@@ -29,6 +29,7 @@ struct IndexSecureInput: View {
                 showsSecret.toggle()
             }
             .frame(width: 32, height: 32)
+            .arrowCursorOnHover()
             .toolMotionIconSwap(id: showsSecret)
             .padding(.trailing, 5)
         }

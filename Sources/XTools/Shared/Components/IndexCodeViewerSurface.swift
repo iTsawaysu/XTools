@@ -22,6 +22,48 @@ private enum IndexCodeViewerLayout {
     }
 }
 
+/// Reports the floating footer's fitted height so the native document can grow
+/// an equally tall tail (scroll-end clearance) without a second layout system.
+private struct IndexCodeViewerFooterHeightPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// Glass mask for the floating status footer: a square top edge (the hairline)
+/// and bottom corners matching the field the band floats inside.
+private struct IndexCodeViewerFooterGlassShape: Shape {
+    let cornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let radius = min(cornerRadius, rect.width / 2, rect.height)
+        guard radius > 0 else { return Path(rect) }
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - radius))
+        path.addArc(
+            center: CGPoint(x: rect.maxX - radius, y: rect.maxY - radius),
+            radius: radius,
+            startAngle: .degrees(0),
+            endAngle: .degrees(90),
+            clockwise: false
+        )
+        path.addLine(to: CGPoint(x: rect.minX + radius, y: rect.maxY))
+        path.addArc(
+            center: CGPoint(x: rect.minX + radius, y: rect.maxY - radius),
+            radius: radius,
+            startAngle: .degrees(90),
+            endAngle: .degrees(180),
+            clockwise: false
+        )
+        path.closeSubpath()
+        return path
+    }
+}
+
 /// High-performance read-only code surface built on AppKit `NSTextView` and
 /// `IndexEditorLineNumberGutterView`.
 ///
@@ -37,6 +79,9 @@ struct IndexCodeViewerSurface: View {
     @State private var fullTextSource: IndexCodeViewerText?
     @State private var previewSource: IndexCodeViewerText?
     @State private var previewCharacterCount: Int?
+    /// Fitted height of the currently mounted glass footer; feeds the native
+    /// document's scroll-end clearance (see `IndexCodeViewerFooterHeightPreferenceKey`).
+    @State private var footerHeight: CGFloat = 0
     private let text: IndexCodeViewerText
     var placeholder: String = IndexEmptyStateCopy.outputWillShowHere
     var lineNumbers: Bool = true
@@ -68,8 +113,16 @@ struct IndexCodeViewerSurface: View {
 
     private var effectiveMinHeight: CGFloat { fillsHeight ? 60 : minHeight }
 
+    /// The footer overlays the viewport only while a notice exists; the scroll
+    /// document's tail grows to match (prototype G1 glass band).
+    private var footerOverlayHeight: CGFloat {
+        let showsPreviewFooter = previewSource == text && previewCharacterCount != nil
+        let showsDegradationFooter = highlightingLimited && !text.isEmpty
+        return showsPreviewFooter || showsDegradationFooter ? footerHeight : 0
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack(alignment: .bottom) {
             ZStack(alignment: .topLeading) {
                 IndexCodeViewerTextView(
                     text: text,
@@ -78,6 +131,7 @@ struct IndexCodeViewerSurface: View {
                     lineBreakMode: lineBreakMode,
                     embedsFlat: embedsFlat,
                     permitsFullText: fullTextSource == text,
+                    bottomInset: footerOverlayHeight,
                     onPreviewChange: { source, count in
                         Task { @MainActor in
                             previewSource = source
@@ -101,30 +155,30 @@ struct IndexCodeViewerSurface: View {
                         )
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
             if previewSource == text, let previewCharacterCount {
                 statusFooter {
                     VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
-                        Text("预览前 \(previewCharacterCount) 个字符；选择与查找仅限预览")
-                            .font(ToolTypography.monoCaption)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                        noticeRow(
+                            icon: "eye",
+                            "预览前 \(previewCharacterCount) 个字符；选择与查找仅限预览"
+                        )
                         HStack(spacing: ToolMetrics.Spacing.sm) {
-                            IndexCopyButton(text: text.value, title: "复制全文", showsIcon: false)
+                            IndexCopyButton(text: text.value, title: "复制全文", showsIcon: false, framed: true)
                             Button("载入全文") { fullTextSource = text }
-                                .buttonStyle(IndexSmallButtonStyle())
+                                .buttonStyle(IndexSmallButtonStyle(framed: true))
                                 .help("全文排版可能需要较长时间")
                         }
                     }
                 }
             } else if highlightingLimited, !text.isEmpty {
                 statusFooter {
-                    Text("部分内容已简化着色；仍可选择和复制全文")
-                        .font(ToolTypography.monoCaption)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                    noticeRow(icon: "paintpalette", "部分内容已简化着色；仍可选择和复制全文")
                 }
             }
         }
+        .onPreferenceChange(IndexCodeViewerFooterHeightPreferenceKey.self) { footerHeight = $0 }
         .onChange(of: text) { _ in fullTextSource = nil }
         .animation(
             reduceMotion ? nil : ToolMotion.EmptyArrival.elementArrival,
@@ -151,6 +205,31 @@ struct IndexCodeViewerSurface: View {
         .accessibilityElement(children: .contain)
     }
 
+    /// Icon + notice line. The glyph shares the notice's secondary ink so the
+    /// monochrome viewport never gains a competing color accent. Icon and text
+    /// form one static-text element whose frame keeps the code reading edge
+    /// (the icon marks the column the text no longer starts at).
+    private func noticeRow(icon systemImage: String, _ message: String) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: systemImage)
+                .font(.system(size: ToolMetrics.IconSize.small, weight: .medium))
+                .foregroundStyle(ToolTheme.textSecondary)
+                .padding(.top, 1.5)
+                .accessibilityHidden(true)
+            Text(verbatim: message)
+                .font(ToolTypography.caption)
+                .foregroundStyle(ToolTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityAddTraits(.isStaticText)
+        .accessibilityLabel(message)
+    }
+
+    /// Frosted chrome band floating over the viewport's bottom edge (prototype
+    /// G1): the notice and its actions ride the system material, so scrolling
+    /// content passes under them blurred instead of reading as more output.
     private func statusFooter<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 0) {
             Rectangle()
@@ -163,9 +242,29 @@ struct IndexCodeViewerSurface: View {
                 .padding(.trailing, IndexCodeViewerLayout.horizontalInset)
                 .padding(.vertical, ToolMetrics.Spacing.sm)
         }
-        // The footer sizes to its content; only the code viewport gives up
-        // height when the notice wraps in a narrow pane.
         .fixedSize(horizontal: false, vertical: true)
+        .background {
+            // ultraThin keeps the light frost translucent; the adaptive
+            // editor tint restores enough body in dark mode that the notice
+            // stays legible over busy content.
+            IndexCodeViewerFooterGlassShape(cornerRadius: ToolMetrics.CornerRadius.field)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    IndexCodeViewerFooterGlassShape(cornerRadius: ToolMetrics.CornerRadius.field)
+                        .fill(ToolTheme.editorBackground.opacity(0.35))
+                }
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: IndexCodeViewerFooterHeightPreferenceKey.self,
+                    value: proxy.size.height
+                )
+            }
+        }
+        // The band is chrome over the selectable text surface, never a
+        // typeable/selectable hover target itself.
+        .arrowCursorOnHover()
     }
 
     private var placeholderView: some View {
@@ -224,6 +323,9 @@ private final class IndexCodeViewerTextViewInternal: NSTextView, IndexAsymmetric
 private final class IndexCodeViewerScrollView: NSScrollView {
     weak var lineNumberGutter: IndexEditorLineNumberGutterView?
     var onViewportSizeChange: (() -> Void)?
+    /// Tail space appended to the scroll document while the glass footer
+    /// floats over the viewport, keeping the last line reachable above it.
+    var bottomInset: CGFloat = 0
     private var isSynchronizing = false
     private var lastViewportSize: NSSize = .zero
 
@@ -266,6 +368,7 @@ private final class IndexCodeViewerScrollView: NSScrollView {
             for: textView,
             visibleWidth: contentSize.width,
             minimumHeight: contentSize.height,
+            bottomPadding: bottomInset,
             usesViewportLayout: true
         )
     }
@@ -278,6 +381,7 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
     var lineBreakMode: NSLineBreakMode
     var embedsFlat: Bool
     var permitsFullText: Bool
+    var bottomInset: CGFloat
     var onPreviewChange: (IndexCodeViewerText, Int?) -> Void
     var onHighlightingDegradation: (Bool) -> Void
 
@@ -295,6 +399,7 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
+        scrollView.bottomInset = bottomInset
 
         textView.autoresizingMask = [.width]
         textView.minSize = NSSize(width: 0, height: 0)
@@ -352,6 +457,11 @@ private struct IndexCodeViewerTextView: NSViewRepresentable {
               let textView = customScrollView.documentView as? IndexCodeViewerTextViewInternal else { return }
         configure(textView)
         context.coordinator.highlighting.onDegradationChange = onHighlightingDegradation
+
+        if customScrollView.bottomInset != bottomInset {
+            customScrollView.bottomInset = bottomInset
+            customScrollView.synchronizeTextGeometry()
+        }
 
         if context.coordinator.lastText != text || context.coordinator.lastSyntax != syntax
             || context.coordinator.lastPermitsFullText != permitsFullText {

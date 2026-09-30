@@ -11,12 +11,8 @@ DerivedData/
 *.playground/
 
 # Swift 包管理器
-.build/
-.build-*
-.build-*/
-.swiftpm-*
-.swiftpm/
-*.swiftpm
+.build*
+.swift*
 .Package.test.resolved
 
 # 构建与打包输出

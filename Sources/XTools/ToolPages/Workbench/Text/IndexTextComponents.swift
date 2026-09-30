@@ -390,6 +390,7 @@ struct IndexSearchInput: View {
                     help: clearTitle,
                     action: clear
                 )
+                .arrowCursorOnHover()
                 .padding(.trailing, 4)
             }
         }
@@ -881,7 +882,7 @@ struct IndexTextArea: View {
                     .strokeBorder(ToolTheme.border, lineWidth: 0.5)
             }
         }
-        .iBeamCursorOnHover()
+        .iBeamCursorOnHover(excludingLeading: lineNumbers ? IndexEditorLineNumberGutter.width : 0)
     }
 }
 
@@ -1586,6 +1587,12 @@ final class IndexEditorLineNumberGutterView: NSView {
         nil
     }
 
+    /// The number column is chrome, not selectable content: keep the arrow
+    /// cursor over it even though the gutter stays hit-test transparent.
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .arrow)
+    }
+
     /// The scroll view is frame-managed (no Auto Layout), so the gutter keeps
     /// its own frame in sync at draw time; autoresizing covers live resizes
     /// between draws.
@@ -1784,6 +1791,7 @@ enum IndexTextKitGeometry {
         visibleWidth: CGFloat,
         minimumHeight: CGFloat,
         trailingReadingGuard: CGFloat = trailingWrapGuard,
+        bottomPadding: CGFloat = 0,
         usesViewportLayout: Bool = false
     ) {
         let width = max(1, floor(visibleWidth.isFinite ? visibleWidth : textView.bounds.width))
@@ -1808,7 +1816,10 @@ enum IndexTextKitGeometry {
         let documentHeight = usesViewportLayout
             ? IndexNativeViewportLayout.documentHeight(for: textView)
             : measuredTextHeight(for: textView)
-        let height = max(resolvedMinimumHeight, documentHeight)
+        // bottomPadding grows the document's tail so a floating chrome band
+        // (the code viewer's glass footer) can overlap the viewport while the
+        // last line still rests fully above it at the end of the scroll range.
+        let height = max(resolvedMinimumHeight, documentHeight + bottomPadding)
         let currentSize = textView.frame.size
         guard abs(currentSize.width - width) > 0.01 || abs(currentSize.height - height) > 0.01 else {
             return

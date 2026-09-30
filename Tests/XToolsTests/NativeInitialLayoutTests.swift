@@ -141,10 +141,17 @@ struct NativeInitialLayoutTests {
         let viewport = window.convertToScreen(scrollView.convert(scrollView.bounds, to: nil))
         let textOrigin = window.convertPoint(toScreen: editor.convert(editor.textContainerOrigin, to: nil))
         let surface = window.convertToScreen(host.convert(host.bounds, to: nil))
-        #expect(abs(notice.frame.minX - textOrigin.x) < 1,
+        // 1.5pt tolerance: the icon-bearing combined row rasterizes on the
+        // half-point; the column edge itself is unchanged.
+        #expect(abs(notice.frame.minX - textOrigin.x) <= 1.5,
                 "The footer notice must share the real native code origin, including the optional gutter")
-        #expect(notice.frame.maxY <= viewport.minY - 4,
-                "The footer must remain below a separated viewport, not overlap code")
+        // The G1 glass footer floats over the viewport's bottom edge as chrome;
+        // scrolling content passes under it instead of the viewport ending above.
+        // (Screen coordinates are bottom-left origin: the viewport's bottom is minY.)
+        #expect(notice.frame.maxY <= viewport.maxY + 0.5,
+                "The glass footer must stay inside the field's top edge")
+        #expect(notice.frame.minY >= viewport.minY - 0.5 && notice.frame.minY <= viewport.minY + 140,
+                "The glass footer must float over the viewport bottom edge, not stack below it")
         #expect(notice.frame.maxX <= surface.maxX - 8)
         #expect(notice.frame.height >= 12, "Narrow notices must retain readable wrapped height")
         for button in buttons where ["复制全文", "载入全文"].contains(button.label ?? "") {
@@ -155,6 +162,25 @@ struct NativeInitialLayoutTests {
             #expect(button.frame.minY >= surface.minY + 6,
                     "The footer actions must not crowd the field's bottom border")
         }
+        // The scroll document grows a tail equal to the band, so the end of the
+        // preview rests fully above the glass instead of hiding beneath it.
+        editor.scrollToEndOfDocument(nil)
+        host.layoutSubtreeIfNeeded()
+        window.displayIfNeeded()
+        CATransaction.flush()
+        let layoutManager = try #require(editor.layoutManager)
+        let textContainer = try #require(editor.textContainer)
+        let textLength = (editor.string as NSString).length
+        let lastGlyphRange = layoutManager.glyphRange(
+            forCharacterRange: NSRange(location: max(0, textLength - 1), length: 1),
+            actualCharacterRange: nil
+        )
+        let lastLineRect = layoutManager.boundingRect(forGlyphRange: lastGlyphRange, in: textContainer)
+            .offsetBy(dx: editor.textContainerOrigin.x, dy: editor.textContainerOrigin.y)
+        let lastLineScreen = window.convertToScreen(editor.convert(lastLineRect, to: nil))
+        let glassTop = notice.frame.minY + ToolMetrics.Spacing.sm
+        #expect(lastLineScreen.minY >= glassTop - 1.5,
+                "Scrolling to the end must rest the last line above the floating glass footer")
         #expect(load.press())
         try await waitUntil { editor.string.utf8.elementsEqual(text.utf8) }
         #expect(findTextView(in: host) === editor,
@@ -173,9 +199,13 @@ struct NativeInitialLayoutTests {
                 && ($0.label ?? $0.value ?? "").contains("部分内容已简化着色")
         })
         let fullViewport = window.convertToScreen(scrollView.convert(scrollView.bounds, to: nil))
-        #expect(abs(highlightingNotice.frame.minX - textOrigin.x) < 1,
+        #expect(abs(highlightingNotice.frame.minX - textOrigin.x) <= 1.5,
                 "The coloring-only notice must reuse the same reading edge")
-        #expect(highlightingNotice.frame.maxY <= fullViewport.minY - 4)
+        #expect(highlightingNotice.frame.maxY <= fullViewport.maxY + 0.5,
+                "The coloring-only glass footer must stay inside the field's top edge")
+        #expect(highlightingNotice.frame.minY >= fullViewport.minY - 0.5
+                    && highlightingNotice.frame.minY <= fullViewport.minY + 140,
+                "The coloring-only glass footer must float over the viewport bottom edge")
         #expect(highlightingNotice.frame.minY >= surface.minY + 6)
     }
 

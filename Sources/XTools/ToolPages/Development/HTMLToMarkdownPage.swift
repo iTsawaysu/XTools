@@ -131,6 +131,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                     }
                     .buttonStyle(IndexBareButtonStyle())
                     .padding(.trailing, 8)
+                    .arrowCursorOnHover()
                     .help("清空 URL (Esc)")
                     .accessibilityLabel("清空 URL 地址")
                 }

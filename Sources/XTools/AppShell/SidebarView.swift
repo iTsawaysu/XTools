@@ -156,6 +156,7 @@ struct SidebarView: View {
                     .font(.system(size: ToolMetrics.IconSize.small, weight: .medium))
                     .frame(width: SidebarMetrics.searchIconWidth)
                     .allowsHitTesting(false)
+                    .arrowCursorOnHover()
 
                 Spacer(minLength: 0)
 
@@ -173,6 +174,7 @@ struct SidebarView: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .arrowCursorOnHover()
                         .toolInteractionFeedback()
                         .accessibilityIdentifier("sidebar.search.clear")
                         .help("清除搜索")

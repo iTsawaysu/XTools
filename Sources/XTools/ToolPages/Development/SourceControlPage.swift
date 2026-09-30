@@ -598,8 +598,10 @@ private struct SourceControlWorkspaceContent: View {
                 .frame(width: 32, height: 32)
                 .toolMotionIconSwap(id: isBusy)
                 .disabled(!isBusy && !workspace.canScan)
+                .arrowCursorOnHover()
             }
             .padding(.trailing, 5)
+            .arrowCursorOnHover()
         }
         .accessibilityElement(children: .contain)
     }

@@ -2134,6 +2134,12 @@ private final class IndexDiffLineNumberOverlayView: NSView {
         nil
     }
 
+    /// The number column is chrome, not selectable content: keep the arrow
+    /// cursor over it even though the overlay stays hit-test transparent.
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .arrow)
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         guard let textView,
               let scrollView = scrollView else {
