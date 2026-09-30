@@ -293,6 +293,10 @@ final class SidebarNavigationDocumentView: NSView {
 @MainActor
 final class SidebarNavigationScrollView: NSScrollView {    var onViewportSizeChange: ((CGSize) -> Void)?
     var onViewportBoundsChange: (() -> Void)?
+    /// Self-drawn thin scroll indicator (the sidebar installs no native
+    /// scroller lane — see the class docs); the scroll view drives its
+    /// geometry sync and fade lifecycle.
+    let sidebarScrollIndicator = SidebarScrollIndicatorView()
     private var lastViewportSize = CGSize.zero
     private(set) var isLiveScrolling = false
 
@@ -327,15 +331,21 @@ final class SidebarNavigationScrollView: NSScrollView {    var onViewportSizeCha
 
     @objc private func handleWillStartLiveScroll() {
         isLiveScrolling = true
+        sidebarScrollIndicator.noteLiveScrollStarted()
     }
 
     @objc private func handleDidEndLiveScroll() {
         isLiveScrolling = false
+        sidebarScrollIndicator.noteLiveScrollEnded()
         onViewportBoundsChange?()
     }
 
     override func layout() {
         super.layout()
+        if sidebarScrollIndicator.frame != bounds {
+            sidebarScrollIndicator.frame = bounds
+        }
+        sidebarScrollIndicator.refresh()
         let nextSize = contentSize
         guard nextSize != lastViewportSize else { return }
         lastViewportSize = nextSize
@@ -344,6 +354,7 @@ final class SidebarNavigationScrollView: NSScrollView {    var onViewportSizeCha
 
     override func reflectScrolledClipView(_ cView: NSClipView) {
         super.reflectScrolledClipView(cView)
+        sidebarScrollIndicator.refresh()
         guard !isLiveScrolling else { return }
         onViewportBoundsChange?()
     }

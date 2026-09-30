@@ -41,6 +41,12 @@ final class SidebarNavigationListCoordinator {
     private let pointerLocationProvider: SidebarNavigationPointerLocationProvider
     private var hoveredTrackID: String?
     private weak var scrollView: NSScrollView?
+    /// The scroll view handed back by the representable is always the
+    /// `SidebarNavigationScrollView` created in `makeScrollView`; the cast only
+    /// recovers the subclass surface (scroll indicator chrome).
+    private var sidebarScrollView: SidebarNavigationScrollView? {
+        scrollView as? SidebarNavigationScrollView
+    }
     /// Sliding selection chrome below every track (v3). Owns the selection
     /// pill + rail so tool switches can spring it between rows; the hosted
     /// rows keep only their text/icon color states.
@@ -57,6 +63,10 @@ final class SidebarNavigationListCoordinator {
     ) {
         self.pointerLocationProvider = pointerLocationProvider
         documentView.onFrameSizeChange = { [weak self] in
+            // Document growth/shrink moves the knob proportion on every
+            // animation tick; refresh before the anchor guard so accordion
+            // motion never leaves a stale capsule length behind.
+            (self?.sidebarScrollView)?.sidebarScrollIndicator.refresh()
             guard self?.activeAnimationToken == nil else { return }
             self?.applyScrollAnchor()
             self?.reconcilePointerLocation()
@@ -84,11 +94,11 @@ final class SidebarNavigationListCoordinator {
         scrollView.contentView.wantsLayer = true
         scrollView.contentView.drawsBackground = false
         scrollView.hasHorizontalScroller = false
-        // Overlay scroller that fades in while scrolling (autohides) so long
-        // tool lists read as scrollable without a permanent scroller lane.
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
-        scrollView.scrollerStyle = .overlay
+        // No native scroller lane: the stock overlay knob fattens into a
+        // grabber under the pointer, AppKit offers no opt-out, and its overlay
+        // rendering bypasses scroller draw overrides. The scroll view paints
+        // its own thin capsule instead (see SidebarScrollIndicatorView) with
+        // the same idle geometry and a native-style fade lifecycle.
         scrollView.horizontalScrollElasticity = .none
         scrollView.verticalScrollElasticity = .automatic
         scrollView.usesPredominantAxisScrolling = true
@@ -100,6 +110,10 @@ final class SidebarNavigationListCoordinator {
         // Below every track: reordering cycles only touch tracks, so the
         // indicator keeps its backmost slot through the list's lifetime.
         documentView.addSubview(selectionIndicator, positioned: .below, relativeTo: nil)
+        // Topmost overlay chrome: above the document, never in the hit-test
+        // path, so track z-ordering cycles cannot bury the scroll indicator.
+        scrollView.addSubview(scrollView.sidebarScrollIndicator, positioned: .above, relativeTo: nil)
+        scrollView.sidebarScrollIndicator.frame = scrollView.bounds
         scrollView.onViewportSizeChange = { [weak self] size in
             self?.resizeViewport(to: size)
         }
@@ -208,6 +222,7 @@ final class SidebarNavigationListCoordinator {
         slide: Bool
     ) {
         selectionIndicator.updateColors()
+        sidebarScrollView?.sidebarScrollIndicator.updateColors()
         guard let frame = selectionIndicatorFrame(configuration: configuration, plan: plan) else {
             selectionIndicator.setHidden(true)
             return
@@ -719,6 +734,7 @@ final class SidebarNavigationListCoordinator {
             // Selection chrome rides the same disclosure motion as the rows —
             // never its own spring during structural changes.
             selectionIndicator.updateColors()
+            sidebarScrollView?.sidebarScrollIndicator.updateColors()
             selectionIndicator.prepareForStructuralMotion()
             if let frame = selectionIndicatorFrame(configuration: configuration, plan: plan) {
                 if selectionIndicator.alphaValue < 0.01 {

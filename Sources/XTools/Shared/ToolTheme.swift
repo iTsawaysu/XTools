@@ -181,6 +181,18 @@ enum ToolTheme {
         static let rail = dynamicNSColor(light: 0xC15F3C, dark: 0xD97757)
     }
 
+    /// AppKit token for the sidebar's permanent thin scroll knob (see
+    /// `SidebarScrollIndicatorView`). Translucent ink matching the native
+    /// overlay knob sampled on the sidebar surface (~50% black over beige).
+    enum ScrollbarNSColor {
+        static let sidebarKnob = dynamicNSColor(
+            light: 0x000000,
+            dark: 0xFFFFFF,
+            alpha: 0.5,
+            darkAlpha: 0.4
+        )
+    }
+
     static func dynamicNSColor(
         light: UInt32,
         dark: UInt32,

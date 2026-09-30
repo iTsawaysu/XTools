@@ -440,16 +440,93 @@ struct SidebarNavigationListTests {
         #expect(pointerAreas.first?.owner === documentView)
     }
 
-    @Test @MainActor func scrollViewAndDocumentViewConfigureFullLayerBackingAndPredominantScrolling() {
+    @Test @MainActor func scrollViewAndDocumentViewConfigureFullLayerBackingAndPredominantScrolling() throws {
         let coordinator = SidebarNavigationListCoordinator()
-        let scrollView = coordinator.makeScrollView()
+        let scrollView = try #require(coordinator.makeScrollView() as? SidebarNavigationScrollView)
 
         #expect(scrollView.wantsLayer)
         #expect(scrollView.contentView.wantsLayer)
         #expect(coordinator.documentView.wantsLayer)
         #expect(coordinator.documentView.layerContentsRedrawPolicy == .onSetNeedsDisplay)
         #expect(scrollView.usesPredominantAxisScrolling)
-        #expect(scrollView.scrollerStyle == .overlay)
+        // No native scroller lane at all: the stock overlay knob fattens under
+        // the pointer and its rendering cannot be taken over reliably.
+        #expect(!scrollView.hasVerticalScroller)
+        #expect(scrollView.verticalScroller == nil)
+        // The self-drawn indicator rides topmost as pure chrome, sized to the
+        // scroll view once layout runs.
+        let indicator = scrollView.sidebarScrollIndicator
+        #expect(indicator.superview === scrollView)
+        scrollView.needsLayout = true
+        scrollView.layoutSubtreeIfNeeded()
+        #expect(indicator.frame == scrollView.bounds)
+    }
+
+    @Test @MainActor func scrollIndicatorKnobTracksScrollProportionAndMinimumLength() throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = try #require(coordinator.makeScrollView() as? SidebarNavigationScrollView)
+        let indicator = scrollView.sidebarScrollIndicator
+        scrollView.setFrameSize(NSSize(width: 220, height: 400))
+        scrollView.needsLayout = true
+        scrollView.layoutSubtreeIfNeeded()
+        coordinator.documentView.frame = NSRect(x: 0, y: 0, width: 220, height: 1_200)
+        indicator.refresh()
+
+        // Viewport 400 of document 1200 at offset 300: proportion 0.375 of the
+        // post-inset travel, trailing edge 2pt in from the sidebar border.
+        scrollView.contentView.bounds.origin.y = 300
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        let knob = indicator.debugKnobFrame
+        #expect(knob.width == SidebarScrollIndicatorView.knobWidth)
+        #expect(abs(knob.height - 400.0 * 400.0 / 1_200.0) < 0.01)
+        #expect(knob.origin.x == 220 - SidebarScrollIndicatorView.knobTrailingInset - SidebarScrollIndicatorView.knobWidth)
+        let travel = 400 - 2 * SidebarScrollIndicatorView.laneVerticalInset - knob.height
+        #expect(abs(knob.origin.y - (SidebarScrollIndicatorView.laneVerticalInset + 0.375 * travel)) < 0.5)
+
+        // Extremely long documents clamp to the minimum capsule length.
+        coordinator.documentView.frame = NSRect(x: 0, y: 0, width: 220, height: 18_000)
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        #expect(indicator.debugKnobFrame.height == SidebarScrollIndicatorView.minKnobLength)
+    }
+
+    @Test @MainActor func scrollIndicatorRevealsOnScrollAndFadesAfterIdle() throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = try #require(coordinator.makeScrollView() as? SidebarNavigationScrollView)
+        let indicator = scrollView.sidebarScrollIndicator
+        coordinator.documentView.frame = NSRect(x: 0, y: 0, width: 220, height: 1_200)
+        indicator.refresh()
+        #expect(indicator.debugOpacity == 0)
+
+        indicator.noteLiveScrollStarted()
+        #expect(indicator.debugOpacity == 1)
+
+        // The idle window keeps the knob visible; the scheduled hide lands it.
+        indicator.noteLiveScrollEnded()
+        #expect(indicator.debugOpacity == 1)
+        indicator.performScheduledHide()
+        #expect(indicator.debugOpacity == 0)
+
+        // Lane hover reveals the same thin capsule, and the idle hide is a
+        // no-op while the pointer stays in the strip.
+        indicator.setLaneHovered(true)
+        #expect(indicator.debugOpacity == 1)
+        indicator.performScheduledHide()
+        #expect(indicator.debugOpacity == 1)
+        indicator.setLaneHovered(false)
+    }
+
+    @Test @MainActor func scrollIndicatorStaysHiddenWhenContentFits() throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = try #require(coordinator.makeScrollView() as? SidebarNavigationScrollView)
+        let indicator = scrollView.sidebarScrollIndicator
+        coordinator.documentView.frame = NSRect(x: 0, y: 0, width: 220, height: 300)
+        indicator.refresh()
+
+        // Even an active scroll lifecycle cannot reveal a knob when there is
+        // nothing to scroll (autohide's belt-and-braces).
+        indicator.noteLiveScrollStarted()
+        #expect(indicator.debugOpacity == 0)
+        indicator.noteLiveScrollEnded()
     }
 
     @Test @MainActor func liveScrollingSuspendsHoverReconciliationUntilScrollEnds() throws {
