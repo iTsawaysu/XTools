@@ -18,7 +18,10 @@ struct IndexGeneratedValueRow: Identifiable {
 /// `motionGeneration` remounts the rows so each one replays the staggered
 /// pop-in (30ms per row for the first rows, matching the generated-list
 /// motion cap) without changing slot identity. Reduce Motion skips both the
-/// stagger and the pop.
+/// stagger and the pop. A mount whose `motionGeneration` is still 0 (segment
+/// switch or tool re-entry with retained values — nothing was generated in
+/// this view session) shows the rows revealed immediately, so fast in-hub
+/// switching never pays the blank-plus-stagger sequence.
 struct IndexGeneratedValueRowList: View {
     let rows: [IndexGeneratedValueRow]
     var emptyText = IndexEmptyStateCopy.noResults
@@ -43,6 +46,7 @@ struct IndexGeneratedValueRowList: View {
                                 row: replayRow.row,
                                 index: replayRow.index,
                                 wrapsValue: wrapsValues,
+                                startsRevealed: motionGeneration == 0,
                                 staggerDelay: staggerDelay(for: replayRow.index)
                             )
                         }
@@ -86,6 +90,9 @@ private struct IndexGeneratedValueRowView: View {
     let row: IndexGeneratedValueRow
     let index: Int
     var wrapsValue = false
+    /// Mount without a session generation (`motionGeneration == 0`): the row
+    /// renders revealed from the first frame and skips the pop replay.
+    let startsRevealed: Bool
     let staggerDelay: TimeInterval
 
     @State private var isHovering = false
@@ -96,6 +103,12 @@ private struct IndexGeneratedValueRowView: View {
 
     private var showsActions: Bool {
         isHovering || feedback.isPresented
+    }
+
+    /// Effective visibility: a revealed mount never participates in the
+    /// pop sequence, so its animation never schedules.
+    private var revealed: Bool {
+        isRevealed || startsRevealed
     }
 
     var body: some View {
@@ -132,9 +145,9 @@ private struct IndexGeneratedValueRowView: View {
                 .fill(ToolTheme.border)
                 .frame(height: 0.5)
         }
-        .opacity(isRevealed ? 1 : 0)
-        .scaleEffect(isRevealed ? 1 : 0.96, anchor: .top)
-        .offset(y: isRevealed ? 0 : 2)
+        .opacity(revealed ? 1 : 0)
+        .scaleEffect(revealed ? 1 : 0.96, anchor: .top)
+        .offset(y: revealed ? 0 : 2)
         .animation(
             ToolMotion.animation(
                 ToolMotion.Curve.smoothOut(duration: ToolMotion.Duration.fast).delay(staggerDelay),
@@ -144,6 +157,7 @@ private struct IndexGeneratedValueRowView: View {
         )
         .accessibilityHint(row.copyHelp)
         .task(id: row.id) {
+            guard !startsRevealed else { return }
             replayAppearance()
         }
         .task(id: feedback.generation) {

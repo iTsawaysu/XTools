@@ -89,6 +89,26 @@ struct GeneratedCryptoSourceContractTests {
         contains(generator, "timestamp: timestamp", "UUID v7 bytes must be assembled in Core")
     }
 
+    @Test func generatorRowListMountsRevealedWithoutASessionGeneration() throws {
+        // Hub 分段切换 / 工具重入会在本视图会话未发生生成的情况下重挂行列表。
+        // 行必须立即可见（无空白帧、无延迟任务、无阶梯重放）；只有真实生成
+        // （motionGeneration 递增导致行 id 变化）才重放弹入序列，保证切换不
+        // 支付「空白 + 阶梯 + 250ms 动画」的整段序列。
+        let rowList = try readSource("Sources/XTools/ToolPages/Workbench/Diagnostics/IndexGeneratedValueRowList.swift")
+
+        contains(rowList, "startsRevealed: motionGeneration == 0", "Rows mounting without a session generation must be revealed immediately instead of replaying the stagger")
+        contains(rowList, "guard !startsRevealed else { return }", "Revealed mounts must not schedule the delayed pop replay")
+        contains(rowList, "try? await Task.sleep(for: .milliseconds(20))", "A real generation must keep the delayed pop-in replay")
+
+        let token = try readSource("Sources/XTools/ToolPages/Crypto/TokenGeneratorPage.swift")
+        let uuid = try readSource("Sources/XTools/ToolPages/Crypto/UUIDGeneratorPage.swift")
+        let password = try readSource("Sources/XTools/ToolPages/Crypto/PasswordGeneratorPage.swift")
+        for (name, source) in [("Token", token), ("UUID", uuid), ("Password", password)] {
+            doesNotContain(source, "else if motionGeneration == 0", "\(name) must not force a replay bump when remounting retained values")
+        }
+        contains(uuid, "if workspace.values.isEmpty {", "UUID must keep the auto-generate on first appearance")
+    }
+
     @Test func tokenGeneratorAutoGeneratesWithoutCustomCharacterSet() throws {
         let source = try readSource("Sources/XTools/ToolPages/Crypto/TokenGeneratorPage.swift")
         let generator = try readSource("Sources/XToolsCore/Crypto/TokenGenerator.swift")

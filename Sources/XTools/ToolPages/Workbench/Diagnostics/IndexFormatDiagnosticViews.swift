@@ -116,3 +116,33 @@ struct IndexDiagnosticBanner: View {
         .onChange(of: message) { _ in showsDetails = false }
     }
 }
+
+/// The one sanctioned container for a workbench diagnostic status row.
+/// Call sites declare whether a row is currently needed and what it shows;
+/// this component owns the structural decisions that regressed twice when
+/// each workbench reimplemented them: conditional presence (an inactive slot
+/// reserves no blank space), the bounded 36pt row, and the shared diagnostic
+/// motion. Pair it with `IndexDiagnosticBanner`.
+struct IndexDiagnosticStatusSlot<Content: View>: View {
+    private let isActive: Bool
+    private let content: () -> Content
+
+    init(
+        isActive: Bool,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.isActive = isActive
+        self.content = content
+    }
+
+    var body: some View {
+        if isActive {
+            ZStack(alignment: .leading) {
+                content()
+            }
+            .frame(height: 36)
+            .frame(maxWidth: .infinity)
+            .toolAnimation(ToolMotion.Preset.diagnostic, value: isActive)
+        }
+    }
+}

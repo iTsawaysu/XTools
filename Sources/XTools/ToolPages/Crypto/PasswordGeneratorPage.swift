@@ -119,9 +119,6 @@ private struct IndexPasswordGeneratorWorkspaceContent: View {
         }
         .onAppear {
             if !workspace.hasAttemptedGeneration { generate() }
-            else if motionGeneration == 0 {
-                motionGeneration += 1
-            }
         }
     }
 

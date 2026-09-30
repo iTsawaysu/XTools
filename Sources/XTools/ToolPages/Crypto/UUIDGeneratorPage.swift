@@ -82,9 +82,6 @@ private struct IndexUUIDWorkspaceContent: View {
         .onAppear {
             if workspace.values.isEmpty {
                 generate()
-            } else if motionGeneration == 0 {
-                // Session-restored values: replay the arrival pop once.
-                motionGeneration += 1
             }
         }
     }

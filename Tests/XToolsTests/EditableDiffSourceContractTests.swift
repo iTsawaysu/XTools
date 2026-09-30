@@ -78,8 +78,12 @@ struct EditableDiffSourceContractTests {
 
     @Test func absentDiffDiagnosticDoesNotReserveABlankStatusRow() throws {
         let source = try readSource("Sources/XTools/ToolPages/Workbench/Diff/IndexEditableDiffWorkspace.swift")
-        contains(source, "if hasDiagnostic {\n                ZStack {", "Absent diff diagnostics must not reserve a blank status row above the editable panes")
-        contains(source, ".frame(height: 36)", "Visible diff diagnostics must keep a bounded status-row height")
+        let diagnosticViews = try readSource("Sources/XTools/ToolPages/Workbench/Diagnostics/IndexFormatDiagnosticViews.swift")
+        contains(source, "IndexDiagnosticStatusSlot(isActive: hasDiagnostic)", "The diff status row must go through the shared slot that owns conditional presence")
+        contains(source, "关闭导入提示", "Dropped-file rejections must expose the shared dismiss control")
+        contains(diagnosticViews, "struct IndexDiagnosticStatusSlot", "Diagnostic status rows must share one sanctioned container")
+        contains(diagnosticViews, ".frame(height: 36)", "The shared slot must keep the bounded status-row height")
+        doesNotContain(source, "frame(height: 36)", "Row geometry must live in the shared slot, not per workbench")
     }
 
     @Test func editableDiffAppliesLatestCanonicalTextWhenEitherEditorEndsEditing() throws {

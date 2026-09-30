@@ -35,6 +35,57 @@ struct EditableDiffInteractionTests {
                 "Clearing the diff diagnostic must reclaim the status row")
     }
 
+    @Test func rejectedNativeFileDropShowsThroughSharedSlotAndDismisses() async throws {
+        let model = DiffDiagnosticProbeModel()
+        // Swift Testing has no assistive-technology client; enable the SwiftUI
+        // semantic tree for this fixture so the dismiss control is pressable
+        // through real accessibility actions (never a fake closure call).
+        let hosting = NSHostingView(
+            rootView: DiffDiagnosticProbe(model: model).environment(\.accessibilityEnabled, true)
+        )
+        hosting.frame = NSRect(x: 0, y: 0, width: 1000, height: 500)
+        let window = NSWindow(
+            contentRect: hosting.frame,
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+        window.makeKeyAndOrderFront(nil)
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
+        hosting.layoutSubtreeIfNeeded()
+        let editor = try #require(textView(in: hosting))
+        let viewport = try #require(editor.enclosingScrollView)
+        let originalFrame = viewport.convert(viewport.bounds, to: hosting)
+        #expect(findDismissAction(in: window) == nil, "No rejection must show no dismiss control")
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("XToolsDiffRejection-\(UUID())")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let malformed = directory.appendingPathComponent("invalid-utf8.txt")
+        try Data([0xC3]).write(to: malformed)
+
+        let native = try #require(editor as? IndexDiffTextView)
+        native.loadDroppedFile(from: malformed)
+        try await waitUntilLayout(window, hosting, "rejection row and dismiss control") {
+            findDismissAction(in: window) != nil
+        }
+        let rejectionFrame = viewport.convert(viewport.bounds, to: hosting)
+        #expect(abs(rejectionFrame.height - (originalFrame.height - 36)) < 0.5,
+                "The rejection must occupy exactly its own 36pt status row")
+
+        #expect(try #require(findDismissAction(in: window)).press())
+        try await waitUntilLayout(window, hosting, "dismiss reclaims the status row") {
+            findDismissAction(in: window) == nil
+                && viewport.convert(viewport.bounds, to: hosting) == originalFrame
+        }
+        #expect(native.string == model.left, "Dismissing the rejection must preserve the user draft")
+    }
+
     @Test func rejectedNativeFileDropReportsDiagnosticAndKeepsBothDrafts() async throws {
         let left = MutableStringValue("existing left")
         let right = MutableStringValue("existing right")
@@ -815,6 +866,27 @@ struct EditableDiffInteractionTests {
         return rows
     }
 
+    private func waitUntilLayout(
+        _ window: NSWindow, _ hosting: NSView, _ stage: String, _ condition: () -> Bool
+    ) async throws {
+        let deadline = ContinuousClock.now + .seconds(2)
+        repeat {
+            hosting.layoutSubtreeIfNeeded()
+            hosting.displayIfNeeded()
+            window.displayIfNeeded()
+            CATransaction.flush()
+            if condition() { return }
+            try await Task.sleep(for: .milliseconds(10))
+        } while ContinuousClock.now < deadline
+        Issue.record("Timed out waiting for diff workspace state: \(stage)")
+    }
+
+    private func findDismissAction(in window: NSWindow) -> DiffAccessibilityProbeElement? {
+        DiffAccessibilityProbeElement.elements(in: window).first {
+            $0.role == NSAccessibility.Role.button.rawValue && $0.label == "关闭导入提示"
+        }
+    }
+
     private func binding(to value: MutableStringValue) -> Binding<String> {
         Binding(
             get: { value.value },
@@ -868,10 +940,44 @@ private final class MutableStringValue {
     }
 }
 
-@MainActor private final class DiffDiagnosticProbeModel: ObservableObject {
+@MainActor
+private final class DiffDiagnosticProbeModel: ObservableObject {
     @Published var left = "draft"
     @Published var right = ""
     @Published var error: String?
+}
+
+/// Minimal in-process accessibility probe mirroring the established
+/// WorkbenchAccessibilityTests element walk: SwiftUI's virtual nodes implement
+/// accessibility selectors without declaring NSAccessibilityProtocol, and
+/// Objective-C optional dispatch reaches them without unchecked casts.
+@MainActor
+private struct DiffAccessibilityProbeElement {
+    let object: NSObject
+    // Objective-C optional protocol dispatch requires an untyped receiver.
+    private var dynamic: AnyObject { object }
+
+    var role: String? { dynamic.accessibilityRole?()?.rawValue }
+    var label: String? { dynamic.accessibilityLabel?() }
+    var children: [DiffAccessibilityProbeElement] {
+        (dynamic.accessibilityChildren?() ?? []).compactMap { ($0 as? NSObject).map(Self.init) }
+    }
+
+    func press() -> Bool {
+        dynamic.accessibilityPerformPress?() ?? false
+    }
+
+    static func elements(in window: NSWindow) -> [DiffAccessibilityProbeElement] {
+        var pending = [DiffAccessibilityProbeElement(object: window)]
+        var result: [DiffAccessibilityProbeElement] = []
+        var visited = Set<ObjectIdentifier>()
+        while let element = pending.popLast(), result.count < 2000 {
+            guard visited.insert(ObjectIdentifier(element.object)).inserted else { continue }
+            result.append(element)
+            pending.append(contentsOf: element.children)
+        }
+        return result
+    }
 }
 
 private struct DiffDiagnosticProbe: View {
@@ -888,5 +994,6 @@ private struct DiffDiagnosticProbe: View {
             onClear: {},
             leadingControl: {}
         )
+        .transaction { $0.disablesAnimations = true }
     }
 }

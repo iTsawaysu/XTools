@@ -273,8 +273,21 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            if hasDiagnostic || droppedFile.rejection != nil {
-                diagnosticStatusSlot
+            IndexDiagnosticStatusSlot(isActive: hasDiagnostic || droppedFile.rejection != nil) {
+                if let rejection = droppedFile.rejection {
+                    HStack(spacing: 0) {
+                        IndexDiagnosticBanner(diagnostic: nil, message: rejection.message)
+                        IndexIconButton(systemImage: "xmark", help: "关闭导入提示", action: droppedFile.dismissRejection)
+                            .padding(.trailing, 8)
+                    }
+                } else if hasDiagnostic, let diagnostic {
+                    IndexDiagnosticBanner(
+                        diagnostic: diagnosticDetail,
+                        message: diagnostic,
+                        tone: diagnosticTone,
+                        onLocate: diagnosticMarker == nil ? nil : { diagnosticNavigationToken &+= 1 }
+                    )
+                }
             }
             HStack(spacing: ToolMetrics.Spacing.sm) {
                 inputPaneWithHeader
@@ -306,28 +319,6 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         )
         .toolAnimation(ToolMotion.Preset.diagnostic, value: showsErrorState)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var diagnosticStatusSlot: some View {
-        ZStack(alignment: .leading) {
-            if let rejection = droppedFile.rejection {
-                HStack(spacing: 0) {
-                    IndexDiagnosticBanner(diagnostic: nil, message: rejection.message)
-                    IndexIconButton(systemImage: "xmark", help: "关闭导入提示", action: droppedFile.dismissRejection)
-                        .padding(.trailing, 8)
-                }
-            } else if hasDiagnostic, let diagnostic {
-                IndexDiagnosticBanner(
-                    diagnostic: diagnosticDetail,
-                    message: diagnostic,
-                    tone: diagnosticTone,
-                    onLocate: diagnosticMarker == nil ? nil : { diagnosticNavigationToken &+= 1 }
-                )
-            }
-        }
-        .frame(height: 36)
-        .frame(maxWidth: .infinity)
-        .toolAnimation(ToolMotion.Preset.diagnostic, value: hasDiagnostic)
     }
 
     // MARK: Toolbar

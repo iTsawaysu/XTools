@@ -122,9 +122,6 @@ private struct IndexTokenWorkspaceContent: View {
         }
         .onAppear {
             if !workspace.hasAttemptedGeneration { generate() }
-            else if motionGeneration == 0 {
-                motionGeneration += 1
-            }
         }
     }
 

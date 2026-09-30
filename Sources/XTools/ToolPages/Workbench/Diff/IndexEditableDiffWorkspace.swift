@@ -208,15 +208,20 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             toolbar
-            if hasDiagnostic {
-                ZStack {
+            IndexDiagnosticStatusSlot(isActive: hasDiagnostic) {
+                HStack(spacing: 0) {
                     IndexDiagnosticBanner(
                         diagnostic: nil,
-                        message: diagnosticText!,
+                        message: diagnosticText ?? "",
                         tone: diagnosticTone
                     )
+                    if droppedFileDiagnostic != nil {
+                        IndexIconButton(systemImage: "xmark", help: "关闭导入提示") {
+                            droppedFileDiagnostic = nil
+                        }
+                        .padding(.trailing, 8)
+                    }
                 }
-                .frame(height: 36)
             }
             IndexEditableDiffMergeView(
                 left: $left,
@@ -262,6 +267,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
             }
         }
         .toolShadow(ToolTheme.Shadow.panel)
+        .toolAnimation(ToolMotion.Preset.diagnostic, value: hasDiagnostic)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
