@@ -897,12 +897,7 @@ private struct CommandPaletteHintsBar: View {
 
     private static func hint(key: String, label: String) -> some View {
         HStack(spacing: 5) {
-            Text(key)
-                .font(ToolTypography.tagMicro)
-                .foregroundStyle(ToolTheme.textSecondary)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(ToolTheme.editorBackground, in: Capsule(style: .continuous))
+            IndexKeycap(label: key)
             Text(label)
                 .font(ToolTypography.caption)
                 .foregroundStyle(ToolTheme.textTertiary)

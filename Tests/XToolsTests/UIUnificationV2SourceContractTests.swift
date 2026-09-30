@@ -5,7 +5,7 @@ import Testing
 
 /// UI 统一重构 2.0（Clay Warmth）的防回潮契约。
 ///
-/// 十一条规则对应 `docs/ui-unification-v2-master-plan.md` §六 R5；每条都是
+/// 规则清单以 `docs/DESIGN.md`（防回潮规则节）为准；每条都是
 /// 「单一真相源」的编译外看门：令牌/共享组件之外的位置不允许再出现旧写法。
 struct UIUnificationV2SourceContractTests {
     private let categoryDirs = [
@@ -181,12 +181,34 @@ struct UIUnificationV2SourceContractTests {
     }
 
     @Test func keycapLabelsUseDedicatedLegibleTypography() throws {
-        let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
         let typography = try readSource("Sources/XTools/Shared/ToolTypography.swift")
 
         contains(typography, "static let keycap = Font.system(size: 11, weight: .medium)", "Keycap typography must use 11pt medium proportional font")
-        contains(controls, ".font(ToolTypography.keycap)", "Keyboard hint label must use legible keycap font")
-        contains(controls, ".tracking(", "Keyboard hint label must include letter spacing for clear glyph separation")
+    }
+
+    /// 键帽必须走统一组件 `IndexKeycap`：字排与视觉容器只允许存在于该组件，
+    /// 四个既有落点（顶栏 / 命令面板 / 侧栏 / 页内主按钮）不得绕开。
+    @Test func keycapsMustRenderThroughTheUnifiedComponent() throws {
+        let component = try readSource("Sources/XTools/Shared/Components/IndexKeycap.swift")
+        contains(component, ".font(ToolTypography.keycap)", "Unified keycap must use the legible keycap font")
+        contains(component, ".tracking(", "Unified keycap must include letter spacing for clear glyph separation")
+        contains(component, "ToolTheme.Keycap.", "Unified keycap must source its chrome from ToolTheme.Keycap tokens")
+
+        let callSites = [
+            "Sources/XTools/AppShell/TitlebarView.swift",
+            "Sources/XTools/AppShell/CommandPalette.swift",
+            "Sources/XTools/AppShell/SidebarView.swift",
+            "Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift",
+        ]
+        for path in callSites {
+            let source = try readSource(path)
+            contains(source, "IndexKeycap(", "\(path) must render keyboard hints through IndexKeycap")
+        }
+
+        // 组件之外禁止再直接消费 keycap 字排，防止键帽样式再次分叉。
+        for (path, source) in try allSources(excluding: ["Sources/XTools/Shared/Components/IndexKeycap.swift"]) {
+            doesNotContain(source, ".font(ToolTypography.keycap)", "\(path) must render keycap text inside IndexKeycap, not inline")
+        }
     }
 
     // MARK: - Helpers

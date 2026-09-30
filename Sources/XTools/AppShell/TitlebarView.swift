@@ -51,15 +51,7 @@ struct WindowToolbarContent: ToolbarContent {
                     Text("跳转工具…")
                         .font(ToolTypography.compactBody)
 
-                    Text("⌘K")
-                        .font(ToolTypography.tagMicro)
-                        .foregroundStyle(ToolTheme.textTertiary)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .overlay {
-                            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-                                .strokeBorder(ToolTheme.border, lineWidth: 0.5)
-                        }
+                    IndexKeycap(label: "⌘K")
                 }
                 .frame(height: WindowToolbarMetrics.commandHeight)
                 .padding(.horizontal, WindowToolbarMetrics.commandHorizontalPadding)

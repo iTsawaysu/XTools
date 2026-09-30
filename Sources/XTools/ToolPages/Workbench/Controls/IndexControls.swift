@@ -448,16 +448,7 @@ struct IndexKeyboardHintLabel: View {
     let hint: String
 
     var body: some View {
-        Text(hint)
-            .font(ToolTypography.keycap)
-            .tracking(0.6)
-            .foregroundStyle(ToolTheme.onAccent.opacity(0.95))
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1.5)
-            .background(
-                ToolTheme.onAccent.opacity(0.20),
-                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-            )
+        IndexKeycap(label: hint, variant: .onAccent)
             .accessibilityHidden(true)
     }
 }

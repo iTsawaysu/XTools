@@ -84,9 +84,7 @@ struct SidebarView: View {
                 Text("工作台")
                     .font(ToolTypography.label)
                 Spacer(minLength: 0)
-                Text("⌘0")
-                    .font(ToolTypography.caption)
-                    .foregroundStyle(ToolTheme.textTertiary)
+                IndexKeycap(label: "⌘0")
             }
             .foregroundStyle(selectedToolID == nil ? ToolTheme.accent : ToolTheme.textSecondary)
             .padding(.horizontal, SidebarMetrics.toolRowHorizontalPadding)

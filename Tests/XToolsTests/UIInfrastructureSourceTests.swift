@@ -715,7 +715,7 @@ struct UIInfrastructureSourceTests {
         contains(toolbar, ".accessibilityLabel(presentation.title)", "The toolbar toggle must expose the current action as its accessible name")
         contains(toolbar, ".accessibilityHint(SidebarTogglePresentation.accessibilityHint)", "The toolbar toggle must expose the shortcut separately as an accessibility hint")
         contains(toolbar, "Text(\"跳转工具…\")", "The command trigger must keep its visible label instead of collapsing to an icon-only toolbar item")
-        contains(toolbar, "Text(\"⌘K\")", "The command trigger must remain the only visible keyboard hint in window chrome")
+        contains(toolbar, "IndexKeycap(label: \"⌘K\")", "The command trigger must remain the only visible keyboard hint in window chrome, rendered through the unified keycap")
         contains(sidebar, "static let idealWidth: CGFloat = 220", "Sidebar must expose one stable ideal pane width")
         doesNotContain(sidebar, "isCollapsed", "Sidebar must not retain the collapsed rail state")
         contains(sidebar, "static let titlebarHeight: CGFloat = 40", "Sidebar brand band must stay compact under the native unified toolbar")

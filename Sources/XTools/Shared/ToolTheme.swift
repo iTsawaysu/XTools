@@ -83,6 +83,21 @@ enum ToolTheme {
     /// Wave 2 card-lift pane hover: lifted depth (prototype --pane-shadow-hov).
     static let paneHoverShadowLifted = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.12, darkAlpha: 0.34)
 
+    // MARK: - Keycap（统一键帽配方 · 实心色片）
+    //
+    // 全 App 键帽的唯一视觉来源（`IndexKeycap`）。配方刻意归零装饰：
+    // 一块比所在表面深（浅色）/亮（深色）一档的实心色片 + 干净硬边界 +
+    // 近黑（浅）/暖白（深）字形，无渐变、无边线、无描边、无投影——
+    // 质感全部来自色片与表面的明度差（参考实测：浅色床 #E6E6E6 落在
+    // #FCFCFC 面板上，约 8% 明度差，边缘 1px 直切无任何过渡线）。
+
+    enum Keycap {
+        /// 键床：实心一档。浅色＝比表面深一档的暖灰，深色＝比表面亮一档。
+        static let bed = dynamicColor(light: 0x000000, dark: 0xFFFFFF, alpha: 0.07, darkAlpha: 0.10)
+        /// onAccent 变体（实心 accent 主按钮内）：onAccent 同色实底。
+        static let onAccentBed = dynamicColor(light: 0xFFF8F2, dark: 0x1A0F0A, alpha: 0.20, darkAlpha: 0.20)
+    }
+
     // MARK: - Shadow recipes（层级语言：面板几乎无影靠色差，浮层与模态分层）
 
     /// A shadow recipe pairs a tint with radius/offset so every elevation
