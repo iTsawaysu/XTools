@@ -235,12 +235,17 @@ struct CommandPaletteView: View {
     /// The flip lands one runloop tick after the open render, so rows mount
     /// hidden and animate in on their per-row delayed arcs; a close before
     /// the tick cancels the reveal.
+    ///
+    /// Runs on whatever view copy SwiftUI happens to hold, so the async tick
+    /// must gate on live references (`presentation.shows`, the session model),
+    /// never on this struct's `isPresented` — a captured copy still carries
+    /// the previous body's value at transition boundaries.
     private func scheduleRowArrival() {
         guard !reduceMotion else { return }
         let session = sessionModel.session
         guard revealedSession != session else { return }
         DispatchQueue.main.async {
-            guard isPresented, sessionModel.session == session else { return }
+            guard presentation.shows, sessionModel.session == session else { return }
             revealedSession = session
         }
     }
@@ -359,12 +364,24 @@ struct CommandPaletteView: View {
         }
     }
 
+    /// Warms the retained palette tree for the live presentation session.
+    /// Reads the presentation model (a reference) instead of this struct's
+    /// `isPresented`/`presentationSession` because onChange action closures
+    /// execute on the previous body's view copy, where those stored
+    /// properties still hold pre-transition values.
     private func preparePresentationIfNeeded() {
-        guard isPresented else { return }
+        guard presentation.shows else { return }
         contentLifecycle.prepareSessionIfNeeded(
-            session: presentationSession,
+            session: presentation.session,
             previewValue: presentation.previewValue
         )
+    }
+
+    /// Live-source presentation readiness for transition-boundary callbacks
+    /// (see `preparePresentationIfNeeded`). Body-time reads should keep
+    /// using `isPresentationReady`.
+    private var isPresentationReadyLive: Bool {
+        presentation.shows && sessionModel.session == presentation.session
     }
 
     private var currentRevealRequest: CommandPaletteRevealRequest? {
@@ -647,14 +664,19 @@ struct CommandPaletteView: View {
             preparePresentationIfNeeded()
             highlightFlightAnimated = false
         }
-        .onChange(of: isPresented) { _ in
+        // The action closure executes on the previous body's view copy, so
+        // gating must use the `nowPresented` parameter — the captured
+        // `isPresented` still holds the pre-transition value (false on
+        // reopen), which used to skip the reveal and leave every row
+        // behind the arrival gate at opacity 0.
+        .onChange(of: isPresented) { nowPresented in
             preparePresentationIfNeeded()
-            if isPresented {
+            if nowPresented {
                 scheduleRowArrival()
             }
         }
         .onChange(of: actions) { newActions in
-            guard isPresentationReady else { return }
+            guard isPresentationReadyLive else { return }
             sessionModel.replaceActions(newActions)
         }
     }
