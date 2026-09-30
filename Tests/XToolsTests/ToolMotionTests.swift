@@ -10,10 +10,18 @@ struct ToolMotionTests {
         #expect(ToolMotion.Duration.arrival == 0.24)
         #expect(ToolMotion.Duration.fast == 0.25)
         #expect(ToolMotion.Duration.medium == 0.35)
+        // 01 景深沉降 (PAGE-TRANSITIONS t-1): 300ms in / 220ms out / 480ms letters.
+        #expect(ToolMotion.Duration.pageSinkEnter == 0.30)
+        #expect(ToolMotion.Duration.pageSinkExit == 0.22)
+        #expect(ToolMotion.Duration.letter == 0.48)
     }
 
     @Test func pageArrivalStaysAHostOwnedWhitelistedPreset() {
-        #expect(ToolMotion.Preset.pageArrival == ToolMotion.Curve.smoothOut(duration: ToolMotion.Duration.arrival))
+        #expect(ToolMotion.Preset.pageArrival == ToolMotion.Curve.smoothOut(duration: ToolMotion.Duration.pageSinkEnter))
+        #expect(ToolMotion.Preset.pageDeparture == ToolMotion.Curve.productiveExit(duration: ToolMotion.Duration.pageSinkExit))
+        #expect(ToolMotion.Scale.pageArrivalSink == 0.995)
+        #expect(ToolMotion.Scale.pageDepartureSink == 0.992)
+        #expect(ToolMotion.Distance.pageSinkRise == 10)
     }
 
     @Test func motionGeometryTokensStayLightweight() {

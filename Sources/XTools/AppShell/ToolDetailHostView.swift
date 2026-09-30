@@ -20,9 +20,29 @@ struct ToolDetailHostView: View {
     }
 
     var body: some View {
-        Group {
-            if let selectedToolID,
-               let tool = registry.tool(for: selectedToolID) {
+        // 01 景深沉降: every navigation path lands here as one `target` key,
+        // so tool pages, the dashboard, and the empty state share the same
+        // page swap choreography (see `ToolPageStage`).
+        ToolPageStage(target: pageKey) { key in
+            page(for: key)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(ToolTheme.workspaceBackground)
+    }
+
+    private var pageKey: ToolPageKey {
+        if let selectedToolID,
+           let tool = registry.tool(for: selectedToolID) {
+            return .tool(tool.id)
+        }
+        return dashboardStore != nil ? .dashboard : .emptySelection
+    }
+
+    @ViewBuilder
+    private func page(for key: ToolPageKey) -> some View {
+        switch key.payload {
+        case .tool(let toolID):
+            if let tool = registry.tool(for: toolID) {
                 let traceContext = ToolPageEntryTraceContext(toolID: tool.id, title: tool.title)
                 tracedPage(for: tool)
                     .environment(\.toolPageEntryTraceContext, traceContext)
@@ -33,20 +53,20 @@ struct ToolDetailHostView: View {
                             .onAppear { ToolPageEntryTrace.pageAppeared(traceContext) }
                     }
                     .toolPageArrival(id: tool.id.rawValue)
-            } else {
-                if let dashboardStore {
-                    DashboardView(
-                        store: dashboardStore,
-                        registry: registry,
-                        onSelectTool: onSelectTool
-                    )
-                } else {
-                    EmptyToolSelectionView()
-                }
             }
+        case .dashboard:
+            if let dashboardStore {
+                DashboardView(
+                    store: dashboardStore,
+                    registry: registry,
+                    onSelectTool: onSelectTool
+                )
+                .toolPageArrival(id: "dashboard")
+            }
+        case .emptySelection:
+            EmptyToolSelectionView()
+                .toolPageArrival(id: "empty-selection")
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(ToolTheme.workspaceBackground)
     }
 
     private func tracedPage(for tool: RegisteredTool) -> AnyView {

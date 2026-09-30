@@ -15,6 +15,15 @@ enum ToolMotion {
         static let arrival: TimeInterval = 0.24
         static let fast: TimeInterval = 0.25
         static let medium: TimeInterval = 0.35
+        /// 01 景深沉降 (PAGE-TRANSITIONS t-1): incoming page settles over
+        /// 300ms on smoothOut.
+        static let pageSinkEnter: TimeInterval = 0.30
+        /// 01 景深沉降: outgoing page leaves over 220ms on productiveExit —
+        /// faster than the arrival so the exit never lags the new page.
+        static let pageSinkExit: TimeInterval = 0.22
+        /// Page-header letter arrival: one character's rise arc on smoothOut
+        /// (prototype .lt 480ms); delay comes from `letterStagger`.
+        static let letter: TimeInterval = 0.48
         /// Page-header letter arrival: delay added per title character.
         static let letterStagger: TimeInterval = 0.032
         /// Subtitle follow-up beat after the letter choreography starts.
@@ -53,10 +62,13 @@ enum ToolMotion {
         static let base: CGFloat = 8
         static let medium: CGFloat = 12
         static let large: CGFloat = 18
-        /// Page-header arrival: per-letter rise (≈0.6em of the 18pt page title)
+        /// Page-header arrival rise (≈0.6em of the 18pt page title)
         /// and the subtitle follow-up offset.
         static let letterRise: CGFloat = 11
         static let headerFollow: CGFloat = 4
+        /// 01 景深沉降: incoming page rises 10pt while settling (prototype
+        /// translateY(10px)).
+        static let pageSinkRise: CGFloat = 10
     }
 
     enum Scale {
@@ -64,14 +76,11 @@ enum ToolMotion {
         static let pressed: CGFloat = 0.98
         static let iconInserted: CGFloat = 0.98
         static let iconRemoved: CGFloat = 1.02
-        /// Wave 2 sidebar selection pill stretch (prototype MOTION s.pillStretch*):
-        /// vertical stretch per row of travel, capped, with horizontal volume
-        /// compensation; only jumps beyond `pillStretchMinRows` rows stretch.
-        static let pillStretchPerRow: CGFloat = 0.06
-        static let pillStretchMax: CGFloat = 0.15
-        static let pillStretchMinRows: CGFloat = 1.5
         /// Page-arrival depth: incoming tool pages settle from 99.5% scale.
         static let pageArrivalSink: CGFloat = 0.995
+        /// 01 景深沉降: outgoing pages sink to 99.2% while fading — depth on
+        /// the exit without a readable zoom.
+        static let pageDepartureSink: CGFloat = 0.992
     }
 
     enum ResultPresence {
@@ -185,14 +194,20 @@ enum ToolMotion {
         static let modal = Animation.spring(response: 0.25, dampingFraction: 0.86, blendDuration: 0)
         static let panelReveal = Curve.smoothOut(duration: Duration.medium)
         /// v3: tool-switch page arrival (host-owned whitelist; see
-        /// `MotionSourceContractTests`). Light crossfade that keeps the entry
-        /// hot path responsive — pages never apply this preset themselves.
-        static let pageArrival = Curve.smoothOut(duration: Duration.arrival)
-        /// Page-header letter choreography: each title character rises with
-        /// the shared container spring, one stagger step apart. Consumed by
-        /// `IndexPageHeader` only; tool pages never apply it themselves.
+        /// `MotionSourceContractTests`). 01 景深沉降: 300ms smoothOut — the
+        /// incoming page sinks from y+10/99.5% while the outgoing layer runs
+        /// its own 220ms productiveExit (`pageDeparture`). Timing is driven by
+        /// `ToolPageStage`'s two explicit transactions, one per direction.
+        static let pageArrival = Curve.smoothOut(duration: Duration.pageSinkEnter)
+        /// 01 景深沉降: outgoing page exit timing — 220ms productiveExit so
+        /// leaving content accelerates away while the arrival still settles.
+        static let pageDeparture = Curve.productiveExit(duration: Duration.pageSinkExit)
+        /// Page-header letter choreography: each title character rises on the
+        /// shared 480ms smoothOut arc (prototype .lt), one stagger step apart.
+        /// Consumed by `IndexPageHeader` only; tool pages never apply it
+        /// themselves.
         static func letterArrival(index: Int) -> Animation {
-            Curve.gentleSpring().delay(letterArrivalDelay(index: index))
+            Curve.smoothOut(duration: Duration.letter).delay(letterArrivalDelay(index: index))
         }
 
         static func letterArrivalDelay(index: Int) -> TimeInterval {
@@ -490,20 +505,29 @@ enum ToolMotion {
             )
         }
 
-        /// Spring-matched slide for the sidebar selection indicator. Mirrors
-        /// `Curve.gentleSpring()` (response 0.3 / damping 0.85) through the
-        /// standard SwiftUI→CASpringAnimation parameter mapping, so AppKit
-        /// layer motion and SwiftUI containers stay in one spring family.
-        /// Duration self-reports from `settlingDuration`; consumers retarget
-        /// mid-flight by reading the presentation layer.
+        /// Sliding spring for the sidebar selection chrome. Replicates the
+        /// prototype's hand-integrated rail spring exactly (transition-lab
+        /// PHYS.spring { s: 170, d: 22 }, mass 1): ωn ≈ 13.0 rad/s, ζ ≈ 0.84 —
+        /// slow, soft, and inertial, which is the "settles like liquid" feel
+        /// the prototype's rail has. Deliberately NOT the 0.3/0.85
+        /// `gentleSpring` family: that one reads snappy here, not silky.
+        /// CoreAnimation integrates the spring off the main thread, which beats
+        /// the prototype's rAF loop on frame budget; the one trade is that an
+        /// interrupted slide restarts from its presentation position with zero
+        /// velocity (CASpringAnimation cannot inject the in-flight velocity the
+        /// prototype carried over on retarget).
         static func selectionSlide() -> CASpringAnimation {
-            let response = 0.3
-            let dampingFraction = 0.85
             let spring = CASpringAnimation(keyPath: "position.y")
             spring.mass = 1
-            spring.stiffness = pow(2 * .pi / response, 2)
-            spring.damping = 4 * .pi * dampingFraction / response
-            spring.duration = max(spring.settlingDuration, Duration.quick)
+            spring.stiffness = 170
+            spring.damping = 22
+            // settlingDuration self-reports short: at that timestamp the spring
+            // can still be a few pixels from rest on long jumps, and CASpring
+            // hard-cuts to the model value when the animation ends — the
+            // "slams to a stop" feel. The +0.12s tail lets the arc settle to
+            // sub-pixel residual before the cut, restoring the prototype's
+            // liquid landing (its rAF loop ran until |Δ| < 0.05px).
+            spring.duration = spring.settlingDuration + 0.12
             return spring
         }
     }
@@ -513,16 +537,21 @@ enum ToolMotion {
             .opacity
         }
 
-        /// v3: tool-switch arrival — outgoing page fades, incoming page sinks
-        /// by one base step while settling from 99.5% scale (depth without a
-        /// visible zoom). Host-owned; Reduce Motion collapses to identity
-        /// through the shared transition helper.
+        /// 01 景深沉降 (PAGE-TRANSITIONS t-1): incoming page fades in while
+        /// rising 10pt and settling from 99.5% scale; the outgoing page sinks
+        /// to 99.2% while fading. Insertion and removal intentionally ride
+        /// different timings (300ms smoothOut in / 220ms productiveExit out),
+        /// which one implicit `.animation` cannot split — `ToolPageStage` drives
+        /// each direction through its own explicit transaction. Host-owned;
+        /// Reduce Motion collapses to identity through the shared transition
+        /// helper.
         static var pageArrival: AnyTransition {
             AnyTransition.asymmetric(
                 insertion: .opacity
-                    .combined(with: .offset(y: Distance.base))
+                    .combined(with: .offset(y: Distance.pageSinkRise))
                     .combined(with: .scale(scale: Scale.pageArrivalSink)),
                 removal: .opacity
+                    .combined(with: .scale(scale: Scale.pageDepartureSink))
             )
         }
 

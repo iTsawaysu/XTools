@@ -91,13 +91,25 @@ struct MotionSourceContractTests {
         doesNotContain(commandPalette, "Color.black.opacity(0.30)", "Command palette panel view must not own the full-window scrim")
 
         let dashboard = try readSource("Sources/XTools/AppShell/DashboardView.swift")
+        let stage = try readSource("Sources/XTools/AppShell/ToolPageStage.swift")
         doesNotContain(host, "@Environment(\\.accessibilityReduceMotion) private var reduceMotion", "Tool detail host must not carry Reduce Motion directly; the shared page-arrival modifier owns the gate")
         doesNotContain(host, "ToolMotion.Transition.pageContent", "Tool detail host must not animate selected tool page replacement")
         doesNotContain(host, "ToolMotion.Preset.pageContent", "Tool detail host must not animate selectedToolID page replacement")
-        contains(motion, "static let pageArrival = Curve.smoothOut(duration: Duration.arrival)", "Existing tool pages must retain the shared arrival preset")
+        contains(motion, "static let pageArrival = Curve.smoothOut(duration: Duration.pageSinkEnter)", "Existing tool pages must retain the shared arrival preset (01 景深沉降: 300ms smoothOut)")
+        contains(motion, "static let pageDeparture = Curve.productiveExit(duration: Duration.pageSinkExit)", "The outgoing page must leave on its own accelerating 220ms arc")
         contains(host, ".toolPageArrival(id: tool.id.rawValue)", "Only real tool pages may keep the host-owned arrival modifier")
         doesNotContain(dashboard, ".toolPageArrival(", "V3 dashboard must not replay a page-arrival animation")
         contains(root, ".toolAnimation(ToolMotion.Preset.pageArrival, value: viewModel.selectedToolID)", "Root must preserve existing tool-page arrival behavior")
+        // 01 景深沉降 stage: one choreography for every navigation path, with
+        // insertion and removal riding separate explicit transactions because
+        // one implicit animation cannot split their timings.
+        contains(host, "ToolPageStage(target: pageKey)", "The detail host must swap tool, dashboard, and empty pages through the shared page stage")
+        contains(host, ".toolPageArrival(id: \"dashboard\")", "The dashboard branch must share the tool-page arrival so ⌘0 and workbench cards land like every other path")
+        contains(stage, "withAnimation(ToolMotion.Preset.pageDeparture)", "The outgoing layer must depart through its own productiveExit transaction")
+        contains(stage, "withAnimation(ToolMotion.Preset.pageArrival)", "The incoming layer must arrive through its own smoothOut transaction")
+        contains(stage, "transaction.disablesAnimations = true", "Reduce Motion and first mount must swap pages directly without a transition")
+        contains(stage, ".allowsHitTesting(key == displayed)", "Departing layers must stop hit testing immediately while their exit plays")
+        contains(stage, ".accessibilityHidden(key != displayed)", "Departing layers must leave the accessibility tree immediately")
         let emptyState = try readSource("Sources/XTools/Shared/Components/IndexEmptyState.swift")
         contains(emptyState, ".toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)", "Empty-state host swaps must use a shared lightweight transition")
         contains(emptyState, ".toolMotionIconSwap(id: systemImage)", "Empty-state glyph changes must use the fixed-slot icon swap helper")
@@ -589,17 +601,18 @@ struct MotionSourceContractTests {
         doesNotContain(banner, "withAnimation(", "Diagnostic details must not bypass system motion preferences")
     }
 
-    @Test func wave2SidebarPillStretchesOnMultiRowJumps() throws {
+    @Test func sidebarSelectionSlideReplicatesThePrototypeRailPhysics() throws {
         let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
         let track = try readSource("Sources/XTools/AppShell/SidebarNavigationTrackView.swift")
-        contains(motion, "static let pillStretchPerRow: CGFloat = 0.06", "Pill stretch must grow at the terminal per-row rate")
-        contains(motion, "static let pillStretchMax: CGFloat = 0.15", "Pill stretch must cap at the terminal maximum")
-        contains(motion, "static let pillStretchMinRows: CGFloat = 1.5", "Neighbor moves must never stretch the pill")
-        contains(track, "CAKeyframeAnimation(keyPath: \"transform.scale.y\")", "Stretch must ride a synchronized keyframe on the pill layer")
-        contains(track, "1 / sqrt(peak)", "Stretch must conserve volume through horizontal compensation")
-        contains(track, "addVelocityStretch(distance: distance, duration: spring.duration)", "Stretch must share the slide spring's duration")
-        let stretch = sourceSlice(track, from: "private func addVelocityStretch", to: "private func removeSlideAnimation")
-        doesNotContain(stretch, "prepareForStructuralMotion", "Structural motion paths must not pick up the stretch")
+        contains(motion, "spring.stiffness = 170", "The rail spring must replicate the prototype's hand-integrated physics (PHYS.spring s: 170)")
+        contains(motion, "spring.damping = 22", "The rail spring damping must replicate the prototype terminal value")
+        contains(motion, "spring.duration = spring.settlingDuration + 0.12", "The slide must outlast settlingDuration so CASpring never hard-cuts a few pixels of residual on landing")
+        contains(track, "let fromY = layer.presentation()?.position.y ?? layer.position.y", "Interrupted slides must continue from the presentation position, never restart from the model value")
+        // Pure translation, like the prototype rail: the slow spring reads as
+        // dragging once deformation rides on top of it, so the removed Wave 2
+        // pill stretch stays removed.
+        doesNotContain(track, "transform.scale.y", "The sliding selection chrome must stay pure translation — no deformation")
+        doesNotContain(motion, "pillStretch", "Pill stretch must not return beside the prototype spring")
     }
 
     @Test func wave2SidebarSearchArrivalIsFadeDominantAndRefinementCalm() throws {
