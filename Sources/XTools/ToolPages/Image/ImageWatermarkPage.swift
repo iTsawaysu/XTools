@@ -251,7 +251,6 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                         ],
                         selection: $textColor
                     )
-                    .help("选择黑色或白色水印文字")
                     .onChange(of: textColor) { _ in recipeDidChange(previewCadence: .immediate) }
 
                     IndexOptionDivider()
@@ -440,7 +439,6 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                 }
                 .buttonStyle(IndexSmallButtonStyle())
                 .accessibilityLabel("清除当前水印图片")
-                .help("清除当前水印图片")
             }
         }
     }
@@ -612,7 +610,6 @@ private struct WatermarkAnchorOption: View {
         .buttonStyle(IndexBareButtonStyle())
         .accessibilityLabel("水印位置")
         .accessibilityValue(position.displayName)
-        .help("选择水印位置")
         .popover(isPresented: $isPickerPresented, arrowEdge: .bottom) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("水印位置")

@@ -43,7 +43,6 @@ struct IndexDatePicker: View {
             }
         }
         .buttonStyle(.plain)
-        .help("选择日期")
         .accessibilityLabel("选择日期")
         .accessibilityValue(formatted(selection))
         .popover(isPresented: $showPopover, arrowEdge: .bottom) {

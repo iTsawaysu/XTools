@@ -75,7 +75,6 @@ struct IndexDiagnosticBanner: View {
             if let onLocate {
                 Button("定位", action: onLocate)
                     .buttonStyle(IndexSmallButtonStyle())
-                    .help("在当前输入中定位问题")
                     .accessibilityLabel("定位问题，\(presentation.location ?? "当前输入")")
             }
             Button("详情") { showsDetails.toggle() }

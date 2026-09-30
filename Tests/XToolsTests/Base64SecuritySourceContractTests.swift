@@ -158,7 +158,7 @@ struct Base64SecuritySourceContractTests {
         contains(source, "importEncodedTextFileButton", "Base64 reverse workspace must keep encoded text file import as a separate header button")
         doesNotContain(source, "title: \"导入文件\"", "Base64 encoded text file import must stay secondary as an icon-only header action")
         contains(source, "isProcessing: session.decodeActivity == .encodedTextImport", "Base64 encoded text import must attach progress to the initiating action")
-        contains(source, ".help(\"导入编码文本文件\")", "Base64 encoded text file import must retain its full purpose in help text")
+        contains(source, ".accessibilityLabel(session.decodeActivity == .encodedTextImport ? \"正在导入编码文本文件\" : \"导入编码文本文件\")", "Base64 encoded text file import must retain its full purpose in the accessibility label")
         doesNotContain(source, "externalDecodeInputMenu", "Base64 reverse workspace must not replace the header buttons with an external-input menu")
         doesNotContain(source, "Label(\"外部输入\", systemImage: \"tray.and.arrow.down\")", "Base64 reverse workspace must not show the removed external-input menu")
         doesNotContain(source, "解码剪贴板", "Base64 reverse workspace must not expose clipboard direct decode copy")
@@ -340,7 +340,7 @@ struct Base64SecuritySourceContractTests {
             to: "} else {"
         )
         doesNotContain(selectedFileState, "选择或拖入文件", "Base64 selected-file state must not repeat the empty-state selection prompt")
-        contains(source, ".help(filePickerHelp)\n        .accessibilityHint(filePickerHelp)", "Base64 selected-file target must still disclose click-or-drop replacement")
+        contains(source, ".accessibilityHint(filePickerHelp)", "Base64 selected-file target must still disclose click-or-drop replacement to accessibility")
         contains(source, "private var encodedOutputPreviewSurface: some View", "Base64 encoded output must render through the stable preview surface")
         contains(source, "text: session.outputPreview?.visibleText ?? \"\"", "Base64 encoded output must render the capped preview, not a forced full string")
         contains(source, "Base64FileWorkbenchFooter(", "Base64 workbench panes must expose their real state at the bottom edge")

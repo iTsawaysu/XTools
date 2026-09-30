@@ -314,7 +314,6 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
                             isCapsule: true
                         )
                         .fixedSize(horizontal: true, vertical: false)
-                        .help("当前差异块 \(current) / \(navigationProgress.total)")
                         .accessibilityLabel("当前差异块 \(current)，共 \(navigationProgress.total) 个")
                     }
                     IndexIconButton(

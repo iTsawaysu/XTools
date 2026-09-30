@@ -107,7 +107,6 @@ struct IndexDockerWorkspaceContent: View {
                         ),
                         density: .compact
                     )
-                    .help("切换转换方向")
                     .fixedSize(horizontal: true, vertical: false)
                 }
             )

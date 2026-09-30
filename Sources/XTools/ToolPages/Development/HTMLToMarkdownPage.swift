@@ -71,7 +71,6 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 leadingControl: {
                     IndexOptionSwitch(
                         title: "仅提取正文",
-                        help: "仅提取文章正文",
                         style: .button,
                         isOn: $session.extractArticleOnly
                     )
@@ -94,7 +93,6 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                         ),
                         density: .compact
                     )
-                    .help("切换 Markdown 源码与排版预览")
                     .fixedSize(horizontal: true, vertical: false)
                 }
             )

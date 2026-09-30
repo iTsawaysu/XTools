@@ -101,7 +101,6 @@ struct SidebarView: View {
         .toolInteractionFeedback()
         .accessibilityIdentifier("sidebar.dashboard")
         .accessibilityLabel("工作台")
-        .help("打开个人工作台")
         .padding(.horizontal, SidebarMetrics.toolRowHorizontalPadding)
         .padding(.top, 8)
         .padding(.bottom, 4)
@@ -148,7 +147,6 @@ struct SidebarView: View {
                 onFocusChange: { isSearchFocused = $0 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .help("输入关键词搜索工具")
 
             HStack(spacing: SidebarMetrics.searchContentSpacing) {
                 Image(systemName: "magnifyingglass")
@@ -417,7 +415,6 @@ struct SidebarGroupHeader: View {
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(isExpanded ? "已展开" : "已收起")
-        .help(accessibilityLabel)
         .onHover { hoverState.isHovered = $0 }
         // Search / Reduce Motion land immediately; otherwise share accordion timing
         // with the AppKit track owner (ADR-0015) via ToolMotion.animation.

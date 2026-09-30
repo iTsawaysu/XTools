@@ -62,7 +62,6 @@ struct IndexGenerateParseModeBar: View {
         }
         .buttonStyle(IndexSmallButtonStyle())
         .disabled(clearAllDisabled)
-        .help("清空生成和解析模式中的所有内容")
         .accessibilityLabel("清空所有内容")
     }
 }

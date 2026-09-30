@@ -39,8 +39,8 @@ struct WindowToolbarContent: ToolbarContent {
                 .buttonStyle(QuietTitlebarButtonStyle())
                 .environment(\.colorScheme, colorScheme)
                 .foregroundStyle(isFavorite ? ToolTheme.accent : ToolTheme.textSecondary)
-                .help(isFavorite ? "Remove from Favorites" : "Add to Favorites")
-                .accessibilityLabel(isFavorite ? "Remove from Favorites" : "Add to Favorites")
+                .help(isFavorite ? "取消收藏" : "加入收藏")
+                .accessibilityLabel(isFavorite ? "取消收藏" : "加入收藏")
             }
 
             Button(action: onCommandPalette) {
@@ -67,7 +67,6 @@ struct WindowToolbarContent: ToolbarContent {
             }
             .buttonStyle(CommandTriggerButtonStyle())
             .environment(\.colorScheme, colorScheme)
-            .help("命令面板 (Command-K)")
             .accessibilityLabel("跳转工具")
             .accessibilityHint("打开命令面板，快捷键 Command-K")
         }

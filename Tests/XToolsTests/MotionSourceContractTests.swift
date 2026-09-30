@@ -691,7 +691,7 @@ struct MotionSourceContractTests {
         doesNotContain(controls, ".toolMotionSuccessSwap(id: copied)", "Copy feedback must use the tick choreography, not the generic swap")
         contains(controls, #"copied ? "已复制" : title"#, "The 已复制 switch may live on the accessibility/help surface")
         contains(controls, "Text(title)", "The copy button must render the constant title")
-        contains(controls, ".help(copied ? \"已复制\" : title)", "Hover help may keep announcing the copied state")
+        contains(controls, ".modifier(IndexCopyButtonHelp(iconOnly: iconOnly, copied: copied, title: title))", "Icon-only hover help may keep announcing the copied state")
 
         // Both copy presentations share one fixed tick slot; Reduce Motion cuts
         // directly between the SF Symbols (no draw, no scale).

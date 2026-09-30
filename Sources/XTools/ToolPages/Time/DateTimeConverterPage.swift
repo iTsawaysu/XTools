@@ -127,7 +127,6 @@ private struct IndexDateTimeWorkspaceContent: View {
                 .font(ToolTypography.buttonSmall)
         }
         .buttonStyle(IndexSmallButtonStyle())
-        .help("使用当前时间")
         .accessibilityLabel("使用当前时间")
         .fixedSize(horizontal: true, vertical: false)
     }
@@ -144,7 +143,6 @@ private struct IndexDateTimeWorkspaceContent: View {
         }
         .buttonStyle(IndexSmallButtonStyle())
         .disabled(workspace.timestamp.isEmpty && workspace.humanTimeInput.isEmpty && workspace.rows.isEmpty && workspace.timestampError == nil && workspace.humanError == nil)
-        .help("全部清空")
         .accessibilityLabel("全部清空")
     }
 

@@ -110,7 +110,6 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
                 }
                 .buttonStyle(IndexSmallButtonStyle())
                 .accessibilityLabel("保存灰度图")
-                .help("保存灰度图")
             }
         }
         .verticallyFilling()
@@ -137,7 +136,6 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
                 }
                 .buttonStyle(IndexSmallButtonStyle())
                 .accessibilityLabel("清除当前灰阶图片")
-                .help("清除当前灰阶图片")
             }
         }
     }

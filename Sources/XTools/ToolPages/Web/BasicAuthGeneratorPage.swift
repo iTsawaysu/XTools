@@ -94,7 +94,6 @@ private struct IndexBasicAuthWorkspaceContent: View {
                 }
                 .buttonStyle(IndexSmallButtonStyle())
                 .disabled(session.output.isEmpty)
-                .help("送入解析模式")
 
                 IndexCopyButton(text: session.output)
             }
@@ -158,7 +157,6 @@ private struct IndexBasicAuthWorkspaceContent: View {
             }
             .buttonStyle(IndexSmallButtonStyle())
             .disabled(session.parsedCredentials == nil)
-            .help("送入生成模式")
         }
     }
 

@@ -187,7 +187,6 @@ struct TimeAndDateSourceContractTests {
         contains(controlledInput, "textField.indexContentInsets = contentInsets", "Controlled segmented fields must synchronize cell insets in both make and update paths")
         contains(controlledInput, "struct IndexControlledHumanTimeInput", "Shared controlled input must expose a human-time wrapper")
         contains(timestampConverter, "Label(\"现在\", systemImage: \"clock\")", "Current time page action must show clock plus Now")
-        contains(timestampConverter, ".help(\"使用当前时间\")", "Current time page action must keep an explicit help label")
         contains(timestampConverter, ".accessibilityLabel(\"使用当前时间\")", "Current time page action must keep an explicit accessibility label")
         contains(timestampConverter, "NSApp.keyWindow?.makeFirstResponder(nil)", "Current time action must end active text editing before programmatic timestamp backfill so AppKit does not select the new value")
         doesNotContain(timestampConverter, "IndexClearButton", "Unix clear must not live in the panel header or input field")

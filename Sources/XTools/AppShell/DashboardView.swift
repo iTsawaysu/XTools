@@ -345,7 +345,6 @@ private struct WorkbenchShortcutButton: View {
         .focused($isFocused)
         .indexFocusRing(active: isFocused, cornerRadius: ToolMetrics.Workbench.compactCorner)
         .onHover { isHovering = $0 }
-        .help("打开\(tool.title)")
         .accessibilityLabel("打开\(tool.title)")
         .accessibilityIdentifier("dashboard.shortcut.\(tool.id.rawValue)")
     }
@@ -388,7 +387,6 @@ private struct WorkbenchRecentButton: View {
         .focused($isFocused)
         .indexFocusRing(active: isFocused, cornerRadius: ToolMetrics.Workbench.compactCorner)
         .onHover { isHovering = $0 }
-        .help("打开\(tool.title) · \(fullTimestamp)")
         .accessibilityLabel("打开\(tool.title)，\(lastOpenedAt.formatted(date: .abbreviated, time: .shortened))")
         .accessibilityIdentifier("dashboard.recent.\(tool.id.rawValue)")
     }
@@ -398,10 +396,6 @@ private struct WorkbenchRecentButton: View {
         formatter.dateTimeStyle = .named
         formatter.unitsStyle = .full
         return formatter.localizedString(for: lastOpenedAt, relativeTo: Date())
-    }
-
-    private var fullTimestamp: String {
-        lastOpenedAt.formatted(date: .complete, time: .standard)
     }
 
 }

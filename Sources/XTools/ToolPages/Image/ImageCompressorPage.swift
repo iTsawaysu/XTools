@@ -193,7 +193,6 @@ private struct IndexImageCompressorWorkspaceContent: View {
                         .font(ToolTypography.buttonSmall)
                 }
                 .buttonStyle(IndexSmallButtonStyle())
-                .help("保存优化图片")
                 .accessibilityLabel("保存优化图片")
             }
         }
@@ -221,7 +220,6 @@ private struct IndexImageCompressorWorkspaceContent: View {
                 }
                 .buttonStyle(IndexSmallButtonStyle())
                 .accessibilityLabel("清除当前优化图片")
-                .help("清除当前优化图片")
             }
         }
     }

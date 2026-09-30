@@ -13,6 +13,36 @@ enum IndexActionSymbol {
 
 // MARK: - IndexButtonStyle
 
+/// Conditional tooltip: applies `.help` only when a title exists — labeled
+/// controls show their own title, so only icon-only slots carry a tooltip.
+private struct IndexOptionalHelp: ViewModifier {
+    let title: String?
+
+    func body(content: Content) -> some View {
+        if let title {
+            content.help(title)
+        } else {
+            content
+        }
+    }
+}
+
+/// Copy variant on the same icon-only discipline: the tooltip keeps
+/// announcing the copied state while it exists.
+private struct IndexCopyButtonHelp: ViewModifier {
+    let iconOnly: Bool
+    let copied: Bool
+    let title: String
+
+    func body(content: Content) -> some View {
+        if iconOnly {
+            content.help(copied ? "已复制" : title)
+        } else {
+            content
+        }
+    }
+}
+
 struct IndexButtonStyle: ButtonStyle {
     var primary = false
 
@@ -222,7 +252,9 @@ struct IndexCopyButton: View {
             }
         }
         .disabled(text.isEmpty)
-        .help(copied ? "已复制" : title)
+        // Labeled buttons show their own title; only icon-only slots need the
+        // tooltip to name the action.
+        .modifier(IndexCopyButtonHelp(iconOnly: iconOnly, copied: copied, title: title))
         .accessibilityLabel(copied ? "已复制" : title)
         .task(id: feedback.generation) {
             let generation = feedback.generation
@@ -266,7 +298,7 @@ struct IndexCopyButton: View {
                 Label {
                     // Zero-deformation copy feedback: the visible title never
                     // changes (Wave 2 复制确认 tick); only the accessibility
-                    // label/help announces 已复制.
+                    // label announces 已复制.
                     Text(title)
                 } icon: {
                     if showsIcon {
@@ -407,7 +439,6 @@ struct IndexPrimaryActionButton: View {
             .fixedSize(horizontal: true, vertical: false)
         }
         .buttonStyle(IndexButtonStyle(primary: true))
-        .help(help)
         .accessibilityLabel(help)
     }
 }
@@ -520,7 +551,8 @@ struct IndexClearButton: View {
         }
         .buttonStyle(IndexSmallButtonStyle(framed: framed))
         .disabled(isDisabled)
-        .help(title)
+        // Icon-only slots have no visible title to fall back on.
+        .modifier(IndexOptionalHelp(title: iconOnly ? title : nil))
         .accessibilityLabel(title)
     }
 }
@@ -792,7 +824,6 @@ struct IndexSwitch: View {
             Text(title)
         }
         .toggleStyle(IndexSwitchToggleStyle())
-        .help(title)
         .accessibilityValue(isOn ? "已开启" : "已关闭")
         .fixedSize(horizontal: true, vertical: false)
     }
@@ -904,13 +935,11 @@ struct IndexOptionSwitch: View {
     }
 
     let title: String
-    var help: String?
     var style: Style = .switchToggle
     @Binding var isOn: Bool
 
-    init(title: String, help: String? = nil, style: Style = .switchToggle, isOn: Binding<Bool>) {
+    init(title: String, style: Style = .switchToggle, isOn: Binding<Bool>) {
         self.title = title
-        self.help = help
         self.style = style
         self._isOn = isOn
     }
@@ -920,7 +949,6 @@ struct IndexOptionSwitch: View {
             Text(title)
         }
         .toggleStyle(IndexOptionSwitchToggleStyle(style: style))
-        .help(help ?? title)
         .accessibilityValue(isOn ? "已开启" : "已关闭")
         .fixedSize(horizontal: true, vertical: false)
     }
@@ -1195,7 +1223,6 @@ struct IndexOptionMenu: View {
                 .accessibilityHidden(true)
         }
         .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
-        .help(title)
         .accessibilityLabel("\(title)：\(selectedLabel)")
         .fixedSize(horizontal: true, vertical: false)
     }

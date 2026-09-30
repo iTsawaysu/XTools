@@ -56,7 +56,6 @@ private struct IndexPortWorkspaceContent: View {
                         .font(ToolTypography.buttonSmall)
                 }
                 .buttonStyle(IndexSmallButtonStyle())
-                .help("重新生成端口")
             }
         }
     }

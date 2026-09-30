@@ -334,7 +334,7 @@ struct ImageWorkflowSourceContractTests {
         contains(converter, "透明区域已填充为", "Image converter output facts must state the applied transparency fill")
         contains(converter, ".accessibilityLabel(\"透明区域填充颜色\")", "Image converter fill controls must expose a stable accessibility label")
         contains(converter, ".accessibilityValue(transparencyFillAccessibilityValue)", "Image converter fill controls must expose the selected or missing value")
-        contains(converter, ".help(\"选择转换前用于填充透明像素的颜色\")", "Image converter fill controls must explain the lossy boundary")
+        contains(converter, ".help(\"JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。\")", "Image converter fill controls must explain the lossy boundary where they apply")
         doesNotContain(converter, "ImageFileFormat.allCases.map", "Image converter must not expose unsupported output formats such as WebP")
         doesNotContain(converter, "hasAlpha: metadata.hasAlpha", "Image converter target visibility must not confuse an Alpha channel with transparent pixels")
         contains(converter, "maxDisplayHeight: 260", "Conditional converter controls must retain a bounded preview height so 960-wide layouts keep the output facts and save action reachable")

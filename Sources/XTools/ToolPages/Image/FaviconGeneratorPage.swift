@@ -116,7 +116,6 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                 }
                 .buttonStyle(IndexSmallButtonStyle())
                 .accessibilityLabel("清除当前 Favicon 图片")
-                .help("清除当前 Favicon 图片")
             }
         }
     }
@@ -174,7 +173,6 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                 }
                 .buttonStyle(IndexSmallButtonStyle())
                 .accessibilityLabel("保存全部五个 Favicon 部署文件")
-                .help("保存全部 Favicon")
             }
         }
         .verticallyFilling()

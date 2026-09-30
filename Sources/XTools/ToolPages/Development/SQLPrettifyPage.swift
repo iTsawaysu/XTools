@@ -113,7 +113,6 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
                         selection: keywordCaseSelection,
                         density: .compact
                     )
-                    .help("关键字大小写 (UPPER / lower)")
                 }
             }
         )

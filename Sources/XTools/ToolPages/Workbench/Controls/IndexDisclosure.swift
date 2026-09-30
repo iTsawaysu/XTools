@@ -97,7 +97,6 @@ struct IndexDisclosure<Content: View, Accessory: View>: View {
         }
         .accessibilityLabel(isExpanded ? "折叠\(title)" : "展开\(title)")
         .accessibilityValue(isExpanded ? "已展开" : "已收起\(collapsedSummary.map { "，\($0)" } ?? "")")
-        .help(isExpanded ? "折叠\(title)" : "展开\(title)")
         .toolAnimation(ToolMotion.Preset.accordion, value: isExpanded)
     }
 }

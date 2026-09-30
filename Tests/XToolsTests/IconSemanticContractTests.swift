@@ -326,7 +326,6 @@ struct IconSemanticContractTests {
             from: "var body: some View",
             to: "// MARK: - IndexCalendarView"
         )
-        contains(trigger, #".help("选择日期")"#, "Date trigger must explain its action on hover")
         contains(trigger, #".accessibilityLabel("选择日期")"#, "Date trigger must expose an action name instead of reading only its icon")
         contains(trigger, ".accessibilityValue(formatted(selection))", "Date trigger must expose the selected date as its value")
 

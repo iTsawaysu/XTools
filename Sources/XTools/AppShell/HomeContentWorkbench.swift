@@ -399,7 +399,6 @@ private struct WorkbenchPrimaryButton: View {
         .focused($isFocused)
         .indexFocusRing(active: isFocused, cornerRadius: ToolMetrics.Workbench.compactCorner)
         .onHover { isHovering = $0 }
-        .help(helpText)
         .accessibilityLabel(helpText)
     }
 }

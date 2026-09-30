@@ -30,7 +30,6 @@ struct DeviceInformationQuickActionsSourceContractTests {
             "Label(\"刷新\", systemImage: IndexActionSymbol.refresh)",
             "Device information must expose a visible manual refresh action"
         )
-        contains(page, ".help(\"刷新设备信息\")", "Manual refresh must explain its action")
         contains(
             page,
             ".accessibilityLabel(\"刷新设备信息\")",

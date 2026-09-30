@@ -299,7 +299,6 @@ private struct IndexBase64FileWorkspaceContent: View {
         }
         .buttonStyle(IndexBareButtonStyle())
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .help(filePickerHelp)
         .accessibilityHint(filePickerHelp)
         .disabled(session.isReadingFile)
         .task(id: session.isReadingFile) {
@@ -486,7 +485,6 @@ private struct IndexBase64FileWorkspaceContent: View {
         }
         .buttonStyle(IndexSmallButtonStyle())
         .disabled(session.reverseInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.isDecoding)
-        .help("解析并解码输入")
         .accessibilityLabel(session.decodeActivity == .manualInput ? "正在解码输入" : "解码输入")
     }
 
@@ -502,7 +500,6 @@ private struct IndexBase64FileWorkspaceContent: View {
         }
         .buttonStyle(IndexSmallButtonStyle())
         .disabled(session.isDecoding)
-        .help("导入编码文本文件")
         .accessibilityLabel(session.decodeActivity == .encodedTextImport ? "正在导入编码文本文件" : "导入编码文本文件")
     }
 

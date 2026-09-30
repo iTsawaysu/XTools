@@ -10,7 +10,7 @@ struct WorkspaceClearAffordanceSourceContractTests {
         contains(controls, "var title = \"清空\"", "Existing clear buttons must keep the concise default title")
         contains(controls, "static let clear = \"xmark.circle\"", "The shared action vocabulary must own the clear symbol")
         contains(controls, "Label(title, systemImage: IndexActionSymbol.clear)", "Visible clear buttons must render the owning scope title with the shared symbol")
-        contains(controls, ".help(title)", "Clear buttons must expose their concrete scope in help")
+        contains(controls, ".modifier(IndexOptionalHelp(title: iconOnly ? title : nil))", "Icon-only clear buttons must still expose their concrete scope; labeled ones show the title")
         contains(controls, ".accessibilityLabel(title)", "Clear buttons must expose their concrete scope to accessibility")
     }
 
