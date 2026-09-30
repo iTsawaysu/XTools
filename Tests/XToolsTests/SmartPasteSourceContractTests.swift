@@ -48,14 +48,26 @@ struct SmartPasteSourceContractTests {
 
     @Test func bannerFloatsWithoutDisplacingTheWorkspace() throws {
         let banner = try readSource("Sources/XTools/AppShell/SmartPasteSuggestionBanner.swift")
+        let monitor = try readSource("Sources/XTools/AppShell/SmartPasteMonitor.swift")
         let root = try readSource("Sources/XTools/AppShell/RootView.swift")
 
         contains(banner, ".toolSurface(\n            .floating,", "The suggestion must reuse the shared floating material surface treatment")
         contains(banner, "autoDismissDelay", "The suggestion is transient by design and must auto-dismiss")
         contains(banner, "IndexSmallButtonStyle()", "The suggestion action must reuse the shared small button style")
 
+        // Hover-pause bookkeeping mirrors ToastCenter: the banner must never be
+        // pulled out from under the pointer, and leaving resumes the remainder.
+        contains(banner, "func pauseDismissal()", "Hovering must freeze the auto-dismiss countdown")
+        contains(banner, "func resumeDismissal()", "Leaving the banner must resume the remaining countdown, not restart it")
+        contains(banner, ".onHover { hovering in", "The banner must wire hover into the pause/resume bookkeeping")
+
+        // Every suggestion mutation rides the shared panelReveal transaction so
+        // the banner animates in and out instead of popping.
+        contains(monitor, "applyToolMotion {", "Suggestion mutations must run inside the shared panelReveal transaction (ToastCenter-isomorphic)")
+
         contains(root, ".overlay(alignment: .top) {\n            if let suggestion = smartPaste.suggestion {", "The suggestion must overlay the workspace instead of joining page layout")
-        contains(root, "ToolMotion.Transition.topRowInsertion", "The suggestion must reuse the shared top-row insertion transition")
+        contains(root, "ToolMotion.Transition.toastPanel", "The suggestion must reuse the shared floating-panel transition so removal fades out (topRowInsertion's removal is identity and would vanish)")
+        contains(root, ".id(suggestion)", "Replacing the suggestion must replay the transition instead of an unanimated same-tick content swap")
         contains(root, "onDismiss: smartPaste.dismiss", "Dismissing must be wired to the monitor so the hint stays dismissible")
     }
 }

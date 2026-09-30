@@ -659,7 +659,8 @@ struct IndexSegmentedControl: View {
         .background {
             GeometryReader { proxy in
                 IndexSegmentedCursorLayer(
-                    activeFrame: segmentAnchors[selection].map { proxy[$0] }
+                    activeFrame: segmentAnchors[selection].map { proxy[$0] },
+                    selection: selection
                 )
             }
         }
@@ -766,13 +767,25 @@ private struct IndexSegmentedCursorFlightEffect: GeometryEffect {
 /// The floating selected-segment fill behind the segments. Selection changes
 /// spring the cursor to the new segment on the fast selection spring (width
 /// follows the target segment on the same arc); first placement and Reduce
-/// Motion drop it in place without motion.
+/// Motion drop it in place without motion. Pure geometry changes (live resize,
+/// font metric swaps) glue the cursor to the new frame instantly — the same
+/// selection-keyed intent gating the palette highlight uses, so the stretch
+/// envelope never replays while the window is being dragged.
 private struct IndexSegmentedCursorLayer: View {
     let activeFrame: CGRect?
+    let selection: String
 
     @State private var flight: IndexSegmentedCursorFlight?
     @State private var settledFrame: CGRect?
+    @State private var settledSelection: String?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Settled selection still holds the previous segment during the render
+    /// pass where a tap lands, so this flips true exactly once per selection
+    /// change and stays false across geometry-only frame changes.
+    private var selectionChanged: Bool {
+        selection != settledSelection
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -791,16 +804,16 @@ private struct IndexSegmentedCursorLayer: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .animation(
-            !reduceMotion && settledFrame != nil
+            !reduceMotion && settledFrame != nil && selectionChanged
                 ? ToolMotion.SegmentedCursor.slide
                 : nil,
             value: activeFrame
         )
         .onChange(of: activeFrame) { newFrame in
             if !reduceMotion,
+               selectionChanged,
                let previousFrame = settledFrame,
-               let newFrame,
-               previousFrame.minX != newFrame.minX {
+               let newFrame {
                 flight = IndexSegmentedCursorFlight(
                     fromX: previousFrame.minX,
                     toX: newFrame.minX
@@ -809,6 +822,7 @@ private struct IndexSegmentedCursorLayer: View {
                 flight = nil
             }
             settledFrame = newFrame
+            settledSelection = selection
         }
     }
 }
@@ -1058,12 +1072,12 @@ private struct IndexEmbeddedSwitchLabel: View {
                 .padding(.trailing, isOn ? (trackPadding + thumbSize + textSpacing) : textOuterPadding)
 
             Circle()
-                .fill(Color.white)
+                .fill(isOn ? ToolTheme.onAccent : ToolTheme.textSecondary)
                 .frame(width: thumbSize, height: thumbSize)
                 .toolShadow(ToolTheme.Shadow.panel)
                 .overlay {
                     Circle()
-                        .strokeBorder(Color.black.opacity(0.08), lineWidth: 0.5)
+                        .strokeBorder(ToolTheme.border, lineWidth: 0.5)
                 }
                 .padding(.horizontal, trackPadding)
         }

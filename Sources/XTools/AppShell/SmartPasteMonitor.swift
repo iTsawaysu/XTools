@@ -14,7 +14,7 @@ import XToolsCore
 /// - Never suggests the tool the user is already looking at.
 @MainActor
 final class SmartPasteMonitor: ObservableObject {
-    struct Suggestion: Equatable {
+    struct Suggestion: Hashable {
         let kind: SmartPasteDetector.Kind
         let toolID: ToolID
         let toolTitle: String
@@ -45,6 +45,8 @@ final class SmartPasteMonitor: ObservableObject {
         .base64: Route(toolID: "text-encoding", message: "剪贴板里是 Base64", hubSegment: "base64")
     ]
 
+    /// 每次突变都包在 applyToolMotion（panelReveal 事务）里，横幅的进出场
+    /// 因此落在动画事务内（ToastCenter 同构）；Reduce Motion 时自动直执行。
     @Published private(set) var suggestion: Suggestion?
 
     private var inspectedChangeCount = -1
@@ -72,7 +74,7 @@ final class SmartPasteMonitor: ObservableObject {
 
         // Any new content invalidates the previous suggestion, including content
         // that does not classify — the old hint is about the old clipboard.
-        suggestion = nil
+        applyToolMotion { suggestion = nil }
 
         guard changeCount != dismissedChangeCount else { return }
         guard let data = pasteboard.data(forType: .string),
@@ -89,24 +91,26 @@ final class SmartPasteMonitor: ObservableObject {
             return
         }
 
-        suggestion = Suggestion(
-            kind: kind,
-            toolID: tool.id,
-            toolTitle: tool.title,
-            message: route.message,
-            hubSegment: route.hubSegment
-        )
+        applyToolMotion {
+            suggestion = Suggestion(
+                kind: kind,
+                toolID: tool.id,
+                toolTitle: tool.title,
+                message: route.message,
+                hubSegment: route.hubSegment
+            )
+        }
     }
 
     func dismiss() {
         dismissedChangeCount = inspectedChangeCount
-        suggestion = nil
+        applyToolMotion { suggestion = nil }
     }
 
     func noteSelectedTool(_ toolID: ToolID?) {
         currentToolID = toolID
         if suggestion?.toolID == toolID {
-            suggestion = nil
+            applyToolMotion { suggestion = nil }
         }
     }
 }

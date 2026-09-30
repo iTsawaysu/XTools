@@ -435,7 +435,12 @@ struct RootView: View {
         // originates outside the host (palette, sidebar, shortcuts).
         .toolAnimation(ToolMotion.Preset.pageArrival, value: viewModel.selectedToolID)
         // Floating suggestion: overlay keeps page layout, scroll ownership, and
-        // control positions untouched while the hint is visible.
+        // control positions untouched while the hint is visible. The entrance/
+        // exit transaction comes from the monitor's applyToolMotion writes; the
+        // container-level animation below is the same belt-and-braces the toast
+        // host carries. `.id(suggestion)` forces a remove+insert when a new
+        // clipboard replaces the visible banner (same-tick nil→new writes would
+        // otherwise merge into an unanimated content swap).
         .overlay(alignment: .top) {
             if let suggestion = smartPaste.suggestion {
                 SmartPasteSuggestionBanner(
@@ -451,12 +456,16 @@ struct RootView: View {
                     },
                     onDismiss: smartPaste.dismiss
                 )
+                .id(suggestion)
                 .padding(.top, ToolMetrics.Spacing.md)
                 .padding(.horizontal, ToolMetrics.Spacing.lg)
-                .toolTransition(ToolMotion.Transition.topRowInsertion, reduceMotion: reduceMotion)
-                .toolAnimation(ToolMotion.Preset.panelReveal, value: suggestion.toolID)
+                .toolTransition(ToolMotion.Transition.toastPanel, reduceMotion: reduceMotion)
             }
         }
+        .animation(
+            ToolMotion.animation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion),
+            value: smartPaste.suggestion
+        )
     }
 
     private var navigationActions: ToolNavigationActions {
