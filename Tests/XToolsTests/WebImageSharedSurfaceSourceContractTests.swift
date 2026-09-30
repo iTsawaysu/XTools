@@ -25,6 +25,6 @@ struct WebImageSharedSurfaceSourceContractTests {
 
         contains(imageHub, "workspaceSemantic: .imagePreviewStage", "The image hub must use the shared image preview stage")
         contains(converter, "workspaceSemantic: .copyTransformWorkspace", "Generic converters must use the shared copy-transform shell")
-        contains(converter, "IndexTextConversionWorkbench(", "Generic converters must render through the shared input/output workbench")
+        contains(converter, "IndexFormatWorkbench(", "Generic converters must render through the shared unified input/output workbench")
     }
 }

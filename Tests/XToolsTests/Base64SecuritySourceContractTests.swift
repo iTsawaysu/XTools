@@ -39,7 +39,7 @@ struct Base64SecuritySourceContractTests {
         contains(converterSource, "workspace.changeMode(to: $0, backfillModeTransition: backfillModeTransition)", "Shared converter must route mode changes through the workspace execution model")
         contains(converterSource, "completedRequest == IndexConverterRequest(input: input, mode: mode)", "Shared converter must only backfill a completed result for the current request identity")
         doesNotContain(converterSource, "ConverterModeBackfill.currentValidOutput", "Shared converter must not re-execute the previous conversion while backfilling a mode switch")
-        contains(converterSource, "onClear: workspace.clear", "Shared converter must always embed clear in the input panel header via IndexTextConversionWorkbench")
+        contains(converterSource, "onClear: workspace.clear", "Shared converter must keep clear in the unified workbench toolbar via IndexFormatWorkbench")
         doesNotContain(converterSource, "embedsClearButtonInInputPanel", "Shared converter must not expose a switch for clear placement — clear is always embedded")
         doesNotContain(converterSource, "Label(\"清空\"", "Shared converter must not render a separate action-row clear button")
 

@@ -9,7 +9,8 @@ import XToolsCore
 /// leading control slot on the left, a centered STDOUT cluster with the
 /// inline diagnostic (anchored to the cluster so it never shifts), and the
 /// framed copy/clear actions plus the primary format action on the right —
-/// above a fixed two-pane code split with line-number gutters. A failed
+/// above a fixed two-pane code split with line-number gutters (plain-text
+/// workbenches like the shared converter opt out of the gutters). A failed
 /// format tints the panel outline; a status row appears only for a current
 /// diagnostic or import rejection. Its details open without changing editor
 /// geometry, and the native editors retain their identity as the row changes.
@@ -27,6 +28,15 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
     /// Retained for call-site compatibility and per-attempt feedback identity.
     var formatAttempt = 0
     var outputLineNumbers = true
+    /// Structured code keeps the editor gutter; plain-text workbenches
+    /// (text encoding, like the diff workspace) opt out.
+    var inputLineNumbers = true
+    /// One-shot caret placement seam for programmatic input backfills
+    /// (converter mode switches); interactive typing never needs it.
+    var inputCaretPlacementRequestToken: Int? = nil
+    /// Opt-in live input metric in the toolbar's STDIN cluster. The structured
+    /// formatter family ships without it; conversion callers pass `.characters`.
+    var inputCountPresentation: IndexInputCountPresentation? = nil
     var outputSyntax: IndexSyntaxKind? = nil
     var outputPlaceholder = IndexEmptyStateCopy.outputWillShowHere
     var actionTitle = "格式化"
@@ -72,6 +82,9 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
+        inputLineNumbers: Bool = true,
+        inputCaretPlacementRequestToken: Int? = nil,
+        inputCountPresentation: IndexInputCountPresentation? = nil,
         outputSyntax: IndexSyntaxKind? = nil,
         outputPlaceholder: String = IndexEmptyStateCopy.outputWillShowHere,
         actionTitle: String = "格式化",
@@ -102,6 +115,9 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             diagnosticMarker: diagnosticMarker,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
+            inputLineNumbers: inputLineNumbers,
+            inputCaretPlacementRequestToken: inputCaretPlacementRequestToken,
+            inputCountPresentation: inputCountPresentation,
             outputSyntax: outputSyntax,
             outputPlaceholder: outputPlaceholder,
             actionTitle: actionTitle,
@@ -135,6 +151,9 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
         formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
+        inputLineNumbers: Bool = true,
+        inputCaretPlacementRequestToken: Int? = nil,
+        inputCountPresentation: IndexInputCountPresentation? = nil,
         outputSyntax: IndexSyntaxKind? = nil,
         outputPlaceholder: String = IndexEmptyStateCopy.outputWillShowHere,
         actionTitle: String = "格式化",
@@ -166,6 +185,9 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             diagnosticMarker: diagnosticMarker,
             formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
+            inputLineNumbers: inputLineNumbers,
+            inputCaretPlacementRequestToken: inputCaretPlacementRequestToken,
+            inputCountPresentation: inputCountPresentation,
             outputSyntax: outputSyntax,
             outputPlaceholder: outputPlaceholder,
             actionTitle: actionTitle,
@@ -199,6 +221,9 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         diagnosticMarker: IndexTextAreaDiagnosticMarker?,
         formatAttempt: Int,
         outputLineNumbers: Bool,
+        inputLineNumbers: Bool = true,
+        inputCaretPlacementRequestToken: Int? = nil,
+        inputCountPresentation: IndexInputCountPresentation? = nil,
         outputSyntax: IndexSyntaxKind?,
         outputPlaceholder: String,
         actionTitle: String,
@@ -230,6 +255,9 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
         self.diagnosticMarker = diagnosticMarker
         self.formatAttempt = formatAttempt
         self.outputLineNumbers = outputLineNumbers
+        self.inputLineNumbers = inputLineNumbers
+        self.inputCaretPlacementRequestToken = inputCaretPlacementRequestToken
+        self.inputCountPresentation = inputCountPresentation
         self.outputSyntax = outputSyntax
         self.outputPlaceholder = outputPlaceholder
         self.actionTitle = actionTitle
@@ -340,6 +368,17 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
                     .layoutPriority(9)
 
                 leadingControl()
+
+                // Opt-in live input metric (text encoding keeps the counter the
+                // structured family dropped). Collapses first when the toolbar
+                // runs out of width instead of squeezing the fixed controls.
+                if let inputCountPresentation {
+                    ViewThatFits(in: .horizontal) {
+                        IndexInputCountLabel(text: inputCountPresentation.label(for: input))
+                        EmptyView()
+                    }
+                    .layoutPriority(1)
+                }
 
                 Spacer(minLength: 0)
             }
@@ -483,10 +522,11 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             text: $input,
             fillsHeight: true,
             autoFocus: autoFocus,
+            caretPlacementRequestToken: inputCaretPlacementRequestToken,
             diagnosticMarker: hasDiagnostic ? diagnosticMarker : nil,
             diagnosticNavigationToken: diagnosticNavigationToken,
             embedsFlat: inputHeader != nil,
-            lineNumbers: true,
+            lineNumbers: inputLineNumbers,
             onFileDrop: { content in
                 input = content
                 onFormat?()

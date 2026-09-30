@@ -339,36 +339,34 @@ private struct IndexConverterWorkspaceContent: View {
         }
     }
 
-    /// actionBar + converterPair 的同构组合：壳内作为 IndexPage 的内容闭包，
-    /// 嵌入态直接挂到 Hub 的内容闭包——两者同为 VStack 上下文，元素间距与
-    /// 合并前完全一致。
-    @ViewBuilder
+    /// 壳内作为 IndexPage 的内容闭包，嵌入态直接挂到 Hub 的内容闭包——
+    /// 两者同为 VStack 上下文。工作台与「格式化」/「对比」同构：单一面板
+    /// + 统一工具栏，模式切换落在 STDIN 槽位（同 JSON 缩进控制），转换
+    /// 错误走工具栏下的诊断状态行。
     private var workbenchBody: some View {
-        actionBar
-        converterPair
-    }
-
-    private var actionBar: some View {
-        IndexActionBar {
-            IndexSegmentedControl(items: modes.map { ($0.id, $0.label) }, selection: modeSelection)
-        }
-    }
-
-    private var converterPair: some View {
-        // Mode chrome motion is owned by IndexSegmentedControl (Preset.tabs).
-        // Do not animate the fixed text-conversion pair layout on mode change
-        // (quality hot-path ban). Pane content updates stay immediate.
-        IndexTextConversionWorkbench(
+        IndexFormatWorkbench(
             inputTitle: "输入",
             outputTitle: "输出",
-            placeholder: placeholder,
             input: $workspace.input,
             output: workspace.output,
-            inputError: workspace.error,
-            outputProcessingText: workspace.isProcessing ? "正在转换…" : nil,
-            outputPresentation: outputPresentation,
-            onClear: workspace.clear,
+            inputPlaceholder: placeholder,
+            diagnostic: workspace.error,
+            diagnosticTone: .error,
+            outputLineNumbers: false,
+            inputLineNumbers: false,
             inputCaretPlacementRequestToken: workspace.inputReplacementToken == 0 ? nil : workspace.inputReplacementToken,
+            inputCountPresentation: .characters,
+            autoFocus: true,
+            clearDisabled: workspace.input.isEmpty && workspace.output.isEmpty && workspace.error == nil,
+            onClear: workspace.clear,
+            outputPresentation: outputPresentation,
+            outputProcessingText: workspace.isProcessing ? "正在转换…" : nil,
+            leadingControl: {
+                // Mode chrome motion is owned by IndexSegmentedControl (Preset.tabs).
+                // Do not animate the fixed text-conversion pair layout on mode change
+                // (quality hot-path ban). Pane content updates stay immediate.
+                IndexSegmentedControl(items: modes.map { ($0.id, $0.label) }, selection: modeSelection, density: .compact)
+            },
             workspaceSemantic: .copyTransformWorkspace
         )
     }
