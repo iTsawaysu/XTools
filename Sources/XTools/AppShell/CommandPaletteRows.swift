@@ -31,14 +31,19 @@ struct CommandPaletteSectionTitle: View {
 }
 
 /// Raycast-style bottom hints: the palette's keyboard grammar at a glance.
+/// Bottom hints: the palette's keyboard grammar at a glance. The return
+/// label follows the ACTIVE row's real action — tools jump, commands run —
+/// so the hint never describes a behavior the current selection doesn't have.
 struct CommandPaletteHintsBar: View {
+    /// ↩ 对当前选中行的实际语义（工具＝跳转，命令＝执行）。
+    let returnLabel: String
+
     var body: some View {
         VStack(spacing: 0) {
             ToolDivider()
             HStack(spacing: 12) {
                 Self.hint(key: "↑↓", label: "浏览")
-                Self.hint(key: "⇞⇟", label: "翻页")
-                Self.hint(key: "↩", label: "执行")
+                Self.hint(key: "↩", label: returnLabel)
                 Spacer()
                 Self.hint(key: "esc", label: "关闭")
             }
@@ -92,7 +97,7 @@ struct CommandPaletteRow: View {
                     // resting icon; the active row swaps to the accent tint.
                     .frame(width: 24, height: 24)
                     .background(
-                        isActive ? ToolTheme.accentSoft : ToolTheme.Keycap.bed,
+                        isActive ? ToolTheme.accentSoft : ToolTheme.chipBed,
                         in: RoundedRectangle(
                             cornerRadius: ToolMetrics.CornerRadius.nestedControl,
                             style: .continuous

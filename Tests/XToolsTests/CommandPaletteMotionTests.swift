@@ -53,18 +53,16 @@ struct CommandPaletteMotionTests {
     /// the single progress interpolation.
     @Test
     func paletteMotionTokensMatchWave2Prototype() {
-        #expect(ToolMotion.PaletteMotion.riseDistance == 8)
+        #expect(ToolMotion.PaletteMotion.riseDistance == 0)
         // Springs keep the presentation retargetable (timing-curve variants
         // stalled real-window reversals); launcher-fast cadence.
-        #expect(ToolMotion.PaletteMotion.open == Animation.spring(response: 0.15, dampingFraction: 0.95, blendDuration: 0))
-        #expect(ToolMotion.PaletteMotion.close == Animation.spring(response: 0.14, dampingFraction: 1.0, blendDuration: 0))
-        // Keyboard selection highlight: mature-launcher fast snap spring.
-        #expect(ToolMotion.PaletteMotion.highlightSlide == Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0))
+        #expect(ToolMotion.PaletteMotion.open == Animation.easeOut(duration: 0.13))
+        #expect(ToolMotion.PaletteMotion.close == Animation.easeOut(duration: 0.12))
+        // Keyboard selection highlight is instant (no interpolation token).
     }
 
-    /// The open arc starts 8pt BELOW the resting position (prototype rises
-    /// up) and settles at the resting position — one continuous mapping for
-    /// both directions.
+    /// Fade-only presentation: opacity spans 0→1 across the progress range
+    /// with no positional travel, one continuous mapping for both directions.
     @Test
     func visibilityGeometryMatchesWave2Endpoints() {
         let start = CommandPaletteVisibilityGeometry.resolve(
@@ -81,16 +79,14 @@ struct CommandPaletteMotionTests {
         #expect(settled.offsetY == 0)
         #expect(settled.opacity == 1)
 
-        var previousOffset = start.offsetY
-        for progress in stride(from: CGFloat(0.05), through: 1, by: 0.05) {
+        for progress in stride(from: CGFloat(0.05), to: 1, by: 0.05) {
             let geometry = CommandPaletteVisibilityGeometry.resolve(
                 progress: progress,
                 reduceMotion: false
             )
-            // The panel rises monotonically toward its resting position.
-            #expect(geometry.offsetY < previousOffset)
-            #expect(geometry.offsetY >= 0)
-            previousOffset = geometry.offsetY
+            // Fade-only: no positional travel at any intermediate progress.
+            #expect(geometry.offsetY == 0)
+            #expect(geometry.opacity > 0 && geometry.opacity < 1)
         }
     }
 

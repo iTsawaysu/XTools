@@ -51,7 +51,7 @@ struct SmartPasteSourceContractTests {
         let monitor = try readSource("Sources/XTools/AppShell/SmartPasteMonitor.swift")
         let root = try readSource("Sources/XTools/AppShell/RootView.swift")
 
-        contains(banner, ".toolSurface(\n            .floating,", "The suggestion must reuse the shared floating material surface treatment")
+        contains(banner, ".indexSurface(\n            .modal,", "The suggestion must reuse the shared opaque floating surface — the transient system material flashes white on appear/disappear")
         contains(banner, "autoDismissDelay", "The suggestion is transient by design and must auto-dismiss")
         contains(banner, "IndexSmallButtonStyle()", "The suggestion action must reuse the shared small button style")
 

@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// Wave 2 command-palette selection highlight, redone to match mature
-/// launchers (Raycast / Linear command menu): the active row carries one
-/// neutral floating fill that slides to the next row with a fast
-/// critically-damped spring — glued to the row, retargetable under key
-/// repeat, never stretched. List rebuilds (query reset, new session)
-/// reposition it instantly.
+/// Command-palette selection highlight, matched to mature launchers
+/// (Raycast / Spotlight): the active row carries one neutral floating fill
+/// that repositions INSTANTLY — keyboard navigation reads as smooth through
+/// deterministic, zero-latency feedback; interpolation only ever lags the
+/// selection behind the keys. Rebuilds (query reset, new session), pointer
+/// moves, and ↑↓ moves all snap identically.
 ///
 /// This file owns the geometry plumbing (row anchor preference, list-space
 /// resolution) so the palette view itself stays free of continuous geometry
@@ -30,8 +30,6 @@ struct CommandPaletteRowAnchorsKey: PreferenceKey {
 struct CommandPaletteSelectionHighlightHost: View {
     let activeItemID: String?
     let anchors: [String: Anchor<CGRect>]
-    let animates: Bool
-    let reduceMotion: Bool
 
     var body: some View {
         GeometryReader { proxy in
@@ -40,24 +38,17 @@ struct CommandPaletteSelectionHighlightHost: View {
                     activeItemID,
                     anchors: anchors,
                     proxy: proxy
-                ),
-                animates: animates,
-                reduceMotion: reduceMotion
+                )
             )
         }
     }
 }
 
-/// Floating selection fill behind the list rows. Keyboard moves slide the
-/// whole frame (position *and* size) on the shared fast snap spring; a
-/// spring keeps mid-flight retargeting continuous when ↑↓ repeats outpace
-/// the settle. Non-animated changes drop it instantly. Reduce Motion
-/// removes the spring entirely — the highlight follows the active row
-/// without interpolation.
+/// Floating selection fill behind the list rows. Every active-row change
+/// repositions it instantly (no interpolation): under ↑↓ key repeat an
+/// animated highlight trails the keys by rows, which reads as lag.
 struct CommandPaletteSelectionHighlightLayer: View {
     let activeFrame: CGRect?
-    let animates: Bool
-    let reduceMotion: Bool
 
     /// Resolves the active row's anchor in list space.
     static func resolvedActiveFrame(
@@ -87,11 +78,5 @@ struct CommandPaletteSelectionHighlightLayer: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .animation(
-            animates && !reduceMotion
-                ? ToolMotion.PaletteMotion.highlightSlide
-                : nil,
-            value: activeFrame
-        )
     }
 }

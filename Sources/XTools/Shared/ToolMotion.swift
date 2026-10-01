@@ -320,33 +320,15 @@ enum ToolMotion {
     /// with no per-row stagger; the keyboard selection highlight snaps on the
     /// 0.2/1.0 fast spring with no stretch.
     enum PaletteMotion {
-        /// Panel open: 8pt rise + fade on a ~150ms near-critical spring —
-        /// launcher-fast (Raycast cadence), overshoot-free, and still
-        /// retargetable mid-flight on rapid ⌘K reversals.
-        static let open = Animation.spring(
-            response: 0.15,
-            dampingFraction: 0.95,
-            blendDuration: 0
-        )
-        /// Panel close: fade + sink settling in ~140ms. A critically damped
-        /// spring keeps the arc monotonic — timing-curve variants stall
-        /// real-window retargets (see `CommandPaletteMotionTests` rapid
-        /// reversals).
-        static let close = Animation.spring(
-            response: 0.14,
-            dampingFraction: 1.0,
-            blendDuration: 0
-        )
-        /// Unified rise/sink travel: open rises from 8pt below the resting
-        /// position, close sinks the same 8pt while fading. One distance
-        /// keeps reversal geometry continuous (cmdkRise / cmdkSink).
-        static let riseDistance: CGFloat = 8
-        /// Selection highlight slide, redone to match mature launchers
-        /// (Raycast / Linear): a fast critically-damped snap that stays glued
-        /// to the active row and retargets continuously under key repeat.
-        /// Deliberately *not* the 0.3/0.85 pill spring — that family lags
-        /// keyboard selection and read as sluggish; no stretch.
-        static let highlightSlide = Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0)
+        /// Panel open: quiet ~130ms fade — the palette is the densest
+        /// reading surface, so restraint (no movement) is the smooth feel.
+        static let open = Animation.easeOut(duration: 0.13)
+        /// Panel close: a slightly faster ~120ms fade.
+        static let close = Animation.easeOut(duration: 0.12)
+        /// Fade-only presentation: no positional travel. The mapping keeps
+        /// the offset channel at zero so reversal geometry stays trivially
+        /// continuous.
+        static let riseDistance: CGFloat = 0
     }
 
     /// Wave 2 copy-confirmation tick (prototype MOTION d.copyOut / d.copyDraw /

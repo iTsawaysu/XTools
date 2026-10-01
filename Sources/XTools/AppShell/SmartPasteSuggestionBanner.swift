@@ -46,10 +46,12 @@ struct SmartPasteSuggestionBanner: View {
         .padding(.leading, ToolMetrics.Spacing.md)
         .padding(.trailing, ToolMetrics.Spacing.sm)
         .padding(.vertical, ToolMetrics.Spacing.sm)
-        .toolSurface(
-            .floating,
-            fallback: ToolTheme.popoverBackground,
-            in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.modal, style: .continuous)
+        // Opaque surface — same material-flash fix as the toast.
+        .indexSurface(
+            .modal,
+            fill: ToolTheme.popoverBackground,
+            border: .clear,
+            borderWidth: 0
         )
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.modal, style: .continuous)

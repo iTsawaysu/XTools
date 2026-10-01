@@ -2644,6 +2644,9 @@
     "跟随系统" : {
       "extractionState" : "manual"
     },
+    "跳转" : {
+      "extractionState" : "manual"
+    },
     "跳转工具" : {
       "extractionState" : "manual"
     },

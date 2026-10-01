@@ -385,6 +385,10 @@ struct RootView: View {
                 selectedTool: selectedTool,
                 isSidebarVisible: viewModel.sidebarVisibility == .visible,
                 isFavorite: selectedTool.map { favorites.isFavorite($0.id) } ?? false,
+                // 传模型引用（let 常量，不读计算属性）：读取 showsCommandPalette
+                // 会在 body 里依赖面板状态，而面板开关不触发 body 重估——压暗
+                // 观察在 CommandTriggerLabel 内完成。
+                presentation: viewModel.commandPalettePresentation,
                 onToggleSidebar: toggleSidebar,
                 onToggleFavorite: toggleFavorite,
                 onCommandPalette: { toggleCommandPaletteAnimated() },
@@ -406,6 +410,9 @@ struct RootView: View {
                 registry: registry,
                 navigationActions: navigationActions
             )
+            // ENV-gated forensic autopilot (XTOOLS_PALETTE_AUTOPILOT); inert in
+            // normal launches. See CommandPaletteAutopilot.
+            CommandPaletteAutopilot.attachIfRequested(viewModel)
         }
         .onChange(of: scenePhase) { phase in
             // Sample the clipboard only when the app comes forward — never in
@@ -759,6 +766,11 @@ private struct CommandPaletteOverlayHost: View {
     let onRunCommand: (CommandActionID) -> Void
     let onRequestFocus: () -> Void
     let onDismiss: () -> Void
+    /// Explicit animated visibility progress. `presentation.shows` alone
+    /// never paints the panel: progress only reaches 1 through the animated
+    /// state change below, so a full-bright first frame (the intermittent
+    /// white flash under load) is structurally impossible.
+    @State private var presentationProgress: CGFloat = 0
 
     private var actions: [CommandActionEntry] {
         CommandActionEntry.paletteActions(
@@ -772,7 +784,7 @@ private struct CommandPaletteOverlayHost: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             .modifier(CommandPalettePresentationMotionModifier(
-                progress: presentation.shows ? 1 : 0,
+                progress: presentationProgress,
                 isPresented: presentation.shows,
                 reduceMotion: reduceMotion,
                 traceSession: presentation.shows
@@ -804,28 +816,24 @@ private struct CommandPaletteOverlayHost: View {
                     }
                 }
             ))
-        // Wave 2 palette choreography: open rides the 150ms launcher-fast
-        // spring rise, every close path lands on the same ~140ms settle
-        // spring, and rapid reversals retarget the in-flight progress instead
-        // of queueing.
-        // Scoped deeper than the shared modal shell animation below so the
-        // directional arcs own the presentation interpolation.
-        .animation(
-            ToolMotion.animation(
-                presentation.shows
+        // One directional arc per toggle, applied where the state changes:
+        // withAnimation on the explicit progress makes the interpolation
+        // ride the same transaction as the flip, so late or loaded runloop
+        // turns can never render the target value unanimated (the white
+        // flash), and rapid reversals retarget the in-flight progress.
+        .onChange(of: presentation.shows) { shows in
+            withToolAnimation(
+                shows
                     ? ToolMotion.PaletteMotion.open
                     : ToolMotion.PaletteMotion.close,
                 reduceMotion: reduceMotion
-            ),
-            value: presentation.shows
-        )
+            ) {
+                presentationProgress = shows ? 1 : 0
+            }
+        }
         .onAppear {
             CommandPaletteTrace.presentationShellMounted()
         }
-        .animation(
-            ToolMotion.animation(ToolMotion.Preset.modal, reduceMotion: reduceMotion),
-            value: presentation.shows
-        )
     }
 }
 

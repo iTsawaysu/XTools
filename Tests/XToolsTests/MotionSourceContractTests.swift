@@ -66,14 +66,15 @@ struct MotionSourceContractTests {
         contains(root, "ToolMotion.Preset.shellResize", "Root shell resize/focus motion must use ToolMotion")
         contains(root, "CommandPaletteScrim", "Command palette dimming must be a root-owned full-window layer")
         contains(root, "private struct CommandPalettePresentationMotionModifier<", "First and retained palette presentations must share one stable interpolation owner")
-        contains(root, "progress: presentation.shows ? 1 : 0", "Palette visibility must derive directly from presentation state")
+        contains(root, "@State private var presentationProgress: CGFloat = 0", "Palette visibility progress must be explicit animated state — the panel can never paint a full-bright first frame")
+        contains(root, ".onChange(of: presentation.shows)", "The palette arcs must key on the stable presentation state through one explicit progress transaction")
         contains(root, ".transition(.identity)", "Mounting retained palette content must not add a second insertion transition")
         contains(root, "withToolAnimation(ToolMotion.Preset.modal) {\n            navigationActions.closeCommandPalette()", "v3: palette open/close must run inside one explicit animation transaction")
         doesNotContain(commandPalette, "ToolMotion.Preset.orderedContent.delay", "Command palette rows must not create per-row arrival animations during modal presentation")
         contains(root, "private struct CommandPaletteOverlayHost: View", "Command palette presentation animation must live in its lightweight overlay observer")
         contains(root, ".allowsHitTesting(isPresented)", "The retained palette scrim must stop hit testing immediately on close")
         contains(commandPalette, ".allowsHitTesting(isPresentationReady)", "The retained palette panel must stop hit testing immediately on close")
-        contains(root, ".animation(\n            ToolMotion.animation(ToolMotion.Preset.modal, reduceMotion: reduceMotion),\n            value: presentation.shows\n        )", "The stable shell must animate visibility with the shared modal recipe")
+        doesNotContain(root, "value: presentation.shows", "One progress owner only — stacked .animation(value:) arcs are the first-frame race that flashes white")
         contains(commandPalette, "transaction.animation = nil", "Session row replacement must not inherit the panel visibility animation")
         contains(root, ">: @MainActor AnimatableModifier", "Palette scrim and panel must consume one SwiftUI interpolation owner")
         contains(commandPalette, "struct CommandPaletteVisibilityGeometry: Equatable", "Palette geometry must expose a pure regression-testable progress mapping")
@@ -650,16 +651,15 @@ struct MotionSourceContractTests {
 
         // Terminal tokens (prototype MOTION d/x/s.cmdk* + listStagger).
         contains(motion, "enum PaletteMotion", "Palette choreography must own one terminal-value namespace")
-        contains(motion, "static let open = Animation.spring(\n            response: 0.15,", "Open must ride the launcher-fast 150ms spring-family rise")
-        contains(motion, "static let close = Animation.spring(\n            response: 0.14,", "Close must settle on the ~140ms critically damped exit spring")
-        contains(motion, "static let riseDistance: CGFloat = 8", "The unified open-rise/close-sink travel is 8pt (prototype splits 8 in / 6 out)")
+        contains(motion, "static let open = Animation.easeOut(duration: 0.13)", "Open must be a quiet ~130ms fade — no movement on the densest reading surface")
+        contains(motion, "static let close = Animation.easeOut(duration: 0.12)", "Close must be a slightly faster ~120ms fade")
+        contains(motion, "static let riseDistance: CGFloat = 0", "The palette must not travel — fade-only presentation")
         doesNotContain(motion, "settleScale", "Panel motion must not scale the native-view subtree (~45 NSViews resample per interpolated frame)")
-        contains(motion, "static let highlightSlide = Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0)", "The highlight must snap on the mature-launcher fast spring, never the laggy pill spring")
+        doesNotContain(motion, "highlightSlide", "The selection highlight must reposition instantly — interpolation only lags the keys")
 
         // Open/close share one directional animation owner; every close path
         // lands on the same arc (prototype closeCmdk unification).
-        contains(root, "presentation.shows\n                    ? ToolMotion.PaletteMotion.open\n                    : ToolMotion.PaletteMotion.close,", "One directional selector must own open vs close arcs")
-        contains(root, "value: presentation.shows", "The palette arcs must stay keyed on the stable presentation state")
+        contains(root, "shows\n                    ? ToolMotion.PaletteMotion.open\n                    : ToolMotion.PaletteMotion.close,", "One directional selector must own open vs close arcs")
 
         // The scrim dims through the same single panel progress as the panel
         // (0.30 ceiling); no independent directional scrim arcs may queue
@@ -685,11 +685,21 @@ struct MotionSourceContractTests {
         doesNotContain(commandPalette, ".toolSurface(", "The palette panel must not use the transient system material")
 
         // Selection highlight: keyboard-sprung slide + multi-row stretch.
-        contains(commandPalette, "@State private var highlightFlightAnimated = false", "The palette must track keyboard-driven highlight intent")
+        doesNotContain(commandPalette, "highlightFlightAnimated", "The highlight must not interpolate on keyboard moves")
         contains(commandPalette, "CommandPaletteSelectionHighlightHost(", "The list must host the floating selection highlight")
         contains(commandPalette, "CommandPaletteRowAnchorsKey.self) { rowAnchors = $0 }", "Row frames must publish through the shared anchor preference")
+        // Session-change anchor clearing must be open-gated: close bumps the
+        // session too, and an unguarded wipe there blanks the floating
+        // highlight for one frame mid-fade — the selected row then shows the
+        // bare near-white panel, a row-shaped bright step (the residual
+        // esc/⌘K "white flash" caught by the 60fps autopilot capture).
+        contains(
+            commandPalette,
+            "if presentation.shows {\n                rowAnchors = [:]\n            }",
+            "Anchor clearing must be open-gated; the close arc must keep the selection highlight mounted and riding the shared fade"
+        )
         contains(highlight, "struct CommandPaletteRowAnchorsKey: PreferenceKey", "Selectable-row bounds must publish through one preference key")
-        contains(highlight, "animates && !reduceMotion\n                ? ToolMotion.PaletteMotion.highlightSlide\n                : nil", "Keyboard moves must snap; rebuilds and Reduce Motion must drop instantly")
+        doesNotContain(highlight, ".animation(", "The floating highlight must reposition instantly on every active-row change")
         doesNotContain(highlight, "FlightEffect", "The stretch-flight machinery must stay removed (mature launchers never stretch the palette highlight)")
     }
 

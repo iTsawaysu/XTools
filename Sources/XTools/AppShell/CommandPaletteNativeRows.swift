@@ -8,6 +8,17 @@ struct CommandPaletteRevealRequest: Equatable {
     let session: Int
 }
 
+/// Value inputs of one row attachment; equality short-circuits redundant
+/// `updateNSView` configuration passes (closures are excluded on purpose —
+/// they are behaviorally identical per row).
+struct CommandPaletteRowInputs: Equatable {
+    let itemID: String
+    let selectableIndex: Int?
+    let session: Int
+    let interactionEnabled: Bool
+    let revealRequest: CommandPaletteRevealRequest?
+}
+
 struct CommandPaletteRowAttachment: NSViewRepresentable {
     let itemID: String
     let selectableIndex: Int?
@@ -27,6 +38,19 @@ struct CommandPaletteRowAttachment: NSViewRepresentable {
 
     func updateNSView(_ view: CommandPaletteRevealView, context: Context) {
         view.traceSession = session
+        // Arrow navigation re-evaluates every row's attachment (the reveal
+        // request and active state change per keystroke). configure() is
+        // idempotent bookkeeping, so unchanged inputs skip it — per-keystroke
+        // native work stays proportional to the rows that actually moved.
+        if view.lastConfiguredInputs == CommandPaletteRowInputs(
+            itemID: itemID,
+            selectableIndex: selectableIndex,
+            session: session,
+            interactionEnabled: interactionEnabled,
+            revealRequest: revealRequest
+        ) {
+            return
+        }
         CommandPaletteTrace.count(.revealUpdate, session: view.traceSession)
         view.configure(
             itemID: itemID,
@@ -36,6 +60,13 @@ struct CommandPaletteRowAttachment: NSViewRepresentable {
             interactionEnabled: interactionEnabled,
             pointerMovementTracker: pointerMovementTracker,
             onMouseMove: onMouseMove
+        )
+        view.lastConfiguredInputs = CommandPaletteRowInputs(
+            itemID: itemID,
+            selectableIndex: selectableIndex,
+            session: session,
+            interactionEnabled: interactionEnabled,
+            revealRequest: revealRequest
         )
 
         // View-level reveal on this update pass deliberately does NOT call
@@ -479,6 +510,9 @@ final class CommandPaletteRevealRegistry: NSObject {
 }
 
 final class CommandPaletteRevealView: NSView {
+    /// Inputs of the last applied `configure` pass (see
+    /// `CommandPaletteRowInputs`).
+    var lastConfiguredInputs: CommandPaletteRowInputs?
     private var lastRevealRequest: CommandPaletteRevealRequest?
     private var scheduledRevealRetryRequest: CommandPaletteRevealRequest?
     private weak var registry: CommandPaletteRevealRegistry?

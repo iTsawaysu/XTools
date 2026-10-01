@@ -217,10 +217,14 @@ private struct ToolToastCard: View {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.modal, style: .continuous)
                 .fill(message.tone.softFill)
         }
-        .toolSurface(
-            .floating,
-            fallback: ToolTheme.popoverBackground,
-            in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.modal, style: .continuous)
+        // Opaque surface — the transient system material flashes a bright
+        // placeholder frame on appear/disappear (the "white block"), exactly
+        // like the palette before it went opaque.
+        .indexSurface(
+            .modal,
+            fill: ToolTheme.popoverBackground,
+            border: .clear,
+            borderWidth: 0
         )
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.modal, style: .continuous)

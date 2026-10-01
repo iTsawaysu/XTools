@@ -153,7 +153,7 @@ struct CommandPaletteNavigationSourceContractTests {
         contains(source, "rowAnchors = [:]", "A new session must drop stale row anchors so the floating highlight never paints at the previous session's frames")
         contains(source, "revealRegistry.suspend(session: session)", "Closing must synchronously suspend retained native rows")
         contains(source, "transaction.animation = nil", "Session row changes must not inherit the outer modal animation")
-        contains(root, "progress: presentation.shows ? 1 : 0", "Visible presentation progress must derive directly from the stable presentation shell")
+        contains(root, "presentationProgress = shows ? 1 : 0", "Visible presentation progress must be the explicit animated state, never the raw presentation flag")
         contains(source, "selectableIndex: snapshot.selectableIndex(of: item)", "Command palette rows must consume precomputed selectable indexes")
         contains(source, "sessionModel.navigationState.keyboardMoveDecision(", "Command palette arrows must use the tested active-row movement policy")
         contains(source, "private func activateActive()", "Command palette must activate the active row on submit")

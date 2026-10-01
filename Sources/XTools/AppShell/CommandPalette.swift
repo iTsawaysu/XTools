@@ -11,6 +11,8 @@ private enum CommandPaletteMetrics {
     /// registry yet (rows register on mount, so this only covers the very
     /// first press racing the list).
     static let pageStepFallback = 8
+    /// 列表视口固定高度：面板整体尺寸恒定，任何查询切换都只有行内容变化。
+    static let listHeight: CGFloat = 420
 }
 
 @MainActor
@@ -186,10 +188,6 @@ struct CommandPaletteView: View {
     @StateObject private var contentLifecycle: CommandPaletteContentLifecycle
     /// True when the active row was last set by keyboard arrows (not pointer).
     @State private var keyboardDrivenSession: Int?
-    /// True only for keyboard-driven active-row changes: the floating
-    /// selection highlight springs between rows on ↑↓ moves and drops
-    /// instantly on list rebuilds (query reset, new session, pointer move).
-    @State private var highlightFlightAnimated = false
     /// Row selection frames published by the list and resolved behind the
     /// rows by the floating highlight layer.
     @State private var rowAnchors: [String: Anchor<CGRect>] = [:]
@@ -262,7 +260,7 @@ struct CommandPaletteView: View {
 
     private func updateQuery(_ query: String) {
         guard isLiveSession(), sessionModel.setQuery(query) else { return }
-        highlightFlightAnimated = false
+        rowAnchors = [:]
         requestActiveReveal(for: .queryReset, in: sessionModel.snapshot)
     }
 
@@ -289,8 +287,6 @@ struct CommandPaletteView: View {
 
         switch moveDecision {
         case .move(let index), .alignToVisibleSelectableIndex(let index):
-            // Keyboard-driven move: the selection highlight springs.
-            highlightFlightAnimated = true
             sessionModel.navigationState.setActiveSelectableIndex(index, in: snapshot)
         case .revealCurrent:
             requestActiveReveal(for: .keyboard(delta: delta))
@@ -319,7 +315,6 @@ struct CommandPaletteView: View {
 
         keyboardDrivenSession = presentationSession
         if sessionModel.navigationState.activeSelectableIndex(in: snapshot) != target {
-            highlightFlightAnimated = true
             sessionModel.navigationState.setActiveSelectableIndex(target, in: snapshot)
         }
         requestActiveReveal(for: .keyboard(delta: delta), in: snapshot)
@@ -354,7 +349,6 @@ struct CommandPaletteView: View {
         guard isLiveSession() else { return }
         let snapshot = sessionModel.snapshot
         keyboardDrivenSession = nil
-        highlightFlightAnimated = false
         guard item.id != sessionModel.navigationState.activeRowID(in: snapshot) else { return }
         sessionModel.navigationState.setActiveRow(item, in: snapshot)
         requestActiveReveal(for: .pointerMove)
@@ -453,7 +447,8 @@ struct CommandPaletteView: View {
                     registry: contentLifecycle.revealRegistry,
                     session: presentationSession,
                     interactionEnabled: isPresentationReady,
-                    revealRequest: currentRevealRequest,
+                    revealRequest: currentRevealRequest?.id == item.id
+                        ? currentRevealRequest : nil,
                     pointerMovementTracker: contentLifecycle.pointerMovementTracker,
                     onMouseMove: { setActiveItem(item) }
                 )
@@ -478,7 +473,8 @@ struct CommandPaletteView: View {
                     registry: contentLifecycle.revealRegistry,
                     session: presentationSession,
                     interactionEnabled: isPresentationReady,
-                    revealRequest: currentRevealRequest,
+                    revealRequest: currentRevealRequest?.id == item.id
+                        ? currentRevealRequest : nil,
                     pointerMovementTracker: contentLifecycle.pointerMovementTracker,
                     onMouseMove: { setActiveItem(item) }
                 )
@@ -503,7 +499,8 @@ struct CommandPaletteView: View {
                 .toolInteractionFeedback()
                 .accessibilityIdentifier("command-palette.empty.clear")
             }
-            .frame(maxWidth: .infinity, minHeight: 140, alignment: .center)
+            .frame(maxWidth: .infinity)
+            .frame(height: CommandPaletteMetrics.listHeight)
         }
     }
 
@@ -569,14 +566,19 @@ struct CommandPaletteView: View {
             .background {
                 CommandPaletteSelectionHighlightHost(
                     activeItemID: activeItemID,
-                    anchors: rowAnchors,
-                    animates: highlightFlightAnimated,
-                    reduceMotion: reduceMotion
+                    anchors: rowAnchors
                 )
             }
             .onPreferenceChange(CommandPaletteRowAnchorsKey.self) { rowAnchors = $0 }
         }
-        .frame(maxHeight: 420)
+        // 固定列表高度：查询切换（含清除搜索回落地页）不再让面板瞬时
+        // 长高/缩矮——新露出区域行内容晚一帧布局的空白就是白闪的来源。
+        .frame(height: CommandPaletteMetrics.listHeight)
+    }
+
+    /// ↩ 对当前选中行的语义：命令＝执行，工具（与兜底）＝跳转。
+    private static func returnLabel(for row: CommandPaletteRowProjection?) -> String {
+        row?.commandID != nil ? "执行" : "跳转"
     }
 
     private static func sectionCount(
@@ -592,6 +594,7 @@ struct CommandPaletteView: View {
         let _ = contentLifecycle.updateActions(actions)
         let snapshot = sessionModel.snapshot
         let activeItemID = sessionModel.navigationState.activeRowID(in: snapshot)
+        let activeRow = sessionModel.navigationState.activeRow(in: snapshot)
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: CommandPaletteMetrics.searchHeaderSpacing) {
                 Image(systemName: "magnifyingglass")
@@ -682,7 +685,7 @@ struct CommandPaletteView: View {
 
             rowsSection(snapshot: snapshot, activeItemID: activeItemID)
 
-            CommandPaletteHintsBar()
+            CommandPaletteHintsBar(returnLabel: Self.returnLabel(for: activeRow))
         }
         .frame(width: 560)
         // Opaque surface, deliberately NOT the system material: a transient
@@ -724,11 +727,18 @@ struct CommandPaletteView: View {
         }
         .onChange(of: presentationSession) { _ in
             preparePresentationIfNeeded()
-            highlightFlightAnimated = false
             // A rapid reopen must not paint the floating highlight at the
             // previous session's row frames before the list republishes
-            // anchors.
-            rowAnchors = [:]
+            // anchors. Only the open side clears the anchors: close also
+            // bumps the session, and wiping anchors on the close path blanks
+            // the selection highlight for one frame mid-fade — the selected
+            // row then shows the bare near-white panel, a row-shaped bright
+            // step (the residual ⌘K white flash; captured by the 60fps
+            // autopilot ~70ms after esc, see CommandPaletteAutopilot).
+            // During close the highlight rides the shared fade unchanged.
+            if presentation.shows {
+                rowAnchors = [:]
+            }
         }
         .onChange(of: isPresented) { _ in
             preparePresentationIfNeeded()
