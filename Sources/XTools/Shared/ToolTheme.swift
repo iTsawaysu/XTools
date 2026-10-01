@@ -55,6 +55,11 @@ enum ToolTheme {
     static let panelBackground = dynamicColor(light: 0xFDFCFA, dark: 0x1E1E22)      // §7.1 surfacePanel
     static let utilityBackground = dynamicColor(light: 0xF5F2EC, dark: 0x242429)    // §7.1 surfacePanel2
     static let editorBackground = dynamicColor(light: 0xF5F2EC, dark: 0x0F0F11)     // §7.1 surfaceField
+    /// 顶栏 ⌘K 触发按钮的 chip 底。浅色比 `editorBackground` 深一档：统一键帽
+    /// `IndexKeycap` 的白色顶面落在过浅的 chip 上会白对白糊成一团，需要约 8%
+    /// 明度差才能读出 figure-ground 层次（见 `Keycap` 注释的实测锚）；深色沿用
+    /// editorBackground 的近黑——亮灰键帽在近黑上已有足够分离。
+    static let commandTriggerChip = dynamicColor(light: 0xEAE6DE, dark: 0x0F0F11)
     static let elevatedBackground = dynamicColor(light: 0xFDFCFA, dark: 0x242429)
     static let popoverBackground = dynamicColor(light: 0xFDFCFA, dark: 0x242429, alpha: 0.96, darkAlpha: 0.97)
 
@@ -91,11 +96,18 @@ enum ToolTheme {
     // 质感全部来自色片与表面的明度差（参考实测：浅色床 #E6E6E6 落在
     // #FCFCFC 面板上，约 8% 明度差，边缘 1px 直切无任何过渡线）。
 
+    /// 行内图标色片的静息底（Raycast 式图标底座），半透明不抢内容。
+    static let chipBed = dynamicColor(light: 0x000000, dark: 0xFFFFFF, alpha: 0.07, darkAlpha: 0.10)
+
     enum Keycap {
-        /// 键床：实心一档。浅色＝比表面深一档的暖灰，深色＝比表面亮一档。
-        static let bed = dynamicColor(light: 0x000000, dark: 0xFFFFFF, alpha: 0.07, darkAlpha: 0.10)
-        /// onAccent 变体（实心 accent 主按钮内）：onAccent 同色实底。
-        static let onAccentBed = dynamicColor(light: 0xFFF8F2, dark: 0x1A0F0A, alpha: 0.20, darkAlpha: 0.20)
+        /// 键帽顶面：浅色＝纯白（brew.sh 式键帽），深色＝比表面亮两档的灰。
+        static let surface = dynamicColor(light: 0xFFFFFF, dark: 0x54545C)
+        /// 键帽侧壁（厚度）：浅色＝暖灰一档半，深色＝近黑。
+        static let wall = dynamicColor(light: 0xC7C0B4, dark: 0x101014)
+        /// onAccent 变体（实心 accent 主按钮内）：onAccent 同色系顶面。
+        static let onAccentSurface = dynamicColor(light: 0xFFF8F2, dark: 0x2A1D15, alpha: 0.95, darkAlpha: 0.95)
+        /// onAccent 变体侧壁：accent 上再深一档。
+        static let onAccentWall = dynamicColor(light: 0x1A0F0A, dark: 0x0A0605, alpha: 0.35, darkAlpha: 0.45)
     }
 
     // MARK: - Shadow recipes（层级语言：面板几乎无影靠色差，浮层与模态分层）
@@ -111,6 +123,7 @@ enum ToolTheme {
     enum Shadow {
         /// Resting panels: separation comes from the surface ladder, not shadow.
         static let panel = ShadowRecipe(color: panelShadow, radius: 1, y: 1)
+        static let keycap = ShadowRecipe(color: subtleShadow, radius: 1, y: 1)
         /// Wave 2 card-lift pane hover depth pair (timing lives in
         /// `ToolMotion.PaneHover`): resting → lifted is the hover transition.
         /// Lift values stay restrained per review feedback.
