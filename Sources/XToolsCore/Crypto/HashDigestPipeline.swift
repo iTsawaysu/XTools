@@ -1,6 +1,5 @@
 import CommonCrypto
 import CryptoKit
-@preconcurrency import CryptoSwift
 import Foundation
 
 /// Declaration order is the product order: generally suitable digests appear
@@ -112,7 +111,8 @@ private extension HashDigestAlgorithm {
             }
             return digest
         case .sha3_512:
-            return Digest.sha3(bytes, variant: .sha512)
+            // macOS 13 无平台 SHA3（CryptoKit SHA3 要 macOS 15+），走本地 FIPS 202 实现。
+            return SHA3_512.hash(bytes)
         case .ripemd160:
             return RIPEMD160.hash(bytes)
         case .sha1:

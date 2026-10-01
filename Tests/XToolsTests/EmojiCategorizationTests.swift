@@ -7,7 +7,13 @@ struct EmojiCategorizationTests {
         let data = try #require(EmojiCatalog.bundledPrecompiledCatalogData())
         let decoded = try #require(EmojiCatalog.decodePrecompiledCatalog(data))
 
-        #expect(decoded == EmojiCatalog.buildSourceCatalog())
+        // emoji-test.txt 已移出运行时 bundle：交叉校验从仓库编译工具目录读取
+        // 后注入，语义与原先（运行时解析 txt）保持一致。
+        let sourceURL = try sourcePackageRoot()
+            .appendingPathComponent("tools/EmojiCatalogCompiler/emoji-test.txt")
+        let sourceData = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        #expect(decoded == EmojiCatalog.buildSourceCatalog(sourceData: sourceData))
         #expect(decoded == EmojiCatalog.groups)
     }
 

@@ -11,7 +11,6 @@ let package = Package(
         .executable(name: "XTools", targets: ["XTools"])
     ],
     dependencies: [
-        .package(url: "https://github.com/krzyzanowskim/CryptoSwift.git", from: "1.10.0"),
         .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.13.6"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.3"),
         // Vendored 0.5.2 with a local patch: bare `Document` references are
@@ -24,7 +23,6 @@ let package = Package(
         .target(
             name: "XToolsCore",
             dependencies: [
-                .product(name: "CryptoSwift", package: "CryptoSwift"),
                 .product(name: "SwiftSoup", package: "SwiftSoup"),
                 .product(name: "Yams", package: "Yams")
             ],
@@ -54,7 +52,12 @@ let package = Package(
         .executableTarget(
             name: "EmojiCatalogCompiler",
             dependencies: ["XToolsCore"],
-            path: "tools/EmojiCatalogCompiler"
+            path: "tools/EmojiCatalogCompiler",
+            resources: [
+                // emoji-test.txt 只随编译工具携带：运行时 bundle 不再包含该
+                // 669KB 的 Unicode 数据源（plist 才是运行时目录）。
+                .copy("emoji-test.txt")
+            ]
         ),
         .testTarget(
             name: "XToolsTests",

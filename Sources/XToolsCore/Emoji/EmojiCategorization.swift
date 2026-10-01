@@ -179,9 +179,12 @@ public struct EmojiSkinTone: Identifiable, Equatable, Sendable {
 }
 
 /// Emoji catalog generated once from the OS Unicode tables and cached in a
-/// static, so the picker loads instantly. The primary source is Unicode's
-/// emoji-test.txt data, which includes multi-scalar emoji sequences in CLDR
-/// keyboard order. A scalar-property fallback remains for missing resources.
+/// static, so the picker loads instantly. The primary source is the checked-in
+/// precompiled plist, compiled by tools/EmojiCatalogCompiler from Unicode's
+/// emoji-test.txt (which includes multi-scalar emoji sequences in CLDR
+/// keyboard order). A scalar-property fallback remains when the plist resource
+/// is missing, corrupt, or incompatible; the txt is a compile-time tool input
+/// only and is not shipped in the runtime bundle.
 public enum EmojiCatalog {
     public static let specialSymbolGroupName = "特殊符号"
 
@@ -337,8 +340,10 @@ public enum EmojiCatalog {
         let ranges: [ClosedRange<UInt32>]
     }
 
-    // Fallback category ranges for environments where the bundled Unicode
-    // resource is unavailable. The normal build path uses emoji-test.txt.
+    // Runtime fallback category ranges for when the bundled precompiled plist
+    // is unavailable, corrupt, or incompatible. emoji-test.txt is a compile-time
+    // tool input (tools/EmojiCatalogCompiler), not a runtime resource, so this
+    // scalar-derived catalog is the last runtime resort.
     private static let rangeCategories: [RangeCategory] = [
         RangeCategory(name: "笑脸与情感", ranges: [0x1F600...0x1F64F, 0x1F910...0x1F92F, 0x1F970...0x1F97A, 0x2639...0x263A]),
         RangeCategory(name: "人物与身体", ranges: [0x1F440...0x1F487, 0x1F574...0x1F575, 0x1F9B0...0x1F9FF, 0x1F90C...0x1F90F, 0x1F930...0x1F945, 0x1F48B...0x1F48F, 0x261D...0x261D, 0x270A...0x270D]),
@@ -365,12 +370,13 @@ public enum EmojiCatalog {
     private static let otherCategoryName = "其他"
 
     /// All groups in display order. The checked-in binary catalog keeps normal
-    /// startup off the Unicode text parser; source parsing remains the exact
-    /// runtime fallback when the resource is absent, corrupt, or incompatible.
+    /// startup off the Unicode text parser; the scalar-property fallback keeps
+    /// the picker usable when the plist is absent, corrupt, or incompatible.
+    /// emoji-test.txt is not read at runtime — it only feeds the compiler tool.
     public static let groups: [EmojiGroup] = {
         guard let data = bundledPrecompiledCatalogData(),
               let groups = decodePrecompiledCatalog(data) else {
-            return buildSourceCatalog()
+            return buildFallbackFromScalarProperties() + [buildSpecialSymbolGroup()]
         }
         return groups
     }()
@@ -417,9 +423,12 @@ public enum EmojiCatalog {
         return catalog.groups.map(\.domainValue)
     }
 
-    package static func buildSourceCatalog() -> [EmojiGroup] {
-        if let data = loadEmojiTestData() {
-            let groups = parseEmojiTestData(data)
+    /// 从 emoji-test.txt 文本构建完整目录；文本为空或解析不出分组时降级为
+    /// scalar 派生目录。sourceData 由编译工具（tools/EmojiCatalogCompiler）
+    /// 或测试注入——运行时不再携带 txt，因此没有无参版本。
+    package static func buildSourceCatalog(sourceData: String?) -> [EmojiGroup] {
+        if let sourceData, !sourceData.isEmpty {
+            let groups = parseEmojiTestData(sourceData)
             if !groups.isEmpty {
                 return groups + [buildSpecialSymbolGroup()]
             }
@@ -428,18 +437,12 @@ public enum EmojiCatalog {
         return buildFallbackFromScalarProperties() + [buildSpecialSymbolGroup()]
     }
 
-    package static func compilePrecompiledCatalogData() throws -> Data {
+    /// 编译预编译目录：sourceData 必须由调用方注入（编译工具从自身 bundle 读
+    /// emoji-test.txt），保证 XToolsCore 的运行时资源不含该 txt。
+    package static func compilePrecompiledCatalogData(sourceData: String) throws -> Data {
         let encoder = PropertyListEncoder()
         encoder.outputFormat = .binary
-        return try encoder.encode(PrecompiledCatalog(groups: buildSourceCatalog()))
-    }
-
-    private static func loadEmojiTestData() -> String? {
-        guard let url = Bundle.module.url(forResource: "emoji-test", withExtension: "txt") else {
-            return nil
-        }
-
-        return try? String(contentsOf: url, encoding: .utf8)
+        return try encoder.encode(PrecompiledCatalog(groups: buildSourceCatalog(sourceData: sourceData)))
     }
 
     private static func parseEmojiTestData(_ data: String) -> [EmojiGroup] {

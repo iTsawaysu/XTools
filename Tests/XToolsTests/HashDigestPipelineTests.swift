@@ -36,6 +36,30 @@ struct HashDigestPipelineTests {
         }
     }
 
+    @Test func sha3_512MatchesFIPS202PublishedVectors() {
+        // FIPS 202 官方示例 + rate 边界/多块向量（72/143 字节覆盖对齐与跨块吸收），
+        // 多块期望值与平台 hashlib 独立比对过。
+        let vectors: [([UInt8], String)] = [
+            ([], "a69f73cca23a9ac5c8b567dc185a756e97c982164fe25859e0d1dcc1475c80a615b2123af1f5f94c11e3e9402c3ac558f500199d95b6d3e301758586281dcd26"),
+            ([UInt8](repeating: 0, count: 72), "f8d76fdd8a082a67eaab47b5518ac486cb9a90dcb9f3c9efcfd86d5c8b3f1831601d3c8435f84b9e56da91283d5b98040e6e7b2c8dd9aa5bd4ebdf1823a7cf29"),
+            ([UInt8](repeating: 0, count: 143), "b64c8a8454d18fd30321e5188bbd880847491485129d99e75a253950266f5875bdda0491692b18098c6a1a03bc7affb7a2e56e4c25ac3de54ec9c8e25e537e3d"),
+            ([UInt8](repeating: UInt8(ascii: "a"), count: 200), "eae6c85c6904f11075de9f9d5e1064371d000510fa3d2d79d40cf9be34892fb01859d0a0234e138bcb0ad5c84f6c0dca226a414b0c9a2897cb695f5185fe36ec"),
+        ]
+
+        for (input, expected) in vectors {
+            #expect(DigestEncoding.format(SHA3_512.hash(input), mode: "hex") == expected)
+        }
+    }
+
+    @Test func sha3_512PipelineOutputStaysOnFIPS202Implementation() throws {
+        // 管道里的 SHA3-512 必须继续指向本地 FIPS 202 实现（platform SHA3 要 macOS 15+）。
+        let sha3 = try HashDigestPipeline.compute(text: "abc").first { $0.algorithm == .sha3_512 }
+        #expect(
+            DigestEncoding.format(sha3!.bytes, mode: "hex")
+                == "b751850b1a57168a5693cd924b6b096e08f621827444f70d884f5d0240d2712e10e116e9192af3c91a7ec57647e3934057340b4cf408d5a56592f8274eec53f0"
+        )
+    }
+
     @Test func cancellationIsCheckedAtAlgorithmBoundaries() {
         var checkCount = 0
 

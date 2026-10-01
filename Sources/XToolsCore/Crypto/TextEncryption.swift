@@ -1,6 +1,5 @@
 import CommonCrypto
 import CryptoKit
-@preconcurrency import CryptoSwift
 import Foundation
 import Security
 
@@ -58,7 +57,7 @@ public enum TextEncryptionService {
             switch self {
             case .aesGCM:
                 return 12
-            case .aes: return AES.blockSize
+            case .aes: return kCCBlockSizeAES128
             case .tripleDES: return 8
             case .rabbit: return 8
             case .rc4: return 0
@@ -347,7 +346,7 @@ public enum TextEncryptionService {
                 iv: iv
             )
         case .rabbit:
-            return try Rabbit(key: key, iv: iv).encrypt(bytes)
+            return try RabbitCipher(key: key, iv: iv).encrypt(bytes)
         case .rc4:
             return try commonCrypt(
                 operation: CCOperation(kCCEncrypt),
@@ -388,7 +387,7 @@ public enum TextEncryptionService {
                 iv: iv
             )
         case .rabbit:
-            return try Rabbit(key: key, iv: iv).decrypt(bytes)
+            return try RabbitCipher(key: key, iv: iv).decrypt(bytes)
         case .rc4:
             return try commonCrypt(
                 operation: CCOperation(kCCDecrypt),

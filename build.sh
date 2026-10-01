@@ -2,22 +2,33 @@
 
 # build.sh - build and package XTools.app
 #
+# Default configuration is *release*（体积 + 运行时性能决策）:
+#   - the packaged app runs -O optimized code; debug is -Onone and measurably
+#     slower in the hashing/parsing hot paths,
+#   - the stripped release binary is ~14MB vs ~24MB for debug, which matters
+#     for a daily-driver toolbox app.
+# `dev` remains the fast-iteration fallback: debug compiles faster and keeps
+# full symbols for Instruments (use the .build product, not the .app).
+#
 # Why it used to feel slow even after "incremental":
 #   1) Default was *release* (LTO/opt) — much slower than debug.
 #   2) build.sh used a private .swiftpm-build cache, while `swift test`
 #      warms the normal .build cache. Two caches → almost always cold.
 #   3) Packaging rewrote Info.plist, strip, codesign --deep, lsregister
 #      every run even when only the binary changed.
-#   Packaged binaries are always strip -S -x (dev and release) so daily
+#   2) and 3) are fixed now (shared .build cache, packaging writes only what
+#   changed), which is what makes the release default tolerable again;
+#   packaged binaries are always strip -S -x (dev and release) so daily
 #   XTools.app size tracks code+resources, not a 19MB symbol table.
 #
 # This script follows the XFetch hot path: one `swift build` into .build,
-# then copy the binary into the .app. Daily default is *debug*.
+# then copy the binary into the .app.
 #
 # Usage:
-#   ./build.sh          incremental debug build + package + open  (fast daily)
-#   ./build.sh build    same as default, but do not open the app
-#   ./build.sh release  incremental release build + package (no open)
+#   ./build.sh          release build + package + open  (daily default)
+#   ./build.sh dev      debug build + package + open    (fast iteration fallback)
+#   ./build.sh build    release build + package, do not open (CI / scripts)
+#   ./build.sh release  same as `build`: release build + package (no open)
 #   ./build.sh rebuild  clean caches, then release build + package
 #   ./build.sh clean    clean build caches only
 #   ./build.sh package  package last built product only (debug if present)
@@ -66,7 +77,7 @@ warn() { printf "%b\n" "${YELLOW}WARN${NC} $1"; }
 error() { printf "%b\n" "${RED}ERR${NC} $1"; }
 
 usage() {
-  sed -n '3,20p' "$0"
+  sed -n '3,34p' "$0"
 }
 
 timestamp() {
@@ -172,6 +183,12 @@ copy_swiftpm_resource_bundles() {
     legacy_destination="$APP_PATH/$bundle_name"
     archive_path "$legacy_destination" "$bundle_name.root-bundle"
     destination="$APP_RESOURCES/$bundle_name"
+    # ditto 是合并语义：目标 bundle 中不再被产物包含的残留文件（例如从 Core
+    # 资源移除的 emoji-test.txt）会永久存活。内容不一致时先归档旧 bundle 再
+    # 整体复制，保证包内 bundle 与构建产物逐字节一致。
+    if [[ -e "$destination" ]] && ! diff -rq "$resource_bundle" "$destination" >/dev/null 2>&1; then
+      archive_path "$destination" "$bundle_name.replaced-bundle"
+    fi
     /usr/bin/ditto "$resource_bundle" "$destination"
     copied_bundle=1
   done < <(find "$build_product_dir" -maxdepth 1 -type d -name '*.bundle' -print0)
@@ -198,6 +215,17 @@ copy_swiftpm_resource_bundles() {
     archive_path "$stale_legacy_bundle" "$(basename "$stale_legacy_bundle").stale-legacy-bundle"
   done < <(find "$APP_RESOURCES" -maxdepth 1 -type d -name 'DevToolsMac*.bundle' -print0 2>/dev/null)
 
+  # Remove app-side bundles the current product no longer ships. SwiftPM keeps
+  # stale bundle outputs for removed dependencies on incremental builds (e.g.
+  # CryptoSwift_* after the dependency left the graph); ditto would otherwise
+  # carry those zombies into the packaged app forever.
+  local app_bundle
+  while IFS= read -r -d '' app_bundle; do
+    if [[ ! -e "$build_product_dir/$(basename "$app_bundle")" ]]; then
+      archive_path "$app_bundle" "$(basename "$app_bundle").stale-product-bundle"
+    fi
+  done < <(find "$APP_RESOURCES" -maxdepth 1 -type d -name '*.bundle' -print0 2>/dev/null)
+
   if [[ "$copied_bundle" == "0" ]]; then
     error "No SwiftPM resource bundles found beside $build_product_dir/$PRODUCT_NAME"
     exit 1
@@ -205,6 +233,34 @@ copy_swiftpm_resource_bundles() {
 
   if [[ -z "$(find "$APP_RESOURCES/XTools_XToolsCore.bundle" -type f -name 'Readability-0.6.0.js' -print -quit 2>/dev/null)" ]]; then
     error "Missing Readability-0.6.0.js in packaged XToolsCore resources"
+    exit 1
+  fi
+}
+
+# 体积预算断言：打包二进制必须明显小于构建产物（strip 被绕过时该比例会失控），
+# 且不得超过配置的绝对上限（debug 30MB / release 20MB）。
+# 实测基线：debug 约 51%、release 约 50%，60% 预算留有余量。
+assert_binary_size_budget() {
+  local configuration="$1"
+  local build_binary="$2"
+
+  local packaged_bytes build_bytes
+  packaged_bytes="$(stat -f%z "$APP_BINARY")"
+  build_bytes="$(stat -f%z "$build_binary")"
+
+  local max_ratio_bytes=$(( build_bytes * 60 / 100 ))
+  if (( packaged_bytes > max_ratio_bytes )); then
+    error "Packaged binary is $packaged_bytes bytes, over the 60% budget of build product $build_bytes ($max_ratio_bytes bytes); strip likely did not run"
+    exit 1
+  fi
+
+  local absolute_cap_bytes
+  case "$configuration" in
+    release) absolute_cap_bytes=$((20 * 1024 * 1024)) ;;
+    *) absolute_cap_bytes=$((30 * 1024 * 1024)) ;;
+  esac
+  if (( packaged_bytes > absolute_cap_bytes )); then
+    error "Packaged binary is $packaged_bytes bytes, over the $configuration cap ($absolute_cap_bytes bytes)"
     exit 1
   fi
 }
@@ -218,8 +274,10 @@ write_info_plist_if_needed() {
   # 开发者工具需要访问用户自建的内网服务（http Git 等）：URLSession 默认被
   # ATS 拦截明文请求，无此例外源码管理的 http 自建 Git 全链路不可用。
   ensure_ats_exception() {
-    /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$INFO_PLIST" 2>/dev/null
-    /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$INFO_PLIST" 2>/dev/null
+    # Add 在键已存在时报错；这是幂等 ensure 语义，失败交给随后的 Set 兜底。
+    # 不能让非零状态逃出函数：set -e 会让重复打包在半成品状态下静默退出。
+    /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$INFO_PLIST" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$INFO_PLIST" 2>/dev/null || true
     /usr/libexec/PlistBuddy -c "Set :NSAppTransportSecurity:NSAllowsArbitraryLoads true" "$INFO_PLIST" 2>/dev/null || true
   }
   if [[ -f "$INFO_PLIST" ]]; then
@@ -317,13 +375,31 @@ package_app() {
   # Strip local symbols from the packaged binary for every configuration.
   # Debug *compilation* stays fast; only the .app payload loses LINKEDIT mass.
   # Use .build/.../XTools when you need full symbols for Instruments.
+  # strip 失败必须中止打包：历史上 strip 静默失败后 45MB 未 strip 的半成品
+  # app 仍被 open 当成品使用，warn-continue 分支因此不允许存在。
   if ! strip -S -x "$APP_BINARY"; then
-    warn "strip -S -x failed for $APP_BINARY; packaging continues with unstripped binary"
+    error "strip -S -x failed for $APP_BINARY"
+    exit 1
   fi
+
+  assert_binary_size_budget "$configuration" "$build_binary"
 
   # Ad-hoc sign the app only (no --deep). Nested tools are not in this bundle.
   # Must run after strip — strip invalidates any prior code signature.
   codesign --force --sign - "$APP_PATH" >/dev/null
+
+  # 签名后校验：--verify --strict 必须通过，且签名 Identifier 必须等于
+  # $BUNDLE_ID，防止中途夭折的半成品 app 被直接 open。
+  if ! codesign --verify --strict "$APP_PATH"; then
+    error "codesign --verify --strict failed for $APP_PATH"
+    exit 1
+  fi
+  local signed_identifier
+  signed_identifier="$(codesign -dv "$APP_PATH" 2>&1 | sed -n 's/^Identifier=//p')"
+  if [[ "$signed_identifier" != "$BUNDLE_ID" ]]; then
+    error "Signed Identifier '$signed_identifier' does not match BUNDLE_ID '$BUNDLE_ID'"
+    exit 1
+  fi
 
   # Refresh Finder/Dock icon metadata when artwork changes, keeping the normal
   # incremental path fast. Do this after signing so registration sees the final app.
@@ -340,17 +416,17 @@ package_app() {
   info "Packaged $APP_PATH (app: $app_size, binary: $binary_size, configuration: $configuration, stripped: -S -x, $(elapsed "$t0")ms)"
 }
 
-dev_build_and_launch() {
-  local open_app="${1:-1}"
+# Build, package, and open. `configuration` is debug or release; the daily
+# default (no argument) uses release, `dev` is the fast-iteration debug path.
+build_and_launch() {
+  local configuration="$1"
   local t0
   t0="$(now_ms)"
-  swift_build debug
-  package_app debug
-  if [[ "$open_app" == "1" ]]; then
-    step "Opening $APP_PATH..."
-    open "$APP_PATH"
-    info "Opened $APP_DISPLAY_NAME"
-  fi
+  swift_build "$configuration"
+  package_app "$configuration"
+  step "Opening $APP_PATH..."
+  open "$APP_PATH"
+  info "Opened $APP_DISPLAY_NAME"
   info "Total $(elapsed "$t0")ms"
 }
 
@@ -368,13 +444,17 @@ rebuild_and_package() {
 }
 
 case "${1:-}" in
-  ""|dev)
-    # Daily hot path: debug + open
-    dev_build_and_launch 1
+  "")
+    # Daily default: release + open（体积小、-O 运行时性能，见头部注释）
+    build_and_launch release
+    ;;
+  dev)
+    # 快速迭代兜底：debug 编译更快，完整符号留在 .build 产物里
+    build_and_launch debug
     ;;
   build)
-    # Debug package without open (CI / scripts)
-    dev_build_and_launch 0
+    # Release package without open (CI / scripts)
+    release_build_and_package
     ;;
   release)
     release_build_and_package

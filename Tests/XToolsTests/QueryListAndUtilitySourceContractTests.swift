@@ -492,6 +492,53 @@ struct QueryListAndUtilitySourceContractTests {
         doesNotContain(basicAuth, ".verticallyFilling()", "Basic Auth output panel must not fill the viewport like a query/list workspace")
     }
 
+    @Test func repositorySourcesAndManifestStayFreeOfCryptoSwift() throws {
+        // CryptoSwift 已由平台实现 + 本地 Rabbit/SHA3（RFC 4503 / FIPS 202）取代；
+        // 此契约防止依赖回流：Sources 与 Tests 的所有 Swift 文件以及
+        // Package.swift 都不得再出现该依赖字样。
+        let packageRoot = try sourcePackageRoot()
+        let fileManager = FileManager.default
+
+        var swiftFilePaths: [String] = []
+        for relativeDirectory in ["Sources", "Tests"] {
+            guard let enumerator = fileManager.enumerator(
+                at: packageRoot.appendingPathComponent(relativeDirectory),
+                includingPropertiesForKeys: nil
+            ) else {
+                #expect(false, Comment(rawValue: "Source directory must be enumerable: \(relativeDirectory)"))
+                continue
+            }
+            // 注意不能写 while-let 附加条件：首个非 Swift 元素会终止整个循环。
+            for case let url as URL in enumerator where url.pathExtension == "swift" {
+                swiftFilePaths.append(url.path)
+            }
+        }
+
+        // 枚举必须真实生效，避免目录名改动后契约静默空转。
+        #expect(swiftFilePaths.count > 100, Comment(rawValue: "Source enumeration must find the repository's Swift files"))
+
+        // 行首锚定 import 断言：注释与契约字符串里讨论该依赖（含本契约自身的
+        // 字面量）不构成依赖回流，只有真正的 import 语句才算。
+        let importRegex = try NSRegularExpression(
+            pattern: "^[[:space:]]*(@preconcurrency[[:space:]]+)?import CryptoSwift[[:space:]]*$",
+            options: [.anchorsMatchLines]
+        )
+        for path in swiftFilePaths {
+            let source = try String(contentsOf: URL(fileURLWithPath: path), encoding: .utf8)
+            let range = NSRange(source.startIndex..., in: source)
+            #expect(
+                importRegex.firstMatch(in: source, options: [], range: range) == nil,
+                Comment(rawValue: "CryptoSwift import must stay removed from \(path)")
+            )
+        }
+
+        let manifest = try String(contentsOf: packageRoot.appendingPathComponent("Package.swift"), encoding: .utf8)
+        #expect(
+            !manifest.contains("CryptoSwift"),
+            Comment(rawValue: "Package.swift must not declare the CryptoSwift dependency")
+        )
+    }
+
     @Test func fileTypeDetectorUsesNaturalHeightShortResultPanel() throws {
         let page = try readSource("Sources/XTools/ToolPages/Utility/FileTypeDetectorPage.swift")
         let session = try readSource("Sources/XTools/ToolPages/Utility/FileTypeDetectorSession.swift")

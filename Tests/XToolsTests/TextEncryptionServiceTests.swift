@@ -257,6 +257,57 @@ struct TextEncryptionServiceTests {
         #expect(decrypted == plaintext)
     }
 
+    @Test func rabbitCipherMatchesRFC4503OfficialVectors() throws {
+        // RFC 4503 A.2（带 IV）官方向量：全零 key，明文为 48 零字节，
+        // 即连续 3 个密钥流块的直接呈现。
+        let zeroKey = [UInt8](repeating: 0, count: 16)
+        let zeroMessage = [UInt8](repeating: 0, count: 48)
+        let vectors: [([UInt8], String)] = [
+            ([UInt8](repeating: 0, count: 8), "c6a7275ef85495d87ccd5d376705b7ed5f29a6ac04f5efd47b8f293270dc4a8d2ade822b29de6c1ee52bdb8a47bf8f66"),
+            ([0xc3, 0x73, 0xf5, 0x75, 0xc1, 0x26, 0x7e, 0x59], "1fcd4eb9580012e2e0dccc9222017d6da75f4e10d12125017b2499ffed936f2eebc112c393e738392356bdd012029ba7"),
+        ]
+
+        for (iv, expected) in vectors {
+            #expect(DigestEncoding.format(try RabbitCipher(key: zeroKey, iv: iv).encrypt(zeroMessage), mode: "hex") == expected)
+        }
+    }
+
+    @Test func rabbitCipherMatchesCapturedLegacyGoldens() throws {
+        // 迁移期用原 CryptoSwift Rabbit 固化的金标：自研实现必须逐字节等价，
+        // 历史 Salted__ Rabbit 密文才能继续解密。覆盖非零 key/iv 长明文（跨块）
+        // 与未对齐 16 字节块的尾块缓冲。
+        let vectors: [(key: [UInt8], iv: [UInt8], plaintext: [UInt8], ciphertext: String)] = [
+            (
+                [0x91, 0x28, 0x13, 0x29, 0x2e, 0x3d, 0x36, 0xfe, 0x3b, 0xfc, 0x62, 0xf1, 0xdc, 0x51, 0xc3, 0xac],
+                [0xa6, 0xeb, 0x56, 0x1a, 0xd2, 0xf4, 0x17, 0x27],
+                Array("The quick brown fox jumps over the lazy dog".utf8),
+                "1934cde66d2fac03d853db39ce4011ce852f12640a3b4275a4d31faadb693bbfc31bf8309c3427d267b320"
+            ),
+            (
+                Array("Sixteen byte key".utf8),
+                [0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07],
+                [UInt8](repeating: 0, count: 13),
+                "7b262d3b75c02ef2c02a1de68a"
+            ),
+        ]
+
+        for (key, iv, plaintext, expectedCiphertext) in vectors {
+            let cipher = try RabbitCipher(key: key, iv: iv)
+            let ciphertext = cipher.encrypt(plaintext)
+            #expect(DigestEncoding.format(ciphertext, mode: "hex") == expectedCiphertext)
+            #expect(cipher.decrypt(ciphertext) == plaintext)
+        }
+    }
+
+    @Test func rabbitCipherRejectsWrongKeyAndIVSizes() {
+        #expect(throws: RabbitCipher.Error.invalidKeyOrIV) {
+            _ = try RabbitCipher(key: [UInt8](repeating: 0, count: 15), iv: [UInt8](repeating: 0, count: 8))
+        }
+        #expect(throws: RabbitCipher.Error.invalidKeyOrIV) {
+            _ = try RabbitCipher(key: [UInt8](repeating: 0, count: 16), iv: [UInt8](repeating: 0, count: 7))
+        }
+    }
+
     private static let modernPrefix = "DT-AES-GCM-v1:"
 
     private static func modernPayload(

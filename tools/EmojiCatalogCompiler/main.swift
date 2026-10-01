@@ -9,7 +9,17 @@ guard let outputPath = CommandLine.arguments.dropFirst().first else {
 }
 
 do {
-    let data = try EmojiCatalog.compilePrecompiledCatalogData()
+    // emoji-test.txt 随编译工具 bundle（Package.swift 的 .copy）提供：
+    // 数据注入 EmojiCatalog，XToolsCore 运行时资源不再包含该 txt。
+    guard let sourceURL = Bundle.module.url(forResource: "emoji-test", withExtension: "txt") else {
+        FileHandle.standardError.write(
+            Data("缺少编译输入 emoji-test.txt：应位于 tools/EmojiCatalogCompiler 并随工具 bundle 提供。\n".utf8)
+        )
+        exit(EXIT_FAILURE)
+    }
+    let sourceData = try String(contentsOf: sourceURL, encoding: .utf8)
+
+    let data = try EmojiCatalog.compilePrecompiledCatalogData(sourceData: sourceData)
     let outputURL = URL(fileURLWithPath: outputPath)
     try FileManager.default.createDirectory(
         at: outputURL.deletingLastPathComponent(),
