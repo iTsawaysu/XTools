@@ -7,10 +7,14 @@ private enum CommandPaletteMetrics {
     static let searchHeaderTrailingPadding: CGFloat = 14
     static let searchClearLayoutSize: CGFloat = 15
     static let searchClearButtonSize: CGFloat = 24
+    /// PageUp/PageDown step when no row has registered with the reveal
+    /// registry yet (rows register on mount, so this only covers the very
+    /// first press racing the list).
+    static let pageStepFallback = 8
 }
 
 @MainActor
-private final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePresentationLifecycle {
+final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePresentationLifecycle {
     let revealRegistry = CommandPaletteRevealRegistry()
     let pointerMovementTracker = CommandPalettePointerMovementTracker()
     private(set) var sessionRevealRequest: CommandPaletteRevealRequest?
@@ -168,11 +172,6 @@ struct CommandPaletteView: View {
     @StateObject private var contentLifecycle: CommandPaletteContentLifecycle
     /// True when the active row was last set by keyboard arrows (not pointer).
     @State private var keyboardDrivenSession: Int?
-    /// Wave 2 row-arrival choreography: the session whose rows have started
-    /// their staggered entrance. Rows render hidden until the session flips
-    /// here one runloop tick after the open, so every open replays the 20ms
-    /// stagger while query filtering stays instant.
-    @State private var revealedSession: Int?
     /// True only for keyboard-driven active-row changes: the floating
     /// selection highlight springs between rows on ↑↓ moves and drops
     /// instantly on list rebuilds (query reset, new session, pointer move).
@@ -180,6 +179,8 @@ struct CommandPaletteView: View {
     /// Row selection frames published by the list and resolved behind the
     /// rows by the floating highlight layer.
     @State private var rowAnchors: [String: Anchor<CGRect>] = [:]
+    let usage: any PaletteUsageScoring
+
     init(
         presentation: CommandPalettePresentationModel,
         registry: ToolRegistry,
@@ -189,6 +190,7 @@ struct CommandPaletteView: View {
         focusToken: Int,
         presentationSession: Int,
         canRequestSearchFocus: @escaping AppKitSearchFieldCoordinator.FocusRequestValidity,
+        usage: any PaletteUsageScoring = NoPaletteUsage(),
         onSelectTool: @escaping (ToolID) -> Void,
         onRunCommand: @escaping (CommandActionID) -> Void,
         onRequestFocus: @escaping () -> Void,
@@ -201,6 +203,7 @@ struct CommandPaletteView: View {
         self.focusToken = focusToken
         self.presentationSession = presentationSession
         self.canRequestSearchFocus = canRequestSearchFocus
+        self.usage = usage
         self.onSelectTool = onSelectTool
         self.onRunCommand = onRunCommand
         self.onRequestFocus = onRequestFocus
@@ -209,7 +212,8 @@ struct CommandPaletteView: View {
             wrappedValue: CommandPaletteSessionModel(
                 registry: registry,
                 actions: actions,
-                session: presentationSession
+                session: presentationSession,
+                usage: usage
             )
         )
         _contentLifecycle = StateObject(
@@ -222,32 +226,6 @@ struct CommandPaletteView: View {
 
     private var isPresentationReady: Bool {
         isPresented && sessionModel.session == presentationSession
-    }
-
-    /// Wave 2 stagger gate: only the current session's rows have arrived.
-    /// Reduce Motion keeps rows permanently arrived so the palette opens
-    /// without choreography.
-    private var rowsArrived: Bool {
-        reduceMotion || revealedSession == sessionModel.session
-    }
-
-    /// Replays the row entrance stagger for a fresh presentation session.
-    /// The flip lands one runloop tick after the open render, so rows mount
-    /// hidden and animate in on their per-row delayed arcs; a close before
-    /// the tick cancels the reveal.
-    ///
-    /// Runs on whatever view copy SwiftUI happens to hold, so the async tick
-    /// must gate on live references (`presentation.shows`, the session model),
-    /// never on this struct's `isPresented` — a captured copy still carries
-    /// the previous body's value at transition boundaries.
-    private func scheduleRowArrival() {
-        guard !reduceMotion else { return }
-        let session = sessionModel.session
-        guard revealedSession != session else { return }
-        DispatchQueue.main.async {
-            guard presentation.shows, sessionModel.session == session else { return }
-            revealedSession = session
-        }
     }
 
     private func isLiveSession() -> Bool {
@@ -311,6 +289,44 @@ struct CommandPaletteView: View {
         if sessionModel.navigationState.activeRowID(in: snapshot) != previousActiveID {
             requestActiveReveal(for: .keyboard(delta: delta), in: snapshot)
         }
+    }
+
+    /// Absolute keyboard jumps (Home/⌘↑ to the first row, End/⌘↓ to the
+    /// last). Unlike arrow moves they bypass the visible-handoff policy — a
+    /// jump always targets its endpoint, and the reveal anchor carries the
+    /// direction so the native scroll settles on the matching edge.
+    private func moveActiveToBoundary(delta: Int, targetIndex: Int) {
+        guard isLiveSession() else { return }
+        let snapshot = sessionModel.snapshot
+        guard let target = CommandPaletteSearch.activationIndex(
+            highlight: targetIndex,
+            count: snapshot.selectableCount
+        ) else {
+            return
+        }
+
+        keyboardDrivenSession = presentationSession
+        if sessionModel.navigationState.activeSelectableIndex(in: snapshot) != target {
+            highlightFlightAnimated = true
+            sessionModel.navigationState.setActiveSelectableIndex(target, in: snapshot)
+        }
+        requestActiveReveal(for: .keyboard(delta: delta), in: snapshot)
+    }
+
+    /// PageUp/PageDown move by the real visible row count, following the
+    /// same reveal arc as arrow keys.
+    private func moveActiveByPage(delta: Int) {
+        guard isLiveSession() else { return }
+        let snapshot = sessionModel.snapshot
+        guard let current = sessionModel.navigationState.activeSelectableIndex(in: snapshot) else {
+            return
+        }
+        let step = max(
+            1,
+            contentLifecycle.revealRegistry.visibleSelectableCount()
+                ?? CommandPaletteMetrics.pageStepFallback
+        )
+        moveActiveToBoundary(delta: delta, targetIndex: current + delta * step)
     }
 
     private func activateActive() {
@@ -399,16 +415,17 @@ struct CommandPaletteView: View {
         for item: CommandPaletteRowProjection,
         activeItemID: String?,
         selectableIndex: Int?,
-        highlightQuery: String
+        sectionCount: Int?,
+        highlightRanges: [Range<String.Index>]
     ) -> some View {
         switch item {
         case .sectionTitle(let text):
-            CommandPaletteSectionTitle(text)
+            CommandPaletteSectionTitle(text, count: sectionCount)
         case .tool(let entry):
             CommandPaletteRow(
                 id: entry.id,
                 title: entry.title,
-                highlight: highlightQuery,
+                highlightRanges: highlightRanges,
                 subtitle: entry.categoryTitle,
                 systemImage: entry.systemImage,
                 isActive: item.id == activeItemID,
@@ -433,7 +450,7 @@ struct CommandPaletteView: View {
             CommandPaletteRow(
                 id: entry.id.rawValue,
                 title: entry.title,
-                highlight: highlightQuery,
+                highlightRanges: highlightRanges,
                 subtitle: entry.subtitle,
                 systemImage: entry.systemImage,
                 isActive: item.id == activeItemID,
@@ -455,26 +472,45 @@ struct CommandPaletteView: View {
                 )
             }
         case .empty:
-            Text("没有匹配的工具或命令")
-                .font(ToolTypography.bodyPlain)
-                .foregroundStyle(ToolTheme.textSecondary)
-                .frame(maxWidth: .infinity, minHeight: 140, alignment: .center)
+            VStack(spacing: 10) {
+                Text("没有匹配的工具或命令")
+                    .font(ToolTypography.bodyPlain)
+                    .foregroundStyle(ToolTheme.textSecondary)
+                // No-results states keep a recovery path (clear-and-retry)
+                // instead of a dead end.
+                Button {
+                    guard isLiveSession() else { return }
+                    updateQuery("")
+                    onRequestFocus()
+                } label: {
+                    Text("清除搜索")
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.accentHover)
+                }
+                .buttonStyle(.plain)
+                .toolInteractionFeedback()
+                .accessibilityIdentifier("command-palette.empty.clear")
+            }
+            .frame(maxWidth: .infinity, minHeight: 140, alignment: .center)
         }
     }
 
-    /// One list row: content plus list padding, its selection-frame anchor,
-    /// and the Wave 2 staggered entrance (selectable rows only).
+    /// One list row: content plus list padding and its selection-frame
+    /// anchor. Rows mount fully visible — the panel's own open arc carries
+    /// the entrance, so rapid ⌘K toggling never shows a blank list window.
     private func arrivedRow(
         for item: CommandPaletteRowProjection,
         activeItemID: String?,
         selectableIndex: Int?,
-        highlightQuery: String
+        sectionCount: Int?,
+        highlightRanges: [Range<String.Index>]
     ) -> some View {
         paletteItemView(
             for: item,
             activeItemID: activeItemID,
             selectableIndex: selectableIndex,
-            highlightQuery: highlightQuery
+            sectionCount: sectionCount,
+            highlightRanges: highlightRanges
         )
         .padding(.horizontal, 9)
         .padding(.vertical, 1)
@@ -485,11 +521,6 @@ struct CommandPaletteView: View {
                 bounds: bounds
             )
         }
-        .modifier(CommandPaletteRowArrivalModifier(
-            arrived: rowsArrived,
-            index: selectableIndex,
-            reduceMotion: reduceMotion
-        ))
         .id(item.id)
     }
 
@@ -501,7 +532,7 @@ struct CommandPaletteView: View {
         isSelectable ? [itemID: bounds] : [:]
     }
 
-    /// The scrollable row list: staggered-arrival rows with the floating
+    /// The scrollable row list: rows with the floating
     /// selection highlight behind them.
     private func rowsSection(
         snapshot: CommandPaletteRowSnapshot,
@@ -509,15 +540,13 @@ struct CommandPaletteView: View {
     ) -> some View {
         ScrollView {
             VStack(spacing: 0) {
-                // Trimmed once per section; every row shares this value
-                // instead of re-trimming the query in its renderer.
-                let highlightQuery = sessionModel.query.trimmingCharacters(in: .whitespaces)
                 ForEach(snapshot.rows) { item in
                     arrivedRow(
                         for: item,
                         activeItemID: activeItemID,
                         selectableIndex: snapshot.selectableIndex(of: item),
-                        highlightQuery: highlightQuery
+                        sectionCount: Self.sectionCount(for: item, in: snapshot),
+                        highlightRanges: snapshot.titleHighlightRanges(for: item)
                     )
                 }
             }
@@ -535,7 +564,15 @@ struct CommandPaletteView: View {
             }
             .onPreferenceChange(CommandPaletteRowAnchorsKey.self) { rowAnchors = $0 }
         }
-        .frame(maxHeight: 360)
+        .frame(maxHeight: 420)
+    }
+
+    private static func sectionCount(
+        for item: CommandPaletteRowProjection,
+        in snapshot: CommandPaletteRowSnapshot
+    ) -> Int? {
+        guard case .sectionTitle(let title) = item else { return nil }
+        return snapshot.sectionCountsByTitle[title]
     }
 
     var body: some View {
@@ -570,6 +607,22 @@ struct CommandPaletteView: View {
                     onMoveDown: {
                         guard isInputSessionLive(inputSession) else { return }
                         moveActive(by: 1)
+                    },
+                    onMoveToFirst: {
+                        guard isInputSessionLive(inputSession) else { return }
+                        moveActiveToBoundary(delta: -1, targetIndex: 0)
+                    },
+                    onMoveToLast: {
+                        guard isInputSessionLive(inputSession) else { return }
+                        moveActiveToBoundary(delta: 1, targetIndex: .max)
+                    },
+                    onPageUp: {
+                        guard isInputSessionLive(inputSession) else { return }
+                        moveActiveByPage(delta: -1)
+                    },
+                    onPageDown: {
+                        guard isInputSessionLive(inputSession) else { return }
+                        moveActiveByPage(delta: 1)
                     },
                     onCancel: {
                         guard isInputSessionLive(inputSession) else { return }
@@ -621,16 +674,17 @@ struct CommandPaletteView: View {
             CommandPaletteHintsBar()
         }
         .frame(width: 560)
-        .toolSurface(
-            .floating,
-            fallback: ToolTheme.popoverBackground,
-            in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.modal, style: .continuous)
+        // Opaque surface, deliberately NOT the system material: a transient
+        // `.regular` material re-composites under the open/close opacity +
+        // scale arcs and flashes a bright placeholder frame (the “white
+        // block” on rapid ⌘K). The palette is also the densest reading
+        // surface, which the surface policy keeps opaque for readability.
+        .indexSurface(
+            .modal,
+            fill: ToolTheme.popoverBackground,
+            border: ToolTheme.strongBorder,
+            borderWidth: 0.5
         )
-        .overlay {
-            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.modal, style: .continuous)
-                .strokeBorder(ToolTheme.strongBorder, lineWidth: 0.5)
-        }
-        .toolShadow(ToolTheme.Shadow.modal)
         // The retained row/search subtree ignores the surrounding modal
         // transaction so a session reset cannot animate row insertion or text
         // replacement. Explicit control animations deeper in the subtree can
@@ -652,9 +706,6 @@ struct CommandPaletteView: View {
             presentation.installLifecycle(contentLifecycle)
             CommandPaletteTrace.appeared(session: presentationSession)
             preparePresentationIfNeeded()
-            if isPresented {
-                scheduleRowArrival()
-            }
         }
         .onDisappear {
             presentation.removeLifecycle(contentLifecycle)
@@ -664,16 +715,8 @@ struct CommandPaletteView: View {
             preparePresentationIfNeeded()
             highlightFlightAnimated = false
         }
-        // The action closure executes on the previous body's view copy, so
-        // gating must use the `nowPresented` parameter — the captured
-        // `isPresented` still holds the pre-transition value (false on
-        // reopen), which used to skip the reveal and leave every row
-        // behind the arrival gate at opacity 0.
-        .onChange(of: isPresented) { nowPresented in
+        .onChange(of: isPresented) { _ in
             preparePresentationIfNeeded()
-            if nowPresented {
-                scheduleRowArrival()
-            }
         }
         .onChange(of: actions) { newActions in
             guard isPresentationReadyLive else { return }
@@ -707,326 +750,5 @@ struct CommandPaletteVisibilityGeometry: Equatable {
                 ? 0
                 : ToolMotion.PaletteMotion.riseDistance * (1 - progress)
         )
-    }
-}
-
-private struct CommandPaletteSearchField: NSViewRepresentable {
-    let placeholder: String
-    @Binding var text: String
-    let focusToken: Int
-    let presentationSession: Int
-    let canRequestFocus: AppKitSearchFieldCoordinator.FocusRequestValidity
-    let contentLifecycle: CommandPaletteContentLifecycle
-    let onSubmit: () -> Void
-    let onMoveUp: () -> Void
-    let onMoveDown: () -> Void
-    let onCancel: () -> Void
-
-    @MainActor
-    final class Coordinator {
-        let search: AppKitSearchFieldCoordinator
-        weak var contentLifecycle: CommandPaletteContentLifecycle?
-
-        init(
-            search: AppKitSearchFieldCoordinator,
-            contentLifecycle: CommandPaletteContentLifecycle
-        ) {
-            self.search = search
-            self.contentLifecycle = contentLifecycle
-        }
-    }
-
-    private var configuration: AppKitSearchFieldConfiguration {
-        // Arc-style large prompt input — the palette's primary affordance.
-        AppKitSearchFieldConfiguration(
-            placeholder: placeholder,
-            font: .systemFont(ofSize: 18)
-        )
-    }
-
-    private var commandHandler: AppKitSearchFieldCoordinator.CommandHandler {
-        { textView, commandSelector in
-            if textView.hasMarkedText(), Self.markedTextShouldHandle(commandSelector) {
-                return false
-            }
-
-            switch commandSelector {
-            case #selector(NSResponder.moveUp(_:)):
-                onMoveUp()
-                return true
-            case #selector(NSResponder.moveDown(_:)):
-                onMoveDown()
-                return true
-            case #selector(NSResponder.insertNewline(_:)):
-                onSubmit()
-                return true
-            case #selector(NSResponder.cancelOperation(_:)):
-                onCancel()
-                return true
-            default:
-                return false
-            }
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        let presentationSession = presentationSession
-        return Coordinator(
-            search: AppKitSearchFieldCoordinator(
-                text: $text,
-                processedFocusToken: nil,
-                focusRetryDelays: [0.05, 0.15],
-                requestFocus: { textField, delayedRetries, isValid in
-                    AppKitSearchFieldLifecycle.requestFocus(
-                        textField,
-                        delayedRetries: delayedRetries,
-                        isValid: isValid,
-                        observer: CommandPaletteTrace.focusAttemptObserver(
-                            session: presentationSession
-                        )
-                    )
-                }
-            ),
-            contentLifecycle: contentLifecycle
-        )
-    }
-
-    func makeNSView(context: Context) -> NSTextField {
-        let textField = AppKitSearchFieldLifecycle.makeTextField(
-            configuration: configuration,
-            text: $text,
-            focusToken: focusToken,
-            coordinator: context.coordinator.search,
-            commandHandler: commandHandler,
-            canRequestFocus: canRequestFocus
-        )
-        textField.setAccessibilityIdentifier("command-palette.search")
-        contentLifecycle.attachSearchField(
-            textField,
-            coordinator: context.coordinator.search,
-            session: presentationSession
-        )
-        CommandPaletteTrace.observeNativeReady(
-            textField,
-            session: presentationSession,
-            isValid: canRequestFocus
-        )
-        return textField
-    }
-
-    func updateNSView(_ textField: NSTextField, context: Context) {
-        textField.setAccessibilityIdentifier("command-palette.search")
-        AppKitSearchFieldLifecycle.update(
-            textField,
-            configuration: configuration,
-            text: $text,
-            focusToken: focusToken,
-            coordinator: context.coordinator.search,
-            commandHandler: commandHandler,
-            canRequestFocus: canRequestFocus
-        )
-        contentLifecycle.attachSearchField(
-            textField,
-            coordinator: context.coordinator.search,
-            session: presentationSession
-        )
-        CommandPaletteTrace.observeNativeReady(
-            textField,
-            session: presentationSession,
-            isValid: canRequestFocus
-        )
-    }
-
-    func sizeThatFits(
-        _ proposal: ProposedViewSize,
-        nsView textField: NSTextField,
-        context: Context
-    ) -> CGSize? {
-        guard let height = proposal.height else { return nil }
-        return CGSize(width: proposal.width ?? textField.fittingSize.width, height: height)
-    }
-
-    static func dismantleNSView(
-        _ textField: NSTextField,
-        coordinator: Coordinator
-    ) {
-        coordinator.contentLifecycle?.detachSearchField(textField)
-        coordinator.search.invalidateFocusRequests()
-    }
-
-    private static func markedTextShouldHandle(_ commandSelector: Selector) -> Bool {
-        commandSelector == #selector(NSResponder.moveUp(_:))
-            || commandSelector == #selector(NSResponder.moveDown(_:))
-            || commandSelector == #selector(NSResponder.insertNewline(_:))
-            || commandSelector == #selector(NSResponder.cancelOperation(_:))
-    }
-}
-
-private struct CommandPaletteSectionTitle: View {
-    let text: String
-
-    init(_ text: String) {
-        self.text = text
-    }
-
-    var body: some View {
-        Text(text)
-            .font(ToolTypography.groupHeader)
-            .foregroundStyle(ToolTheme.textTertiary)
-            .padding(.horizontal, 8)
-            .padding(.top, 4)
-            .frame(maxWidth: .infinity, alignment: .trailing)
-    }
-}
-
-/// Raycast-style bottom hints: the palette's keyboard grammar at a glance.
-private struct CommandPaletteHintsBar: View {
-    var body: some View {
-        VStack(spacing: 0) {
-            ToolDivider()
-            HStack(spacing: 12) {
-                Self.hint(key: "↑↓", label: "浏览")
-                Self.hint(key: "↩", label: "执行")
-                Spacer()
-                Self.hint(key: "esc", label: "关闭")
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
-        }
-    }
-
-    private static func hint(key: String, label: String) -> some View {
-        HStack(spacing: 5) {
-            IndexKeycap(label: key)
-            Text(label)
-                .font(ToolTypography.caption)
-                .foregroundStyle(ToolTheme.textTertiary)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
-/// v3 continuity flight: per-row launch icon anchors, keyed by row id so
-/// RootView can resolve the takeoff point when a row activates.
-struct PaletteRowIconAnchorsKey: PreferenceKey {
-    static let defaultValue: [String: Anchor<CGRect>] = [:]
-
-    static func reduce(
-        value: inout [String: Anchor<CGRect>],
-        nextValue: () -> [String: Anchor<CGRect>]
-    ) {
-        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
-    }
-}
-
-private struct CommandPaletteRow: View {
-    let id: String
-    let title: String
-    var highlight: String = ""
-    let subtitle: String?
-    let systemImage: String
-    var isActive: Bool = false
-    var isKeyboardActive: Bool = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Image(systemName: systemImage)
-                    .symbolRenderingMode(.monochrome)
-                    .font(.system(size: ToolMetrics.IconSize.large, weight: .regular))
-                    .foregroundStyle(isActive ? ToolTheme.accentHover : ToolTheme.textSecondary)
-                    .frame(width: 18)
-                    .anchorPreference(key: PaletteRowIconAnchorsKey.self, value: .bounds) {
-                        [id: $0]
-                    }
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(Self.highlightedTitle(title, query: highlight))
-                        .font(ToolTypography.bodyLarge)
-                        .foregroundStyle(ToolTheme.textPrimary)
-                        .lineLimit(1)
-
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(ToolTypography.caption)
-                            .foregroundStyle(ToolTheme.textTertiary)
-                            .lineLimit(1)
-                    }
-                }
-
-                Spacer()
-
-                if isActive {
-                    Text("↩")
-                        .font(ToolTypography.caption)
-                        .foregroundStyle(ToolTheme.textTertiary)
-                        .accessibilityHidden(true)
-                }
-            }
-            .padding(.horizontal, 8)
-            .frame(height: 36)
-            .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
-            // Selection fill/stroke live in the floating highlight layer
-            // (`CommandPaletteSelectionHighlightLayer`); the row keeps only
-            // the keyboard focus ring.
-            .overlay {
-                if isKeyboardActive {
-                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                        .strokeBorder(ToolTheme.focusRing, lineWidth: 1.5)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .toolInteractionFeedback()
-    }
-
-    /// Accent-highlight the first case-insensitive query match in the title.
-    /// `query` arrives pre-trimmed from the palette body (one trim per body,
-    /// not one per row).
-    private static func highlightedTitle(_ title: String, query: String) -> AttributedString {
-        guard !query.isEmpty,
-              let range = title.range(of: query, options: [.caseInsensitive, .diacriticInsensitive])
-        else {
-            return AttributedString(title)
-        }
-        var highlighted = AttributedString(String(title[range]))
-        highlighted.foregroundColor = ToolTheme.accentHover
-        return AttributedString(String(title[..<range.lowerBound]))
-            + highlighted
-            + AttributedString(String(title[range.upperBound...]))
-    }
-}
-
-// MARK: - Wave 2 row arrival
-
-/// Staggered open-time row entrance (prototype rowIn + cmdkRowsDelay +
-/// listStagger): each selectable row fades in while rising 4pt on a 150ms
-/// smoothOut arc, delayed by 60ms plus its 20ms stagger step. Only the
-/// `arrived` flip animates — rows inserted by query filtering mount at
-/// their final state. Section titles (nil index) never stagger.
-private struct CommandPaletteRowArrivalModifier: ViewModifier {
-    let arrived: Bool
-    let index: Int?
-    let reduceMotion: Bool
-
-    @ViewBuilder
-    func body(content: Content) -> some View {
-        if let index {
-            content
-                .opacity(arrived ? 1 : 0)
-                .offset(y: arrived ? 0 : ToolMotion.PaletteMotion.rowRise)
-                .animation(
-                    ToolMotion.animation(
-                        ToolMotion.PaletteMotion.rowArrival(index: index),
-                        reduceMotion: reduceMotion
-                    ),
-                    value: arrived
-                )
-        } else {
-            content
-        }
     }
 }

@@ -217,6 +217,20 @@ final class CommandPaletteRevealRegistry: NSObject {
         return edgeIndex
     }
 
+    /// The real count of currently visible selectable rows, read from the
+    /// live scroll container — PageUp/PageDown size their step to this
+    /// instead of any estimated row capacity.
+    func visibleSelectableCount() -> Int? {
+        guard liveSession != nil else { return nil }
+        pruneDeadEntries()
+
+        var count = 0
+        for entry in entries.values where isVisible(entry) {
+            count += 1
+        }
+        return count
+    }
+
     func isVisible(itemID: String) -> Bool {
         guard liveSession != nil else { return false }
         pruneDeadEntries()

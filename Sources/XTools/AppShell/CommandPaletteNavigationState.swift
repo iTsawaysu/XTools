@@ -43,13 +43,32 @@ enum CommandPaletteRowProjection: Identifiable, Hashable {
     }
 }
 
+/// One titled group of palette rows; the sectioned builder renders each
+/// group under a header carrying the group's row count.
+struct CommandPaletteSection: Equatable {
+    let title: String
+    let rows: [CommandPaletteRowProjection]
+}
+
+/// The palette's one cached row list. Selectable navigation is precomputed,
+/// and `titleHighlightRangesByID` carries the engine's title-match ranges
+/// (keyed by row id) so row rendering never re-runs matching. Rows own no
+/// other derived per-row state.
 struct CommandPaletteRowSnapshot: Equatable {
     let rows: [CommandPaletteRowProjection]
     private let selectableRows: [CommandPaletteRowProjection]
     private let selectableIndicesByID: [String: Int]
+    let titleHighlightRangesByID: [String: [Range<String.Index>]]
+    let sectionCountsByTitle: [String: Int]
 
-    init(rows: [CommandPaletteRowProjection]) {
+    init(
+        rows: [CommandPaletteRowProjection],
+        titleHighlightRangesByID: [String: [Range<String.Index>]] = [:],
+        sectionCountsByTitle: [String: Int] = [:]
+    ) {
         self.rows = rows
+        self.titleHighlightRangesByID = titleHighlightRangesByID
+        self.sectionCountsByTitle = sectionCountsByTitle
 
         var selectableRows: [CommandPaletteRowProjection] = []
         var selectableIndicesByID: [String: Int] = [:]
@@ -78,6 +97,10 @@ struct CommandPaletteRowSnapshot: Equatable {
     func selectableIndex(of row: CommandPaletteRowProjection) -> Int? {
         guard row.isSelectable else { return nil }
         return selectableIndicesByID[row.id]
+    }
+
+    func titleHighlightRanges(for row: CommandPaletteRowProjection) -> [Range<String.Index>] {
+        titleHighlightRangesByID[row.id] ?? []
     }
 }
 
@@ -161,39 +184,57 @@ struct CommandPaletteKeyboardMovePolicy: Equatable {
 struct CommandPaletteNavigationState: Equatable {
     private(set) var activeIndex = 0
 
-    static func rows(
-        for entries: [ToolNavigationCommandEntry],
-        actions: [CommandActionEntry] = []
-    ) -> [CommandPaletteRowProjection] {
-        snapshot(for: entries, actions: actions).rows
-    }
-
+    /// The primary builder: composes titled sections into one flat row list
+    /// with precomputed selection indices and per-section counts. Empty
+    /// sections are skipped; a fully empty composition still yields the
+    /// no-results row.
     static func snapshot(
-        for entries: [ToolNavigationCommandEntry],
-        actions: [CommandActionEntry] = []
+        sections: [CommandPaletteSection],
+        titleHighlightRangesByID: [String: [Range<String.Index>]] = [:]
     ) -> CommandPaletteRowSnapshot {
         var rows: [CommandPaletteRowProjection] = []
-        if !actions.isEmpty {
-            rows.append(.sectionTitle("动作"))
-            rows.append(contentsOf: actions.map(CommandPaletteRowProjection.command))
+        var sectionCountsByTitle: [String: Int] = [:]
+        rows.reserveCapacity(sections.reduce(0) { $0 + $1.rows.count + 1 })
+
+        for section in sections where !section.rows.isEmpty {
+            rows.append(.sectionTitle(section.title))
+            rows.append(contentsOf: section.rows)
+            if sectionCountsByTitle[section.title] == nil {
+                sectionCountsByTitle[section.title] = section.rows.count
+            }
         }
-        if !entries.isEmpty {
-            rows.append(.sectionTitle("工具"))
-            rows.append(contentsOf: entries.map(CommandPaletteRowProjection.tool))
-        }
-        return CommandPaletteRowSnapshot(rows: rows.isEmpty ? [.empty] : rows)
+
+        return CommandPaletteRowSnapshot(
+            rows: rows.isEmpty ? [.empty] : rows,
+            titleHighlightRangesByID: titleHighlightRangesByID,
+            sectionCountsByTitle: sectionCountsByTitle
+        )
     }
 
-    func activeRowID(in rows: [CommandPaletteRowProjection]) -> String? {
-        activeRowID(in: CommandPaletteRowSnapshot(rows: rows))
+    /// Ranked-results convenience: commands under one shared 动作 section,
+    /// tools under one shared 工具 section.
+    static func snapshot(
+        for entries: [ToolNavigationCommandEntry],
+        actions: [CommandActionEntry] = [],
+        titleHighlightRangesByID: [String: [Range<String.Index>]] = [:]
+    ) -> CommandPaletteRowSnapshot {
+        snapshot(
+            sections: [
+                CommandPaletteSection(
+                    title: "动作",
+                    rows: actions.map(CommandPaletteRowProjection.command)
+                ),
+                CommandPaletteSection(
+                    title: "工具",
+                    rows: entries.map(CommandPaletteRowProjection.tool)
+                ),
+            ],
+            titleHighlightRangesByID: titleHighlightRangesByID
+        )
     }
 
     func activeRowID(in snapshot: CommandPaletteRowSnapshot) -> String? {
         activeRow(in: snapshot)?.id
-    }
-
-    func activeSelectableIndex(in rows: [CommandPaletteRowProjection]) -> Int? {
-        activeSelectableIndex(in: CommandPaletteRowSnapshot(rows: rows))
     }
 
     func activeSelectableIndex(in snapshot: CommandPaletteRowSnapshot) -> Int? {
@@ -203,10 +244,6 @@ struct CommandPaletteNavigationState: Equatable {
         )
     }
 
-    func activeRow(in rows: [CommandPaletteRowProjection]) -> CommandPaletteRowProjection? {
-        activeRow(in: CommandPaletteRowSnapshot(rows: rows))
-    }
-
     func activeRow(in snapshot: CommandPaletteRowSnapshot) -> CommandPaletteRowProjection? {
         guard let index = activeSelectableIndex(in: snapshot) else {
             return nil
@@ -214,25 +251,15 @@ struct CommandPaletteNavigationState: Equatable {
         return snapshot.selectableRow(at: index)
     }
 
-    func activeToolID(in rows: [CommandPaletteRowProjection]) -> ToolID? {
-        activeRow(in: rows).flatMap(toolID(for:))
+    func activeToolID(in snapshot: CommandPaletteRowSnapshot) -> ToolID? {
+        activeRow(in: snapshot).flatMap(toolID(for:))
     }
 
     func toolID(for row: CommandPaletteRowProjection) -> ToolID? {
         row.toolID
     }
 
-    mutating func moveActive(by delta: Int, in rows: [CommandPaletteRowProjection]) {
-        let snapshot = CommandPaletteRowSnapshot(rows: rows)
-        activeIndex = CommandPaletteSearch.clampedHighlight(
-            activeIndex,
-            movingBy: delta,
-            count: snapshot.selectableCount
-        )
-    }
-
-    func canMoveActive(by delta: Int, in rows: [CommandPaletteRowProjection]) -> Bool {
-        let snapshot = CommandPaletteRowSnapshot(rows: rows)
+    func canMoveActive(by delta: Int, in snapshot: CommandPaletteRowSnapshot) -> Bool {
         guard let currentIndex = activeSelectableIndex(in: snapshot) else {
             return false
         }
@@ -242,24 +269,6 @@ struct CommandPaletteNavigationState: Equatable {
             movingBy: delta,
             count: snapshot.selectableCount
         ) != currentIndex
-    }
-
-    func keyboardMoveDecision(
-        by delta: Int,
-        in rows: [CommandPaletteRowProjection],
-        visibleHandoffIndex: Int?,
-        isCurrentActiveVisible: Bool,
-        hasPendingKeyboardRevealForCurrentActive: Bool,
-        allowsVisibleHandoff: Bool
-    ) -> CommandPaletteKeyboardMoveDecision {
-        keyboardMoveDecision(
-            by: delta,
-            in: CommandPaletteRowSnapshot(rows: rows),
-            visibleHandoffIndex: visibleHandoffIndex,
-            isCurrentActiveVisible: isCurrentActiveVisible,
-            hasPendingKeyboardRevealForCurrentActive: hasPendingKeyboardRevealForCurrentActive,
-            allowsVisibleHandoff: allowsVisibleHandoff
-        )
     }
 
     func keyboardMoveDecision(
@@ -281,12 +290,16 @@ struct CommandPaletteNavigationState: Equatable {
         ).decision
     }
 
-    mutating func resetActiveRow() {
-        activeIndex = 0
+    mutating func moveActive(by delta: Int, in snapshot: CommandPaletteRowSnapshot) {
+        activeIndex = CommandPaletteSearch.clampedHighlight(
+            activeIndex,
+            movingBy: delta,
+            count: snapshot.selectableCount
+        )
     }
 
-    mutating func setActiveSelectableIndex(_ index: Int, in rows: [CommandPaletteRowProjection]) {
-        setActiveSelectableIndex(index, in: CommandPaletteRowSnapshot(rows: rows))
+    mutating func resetActiveRow() {
+        activeIndex = 0
     }
 
     mutating func setActiveSelectableIndex(_ index: Int, in snapshot: CommandPaletteRowSnapshot) {
@@ -299,17 +312,9 @@ struct CommandPaletteNavigationState: Equatable {
         activeIndex = clampedIndex
     }
 
-    mutating func setActiveRow(_ row: CommandPaletteRowProjection, in rows: [CommandPaletteRowProjection]) {
-        setActiveRow(row, in: CommandPaletteRowSnapshot(rows: rows))
-    }
-
     mutating func setActiveRow(_ row: CommandPaletteRowProjection, in snapshot: CommandPaletteRowSnapshot) {
         guard let index = snapshot.selectableIndex(of: row) else { return }
         activeIndex = index
-    }
-
-    func selectableIndex(of row: CommandPaletteRowProjection, in rows: [CommandPaletteRowProjection]) -> Int? {
-        CommandPaletteRowSnapshot(rows: rows).selectableIndex(of: row)
     }
 
     func selectableIndex(of row: CommandPaletteRowProjection, in snapshot: CommandPaletteRowSnapshot) -> Int? {

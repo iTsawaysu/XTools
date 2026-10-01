@@ -641,16 +641,11 @@ struct MotionSourceContractTests {
 
         // Terminal tokens (prototype MOTION d/x/s.cmdk* + listStagger).
         contains(motion, "enum PaletteMotion", "Palette choreography must own one terminal-value namespace")
-        contains(motion, "static let open = Animation.spring(\n            response: 0.24,", "Open must ride the 240ms spring-family rise")
-        contains(motion, "static let close = Animation.spring(\n            response: 0.2,", "Close must settle on the ~200ms critically damped exit spring")
+        contains(motion, "static let open = Animation.spring(\n            response: 0.15,", "Open must ride the launcher-fast 150ms spring-family rise")
+        contains(motion, "static let close = Animation.spring(\n            response: 0.14,", "Close must settle on the ~140ms critically damped exit spring")
         contains(motion, "static let riseDistance: CGFloat = 8", "The unified open-rise/close-sink travel is 8pt (prototype splits 8 in / 6 out)")
         contains(motion, "static let settleScale: CGFloat = 0.985", "Close terminal scale must be 0.985")
-        contains(motion, "static let rowsDelay: TimeInterval = 0.06", "Row stagger must start 60ms after the panel launch")
-        contains(motion, "static let rowStagger: TimeInterval = 0.02", "Row stagger cadence must be the shared 20ms listStagger")
-        contains(motion, "static let rowIn: TimeInterval = 0.15", "Each row entrance must run 150ms")
-        contains(motion, "static let rowRise: CGFloat = 4", "Row entrance rise must be 4pt")
         contains(motion, "static let highlightSlide = Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0)", "The highlight must snap on the mature-launcher fast spring, never the laggy pill spring")
-                contains(motion, "static func rowArrival(index: Int) -> Animation", "Row arrival must derive its delayed arc from ToolMotion")
 
         // Open/close share one directional animation owner; every close path
         // lands on the same arc (prototype closeCmdk unification).
@@ -665,11 +660,16 @@ struct MotionSourceContractTests {
         contains(commandPalette, "ToolMotion.PaletteMotion.riseDistance * (1 - progress)", "Offset must derive from the shared 8pt travel")
         contains(commandPalette, "1 - (1 - ToolMotion.PaletteMotion.settleScale) * (1 - progress)", "Scale must settle through the 0.985 terminal value")
 
-        // Staggered row arrival: session-scoped, query filtering stays instant.
-        contains(commandPalette, "revealedSession", "Row arrival must be gated per presentation session")
-        contains(commandPalette, "CommandPaletteRowArrivalModifier(", "Rows must arrive through the shared stagger modifier")
-        contains(commandPalette, "ToolMotion.PaletteMotion.rowArrival(index: index)", "Row arrival delay must come from the shared cadence")
-        contains(commandPalette, "reduceMotion || revealedSession == sessionModel.session", "Reduce Motion must keep rows permanently arrived")
+        // Content is instantly visible: no per-row arrival gate exists, so
+        // rapid ⌘K toggling never frames a blank list (mature launchers
+        // mount content on the first frame; the panel arc carries motion).
+        doesNotContain(commandPalette, "revealedSession", "Rows must not sit behind an arrival-reveal gate")
+        doesNotContain(commandPalette, "CommandPaletteRowArrivalModifier(", "Rows must mount fully visible; the panel arc owns the entrance")
+        // The panel is an opaque indexSurface, never a transient system
+        // material: materials flash a bright placeholder frame under the
+        // open/close opacity+scale arcs (the rapid-⌘K "white block").
+        contains(commandPalette, ".indexSurface(", "The palette panel must use the unified opaque surface channel")
+        doesNotContain(commandPalette, ".toolSurface(", "The palette panel must not use the transient system material")
 
         // Selection highlight: keyboard-sprung slide + multi-row stretch.
         contains(commandPalette, "@State private var highlightFlightAnimated = false", "The palette must track keyboard-driven highlight intent")

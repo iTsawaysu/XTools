@@ -172,6 +172,12 @@ enum AppShellPreferenceKeys {
         default: "visible",
         allowedValues: ["visible", "hidden"]
     )
+
+    /// JSON-encoded palette launch ring (`PaletteRecentsStore`).
+    static let paletteRecents = ToolPreferenceKey<String>.string(
+        "tools.palette.recents.v1",
+        default: "[]"
+    )
 }
 
 @MainActor

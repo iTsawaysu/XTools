@@ -258,6 +258,11 @@ struct RootView: View {
     @State private var showsPreferences = false
     // v3 continuity flight: palette-row icon → page title rail.
     @StateObject private var iconFlight = PaletteIconFlightCoordinator()
+    // ⌘K frecency: palette launches feed the recents landing section and
+    // within-tier ranking refinement. Deliberately NOT observed: recording
+    // a launch must not invalidate the app shell (the palette reads it
+    // synchronously when composing snapshots).
+    private let paletteRecents: PaletteRecentsStore
     @AppStorage("dt.theme") private var themeName = AppThemePreference.system.rawValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
@@ -276,6 +281,7 @@ struct RootView: View {
         )
         let preferences = ToolPreferenceStore(defaults: defaults)
         _viewModel = StateObject(wrappedValue: viewModel ?? RootViewModel(preferences: preferences))
+        self.paletteRecents = PaletteRecentsStore(preferences: preferences)
         let validToolIDs = Set(
             ToolRegistry.default.categoryGroups().flatMap { $0.tools.map(\.id) }
         )
@@ -337,6 +343,7 @@ struct RootView: View {
                 registry: registry,
                 baseActions: commandBaseActions,
                 reduceMotion: reduceMotion,
+                usage: paletteRecents,
                 onSelectTool: launchFromPalette,
                 onRunCommand: runPaletteCommand,
                 onRequestFocus: viewModel.focusCommandPalette,
@@ -500,6 +507,7 @@ struct RootView: View {
     /// surface whose geometry this owns.
     private func launchFromPalette(_ toolID: ToolID) {
         iconFlight.cancelPendingLaunch()
+        paletteRecents.recordLaunch(toolID)
         if viewModel.selectedToolID != toolID,
            !reduceMotion,
            let tool = registry.tool(for: toolID),
@@ -741,6 +749,7 @@ private struct CommandPaletteOverlayHost: View {
     let registry: ToolRegistry
     let baseActions: [CommandActionEntry]
     let reduceMotion: Bool
+    let usage: any PaletteUsageScoring
     let onSelectTool: (ToolID) -> Void
     let onRunCommand: (CommandActionID) -> Void
     let onRequestFocus: () -> Void
@@ -780,6 +789,7 @@ private struct CommandPaletteOverlayHost: View {
                                 presentation.shows
                                     && presentation.session == presentationSession
                             },
+                            usage: usage,
                             onSelectTool: onSelectTool,
                             onRunCommand: onRunCommand,
                             onRequestFocus: onRequestFocus,
@@ -789,9 +799,10 @@ private struct CommandPaletteOverlayHost: View {
                     }
                 }
             ))
-        // Wave 2 palette choreography: open rides the 240ms spring rise,
-        // every close path lands on the same ~200ms settle spring, and rapid
-        // reversals retarget the in-flight progress instead of queueing.
+        // Wave 2 palette choreography: open rides the 150ms launcher-fast
+        // spring rise, every close path lands on the same ~140ms settle
+        // spring, and rapid reversals retarget the in-flight progress instead
+        // of queueing.
         // Scoped deeper than the shared modal shell animation below so the
         // directional arcs own the presentation interpolation.
         .animation(

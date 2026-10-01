@@ -309,77 +309,58 @@ enum ToolMotion {
     }
 
     /// Wave 2 command-palette choreography (prototype MOTION d/x/s.cmdk*):
-    /// open = 240ms smoothOut rise (8pt) + fade while the scrim dims on its
-    /// own independent 200ms arc; close = 200ms exit-arc fade settling toward
-    /// the 0.985 scale. Open and close share ONE continuous rise/sink
-    /// distance and scale mapping so rapid reversals never hard-switch the
-    /// presentation geometry (contract: `CommandPaletteVisibilityGeometry`).
-    /// Rows stagger in 20ms/row starting 60ms after the panel launch; the
-    /// keyboard selection highlight slides on the shared gentle spring
-    /// (0.3/0.85, same family as the sidebar pill) and stretches ≈1.08
-    /// vertically across jumps of two rows or more.
+    /// open = ~150ms near-critical spring rise (8pt) + fade while the scrim
+    /// dims on its own independent ~140ms arc; close and scrim ride ~140ms
+    /// critically damped springs settling toward the 0.985 scale. Open and
+    /// close share ONE continuous rise/sink distance and scale mapping so
+    /// rapid reversals never hard-switch the presentation geometry (contract:
+    /// `CommandPaletteVisibilityGeometry`). Rows mount visible with no
+    /// per-row stagger; the keyboard selection highlight snaps on the
+    /// 0.2/1.0 fast spring with no stretch.
     enum PaletteMotion {
-        /// Panel open: 8pt rise + fade on the spring family (cmdkIn 240ms,
-        /// prototype --ease ≈ smoothOut feel). A near-critical spring keeps
-        /// the arc overshoot-free while staying retargetable mid-flight.
+        /// Panel open: 8pt rise + fade on a ~150ms near-critical spring —
+        /// launcher-fast (Raycast cadence), overshoot-free, and still
+        /// retargetable mid-flight on rapid ⌘K reversals.
         static let open = Animation.spring(
-            response: 0.24,
+            response: 0.15,
             dampingFraction: 0.95,
             blendDuration: 0
         )
-        /// Panel close: fade + sink settling in ~200ms (cmdkOut). A
-        /// critically damped spring approximates the prototype's easeExit
-        /// arc monotonically — timing-curve variants stall real-window
-        /// retargets (see `CommandPaletteMotionTests` rapid reversals).
+        /// Panel close: fade + sink settling in ~140ms. A critically damped
+        /// spring keeps the arc monotonic — timing-curve variants stall
+        /// real-window retargets (see `CommandPaletteMotionTests` rapid
+        /// reversals).
         static let close = Animation.spring(
-            response: 0.2,
+            response: 0.14,
             dampingFraction: 1.0,
             blendDuration: 0
         )
-        /// Scrim dims in / out on its own 200ms arc, independent of the
-        /// panel's 240ms open choreography (cmdkMask). Critically damped so
-        /// opacity never overshoots.
+        /// Scrim dims in / out on its own ~140ms arc, independent of the
+        /// panel's open choreography. Critically damped so opacity never
+        /// overshoots.
         static let scrimIn = Animation.spring(
-            response: 0.2,
+            response: 0.14,
             dampingFraction: 1.0,
             blendDuration: 0
         )
         static let scrimOut = Animation.spring(
-            response: 0.2,
+            response: 0.14,
             dampingFraction: 1.0,
             blendDuration: 0
         )
         /// Unified rise/sink travel: open rises from 8pt below the resting
-        /// position, close sinks the same 8pt while fading. The prototype
-        /// splits this 8 in / 6 out; one distance keeps reversal geometry
-        /// continuous (cmdkRise / cmdkSink).
+        /// position, close sinks the same 8pt while fading. One distance
+        /// keeps reversal geometry continuous (cmdkRise / cmdkSink).
         static let riseDistance: CGFloat = 8
         /// Panel settle scale at the closed end of the interpolation; the
         /// open arc passes through the same settling scale (cmdkOut 0.985).
         static let settleScale: CGFloat = 0.985
-        /// Row entrance starts 60ms after the panel launch (cmdkRowsDelay).
-        static let rowsDelay: TimeInterval = 0.06
-        /// Per-row entrance stagger: the shared list cadence (MOTION
-        /// d.listStagger, 20ms; the sidebar search keeps its faster 12ms
-        /// `SearchArrival.stagger`).
-        static let rowStagger: TimeInterval = 0.02
-        /// Each row's entrance arc (prototype rowIn .15s).
-        static let rowIn: TimeInterval = 0.15
-        /// Row entrance rise (prototype rowIn translateY 4px).
-        static let rowRise: CGFloat = 4
         /// Selection highlight slide, redone to match mature launchers
         /// (Raycast / Linear): a fast critically-damped snap that stays glued
         /// to the active row and retargets continuously under key repeat.
         /// Deliberately *not* the 0.3/0.85 pill spring — that family lags
         /// keyboard selection and read as sluggish; no stretch.
         static let highlightSlide = Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0)
-
-        /// Per-row entrance animation: 150ms smoothOut rise + fade, delayed
-        /// by the 60ms panel-launch lead plus the row's 20ms stagger step.
-        static func rowArrival(index: Int) -> Animation {
-            Curve.smoothOut(duration: rowIn)
-                .delay(rowsDelay + TimeInterval(index) * rowStagger)
-        }
     }
 
     /// Wave 2 copy-confirmation tick (prototype MOTION d.copyOut / d.copyDraw /
@@ -552,19 +533,6 @@ enum ToolMotion {
                     .combined(with: .scale(scale: Scale.pageArrivalSink)),
                 removal: .opacity
                     .combined(with: .scale(scale: Scale.pageDepartureSink))
-            )
-        }
-
-        /// v3: command palette panel — prototype-matched scale-and-settle:
-        /// the panel fades in slightly small, settling downward; removal
-        /// reverses the settle. The scrim stays on `scrim` (opacity-only).
-        static var commandPalette: AnyTransition {
-            AnyTransition.asymmetric(
-                insertion: .opacity
-                    .combined(with: .scale(scale: Scale.modal))
-                    .combined(with: .offset(y: -Distance.small)),
-                removal: .opacity
-                    .combined(with: .scale(scale: Scale.modal))
             )
         }
 

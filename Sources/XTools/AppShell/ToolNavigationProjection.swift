@@ -41,22 +41,59 @@ struct ToolNavigationCommandEntry: Identifiable, Hashable {
     let title: String
     let categoryTitle: String?
     let systemImage: String
+
+    init(
+        toolID: ToolID,
+        title: String,
+        categoryTitle: String?,
+        systemImage: String
+    ) {
+        self.toolID = toolID
+        self.title = title
+        self.categoryTitle = categoryTitle
+        self.systemImage = systemImage
+    }
+
+    /// Maps a registered tool into the palette's narrow entry shape.
+    init(
+        tool: RegisteredTool,
+        categoryTitle: String?
+    ) {
+        self.init(
+            toolID: tool.id,
+            title: tool.title,
+            categoryTitle: categoryTitle,
+            systemImage: tool.systemImage
+        )
+    }
 }
 
 /// Palette-only projection. It intentionally skips favorite grouping,
 /// selection lookup, sidebar sections, and default-tool calculation.
+///
+/// `matches` stays aligned with `entries` (index-for-index); each element is
+/// nil only for the unfiltered empty-query list and otherwise carries the
+/// engine match that ranked the entry, including title highlight ranges.
 struct ToolNavigationCommandProjection: Equatable {
     let entries: [ToolNavigationCommandEntry]
+    let matches: [ToolSearchEngine.Match?]
+
+    init(entries: [ToolNavigationCommandEntry], matches: [ToolSearchEngine.Match?]) {
+        self.entries = entries
+        self.matches = matches
+    }
 
     init(registry: ToolRegistry, query: String) {
-        entries = registry.matchingTools(query: query).map { tool in
-            ToolNavigationCommandEntry(
-                toolID: tool.id,
-                title: tool.title,
-                categoryTitle: registry.categoryTitle(for: tool.categoryID),
-                systemImage: tool.systemImage
-            )
-        }
+        let ranked = registry.matchingToolMatches(query: query)
+        self.init(
+            entries: ranked.map { rankedMatch in
+                ToolNavigationCommandEntry(
+                    tool: rankedMatch.tool,
+                    categoryTitle: registry.categoryTitle(for: rankedMatch.tool.categoryID)
+                )
+            },
+            matches: ranked.map(\.match)
+        )
     }
 }
 

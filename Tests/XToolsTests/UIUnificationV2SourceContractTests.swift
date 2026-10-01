@@ -196,7 +196,7 @@ struct UIUnificationV2SourceContractTests {
 
         let callSites = [
             "Sources/XTools/AppShell/TitlebarView.swift",
-            "Sources/XTools/AppShell/CommandPalette.swift",
+            "Sources/XTools/AppShell/CommandPaletteRows.swift",
             "Sources/XTools/AppShell/SidebarView.swift",
             "Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift",
         ]

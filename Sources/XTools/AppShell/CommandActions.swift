@@ -31,12 +31,17 @@ struct CommandActionEntry: Identifiable, Hashable {
     func matches(query: String) -> Bool {
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return true }
-        if title.localizedCaseInsensitiveContains(normalized) {
-            return true
-        }
-        return keywords.contains {
-            $0.localizedCaseInsensitiveContains(normalized)
-        }
+        return ToolSearchEngine.match(record: searchRecord, query: normalized) != nil
+    }
+
+    var searchRecord: ToolSearchRecord {
+        ToolSearchRecord(title: title, keywords: keywords)
+    }
+
+    /// Prebuilt engine records aligned with `actions`; build once per action
+    /// list change and zip with the actions when filtering.
+    static func searchRecords(for actions: [CommandActionEntry]) -> [ToolSearchRecord] {
+        actions.map(\.searchRecord)
     }
 
     /// Builds the session-complete command list from stable shell actions.

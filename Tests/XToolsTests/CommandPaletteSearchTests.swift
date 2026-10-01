@@ -130,7 +130,7 @@ struct CommandPaletteSearchTests {
     @Test func paletteSessionQuerySynchronouslyRebuildsSnapshotAndResetsActiveRow() throws {
         let registry = ToolRegistry.default
         let model = CommandPaletteSessionModel(registry: registry, actions: [])
-        model.navigationState.moveActive(by: 8, in: model.snapshot.rows)
+        model.navigationState.moveActive(by: 8, in: model.snapshot)
         #expect(model.navigationState.activeSelectableIndex(in: model.snapshot) == 8)
 
         let changed = model.setQuery("jwt")
@@ -147,7 +147,7 @@ struct CommandPaletteSearchTests {
     @Test func paletteSessionBeginsWithOneAtomicResetPublication() throws {
         let model = CommandPaletteSessionModel(registry: .default, actions: [], session: 1)
         #expect(model.setQuery("jwt"))
-        model.navigationState.moveActive(by: 1, in: model.snapshot.rows)
+        model.navigationState.moveActive(by: 1, in: model.snapshot)
         var publications = 0
         let cancellable = model.objectWillChange.sink { publications += 1 }
 
@@ -195,44 +195,45 @@ struct CommandPaletteSearchTests {
     }
 
     @Test func activeMovementReportsWhetherAKeyCanLeaveTheCurrentBoundary() {
-        let rows = CommandPaletteNavigationState.rows(for: [
+        let snapshot = CommandPaletteNavigationState.snapshot(for: [
             Self.entry(.json, title: "JSON Formatter"),
             Self.entry(.jwt, title: "Token Inspector"),
             Self.entry(.regex, title: "Regex Tester")
         ])
         var state = CommandPaletteNavigationState()
 
-        #expect(!state.canMoveActive(by: -1, in: rows))
-        #expect(state.canMoveActive(by: 1, in: rows))
+        #expect(!state.canMoveActive(by: -1, in: snapshot))
+        #expect(state.canMoveActive(by: 1, in: snapshot))
 
-        state.moveActive(by: 2, in: rows)
-        #expect(state.canMoveActive(by: -1, in: rows))
-        #expect(!state.canMoveActive(by: 1, in: rows))
+        state.moveActive(by: 2, in: snapshot)
+        #expect(state.canMoveActive(by: -1, in: snapshot))
+        #expect(!state.canMoveActive(by: 1, in: snapshot))
 
-        #expect(!state.canMoveActive(by: 1, in: [.empty]))
-        #expect(!state.canMoveActive(by: -1, in: [.empty]))
+        let emptySnapshot = CommandPaletteRowSnapshot(rows: [.empty])
+        #expect(!state.canMoveActive(by: 1, in: emptySnapshot))
+        #expect(!state.canMoveActive(by: -1, in: emptySnapshot))
     }
 
     @Test func keyboardMovePolicyLongDownStopsAtLastSelectableRow() {
-        let rows = Self.threeToolRows()
+        let snapshot = Self.threeToolSnapshot()
         var state = CommandPaletteNavigationState()
 
         for _ in 0..<5 {
             let decision = state.keyboardMoveDecision(
                 by: 1,
-                in: rows,
+                in: snapshot,
                 visibleHandoffIndex: nil,
                 isCurrentActiveVisible: true,
                 hasPendingKeyboardRevealForCurrentActive: false,
                 allowsVisibleHandoff: false
             )
-            Self.apply(decision, to: &state, in: rows)
+            Self.apply(decision, to: &state, in: snapshot)
         }
 
-        #expect(state.activeRowID(in: rows) == "tool.regex")
+        #expect(state.activeRowID(in: snapshot) == "tool.regex")
         #expect(state.keyboardMoveDecision(
             by: 1,
-            in: rows,
+            in: snapshot,
             visibleHandoffIndex: nil,
             isCurrentActiveVisible: true,
             hasPendingKeyboardRevealForCurrentActive: false,
@@ -241,26 +242,26 @@ struct CommandPaletteSearchTests {
     }
 
     @Test func keyboardMovePolicyLongUpStopsAtFirstSelectableRow() {
-        let rows = Self.threeToolRows()
+        let snapshot = Self.threeToolSnapshot()
         var state = CommandPaletteNavigationState()
-        state.setActiveSelectableIndex(2, in: rows)
+        state.setActiveSelectableIndex(2, in: snapshot)
 
         for _ in 0..<5 {
             let decision = state.keyboardMoveDecision(
                 by: -1,
-                in: rows,
+                in: snapshot,
                 visibleHandoffIndex: nil,
                 isCurrentActiveVisible: true,
                 hasPendingKeyboardRevealForCurrentActive: false,
                 allowsVisibleHandoff: false
             )
-            Self.apply(decision, to: &state, in: rows)
+            Self.apply(decision, to: &state, in: snapshot)
         }
 
-        #expect(state.activeRowID(in: rows) == "tool.json")
+        #expect(state.activeRowID(in: snapshot) == "tool.json")
         #expect(state.keyboardMoveDecision(
             by: -1,
-            in: rows,
+            in: snapshot,
             visibleHandoffIndex: nil,
             isCurrentActiveVisible: true,
             hasPendingKeyboardRevealForCurrentActive: false,
@@ -269,23 +270,23 @@ struct CommandPaletteSearchTests {
     }
 
     @Test func blockedBoundaryKeyRevealsCurrentRowAndIgnoresOppositeVisibleHandoff() {
-        let rows = Self.threeToolRows()
+        let snapshot = Self.threeToolSnapshot()
         var state = CommandPaletteNavigationState()
-        state.setActiveSelectableIndex(2, in: rows)
+        state.setActiveSelectableIndex(2, in: snapshot)
 
         let downAtLast = state.keyboardMoveDecision(
             by: 1,
-            in: rows,
+            in: snapshot,
             visibleHandoffIndex: 0,
             isCurrentActiveVisible: false,
             hasPendingKeyboardRevealForCurrentActive: false,
             allowsVisibleHandoff: true
         )
 
-        state.setActiveSelectableIndex(0, in: rows)
+        state.setActiveSelectableIndex(0, in: snapshot)
         let upAtFirst = state.keyboardMoveDecision(
             by: -1,
-            in: rows,
+            in: snapshot,
             visibleHandoffIndex: 2,
             isCurrentActiveVisible: false,
             hasPendingKeyboardRevealForCurrentActive: false,
@@ -297,63 +298,63 @@ struct CommandPaletteSearchTests {
     }
 
     @Test func movableOffscreenActiveRowCanAlignToVisibleEdge() {
-        let rows = Self.threeToolRows()
+        let snapshot = Self.threeToolSnapshot()
         var state = CommandPaletteNavigationState()
 
         let decision = state.keyboardMoveDecision(
             by: 1,
-            in: rows,
+            in: snapshot,
             visibleHandoffIndex: 2,
             isCurrentActiveVisible: false,
             hasPendingKeyboardRevealForCurrentActive: false,
             allowsVisibleHandoff: true
         )
-        Self.apply(decision, to: &state, in: rows)
+        Self.apply(decision, to: &state, in: snapshot)
 
         #expect(decision == .alignToVisibleSelectableIndex(2))
-        #expect(state.activeRowID(in: rows) == "tool.regex")
+        #expect(state.activeRowID(in: snapshot) == "tool.regex")
     }
 
     @Test func visibleActiveRowMovesByDeltaInsteadOfUsingVisibleHandoff() {
-        let rows = Self.threeToolRows()
+        let snapshot = Self.threeToolSnapshot()
         var state = CommandPaletteNavigationState()
 
         let decision = state.keyboardMoveDecision(
             by: 1,
-            in: rows,
+            in: snapshot,
             visibleHandoffIndex: 2,
             isCurrentActiveVisible: true,
             hasPendingKeyboardRevealForCurrentActive: false,
             allowsVisibleHandoff: true
         )
-        Self.apply(decision, to: &state, in: rows)
+        Self.apply(decision, to: &state, in: snapshot)
 
         #expect(decision == .move(toSelectableIndex: 1))
-        #expect(state.activeRowID(in: rows) == "tool.jwt")
+        #expect(state.activeRowID(in: snapshot) == "tool.jwt")
     }
 
     @Test func pendingKeyboardRevealSuppressesVisibleEdgeHandoffForSameActiveRow() {
-        let rows = Self.threeToolRows()
+        let snapshot = Self.threeToolSnapshot()
         var state = CommandPaletteNavigationState()
 
         let decision = state.keyboardMoveDecision(
             by: 1,
-            in: rows,
+            in: snapshot,
             visibleHandoffIndex: 2,
             isCurrentActiveVisible: false,
             hasPendingKeyboardRevealForCurrentActive: true,
             allowsVisibleHandoff: true
         )
-        Self.apply(decision, to: &state, in: rows)
+        Self.apply(decision, to: &state, in: snapshot)
 
         #expect(decision == .move(toSelectableIndex: 1))
-        #expect(state.activeRowID(in: rows) == "tool.jwt")
+        #expect(state.activeRowID(in: snapshot) == "tool.jwt")
     }
 
     @Test func keyboardMovePolicyIsNoOpWhenOnlyDisplayRowsExist() {
         let decision = CommandPaletteNavigationState().keyboardMoveDecision(
             by: 1,
-            in: [.empty],
+            in: CommandPaletteRowSnapshot(rows: [.empty]),
             visibleHandoffIndex: 0,
             isCurrentActiveVisible: false,
             hasPendingKeyboardRevealForCurrentActive: false,
@@ -365,7 +366,7 @@ struct CommandPaletteSearchTests {
 
     @Test func keyboardRepeatDoesNotTreatRevealLagAsManualVisibleHandoff() {
         let entries = ToolNavigationCommandProjection(registry: .default, query: "").entries
-        let rows = CommandPaletteNavigationState.rows(for: entries)
+        let snapshot = CommandPaletteNavigationState.snapshot(for: entries)
         var state = CommandPaletteNavigationState()
         let hashIndex = entries.firstIndex { $0.title == "Hash 文本" }
         let encryptionIndex = entries.firstIndex { $0.title == "文本加密" }
@@ -373,37 +374,37 @@ struct CommandPaletteSearchTests {
         #expect(hashIndex != nil)
         #expect(encryptionIndex == hashIndex.map { $0 + 1 })
 
-        state.setActiveSelectableIndex(hashIndex ?? 0, in: rows)
+        state.setActiveSelectableIndex(hashIndex ?? 0, in: snapshot)
         let decision = state.keyboardMoveDecision(
             by: 1,
-            in: rows,
+            in: snapshot,
             visibleHandoffIndex: 0,
             isCurrentActiveVisible: false,
             hasPendingKeyboardRevealForCurrentActive: false,
             allowsVisibleHandoff: false
         )
-        Self.apply(decision, to: &state, in: rows)
+        Self.apply(decision, to: &state, in: snapshot)
 
         #expect(decision == .move(toSelectableIndex: encryptionIndex ?? -1))
-        #expect(state.activeRowID(in: rows) == "tool.text-encryption")
+        #expect(state.activeRowID(in: snapshot) == "tool.text-encryption")
     }
 
     @Test func manualScrollEvidenceStillAllowsVisibleEdgeHandoff() {
-        let rows = Self.threeToolRows()
+        let snapshot = Self.threeToolSnapshot()
         var state = CommandPaletteNavigationState()
 
         let decision = state.keyboardMoveDecision(
             by: 1,
-            in: rows,
+            in: snapshot,
             visibleHandoffIndex: 2,
             isCurrentActiveVisible: false,
             hasPendingKeyboardRevealForCurrentActive: false,
             allowsVisibleHandoff: true
         )
-        Self.apply(decision, to: &state, in: rows)
+        Self.apply(decision, to: &state, in: snapshot)
 
         #expect(decision == .alignToVisibleSelectableIndex(2))
-        #expect(state.activeRowID(in: rows) == "tool.regex")
+        #expect(state.activeRowID(in: snapshot) == "tool.regex")
     }
 
     @Test func highlightIsNoOpWhenNothingSelectable() {
@@ -433,22 +434,22 @@ struct CommandPaletteSearchTests {
     // MARK: - row projection and active-row state
 
     @Test func rowProjectionKeepsSectionTitlesAndEmptyRowsOutOfSelection() {
-        let rows = CommandPaletteNavigationState.rows(for: [
+        let snapshot = CommandPaletteNavigationState.snapshot(for: [
             Self.entry(.json, title: "JSON Formatter"),
             Self.entry(.jwt, title: "Token Inspector")
         ])
-        let emptyRows = CommandPaletteNavigationState.rows(for: [])
+        let emptySnapshot = CommandPaletteNavigationState.snapshot(for: [])
         let state = CommandPaletteNavigationState()
 
-        #expect(rows.map(\.id) == ["title.工具", "tool.json", "tool.jwt"])
-        #expect(rows.map(\.isSelectable) == [false, true, true])
-        #expect(state.activeSelectableIndex(in: rows) == 0)
-        #expect(state.activeRowID(in: rows) == "tool.json")
+        #expect(snapshot.rows.map(\.id) == ["title.工具", "tool.json", "tool.jwt"])
+        #expect(snapshot.rows.map(\.isSelectable) == [false, true, true])
+        #expect(state.activeSelectableIndex(in: snapshot) == 0)
+        #expect(state.activeRowID(in: snapshot) == "tool.json")
 
-        #expect(emptyRows == [.empty])
-        #expect(state.activeSelectableIndex(in: emptyRows) == nil)
-        #expect(state.activeRowID(in: emptyRows) == nil)
-        #expect(state.activeToolID(in: emptyRows) == nil)
+        #expect(emptySnapshot.rows == [.empty])
+        #expect(state.activeSelectableIndex(in: emptySnapshot) == nil)
+        #expect(state.activeRowID(in: emptySnapshot) == nil)
+        #expect(state.activeToolID(in: emptySnapshot) == nil)
     }
 
     @Test func rowSnapshotPrecomputesSelectionWithoutChangingDisplayOrder() {
@@ -481,64 +482,64 @@ struct CommandPaletteSearchTests {
     }
 
     @Test func activeRowMovementResetAndPointerMoveUseTheSameSelectableRows() {
-        let rows = CommandPaletteNavigationState.rows(for: [
+        let snapshot = CommandPaletteNavigationState.snapshot(for: [
             Self.entry(.json, title: "JSON Formatter"),
             Self.entry(.jwt, title: "Token Inspector"),
             Self.entry(.regex, title: "Regex Tester")
         ])
         var state = CommandPaletteNavigationState()
 
-        state.moveActive(by: 2, in: rows)
-        #expect(state.activeRowID(in: rows) == "tool.regex")
+        state.moveActive(by: 2, in: snapshot)
+        #expect(state.activeRowID(in: snapshot) == "tool.regex")
 
         state.resetActiveRow()
-        #expect(state.activeRowID(in: rows) == "tool.json")
+        #expect(state.activeRowID(in: snapshot) == "tool.json")
 
-        state.setActiveRow(rows[2], in: rows)
-        #expect(state.activeRowID(in: rows) == "tool.jwt")
+        state.setActiveRow(snapshot.rows[2], in: snapshot)
+        #expect(state.activeRowID(in: snapshot) == "tool.jwt")
 
-        state.setActiveRow(rows[0], in: rows)
-        #expect(state.activeRowID(in: rows) == "tool.jwt")
+        state.setActiveRow(snapshot.rows[0], in: snapshot)
+        #expect(state.activeRowID(in: snapshot) == "tool.jwt")
     }
 
     @Test func activeRowCanAlignToVisibleSelectableIndexAfterManualScroll() {
-        let rows = CommandPaletteNavigationState.rows(for: [
+        let snapshot = CommandPaletteNavigationState.snapshot(for: [
             Self.entry(.json, title: "JSON Formatter"),
             Self.entry(.jwt, title: "Token Inspector"),
             Self.entry(.regex, title: "Regex Tester")
         ])
         var state = CommandPaletteNavigationState()
 
-        #expect(state.selectableIndex(of: rows[1], in: rows) == 0)
-        #expect(state.selectableIndex(of: rows[2], in: rows) == 1)
-        #expect(state.selectableIndex(of: rows[0], in: rows) == nil)
+        #expect(state.selectableIndex(of: snapshot.rows[1], in: snapshot) == 0)
+        #expect(state.selectableIndex(of: snapshot.rows[2], in: snapshot) == 1)
+        #expect(state.selectableIndex(of: snapshot.rows[0], in: snapshot) == nil)
 
-        state.setActiveSelectableIndex(2, in: rows)
-        #expect(state.activeRowID(in: rows) == "tool.regex")
+        state.setActiveSelectableIndex(2, in: snapshot)
+        #expect(state.activeRowID(in: snapshot) == "tool.regex")
 
-        state.setActiveSelectableIndex(100, in: rows)
-        #expect(state.activeRowID(in: rows) == "tool.regex")
+        state.setActiveSelectableIndex(100, in: snapshot)
+        #expect(state.activeRowID(in: snapshot) == "tool.regex")
 
-        state.setActiveSelectableIndex(-10, in: rows)
-        #expect(state.activeRowID(in: rows) == "tool.json")
+        state.setActiveSelectableIndex(-10, in: snapshot)
+        #expect(state.activeRowID(in: snapshot) == "tool.json")
 
-        state.setActiveSelectableIndex(2, in: [.empty])
-        #expect(state.activeRowID(in: rows) == "tool.json")
+        state.setActiveSelectableIndex(2, in: CommandPaletteRowSnapshot(rows: [.empty]))
+        #expect(state.activeRowID(in: snapshot) == "tool.json")
     }
 
     @Test func activeToolActivationAndClickLookupShareToolOnlyRules() {
-        let rows = CommandPaletteNavigationState.rows(for: [
+        let snapshot = CommandPaletteNavigationState.snapshot(for: [
             Self.entry(.json, title: "JSON Formatter"),
             Self.entry(.jwt, title: "Token Inspector")
         ])
         var state = CommandPaletteNavigationState()
 
-        #expect(state.activeToolID(in: rows) == .json)
+        #expect(state.activeToolID(in: snapshot) == .json)
 
-        state.setActiveRow(rows[2], in: rows)
-        #expect(state.activeToolID(in: rows) == .jwt)
-        #expect(state.toolID(for: rows[2]) == .jwt)
-        #expect(state.toolID(for: rows[0]) == nil)
+        state.setActiveRow(snapshot.rows[2], in: snapshot)
+        #expect(state.activeToolID(in: snapshot) == .jwt)
+        #expect(state.toolID(for: snapshot.rows[2]) == .jwt)
+        #expect(state.toolID(for: snapshot.rows[0]) == nil)
         #expect(state.toolID(for: .empty) == nil)
     }
 
@@ -594,8 +595,8 @@ struct CommandPaletteSearchTests {
         #expect(tracker.acceptsMouseMoved(at: CGPoint(x: 131, y: 220)))
     }
 
-    private static func threeToolRows() -> [CommandPaletteRowProjection] {
-        CommandPaletteNavigationState.rows(for: [
+    private static func threeToolSnapshot() -> CommandPaletteRowSnapshot {
+        CommandPaletteNavigationState.snapshot(for: [
             entry(.json, title: "JSON Formatter"),
             entry(.jwt, title: "Token Inspector"),
             entry(.regex, title: "Regex Tester")
@@ -605,11 +606,11 @@ struct CommandPaletteSearchTests {
     private static func apply(
         _ decision: CommandPaletteKeyboardMoveDecision,
         to state: inout CommandPaletteNavigationState,
-        in rows: [CommandPaletteRowProjection]
+        in snapshot: CommandPaletteRowSnapshot
     ) {
         switch decision {
         case .move(let index), .alignToVisibleSelectableIndex(let index):
-            state.setActiveSelectableIndex(index, in: rows)
+            state.setActiveSelectableIndex(index, in: snapshot)
         case .revealCurrent, .none:
             break
         }
@@ -627,20 +628,20 @@ struct CommandPaletteSearchTests {
             systemImage: "gearshape"
         )
 
-        let both = CommandPaletteNavigationState.rows(for: [toolEntry], actions: [action])
-        #expect(both.count == 4)
-        #expect(both[0] == .sectionTitle("动作"))
-        #expect(both[1] == .command(action))
-        #expect(both[2] == .sectionTitle("工具"))
-        #expect(both[3] == .tool(toolEntry))
-        #expect(both[1].commandID == .openPreferences)
-        #expect(both[1].isSelectable)
+        let both = CommandPaletteNavigationState.snapshot(for: [toolEntry], actions: [action])
+        #expect(both.rows.count == 4)
+        #expect(both.rows[0] == .sectionTitle("动作"))
+        #expect(both.rows[1] == .command(action))
+        #expect(both.rows[2] == .sectionTitle("工具"))
+        #expect(both.rows[3] == .tool(toolEntry))
+        #expect(both.rows[1].commandID == .openPreferences)
+        #expect(both.rows[1].isSelectable)
 
-        let toolOnly = CommandPaletteNavigationState.rows(for: [toolEntry])
-        #expect(toolOnly == [.sectionTitle("工具"), .tool(toolEntry)])
+        let toolOnly = CommandPaletteNavigationState.snapshot(for: [toolEntry])
+        #expect(toolOnly.rows == [.sectionTitle("工具"), .tool(toolEntry)])
 
-        let empty = CommandPaletteNavigationState.rows(for: [])
-        #expect(empty == [.empty])
+        let empty = CommandPaletteNavigationState.snapshot(for: [])
+        #expect(empty.rows == [.empty])
     }
 
     @Test func commandActionMatchingUsesTitleAndKeywords() {

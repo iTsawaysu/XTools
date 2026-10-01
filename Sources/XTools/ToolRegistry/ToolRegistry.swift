@@ -5,22 +5,21 @@ struct ToolRegistryCategoryGroup: Hashable {
     let tools: [RegisteredTool]
 }
 
-struct ToolRegistry {
-    enum MatchRank: Int {
-        case titlePrefix = 0
-        case titleContains = 1
-        case keyword = 2
-    }
+/// One ranked search hit: the tool plus the engine match that ranked it.
+/// `match` is nil only for the unfiltered empty-query pass-through.
+struct ToolRegistryRankedMatch {
+    let tool: RegisteredTool
+    let match: ToolSearchEngine.Match?
+}
 
+struct ToolRegistry {
     private let categories: [ToolCategory]
     private let tools: [RegisteredTool]
     private let categoryByID: [ToolCategoryID: ToolCategory]
     private let toolByID: [ToolID: RegisteredTool]
-    private struct SearchRecord {
-        let title: String
-        let keywords: [String]
-    }
-    private let searchRecordByID: [ToolID: SearchRecord]
+    // Folded + pinyin search records are prebuilt once per registry; queries
+    // only run comparisons against them (see `ToolSearchRecord`).
+    private let searchRecordByID: [ToolID: ToolSearchRecord]
     // Preserve the original tool ordering within each category.
     private let toolsByCategory: [ToolCategoryID: [RegisteredTool]]
 
@@ -33,10 +32,7 @@ struct ToolRegistry {
         self.searchRecordByID = Dictionary(uniqueKeysWithValues: tools.map { tool in
             (
                 tool.id,
-                SearchRecord(
-                    title: Self.normalizedSearchText(tool.title),
-                    keywords: tool.keywords.map(Self.normalizedSearchText)
-                )
+                ToolSearchRecord(title: tool.title, keywords: tool.keywords)
             )
         })
     }
@@ -77,50 +73,47 @@ struct ToolRegistry {
             .first
     }
 
-    private func matchRank(for tool: RegisteredTool, normalizedQuery query: String) -> MatchRank? {
-        // Records are prebuilt for every tool in init; a miss means the tool
-        // did not come from this registry, so it simply does not match.
-        guard let record = searchRecordByID[tool.id] else { return nil }
-
-        if record.title.hasPrefix(query) {
-            return .titlePrefix
-        }
-
-        if record.title.contains(query) {
-            return .titleContains
-        }
-
-        if record.keywords.contains(where: { $0.contains(query) }) {
-            return .keyword
-        }
-
-        return nil
-    }
-
-    func matchingTools(query rawQuery: String) -> [RegisteredTool] {
+    /// Ranked matches for the palette projection: tier order first, fzf
+    /// score within a tier, original registration order as the final stable
+    /// tiebreak. An empty query passes every tool through unranked, which
+    /// `matchingTools(query:)` preserves as plain registration order.
+    func matchingToolMatches(query rawQuery: String) -> [ToolRegistryRankedMatch] {
         let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !query.isEmpty else {
-            return tools
+            return tools.map { ToolRegistryRankedMatch(tool: $0, match: nil) }
         }
-        let normalizedQuery = Self.normalizedSearchText(query)
 
-        return tools.enumerated()
-            .compactMap { originalIndex, tool -> (rank: MatchRank, originalIndex: Int, tool: RegisteredTool)? in
-                guard let rank = matchRank(for: tool, normalizedQuery: normalizedQuery) else { return nil }
-                return (rank, originalIndex, tool)
-            }
+        struct RankedHit {
+            let tool: RegisteredTool
+            let match: ToolSearchEngine.Match
+            let originalIndex: Int
+        }
+
+        // Records are prebuilt for every tool in init; a miss means the tool
+        // did not come from this registry, so it simply does not match.
+        let hits = tools.enumerated().compactMap { originalIndex, tool -> RankedHit? in
+            guard let record = searchRecordByID[tool.id],
+                  let match = ToolSearchEngine.match(record: record, query: query)
+            else { return nil }
+            return RankedHit(tool: tool, match: match, originalIndex: originalIndex)
+        }
+
+        return hits
             .sorted { left, right in
-                if left.rank.rawValue != right.rank.rawValue {
-                    return left.rank.rawValue < right.rank.rawValue
+                if left.match.tier != right.match.tier {
+                    return left.match.tier < right.match.tier
+                }
+                if left.match.score != right.match.score {
+                    return left.match.score > right.match.score
                 }
                 return left.originalIndex < right.originalIndex
             }
-            .map(\.tool)
+            .map { ToolRegistryRankedMatch(tool: $0.tool, match: $0.match) }
     }
 
-    private static func normalizedSearchText(_ text: String) -> String {
-        text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+    func matchingTools(query rawQuery: String) -> [RegisteredTool] {
+        matchingToolMatches(query: rawQuery).map(\.tool)
     }
 }
 

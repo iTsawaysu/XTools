@@ -96,6 +96,11 @@ struct XToolsApp: App {
         // One-shot domain migration must run before RootView / stores read
         // UserDefaults.standard under the new bundle id.
         LegacyPreferencesMigrator.migrateFromLegacyDomainIfNeeded()
+
+        // Pinyin search needs the ICU Han→Latin engine; constructing it costs
+        // ~45ms once per process, so warm it off the main thread instead of
+        // paying inside the first palette/sidebar query.
+        ToolSearchEngine.prewarmTransliterationEngine()
     }
 
     var body: some Scene {
