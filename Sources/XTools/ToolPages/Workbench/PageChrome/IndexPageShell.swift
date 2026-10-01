@@ -499,16 +499,16 @@ struct IndexPanel<Content: View, Accessory: View>: View {
                 Rectangle().fill(ToolTheme.border).frame(height: 0.5)
             }
 
-            if reservesDiagnosticStatusSlot, let diagnostic = workspaceDiagnostic {
-                IndexDiagnosticBanner(
-                    diagnostic: nil,
-                    message: diagnostic.text,
-                    tone: diagnostic.tone
-                )
-                .transition(.asymmetric(
-                    insertion: .move(edge: .top).combined(with: .opacity),
-                    removal: .opacity.combined(with: .move(edge: .top))
-                ))
+            if reservesDiagnosticStatusSlot {
+                IndexDiagnosticStatusSlot(isActive: workspaceDiagnostic != nil) {
+                    if let diagnostic = workspaceDiagnostic {
+                        IndexDiagnosticBanner(
+                            diagnostic: nil,
+                            message: diagnostic.text,
+                            tone: diagnostic.tone
+                        )
+                    }
+                }
             }
 
             content
@@ -520,7 +520,7 @@ struct IndexPanel<Content: View, Accessory: View>: View {
                 ))
                 .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: workspaceDiagnostic != nil)
+        .toolAnimation(ToolMotion.Preset.diagnostic, value: workspaceDiagnostic != nil)
         .frame(maxHeight: fillsHeight ? .infinity : nil, alignment: .top)
         .clipShape(RoundedRectangle(cornerRadius: IndexPanelMetrics.cornerRadius, style: .continuous))
         .background(

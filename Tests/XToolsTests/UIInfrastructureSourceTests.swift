@@ -232,7 +232,7 @@ struct UIInfrastructureSourceTests {
     @Test func diagnosticBannerRendersThroughSharedOwner() throws {
         let panel = try readSource("Sources/XTools/ToolPages/Workbench/PageChrome/IndexPageShell.swift")
 
-        contains(panel, "if reservesDiagnosticStatusSlot, let diagnostic = workspaceDiagnostic {\n                IndexDiagnosticBanner(", "Diagnostic-capable panels must render the shared banner for the current payload")
+        contains(panel, "if reservesDiagnosticStatusSlot {\n                IndexDiagnosticStatusSlot(isActive: workspaceDiagnostic != nil) {", "Diagnostic-capable panels must route banner presence through the shared status slot")
         contains(panel, "func withoutDiagnosticStatusSlot() -> IndexPanel", "Panels without diagnostics must opt out explicitly")
     }
 
@@ -321,7 +321,7 @@ struct UIInfrastructureSourceTests {
         contains(panel, "@State private var workspaceDiagnostic: IndexWorkspaceDiagnosticPayload?", "IndexPanel must own the current diagnostic from its descendant surface")
         contains(panel, "@State private var diagnosticPresentation = IndexWorkspaceDiagnosticPresentationState()", "IndexPanel must gate first-appearance diagnostic HUD feedback locally")
         contains(panel, ".onPreferenceChange(IndexWorkspaceDiagnosticPreferenceKey.self)", "IndexPanel must consume descendant diagnostics at the owning panel boundary")
-        contains(panel, "IndexDiagnosticBanner(\n                    diagnostic: nil,", "IndexPanel must render diagnostics through the shared banner owner")
+        contains(panel, "IndexDiagnosticBanner(\n                            diagnostic: nil,", "IndexPanel must render diagnostics through the shared banner owner")
         contains(panel, "toastCenter?.show(announcement.text, tone: announcement.tone)", "IndexPanel must copy a newly appearing or escalating diagnostic into the window HUD")
         contains(panel, "IndexPanelOutline(", "IndexPanel must keep a semantic outline after the transient HUD disappears")
         let outline = try readSource("Sources/XTools/ToolPages/Workbench/PageChrome/IndexPageShell.swift")
