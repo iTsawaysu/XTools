@@ -118,13 +118,20 @@ struct IndexDiagnosticBanner: View {
 
 /// The one sanctioned container for a workbench diagnostic status row.
 /// Call sites declare whether a row is currently needed and what it shows;
-/// this component owns the structural decisions that regressed twice when
-/// each workbench reimplemented them: conditional presence (an inactive slot
-/// reserves no blank space), the bounded 36pt row, and the shared diagnostic
-/// motion. Pair it with `IndexDiagnosticBanner`.
+/// this component owns the structural decisions that regressed three times
+/// when each workbench reimplemented them: conditional presence (an inactive
+/// slot reserves no blank space), the bounded 36pt row, and the shared
+/// diagnostic motion. Presence rides one always-mounted clipped height track
+/// (the `IndexResultPresence` pattern): an `.animation(value:)` that lives
+/// inside the appearing branch cannot animate its own insertion, so the
+/// track itself observes the flip and reveals/collapses the row through the
+/// shared diagnostic transition even when nothing upstream animates.
+/// Pair it with `IndexDiagnosticBanner`.
 struct IndexDiagnosticStatusSlot<Content: View>: View {
     private let isActive: Bool
     private let content: () -> Content
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
         isActive: Bool,
@@ -135,13 +142,17 @@ struct IndexDiagnosticStatusSlot<Content: View>: View {
     }
 
     var body: some View {
-        if isActive {
-            ZStack(alignment: .leading) {
+        ZStack(alignment: .top) {
+            if isActive {
                 content()
+                    .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
             }
-            .frame(height: 36)
-            .frame(maxWidth: .infinity)
-            .toolAnimation(ToolMotion.Preset.diagnostic, value: isActive)
         }
+        // One bounded status row (the banner self-bounds to 36); 0pt reserves
+        // no blank space while the track itself stays mounted to animate.
+        .frame(height: isActive ? 36 : 0, alignment: .top)
+        .frame(maxWidth: .infinity)
+        .clipped()
+        .toolAnimation(ToolMotion.Preset.diagnostic, value: isActive)
     }
 }

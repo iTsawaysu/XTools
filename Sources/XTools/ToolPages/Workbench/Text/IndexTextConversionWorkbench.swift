@@ -137,23 +137,21 @@ struct IndexTextConversionWorkbench: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            if let diagnosticText = inputDiagnosticText {
-                IndexDiagnosticBanner(
-                    diagnostic: inputDiagnostic,
-                    message: diagnosticText,
-                    tone: inputDiagnosticTone
-                )
-                .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))
-                .transition(.asymmetric(
-                    insertion: .move(edge: .top).combined(with: .opacity),
-                    removal: .opacity.combined(with: .move(edge: .top))
-                ))
+        VStack(spacing: 0) {
+            IndexDiagnosticStatusSlot(isActive: hasDiagnostic) {
+                if let diagnosticText = inputDiagnosticText {
+                    IndexDiagnosticBanner(
+                        diagnostic: inputDiagnostic,
+                        message: diagnosticText,
+                        tone: inputDiagnosticTone
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))
+                }
             }
-
             workbenchBody
+                .padding(.top, hasDiagnostic ? 8 : 0)
         }
-        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: hasDiagnostic)
+        .toolAnimation(ToolMotion.Preset.diagnostic, value: hasDiagnostic)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 

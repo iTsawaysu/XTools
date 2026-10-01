@@ -8,6 +8,14 @@ public struct IndexDropZoneModifier: ViewModifier {
     public func body(content: Content) -> some View {
         content
             .contentShape(Rectangle())
+            // targeted 微光吸附：accent 同色光晕画在描边层（形状描边 + blur，
+            // 不是内容 .shadow），只随悬停出现，离开即撤销。
+            .background {
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous)
+                    .strokeBorder(ToolTheme.accent.opacity(0.24), lineWidth: 2)
+                    .blur(radius: 3)
+                    .opacity(isTargeted ? 1 : 0)
+            }
             .background(
                 isTargeted ? ToolTheme.selectionFill : Color.clear,
                 in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous)

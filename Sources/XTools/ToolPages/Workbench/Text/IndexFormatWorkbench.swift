@@ -490,30 +490,49 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
 
     @ViewBuilder
     private var inputPaneWithHeader: some View {
-        if let inputHeader {
-            // The header row (e.g. a URL bar) and the editor share one field
-            // surface: single border, hairline divider, embedded editor.
-            VStack(spacing: 0) {
-                inputHeader()
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 6)
-                Rectangle()
-                    .fill(ToolTheme.border)
-                    .frame(height: 0.5)
+        Group {
+            if let inputHeader {
+                // The header row (e.g. a URL bar) and the editor share one field
+                // surface: single border, hairline divider, embedded editor.
+                VStack(spacing: 0) {
+                    inputHeader()
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 6)
+                    Rectangle()
+                        .fill(ToolTheme.border)
+                        .frame(height: 0.5)
+                    inputPane
+                }
+                .background(
+                    ToolTheme.editorBackground,
+                    in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                        .strokeBorder(ToolTheme.border, lineWidth: 0.5)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            } else {
                 inputPane
             }
-            .background(
-                ToolTheme.editorBackground,
-                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                    .strokeBorder(ToolTheme.border, lineWidth: 0.5)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        } else {
-            inputPane
         }
+        .overlay {
+            dropTargetHover
+        }
+    }
+
+    /// 文件拖拽悬停反馈：状态由认领拖拽会话的 `IndexCaretTextView` 经
+    /// `droppedFile.isDropTargeted` 发布（SwiftUI 外层 onDrop 收不到回调）。
+    /// 编辑器面不透明，wash 与描边必须画在上层 overlay（ToolOutputBreath 同法）。
+    private var dropTargetHover: some View {
+        let shape = RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+        return ZStack {
+            shape.fill(ToolTheme.selectionFill)
+            shape.strokeBorder(ToolTheme.accentBorder, lineWidth: 1)
+        }
+        .opacity(droppedFile.isDropTargeted ? 1 : 0)
+        .allowsHitTesting(false)
+        .toolAnimation(ToolMotion.Preset.controlFeedback, value: droppedFile.isDropTargeted)
     }
 
     private var inputPane: some View {
@@ -534,25 +553,6 @@ struct IndexFormatWorkbench<LeadingControl: View>: View {
             droppedFile: droppedFile,
             workspaceSemantic: workspaceSemantic
         )
-        .onDrop(of: [.fileURL, .text], isTargeted: nil) { providers in
-            guard let provider = providers.first,
-                  provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) else { return false }
-            let token = droppedFile.invalidate()
-            _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                Task { @MainActor in
-                    guard droppedFile.isCurrent(token) else { return }
-                    guard let url else {
-                        droppedFile.rejectUnreadableDrop()
-                        return
-                    }
-                    droppedFile.start(url: url) { content in
-                        input = content
-                        onFormat?()
-                    }
-                }
-            }
-            return true
-        }
         .onChange(of: JSONExactTextIdentity(input)) { _ in
             droppedFile.invalidate()
             droppedFile.dismissRejection()

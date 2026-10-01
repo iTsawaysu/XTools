@@ -67,7 +67,8 @@ struct TextWorkbenchSourceContractTests {
         contains(workbench, "private var inputDiagnosticText: String?", "Shared text conversion workbench must normalize errors and warnings into one diagnostic text")
         contains(workbench, "private var inputDiagnosticTone: ToolFeedbackTone", "Shared text conversion workbench must select a diagnostic tone from the active error/warning state")
         contains(shared, "struct IndexWorkspaceDiagnosticRegion", "Shared components must provide a safe diagnostic region outside editor text")
-        contains(workbench, "IndexDiagnosticBanner(\n                    diagnostic: inputDiagnostic,\n                    message: diagnosticText,\n                    tone: inputDiagnosticTone", "Shared text conversion workbench must attach errors and warnings as the shared top diagnostic banner")
+        contains(workbench, "IndexDiagnosticStatusSlot(isActive: hasDiagnostic)", "Shared text conversion workbench must attach errors and warnings through the shared status slot")
+        contains(workbench, "IndexDiagnosticBanner(\n                        diagnostic: inputDiagnostic,\n                        message: diagnosticText,\n                        tone: inputDiagnosticTone", "Shared text conversion workbench must render the shared top diagnostic banner")
         contains(json, "diagnostic: execution.binding.error ?? execution.binding.warning", "JSON formatter diagnostics must render inside the prototype workbench toolbar")
         contains(json, "diagnosticTone: execution.binding.error == nil ? .warning : .error", "JSON formatter must select the diagnostic tone from the active error/warning state")
         for (name, needle) in [("XML", "diagnostic: execution.binding.error"), ("YAML", "diagnostic: execution.binding.error"), ("SQL", "diagnostic: execution.binding.error")] {

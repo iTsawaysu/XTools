@@ -82,7 +82,7 @@ struct EditableDiffSourceContractTests {
         contains(source, "IndexDiagnosticStatusSlot(isActive: hasDiagnostic)", "The diff status row must go through the shared slot that owns conditional presence")
         contains(source, "关闭导入提示", "Dropped-file rejections must expose the shared dismiss control")
         contains(diagnosticViews, "struct IndexDiagnosticStatusSlot", "Diagnostic status rows must share one sanctioned container")
-        contains(diagnosticViews, ".frame(height: 36)", "The shared slot must keep the bounded status-row height")
+        contains(diagnosticViews, ".frame(height: isActive ? 36 : 0, alignment: .top)", "The shared slot must keep the bounded status-row height and reserve nothing when absent")
         doesNotContain(source, "frame(height: 36)", "Row geometry must live in the shared slot, not per workbench")
     }
 
