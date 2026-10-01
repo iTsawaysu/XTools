@@ -4,6 +4,9 @@
     "近 7 日趋势" : {
       "extractionState" : "manual"
     },
+    "近 7 日启动" : {
+      "extractionState" : "manual"
+    },
     "近 7 日趋势:" : {
       "extractionState" : "manual"
     },
@@ -26,6 +29,9 @@
       "extractionState" : "manual"
     },
     "收录工具" : {
+      "extractionState" : "manual"
+    },
+    "今日" : {
       "extractionState" : "manual"
     },
     "累计启动" : {

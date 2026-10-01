@@ -85,7 +85,12 @@ public struct IndexBadge: View {
         if isSelected {
             return ToolTheme.selectionStroke
         }
-        return .clear
+        // 常态透色细描边：语义色同色低透明度（neutral 用中性发丝线），
+        // 让 soft 底的语义在浅填充上也读得出轮廓；静态零光晕。
+        if effectiveTone == .neutral {
+            return ToolTheme.border
+        }
+        return effectiveTone.tint.opacity(0.26)
     }
     
     private var font: Font {

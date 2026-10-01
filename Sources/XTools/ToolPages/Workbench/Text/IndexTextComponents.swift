@@ -66,6 +66,7 @@ final class IndexCaretTextView: NSTextView, IndexAsymmetricTextContainerSurface 
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
         if onFileDrop != nil && Self.hasDroppableFile(sender) {
+            activeDroppedFile?.setDropTargeted(true)
             return .copy
         }
         return super.draggingEntered(sender)
@@ -73,15 +74,27 @@ final class IndexCaretTextView: NSTextView, IndexAsymmetricTextContainerSurface 
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
         if onFileDrop != nil && Self.hasDroppableFile(sender) {
+            activeDroppedFile?.setDropTargeted(true)
             return .copy
         }
         return super.draggingUpdated(sender)
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) {
+        activeDroppedFile?.setDropTargeted(false)
+        super.draggingExited(sender)
+    }
+
+    override func draggingEnded(_ sender: NSDraggingInfo) {
+        activeDroppedFile?.setDropTargeted(false)
+        super.draggingEnded(sender)
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         guard onFileDrop != nil, let url = Self.droppedFileURL(sender) else {
             return super.performDragOperation(sender)
         }
+        activeDroppedFile?.setDropTargeted(false)
         loadDroppedFile(from: url)
         return true
     }
@@ -188,6 +201,14 @@ enum IndexDroppedTextOutcome: Sendable {
 @MainActor
 final class IndexDroppedTextFile: ObservableObject {
     @Published private(set) var rejection: IndexDroppedTextRejection?
+    /// 文件拖拽悬停态：由真正认领拖拽会话的 NSTextView 回调驱动
+    /// （draggingEntered/Updated 置 true，exited/ended/perform 置 false），
+    /// 供工作台在输入面上画 targeted 反馈——SwiftUI 外层 onDrop 收不到回调。
+    @Published private(set) var isDropTargeted = false
+
+    func setDropTargeted(_ targeted: Bool) {
+        isDropTargeted = targeted
+    }
     private weak var view: NSTextView?
     private let gate = AsyncWorkGate()
     private let reader: @Sendable (URL) async -> IndexDroppedTextOutcome
