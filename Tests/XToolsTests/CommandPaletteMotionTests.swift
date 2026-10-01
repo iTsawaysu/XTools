@@ -10,7 +10,9 @@ struct CommandPaletteMotionTests {
     @Test
     func visibilityGeometryIsAContinuousFunctionOfProgress() {
         // Wave 2: the palette rises/sinks `PaletteMotion.riseDistance` (8pt)
-        // across the full progress sweep (prototype cmdkRise).
+        // across the full progress sweep (prototype cmdkRise). Opacity and
+        // translation are the only channels — no scale that would resample
+        // the retained native-view subtree.
         var previous = CommandPaletteVisibilityGeometry.resolve(
             progress: 0,
             reduceMotion: false
@@ -27,18 +29,16 @@ struct CommandPaletteMotionTests {
         }
 
         #expect(previous.offsetY == 0)
-        #expect(previous.scale == 1)
     }
 
     @Test
-    func reduceMotionKeepsScaleAndOffsetFixedAcrossAllProgress() {
+    func reduceMotionKeepsOffsetFixedAndOpacityLinearAcrossAllProgress() {
         for progress in stride(from: CGFloat(0), through: 1, by: 0.05) {
             let geometry = CommandPaletteVisibilityGeometry.resolve(
                 progress: progress,
                 reduceMotion: true
             )
 
-            #expect(geometry.scale == 1)
             #expect(geometry.offsetY == 0)
             #expect(geometry.opacity == Double(progress))
         }
@@ -46,26 +46,25 @@ struct CommandPaletteMotionTests {
 
     // MARK: - Wave 2 palette choreography (prototype MOTION cmdk*)
 
-    /// Terminal values lock: open rise 8pt/240ms spring, close ~200ms spring
-    /// settle to 0.985, launcher-fast arcs (open 150ms, close/scrim 140ms),
-    /// no per-row arrival gate (content mounts visible), highlight spring.
+    /// Terminal values lock: open rise 8pt spring, ~140ms close settle,
+    /// launcher-fast arcs (open 150ms, close 140ms), no per-row arrival gate
+    /// (content mounts visible), highlight spring. No scale/scrim tokens:
+    /// the panel must not scale the native-view subtree and the scrim rides
+    /// the single progress interpolation.
     @Test
     func paletteMotionTokensMatchWave2Prototype() {
         #expect(ToolMotion.PaletteMotion.riseDistance == 8)
-        #expect(ToolMotion.PaletteMotion.settleScale == 0.985)
         // Springs keep the presentation retargetable (timing-curve variants
         // stalled real-window reversals); launcher-fast cadence.
         #expect(ToolMotion.PaletteMotion.open == Animation.spring(response: 0.15, dampingFraction: 0.95, blendDuration: 0))
         #expect(ToolMotion.PaletteMotion.close == Animation.spring(response: 0.14, dampingFraction: 1.0, blendDuration: 0))
-        #expect(ToolMotion.PaletteMotion.scrimIn == Animation.spring(response: 0.14, dampingFraction: 1.0, blendDuration: 0))
-        #expect(ToolMotion.PaletteMotion.scrimOut == Animation.spring(response: 0.14, dampingFraction: 1.0, blendDuration: 0))
         // Keyboard selection highlight: mature-launcher fast snap spring.
         #expect(ToolMotion.PaletteMotion.highlightSlide == Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0))
     }
 
     /// The open arc starts 8pt BELOW the resting position (prototype rises
-    /// up) and settles through the 0.985 close scale — one continuous
-    /// mapping for both directions.
+    /// up) and settles at the resting position — one continuous mapping for
+    /// both directions.
     @Test
     func visibilityGeometryMatchesWave2Endpoints() {
         let start = CommandPaletteVisibilityGeometry.resolve(
@@ -78,9 +77,9 @@ struct CommandPaletteMotionTests {
         )
 
         #expect(start.offsetY == ToolMotion.PaletteMotion.riseDistance)
-        #expect(start.scale == ToolMotion.PaletteMotion.settleScale)
+        #expect(start.opacity == 0)
         #expect(settled.offsetY == 0)
-        #expect(settled.scale == 1)
+        #expect(settled.opacity == 1)
 
         var previousOffset = start.offsetY
         for progress in stride(from: CGFloat(0.05), through: 1, by: 0.05) {
@@ -253,7 +252,7 @@ struct CommandPaletteMotionTests {
             followingSamples: samples[firstMountReopenIndex...],
             windowVisible: fixture.window.occlusionState.contains(.visible)
         ))
-        let firstField = try await Self.waitForReadyField(in: fixture, excluding: nil)
+        let firstField = try await Self.waitForReadyField(in: fixture)
         try await Self.waitForCondition(label: "first mount reopen terminal interpolation") {
             Self.flushMotion(in: fixture)
             return samples[firstMountReopenIndex...].contains {
@@ -294,6 +293,11 @@ struct CommandPaletteMotionTests {
         var previousField: NSTextField? = firstField
         for requestedDelayMilliseconds in [20, 50, 100] {
             #expect(!fixture.viewModel.showsCommandPalette)
+            // Between cycles the terminal close suspended the persistent
+            // field: it stays in the retained tree but disabled.
+            if let previousField {
+                #expect(!previousField.isEnabled)
+            }
             let cycleStartIndex = samples.count
             let openRequestedAt = ContinuousClock.now
             withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
@@ -366,14 +370,14 @@ struct CommandPaletteMotionTests {
             #expect(Self.isIntermediate(firstClosingSample.sample.progress))
             #expect(Self.isIntermediate(firstReopeningSample.sample.progress))
 
-            let currentField = try await Self.waitForReadyField(
-                in: fixture,
-                excluding: previousField
-            )
-            if let previousField {
-                #expect(currentField !== previousField)
-                #expect(!previousField.isEnabled)
-            }
+            // The persistent field survives every session reset: the reopen
+            // re-enables the SAME field instance, clears its text, and hands
+            // focus back to its field editor (waitForReadyField only accepts
+            // a focused, empty field editor owned by the fixture window).
+            let currentField = try await Self.waitForReadyField(in: fixture)
+            #expect(currentField === previousField)
+            #expect(currentField.stringValue.isEmpty)
+            #expect(currentField.isEnabled)
             previousField = currentField
 
             try await Self.waitForCondition(label: "reopen interpolation terminal") {
@@ -433,10 +437,8 @@ struct CommandPaletteMotionTests {
         withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.openCommandPalette()
         }
-        let coalescedOldField = try await Self.waitForReadyField(
-            in: fixture,
-            excluding: previousField
-        )
+        let coalescedField = try await Self.waitForReadyField(in: fixture)
+        #expect(coalescedField === previousField)
         try await Self.waitForCondition(label: "coalesced setup terminal interpolation") {
             Self.flushMotion(in: fixture)
             return samples.last.map {
@@ -454,12 +456,11 @@ struct CommandPaletteMotionTests {
             fixture.viewModel.commandPalettePresentationSession
                 > sessionBeforeCoalescedReset
         )
-        let coalescedNewField = try await Self.waitForReadyField(
-            in: fixture,
-            excluding: coalescedOldField
-        )
-        #expect(coalescedNewField !== coalescedOldField)
-        #expect(!coalescedOldField.isEnabled)
+        // The coalesced reset reuses the same persistent field: re-enabled,
+        // cleared, and refocused without a native rebuild.
+        let coalescedReusedField = try await Self.waitForReadyField(in: fixture)
+        #expect(coalescedReusedField === coalescedField)
+        #expect(coalescedReusedField.stringValue.isEmpty)
         #expect(
             !samples[coalescedStartIndex...].contains {
                 $0.observedShows == true && $0.sample.progress <= 0.001
@@ -494,7 +495,7 @@ struct CommandPaletteMotionTests {
         withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.openCommandPalette()
         }
-        let field = try await Self.waitForReadyField(in: fixture, excluding: nil)
+        let field = try await Self.waitForReadyField(in: fixture)
 
         withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.closeCommandPalette()
@@ -536,10 +537,7 @@ struct CommandPaletteMotionTests {
                 fixture.viewModel.commandPalettePresentationSession
                     == oddSessionStart + 5
             )
-            let focusedField = try await Self.waitForReadyField(
-                in: fixture,
-                excluding: nil
-            )
+            let focusedField = try await Self.waitForReadyField(in: fixture)
             try await Self.observePastFocusRetryDeadline(in: fixture)
             #expect(fixture.viewModel.showsCommandPalette)
             #expect(focusedField.isEnabled)
@@ -738,18 +736,17 @@ struct CommandPaletteMotionTests {
 
     @MainActor
     private static func waitForReadyField(
-        in fixture: CommandPaletteWindowFixture,
-        excluding excludedField: NSTextField?
+        in fixture: CommandPaletteWindowFixture
     ) async throws -> NSTextField {
         var result: NSTextField?
         try await waitForCondition(label: "current palette field layout and focus") {
             fixture.flush()
             result = Self.fields(in: fixture.hostingView).first { field in
-                guard field !== excludedField,
-                      field.accessibilityIdentifier() == "command-palette.search",
+                guard field.accessibilityIdentifier() == "command-palette.search",
                       field.window === fixture.window,
                       field.frame.width > 0,
                       field.frame.height > 0,
+                      field.stringValue.isEmpty,
                       let editor = field.currentEditor()
                 else {
                     return false

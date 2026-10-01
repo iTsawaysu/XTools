@@ -309,13 +309,15 @@ enum ToolMotion {
     }
 
     /// Wave 2 command-palette choreography (prototype MOTION d/x/s.cmdk*):
-    /// open = ~150ms near-critical spring rise (8pt) + fade while the scrim
-    /// dims on its own independent ~140ms arc; close and scrim ride ~140ms
-    /// critically damped springs settling toward the 0.985 scale. Open and
-    /// close share ONE continuous rise/sink distance and scale mapping so
-    /// rapid reversals never hard-switch the presentation geometry (contract:
-    /// `CommandPaletteVisibilityGeometry`). Rows mount visible with no
-    /// per-row stagger; the keyboard selection highlight snaps on the
+    /// open = ~150ms near-critical spring rise (8pt) + fade; close rides a
+    /// ~140ms critically damped spring. Open and close share ONE continuous
+    /// rise/sink distance and opacity mapping driven by the single panel
+    /// progress (the scrim dims through the same progress at a 0.30 ceiling),
+    /// so rapid reversals never hard-switch the presentation geometry
+    /// (contract: `CommandPaletteVisibilityGeometry`). Deliberately no scale
+    /// channel: scaling the panel would resample its retained native-view
+    /// subtree (~45 NSViews) on every interpolated frame. Rows mount visible
+    /// with no per-row stagger; the keyboard selection highlight snaps on the
     /// 0.2/1.0 fast spring with no stretch.
     enum PaletteMotion {
         /// Panel open: 8pt rise + fade on a ~150ms near-critical spring —
@@ -335,26 +337,10 @@ enum ToolMotion {
             dampingFraction: 1.0,
             blendDuration: 0
         )
-        /// Scrim dims in / out on its own ~140ms arc, independent of the
-        /// panel's open choreography. Critically damped so opacity never
-        /// overshoots.
-        static let scrimIn = Animation.spring(
-            response: 0.14,
-            dampingFraction: 1.0,
-            blendDuration: 0
-        )
-        static let scrimOut = Animation.spring(
-            response: 0.14,
-            dampingFraction: 1.0,
-            blendDuration: 0
-        )
         /// Unified rise/sink travel: open rises from 8pt below the resting
         /// position, close sinks the same 8pt while fading. One distance
         /// keeps reversal geometry continuous (cmdkRise / cmdkSink).
         static let riseDistance: CGFloat = 8
-        /// Panel settle scale at the closed end of the interpolation; the
-        /// open arc passes through the same settling scale (cmdkOut 0.985).
-        static let settleScale: CGFloat = 0.985
         /// Selection highlight slide, redone to match mature launchers
         /// (Raycast / Linear): a fast critically-damped snap that stays glued
         /// to the active row and retargets continuously under key repeat.

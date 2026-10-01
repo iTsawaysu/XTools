@@ -38,6 +38,12 @@ struct CommandPaletteRowAttachment: NSViewRepresentable {
             onMouseMove: onMouseMove
         )
 
+        // View-level reveal on this update pass deliberately does NOT call
+        // `rebindIfNeeded`: it only serves the pointer-move source and drives
+        // the row view in hand — no registry lookup — so the deferred-tick
+        // rebind stays off the SwiftUI update path. The registry-resolving
+        // paths (`revealImmediately`, visibility queries) keep their
+        // synchronous rebind where correctness requires it.
         guard let revealRequest, revealRequest.id == itemID else { return }
         view.reveal(request: revealRequest)
     }
@@ -76,6 +82,10 @@ final class CommandPaletteRevealRegistry: NSObject {
     private var manualScrollGenerationAtLatestKeyboardReveal = 0
     private var observedClipViews: [ObjectIdentifier: NSClipView] = [:]
     private var liveSession: Int?
+    /// Set while the live session is resumed but its rows are not yet
+    /// rebound (the open path defers the rebind to the next runloop tick).
+    private var pendingRebindSession: Int?
+    private var isRebindScheduled = false
 
     var debugEntryCount: Int {
         entries.count
@@ -114,6 +124,51 @@ final class CommandPaletteRevealRegistry: NSObject {
         liveSession = session
         resetRevealState()
 
+        // Open-frame load shedding: the O(rows) interaction rebind
+        // (resumeInteraction + scroll observers across ~45 native rows) rides
+        // the next runloop tick instead of the synchronous open pass. Any
+        // keyboard or visibility query that lands first rebinds synchronously
+        // (see `rebindIfNeeded`), so correctness never waits on the tick.
+        scheduleRebind(session: session)
+    }
+
+    /// True when `session` is live and its native rows are fully rebound
+    /// (no deferred rebind pending). Rows that were reconfigured after the
+    /// resume activate themselves through `register`, so the deferred tick
+    /// only covers entries left unbound by the resume itself.
+    func hasRebound(session: Int) -> Bool {
+        liveSession == session && pendingRebindSession == nil
+    }
+
+    private func scheduleRebind(session: Int) {
+        pendingRebindSession = session
+        guard !isRebindScheduled else { return }
+        isRebindScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.isRebindScheduled = false
+                guard let session = self.pendingRebindSession,
+                      self.liveSession == session
+                else {
+                    self.pendingRebindSession = nil
+                    return
+                }
+                self.pendingRebindSession = nil
+                self.rebindEntries(for: session)
+            }
+        }
+    }
+
+    /// Synchronous rebind path: interaction and visibility queries that land
+    /// before the deferred tick rebind first, then proceed.
+    private func rebindIfNeeded() {
+        guard let session = liveSession, !hasRebound(session: session) else { return }
+        pendingRebindSession = nil
+        rebindEntries(for: session)
+    }
+
+    private func rebindEntries(for session: Int) {
         for entry in entries.values {
             rebind(entry: entry, for: session)
         }
@@ -123,6 +178,7 @@ final class CommandPaletteRevealRegistry: NSObject {
         guard liveSession == session else { return }
 
         liveSession = nil
+        pendingRebindSession = nil
         resetRevealState()
         removeAllObservers()
 
@@ -199,6 +255,7 @@ final class CommandPaletteRevealRegistry: NSObject {
 
     func visibleEdgeSelectableIndex(direction: Int) -> Int? {
         guard liveSession != nil else { return nil }
+        rebindIfNeeded()
         pruneDeadEntries()
 
         var edgeIndex: Int?
@@ -222,6 +279,7 @@ final class CommandPaletteRevealRegistry: NSObject {
     /// instead of any estimated row capacity.
     func visibleSelectableCount() -> Int? {
         guard liveSession != nil else { return nil }
+        rebindIfNeeded()
         pruneDeadEntries()
 
         var count = 0
@@ -233,6 +291,7 @@ final class CommandPaletteRevealRegistry: NSObject {
 
     func isVisible(itemID: String) -> Bool {
         guard liveSession != nil else { return false }
+        rebindIfNeeded()
         pruneDeadEntries()
         guard let entry = entries[itemID] else { return false }
         return isVisible(entry)
@@ -284,6 +343,7 @@ final class CommandPaletteRevealRegistry: NSObject {
     }
 
     func revealImmediately(request: CommandPaletteRevealRequest) {
+        rebindIfNeeded()
         guard isLatestRevealRequest(request),
               let entry = entries[request.id],
               entry.session == request.session,

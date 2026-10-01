@@ -185,6 +185,65 @@ struct PaletteRecentsStoreTests {
         #expect(ids.filter { $0 == "tool.jwt-parser" }.count == 1)
     }
 
+    /// Warm ⌘K sessions ship a fresh preview UUID per open. The landing
+    /// cache keys on the STABLE actions (preview excluded) plus recents, so
+    /// the sections must be served from cache while the preview row still
+    /// carries each session's own UUID — never a stale one.
+    @Test func landingCacheServesWarmSessionsWithFreshPreviewSubtitles() {
+        let usage = FixedUsage(recents: [.jwt, .json], scores: [:])
+        let baseActions: [CommandActionEntry] = [
+            CommandActionEntry(
+                id: .toggleAppearance,
+                title: "切换主题",
+                subtitle: nil,
+                systemImage: "circle.lefthalf.filled"
+            )
+        ]
+
+        func previewActions(_ previewValue: String?) -> [CommandActionEntry] {
+            CommandActionEntry.paletteActions(
+                baseActions: baseActions,
+                previewValue: previewValue
+            )
+        }
+
+        let model = CommandPaletteSessionModel(
+            registry: .default,
+            actions: previewActions("uuid-first"),
+            session: 1,
+            usage: usage
+        )
+        // The first composition is a cold build: no cache hit yet.
+        #expect(model.landingCacheHitCount == 0)
+        #expect(Self.previewSubtitle(in: model.snapshot) == "uuid-first")
+
+        model.beginSession(2, actions: previewActions("uuid-second"))
+        #expect(model.landingCacheHitCount == 1)
+        #expect(Self.previewSubtitle(in: model.snapshot) == "uuid-second")
+
+        model.beginSession(3, actions: previewActions("uuid-third"))
+        #expect(model.landingCacheHitCount == 2)
+        #expect(Self.previewSubtitle(in: model.snapshot) == "uuid-third")
+
+        // The same rule applies through replaceActions: a preview-only
+        // change (stable actions unchanged) hits the cache — the exact
+        // warm-reopen scenario the cache exists for.
+        model.replaceActions(previewActions("uuid-fourth"))
+        #expect(model.landingCacheHitCount == 3)
+        #expect(Self.previewSubtitle(in: model.snapshot) == "uuid-fourth")
+    }
+
+    private static func previewSubtitle(
+        in snapshot: CommandPaletteRowSnapshot
+    ) -> String? {
+        for row in snapshot.rows {
+            if case .command(let entry) = row, entry.id == .copyGeneratedUUID {
+                return entry.subtitle
+            }
+        }
+        return nil
+    }
+
     @Test func queryRankingStaysIdenticalWithoutUsageData() {
         let model = CommandPaletteSessionModel(registry: .default, actions: [])
 

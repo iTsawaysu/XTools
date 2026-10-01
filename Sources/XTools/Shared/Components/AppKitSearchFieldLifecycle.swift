@@ -95,6 +95,23 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
         focusRequestGeneration &+= 1
     }
 
+    /// Live validity for a focus grab performed outside the token-scheduled
+    /// chain — the search field's window attachment. There is no single
+    /// captured request generation at that moment, so the grab must respect
+    /// the same invalidate/rearm flag and live-presentation guard as a
+    /// scheduled retry; that is what keeps a closed or replaced session from
+    /// stealing first responder on a late view attachment.
+    func canRequestFocusNow() -> Bool {
+        acceptsFocusRequests && canRequestFocus()
+    }
+
+    /// Re-arms focus scheduling after `invalidateFocusRequests`. The command
+    /// palette's search field persists across sessions, so a closed session's
+    /// invalidation must not poison the next session's focus requests.
+    func rearmFocusRequests() {
+        acceptsFocusRequests = true
+    }
+
     func controlTextDidBeginEditing(_ notification: Notification) {
         if let textField = notification.object as? NSTextField {
             AppKitTextEditingConfiguration.configureCurrentFieldEditor(for: textField)
@@ -140,19 +157,45 @@ enum AppKitSearchFieldLifecycle {
         commandHandler: AppKitSearchFieldCoordinator.CommandHandler? = nil,
         canRequestFocus: @escaping AppKitSearchFieldCoordinator.FocusRequestValidity = { true }
     ) -> NSTextField {
+        let textField = IndexPaddedTextField()
+        attach(
+            textField,
+            configuration: configuration,
+            text: text,
+            focusToken: focusToken,
+            coordinator: coordinator,
+            onFocusChange: onFocusChange,
+            commandHandler: commandHandler,
+            canRequestFocus: canRequestFocus
+        )
+        return textField
+    }
+
+    /// Shared field wiring behind `makeTextField`: live coordinator state,
+    /// geometry, editing delegate, and the session's first focus request.
+    /// Callers own the field instance — the command palette passes its
+    /// `CommandPaletteTextField` subclass so the lazily-mounted first-open
+    /// field can grab focus the moment it gains a window.
+    static func attach(
+        _ textField: NSTextField,
+        configuration: AppKitSearchFieldConfiguration,
+        text: Binding<String>,
+        focusToken: Int,
+        coordinator: AppKitSearchFieldCoordinator,
+        onFocusChange: ((Bool) -> Void)? = nil,
+        commandHandler: AppKitSearchFieldCoordinator.CommandHandler? = nil,
+        canRequestFocus: @escaping AppKitSearchFieldCoordinator.FocusRequestValidity = { true }
+    ) {
         coordinator.update(
             text: text,
             onFocusChange: onFocusChange,
             commandHandler: commandHandler,
             canRequestFocus: canRequestFocus
         )
-
-        let textField = IndexPaddedTextField()
         configure(textField, with: configuration)
         textField.delegate = coordinator
         textField.stringValue = text.wrappedValue
         coordinator.focus(textField, focusToken: focusToken)
-        return textField
     }
 
     static func update(
@@ -220,6 +263,23 @@ enum AppKitSearchFieldLifecycle {
                 )
             }
         }
+    }
+
+    /// Synchronous focus grab at the moment the field gains a window
+    /// (`viewDidMoveToWindow`): one guarded attempt with the same success
+    /// semantics as a scheduled link — first responder taken and the field
+    /// editor owned. A success makes the pending scheduled retries no-ops
+    /// (the `succeeded` guard); a failure (extreme attach timing) falls
+    /// through to them untouched.
+    @discardableResult
+    static func grabFocusOnWindowAttach(
+        _ textField: NSTextField,
+        isValid: AppKitSearchFieldCoordinator.FocusRequestValidity
+    ) -> Bool {
+        guard isValid(), textField.isEnabled, let window = textField.window,
+              window.makeFirstResponder(textField),
+              let editor = textField.currentEditor() else { return false }
+        return window.firstResponder === editor
     }
 
     private static func performFocusAttempt(

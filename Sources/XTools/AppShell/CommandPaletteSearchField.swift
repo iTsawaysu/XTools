@@ -4,10 +4,20 @@ import SwiftUI
 /// The palette's AppKit-backed search field: reliable arrow/Return/Escape
 /// handling that SwiftUI's TextField swallows, plus focus-token scheduling
 /// delegated to the shared `AppKitSearchFieldLifecycle`.
+///
+/// The native field instance persists across palette sessions (it never
+/// receives a per-session identity): rebuilding an NSTextField — first layout,
+/// field editor creation, focus retries — inside the visible open arc is what
+/// quantized the palette's fade-in into a brightness step on rapid ⌘K. Only
+/// its live state resets: `isSessionActive` gates native interaction, and the
+/// content lifecycle clears the text when a session opens.
 struct CommandPaletteSearchField: NSViewRepresentable {
     let placeholder: String
     @Binding var text: String
     let focusToken: Int
+    let isSessionActive: Bool
+    /// Diagnostics-only session tag (focus/native-ready traces); it never
+    /// drives field identity or attachment.
     let presentationSession: Int
     let canRequestFocus: AppKitSearchFieldCoordinator.FocusRequestValidity
     let contentLifecycle: CommandPaletteContentLifecycle
@@ -107,19 +117,24 @@ struct CommandPaletteSearchField: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSTextField {
-        let textField = AppKitSearchFieldLifecycle.makeTextField(
+        let coordinator = context.coordinator.search
+        let textField = CommandPaletteTextField()
+        AppKitSearchFieldLifecycle.attach(
+            textField,
             configuration: configuration,
             text: $text,
             focusToken: focusToken,
-            coordinator: context.coordinator.search,
+            coordinator: coordinator,
             commandHandler: commandHandler,
             canRequestFocus: canRequestFocus
         )
         textField.setAccessibilityIdentifier("command-palette.search")
+        textField.canGrabFocusOnWindowAttach = { [weak coordinator] in
+            coordinator?.canRequestFocusNow() ?? false
+        }
         contentLifecycle.attachSearchField(
             textField,
-            coordinator: context.coordinator.search,
-            session: presentationSession
+            coordinator: coordinator
         )
         CommandPaletteTrace.observeNativeReady(
             textField,
@@ -131,6 +146,10 @@ struct CommandPaletteSearchField: NSViewRepresentable {
 
     func updateNSView(_ textField: NSTextField, context: Context) {
         textField.setAccessibilityIdentifier("command-palette.search")
+        // The persistent field must follow live presentation readiness: a
+        // closed or replaced session disables native interaction in the same
+        // update that suspends the retained panel.
+        textField.isEnabled = isSessionActive
         AppKitSearchFieldLifecycle.update(
             textField,
             configuration: configuration,
@@ -142,8 +161,7 @@ struct CommandPaletteSearchField: NSViewRepresentable {
         )
         contentLifecycle.attachSearchField(
             textField,
-            coordinator: context.coordinator.search,
-            session: presentationSession
+            coordinator: context.coordinator.search
         )
         CommandPaletteTrace.observeNativeReady(
             textField,
@@ -180,5 +198,28 @@ struct CommandPaletteSearchField: NSViewRepresentable {
             || commandSelector == #selector(NSResponder.pageDown(_:))
             || commandSelector == #selector(NSResponder.insertNewline(_:))
             || commandSelector == #selector(NSResponder.cancelOperation(_:))
+    }
+}
+
+/// The palette's native search field. The retained palette subtree mounts
+/// lazily on the first open, so the field previously met its window only
+/// after the shared lifecycle's scheduled chain had already missed its
+/// next-runloop attempt — the [0.05, 0.15] retries then left the first
+/// ~50ms of the open arc without a cursor. Warm opens already focus
+/// synchronously in `commandPaletteDidOpen`; grabbing focus the moment the
+/// field gains a window gives the first open the same same-runloop
+/// semantics.
+final class CommandPaletteTextField: IndexPaddedTextField {
+    /// Live-request validity sourced from the field's coordinator
+    /// (`canRequestFocusNow`): the attach-time grab honors the same focus
+    /// invalidation and live-presentation guards as a scheduled retry, so a
+    /// closed or replaced session can never steal first responder on a late
+    /// attachment.
+    var canGrabFocusOnWindowAttach: AppKitSearchFieldCoordinator.FocusRequestValidity?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil, let isValid = canGrabFocusOnWindowAttach else { return }
+        AppKitSearchFieldLifecycle.grabFocusOnWindowAttach(self, isValid: isValid)
     }
 }

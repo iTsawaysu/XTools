@@ -865,26 +865,18 @@ private struct CommandPalettePresentationMotionModifier<
             content
                 .zIndex(0)
 
-            // Wave 2: the scrim dims on its own independent 200ms arc
-            // (prototype cmdkMask), separate from the panel's 240ms open.
+            // The scrim rides the same single progress interpolation as the
+            // panel with a 0.30 dim ceiling: one animatable owner keeps rapid
+            // open/close reversals continuous instead of queueing a second
+            // directional scrim animation beside the panel arc.
             scrim
-                .opacity(isPresented ? 1 : 0)
+                .opacity(geometry.opacity * 0.30)
                 .allowsHitTesting(isPresented)
                 .accessibilityHidden(!isPresented)
-                .animation(
-                    ToolMotion.animation(
-                        isPresented
-                            ? ToolMotion.PaletteMotion.scrimIn
-                            : ToolMotion.PaletteMotion.scrimOut,
-                        reduceMotion: reduceMotion
-                    ),
-                    value: isPresented
-                )
                 .zIndex(1)
 
             palette
                 .opacity(geometry.opacity)
-                .scaleEffect(geometry.scale)
                 .offset(y: geometry.offsetY)
                 .zIndex(2)
         }
@@ -895,7 +887,10 @@ private struct CommandPaletteScrim: View {
     let onDismiss: () -> Void
 
     var body: some View {
-        Color.black.opacity(0.30)
+        // The dim amount (0.30 ceiling) is applied by the presentation
+        // motion modifier through the shared progress, so the scrim itself
+        // stays a plain full-window black layer.
+        Color.black
             .ignoresSafeArea()
             .contentShape(Rectangle())
             .onTapGesture(perform: onDismiss)
@@ -997,6 +992,7 @@ private struct PaletteIconGhostView: View {
     let onFinished: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appeared = false
     @State private var arrived = false
 
     var body: some View {
@@ -1004,15 +1000,30 @@ private struct PaletteIconGhostView: View {
             .font(.system(size: ToolMetrics.IconSize.large, weight: .medium))
             .foregroundStyle(ToolTheme.accent)
             .scaleEffect(arrived ? 0.7 : 1)
-            .opacity(arrived ? 0 : 0.95)
+            // The ghost fades in from 0 to its 0.95 flight opacity instead of
+            // popping in at full strength on its first frame.
+            .opacity(arrived ? 0 : (appeared ? 0.95 : 0))
             .position(arrived ? flight.to : flight.from)
             .animation(ToolMotion.animation(ToolMotion.Preset.settle, reduceMotion: reduceMotion), value: arrived)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             .task(id: flight.token) {
+                // Every flight token restarts the appearance transition:
+                // without this reset a reused ghost would pop straight to
+                // flight opacity instead of fading in.
+                appeared = false
                 if !reduceMotion {
                     do {
                         try await Task.sleep(for: .milliseconds(16))
+                        try Task.checkCancellation()
+                    } catch {
+                        return
+                    }
+                    withToolAnimation(ToolMotion.Preset.settle) {
+                        appeared = true
+                    }
+                    do {
+                        try await Task.sleep(for: .milliseconds(140))
                         try Task.checkCancellation()
                     } catch {
                         return
@@ -1026,6 +1037,8 @@ private struct PaletteIconGhostView: View {
                     } catch {
                         return
                     }
+                } else {
+                    appeared = true
                 }
                 onFinished()
             }

@@ -12,6 +12,11 @@ import SwiftUI
 /// list: 最近使用 (frecency, capped) → 动作 → one section per tool category,
 /// mirroring the sidebar's mental model. A typed query keeps the ranked
 /// 动作 + 工具 structure with frecency refinement inside tiers.
+///
+/// The landing sections are cached under `(stableActions, recentToolIDs)` —
+/// excluding the per-session preview row — so a warm ⌘K reopen reuses them
+/// and only re-appends the fresh preview row at assembly time (see
+/// `makeLandingSnapshot`).
 @MainActor
 final class CommandPaletteSessionModel: ObservableObject {
     private enum LandingMetrics {
@@ -34,6 +39,36 @@ final class CommandPaletteSessionModel: ObservableObject {
         var actions: [CommandActionEntry]
         var actionRecords: [ToolSearchRecord]
     }
+
+    /// Landing-page cache. The cache KEY is `(stableActions, recentToolIDs)`
+    /// where `stableActions` excludes the per-session `.copyGeneratedUUID`
+    /// preview row, and the cached CONTENT is the preview-free composed
+    /// `[CommandPaletteSection]` (最近使用 + 动作(stable) + categories).
+    ///
+    /// A cache hit therefore requires only that the stable action list and
+    /// the frecency recents are unchanged — the fresh preview UUID per open
+    /// does not invalidate it. On a hit the current preview row (if
+    /// `paletteActions` produced one) is appended to the tail of the 动作
+    /// section (matching `CommandActionEntry.paletteActions` order) and the
+    /// final snapshot is assembled from value-type sections — cheap, with no
+    /// registry traversal. A real rebuild inside the visible open arc
+    /// quantizes the palette's fade-in into a brightness step, which is what
+    /// this cache removes.
+    private struct LandingCacheKey: Equatable {
+        let stableActions: [CommandActionEntry]
+        let recentToolIDs: [ToolID]
+    }
+
+    private struct LandingCacheEntry {
+        let key: LandingCacheKey
+        let sections: [CommandPaletteSection]
+    }
+
+    private var landingCache: LandingCacheEntry?
+
+    /// Blank-query snapshot requests served from the landing cache without
+    /// recomposing sections (test hook).
+    private(set) var landingCacheHitCount = 0
 
     @Published private var state: State
 
@@ -60,13 +95,37 @@ final class CommandPaletteSessionModel: ObservableObject {
     ) {
         self.registry = registry
         self.usage = usage
+        // One `now` for the whole cold composition: the sections and their
+        // cache key must read the same recents snapshot, or a snapshot taken
+        // across an instant boundary could cache sections that disagree with
+        // their own key.
+        let now = Date()
         let actionRecords = CommandActionEntry.searchRecords(for: actions)
-        let snapshot = Self.makeSnapshot(
+        // Cold landing composition: no cache exists before phase-one init
+        // completes, so the sections are built here and seed the cache.
+        let stableActions = actions.filter { $0.id != .copyGeneratedUUID }
+        let sections = Self.landingSections(
             registry: registry,
-            actions: actions,
-            actionRecords: actionRecords,
+            stableActions: stableActions,
             usage: usage,
-            query: ""
+            now: now
+        )
+        self.landingCache = LandingCacheEntry(
+            key: LandingCacheKey(
+                stableActions: stableActions,
+                recentToolIDs: usage.recentToolIDs(
+                    limit: LandingMetrics.recentsLimit,
+                    now: now
+                )
+            ),
+            sections: sections
+        )
+        CommandPaletteTrace.count(.rowSnapshot)
+        let snapshot = Self.assemblingLandingSnapshot(
+            sections: sections,
+            previewRows: actions
+                .filter { $0.id == .copyGeneratedUUID }
+                .map(CommandPaletteRowProjection.command)
         )
         self.state = State(
             session: session,
@@ -85,12 +144,10 @@ final class CommandPaletteSessionModel: ObservableObject {
             return
         }
         let actionRecords = CommandActionEntry.searchRecords(for: actions)
-        let snapshot = Self.makeSnapshot(
-            registry: registry,
+        let snapshot = makeSnapshot(
+            query: "",
             actions: actions,
-            actionRecords: actionRecords,
-            usage: usage,
-            query: ""
+            actionRecords: actionRecords
         )
         CommandPaletteTrace.count(.commandProjection, session: session)
         state = State(
@@ -106,12 +163,10 @@ final class CommandPaletteSessionModel: ObservableObject {
     @discardableResult
     func setQuery(_ newQuery: String) -> Bool {
         guard query != newQuery else { return false }
-        let snapshot = Self.makeSnapshot(
-            registry: registry,
+        let snapshot = makeSnapshot(
+            query: newQuery,
             actions: state.actions,
-            actionRecords: state.actionRecords,
-            usage: usage,
-            query: newQuery
+            actionRecords: state.actionRecords
         )
         CommandPaletteTrace.count(.commandProjection)
         var next = state
@@ -125,12 +180,10 @@ final class CommandPaletteSessionModel: ObservableObject {
     func replaceActions(_ newActions: [CommandActionEntry]) {
         guard state.actions != newActions else { return }
         let actionRecords = CommandActionEntry.searchRecords(for: newActions)
-        let snapshot = Self.makeSnapshot(
-            registry: registry,
+        let snapshot = makeSnapshot(
+            query: state.query,
             actions: newActions,
-            actionRecords: actionRecords,
-            usage: usage,
-            query: state.query
+            actionRecords: actionRecords
         )
         CommandPaletteTrace.count(.commandProjection)
         var next = state
@@ -198,14 +251,16 @@ final class CommandPaletteSessionModel: ObservableObject {
         )
     }
 
-    /// The blank-query landing page: usage-ranked recents first, then shell
-    /// commands, then every category with its tools in registry order.
-    private static func landingSnapshot(
+    /// The preview-free landing sections: usage-ranked recents first, then
+    /// the stable shell commands, then every category with its tools in
+    /// registry order. The per-session preview row is appended at snapshot
+    /// assembly time (see `makeLandingSnapshot`) so it never enters the cache.
+    private static func landingSections(
         registry: ToolRegistry,
-        actions: [CommandActionEntry],
+        stableActions: [CommandActionEntry],
         usage: any PaletteUsageScoring,
         now: Date
-    ) -> CommandPaletteRowSnapshot {
+    ) -> [CommandPaletteSection] {
         var sections: [CommandPaletteSection] = []
 
         let recentTools = usage.recentToolIDs(limit: LandingMetrics.recentsLimit, now: now)
@@ -224,10 +279,10 @@ final class CommandPaletteSessionModel: ObservableObject {
             ))
         }
 
-        if !actions.isEmpty {
+        if !stableActions.isEmpty {
             sections.append(CommandPaletteSection(
                 title: "动作",
-                rows: actions.map(CommandPaletteRowProjection.command)
+                rows: stableActions.map(CommandPaletteRowProjection.command)
             ))
         }
 
@@ -252,29 +307,26 @@ final class CommandPaletteSessionModel: ObservableObject {
             ))
         }
 
-        return CommandPaletteNavigationState.snapshot(sections: sections)
+        return sections
     }
 
-    private static func makeSnapshot(
-        registry: ToolRegistry,
+    /// Builds the row snapshot for `query`. A blank query composes the
+    /// landing page through the `(stableActions, recentToolIDs)` cache: a hit
+    /// reuses the preview-free sections and only re-appends the current
+    /// preview row before assembling the final snapshot; an actions or
+    /// recents change recomposes and refreshes the cache.
+    private func makeSnapshot(
+        query: String,
         actions: [CommandActionEntry],
-        actionRecords: [ToolSearchRecord],
-        usage: any PaletteUsageScoring,
-        query: String
+        actionRecords: [ToolSearchRecord]
     ) -> CommandPaletteRowSnapshot {
-        CommandPaletteTrace.count(.rowSnapshot)
-
         // A blank query composes the landing page instead of a flat list.
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return landingSnapshot(
-                registry: registry,
-                actions: actions,
-                usage: usage,
-                now: Date()
-            )
+            return makeLandingSnapshot(actions: actions)
         }
 
-        let projection = applyFrecencyBoost(
+        CommandPaletteTrace.count(.rowSnapshot)
+        let projection = Self.applyFrecencyBoost(
             ToolNavigationCommandProjection(registry: registry, query: query),
             usage: usage,
             now: Date()
@@ -302,5 +354,65 @@ final class CommandPaletteSessionModel: ObservableObject {
             actions: matchedActions.map(\.0),
             titleHighlightRangesByID: titleHighlightRangesByID
         )
+    }
+
+    /// The blank-query landing snapshot for `actions`: sections come from the
+    /// `(stableActions, recentToolIDs)` cache; the current preview row (if
+    /// any) is appended to the 动作 section tail at assembly time so a fresh
+    /// per-session preview UUID never misses the cache.
+    private func makeLandingSnapshot(actions: [CommandActionEntry]) -> CommandPaletteRowSnapshot {
+        let stableActions = actions.filter { $0.id != .copyGeneratedUUID }
+        let previewRows = actions
+            .filter { $0.id == .copyGeneratedUUID }
+            .map(CommandPaletteRowProjection.command)
+
+        let key = LandingCacheKey(
+            stableActions: stableActions,
+            recentToolIDs: usage.recentToolIDs(
+                limit: LandingMetrics.recentsLimit,
+                now: Date()
+            )
+        )
+        let sections: [CommandPaletteSection]
+        if let landingCache, landingCache.key == key {
+            landingCacheHitCount += 1
+            sections = landingCache.sections
+        } else {
+            CommandPaletteTrace.count(.rowSnapshot)
+            sections = Self.landingSections(
+                registry: registry,
+                stableActions: stableActions,
+                usage: usage,
+                now: Date()
+            )
+            landingCache = LandingCacheEntry(key: key, sections: sections)
+        }
+        return Self.assemblingLandingSnapshot(sections: sections, previewRows: previewRows)
+    }
+
+    /// Assembles the final landing snapshot: cached preview-free sections
+    /// plus the current preview rows appended to the 动作 section tail
+    /// (matching `CommandActionEntry.paletteActions` order). Pure value-type
+    /// section splicing — no registry traversal.
+    private static func assemblingLandingSnapshot(
+        sections: [CommandPaletteSection],
+        previewRows: [CommandPaletteRowProjection]
+    ) -> CommandPaletteRowSnapshot {
+        guard !previewRows.isEmpty else {
+            return CommandPaletteNavigationState.snapshot(sections: sections)
+        }
+        var finalSections = sections
+        if let actionSectionIndex = finalSections.firstIndex(where: { $0.title == "动作" }) {
+            finalSections[actionSectionIndex] = CommandPaletteSection(
+                title: finalSections[actionSectionIndex].title,
+                rows: finalSections[actionSectionIndex].rows + previewRows
+            )
+        } else {
+            // Defensive: `paletteActions` always appends the preview after the
+            // stable actions, so the 动作 section exists whenever a preview
+            // row does; a bare preview list still gets its own section.
+            finalSections.append(CommandPaletteSection(title: "动作", rows: previewRows))
+        }
+        return CommandPaletteNavigationState.snapshot(sections: finalSections)
     }
 }

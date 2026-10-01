@@ -37,10 +37,10 @@ struct CommandPalettePresentationTests {
         withToolAnimation(ToolMotion.Preset.modal) {
             fixture.viewModel.openCommandPalette()
         }
-        let oldField = try await Self.waitForReadyField(in: fixture)
-        let oldEditor = try #require(oldField.currentEditor() as? NSTextView)
-        let oldDelegate = try #require(oldField.delegate)
-        Self.replaceText("jwt", in: oldField, delegate: oldDelegate)
+        let field = try await Self.waitForReadyField(in: fixture)
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        let delegate = try #require(field.delegate)
+        Self.replaceText("jwt", in: field, delegate: delegate)
         var filteredRows: [CommandPaletteRevealView] = []
         try await Self.waitForCondition(label: "filtered palette rows") {
             fixture.flush()
@@ -53,59 +53,68 @@ struct CommandPalettePresentationTests {
         fixture.viewModel.openCommandPalette()
         fixture.flush()
         #expect(fixture.viewModel.commandPalettePresentationSession == 1)
-        #expect(oldField.stringValue == "jwt")
+        #expect(field.stringValue == "jwt")
 
         withToolAnimation(ToolMotion.Preset.modal) {
             fixture.viewModel.closeCommandPalette()
         }
-        #expect(oldField.stringValue == "jwt")
-        #expect(!oldField.isEnabled)
+        // The persistent field retains its text across close, but the close
+        // path suspends it: disabled, no field editor, rows retained.
+        #expect(field.stringValue == "jwt")
+        try await Self.waitForCondition(label: "closed palette field suspension") {
+            fixture.flush()
+            let ownsEditor = field.currentEditor().map {
+                fixture.window.firstResponder === $0
+            } ?? false
+            return !field.isEnabled && !ownsEditor
+        }
         #expect(
             Set(Self.commandPaletteRevealViews(in: fixture.hostingView).map(ObjectIdentifier.init))
                 == filteredRowIdentifiers
         )
         #expect(Self.sendCommand(
             #selector(NSResponder.insertNewline(_:)),
-            field: oldField,
-            editor: oldEditor,
-            delegate: oldDelegate
+            field: field,
+            editor: editor,
+            delegate: delegate
         ))
         #expect(fixture.viewModel.selectedToolID == selectionBeforeStaleCommand)
 
-        Self.replaceText("base64", in: oldField, delegate: oldDelegate)
+        Self.replaceText("base64", in: field, delegate: delegate)
         #expect(Self.sendCommand(
             #selector(NSResponder.cancelOperation(_:)),
-            field: oldField,
-            editor: oldEditor,
-            delegate: oldDelegate
+            field: field,
+            editor: editor,
+            delegate: delegate
         ))
         #expect(!fixture.viewModel.showsCommandPalette)
+        #expect(fixture.viewModel.selectedToolID == selectionBeforeStaleCommand)
 
+        // Reopening reuses the SAME persistent field: it is re-enabled,
+        // synchronously cleared for the new session, and refocused.
         fixture.activateWindow()
         withToolAnimation(ToolMotion.Preset.modal) {
             fixture.viewModel.openCommandPalette()
         }
-        #expect(Self.sendCommand(
-            #selector(NSResponder.insertNewline(_:)),
-            field: oldField,
-            editor: oldEditor,
-            delegate: oldDelegate
-        ))
-        #expect(fixture.viewModel.showsCommandPalette)
-        #expect(fixture.viewModel.selectedToolID == selectionBeforeStaleCommand)
+        let reopenedField = try await Self.waitForReadyField(in: fixture)
+        #expect(reopenedField === field)
+        #expect(reopenedField.isEnabled)
+        #expect(reopenedField.stringValue.isEmpty)
 
-        let newField = try await Self.waitForReadyField(in: fixture, excluding: oldField)
-        #expect(newField.stringValue.isEmpty)
-        Self.replaceText("regex", in: oldField, delegate: oldDelegate)
+        // The reused field is fully live in the new session: typing filters
+        // and Return activates through the same shared activation path.
+        let reopenedDelegate = try #require(reopenedField.delegate)
+        let reopenedEditor = try #require(reopenedField.currentEditor() as? NSTextView)
+        Self.replaceText("jwt", in: reopenedField, delegate: reopenedDelegate)
+        let expectedToolID = try #require(ToolRegistry.default.matchingTools(query: "jwt").first?.id)
         #expect(Self.sendCommand(
             #selector(NSResponder.insertNewline(_:)),
-            field: oldField,
-            editor: oldEditor,
-            delegate: oldDelegate
+            field: reopenedField,
+            editor: reopenedEditor,
+            delegate: reopenedDelegate
         ))
-        #expect(fixture.viewModel.showsCommandPalette)
-        #expect(fixture.viewModel.selectedToolID == selectionBeforeStaleCommand)
-        #expect(newField.stringValue.isEmpty)
+        #expect(!fixture.viewModel.showsCommandPalette)
+        #expect(fixture.viewModel.selectedToolID == expectedToolID)
     }
 
     @Test @MainActor
@@ -215,7 +224,11 @@ struct CommandPalettePresentationTests {
         }
         let secondPreview = try #require(fixture.viewModel.commandPalettePreviewValue)
         #expect(secondPreview != firstPreview)
-        let secondField = try await Self.waitForReadyField(in: fixture, excluding: firstField)
+        // The persistent search field is reused for the new session instead
+        // of being rebuilt with a fresh identity.
+        let secondField = try await Self.waitForReadyField(in: fixture)
+        #expect(secondField === firstField)
+        #expect(secondField.stringValue.isEmpty)
         let secondDelegate = try #require(secondField.delegate)
         Self.replaceText("生成并复制", in: secondField, delegate: secondDelegate)
         try await Self.waitForCondition(label: "reopened UUID preview row") {
@@ -519,8 +532,7 @@ struct CommandPalettePresentationTests {
 
     @MainActor
     private static func waitForReadyField(
-        in fixture: Fixture,
-        excluding excludedField: NSTextField? = nil
+        in fixture: Fixture
     ) async throws -> NSTextField {
         var readyField: NSTextField?
         try await waitForCondition(
@@ -529,8 +541,7 @@ struct CommandPalettePresentationTests {
         ) {
             fixture.flush()
             readyField = commandPaletteFields(in: fixture.hostingView).first { field in
-                guard field !== excludedField,
-                      field.window === fixture.window,
+                guard field.window === fixture.window,
                       field.frame.width > 0,
                       field.frame.height > 0,
                       let editor = field.currentEditor()

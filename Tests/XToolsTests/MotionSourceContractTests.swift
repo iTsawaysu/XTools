@@ -82,6 +82,8 @@ struct MotionSourceContractTests {
         contains(root, "withToolAnimation(ToolMotion.Preset.shellResize, reduceMotion: reduceMotion)", "Root shell explicit toggles must route through ToolMotion")
         contains(root, "PaletteIconGhostView(flight: flight", "v3: palette-to-title continuity must render through the shared decorative ghost")
         contains(root, "ToolMotion.animation(ToolMotion.Preset.settle, reduceMotion: reduceMotion), value: arrived)", "v3: the palette icon ghost must animate through the shared settle spring with Reduce Motion gating")
+        contains(root, ".opacity(arrived ? 0 : (appeared ? 0.95 : 0))", "v3: the palette icon ghost must fade in from 0 to its flight opacity instead of popping in at full strength")
+        contains(root, "appeared = false", "v3: every new flight token must restart the ghost's appearance transition instead of reusing the previous flight's full opacity")
         contains(root, ".task(id: flight.token)", "v3: replacing a palette icon flight must cancel the previous ghost task")
         contains(root, "try Task.checkCancellation()", "v3: a cancelled palette icon flight must not run its completion callback")
         contains(root, "guard self.flight?.token == flight.token else { return }", "v3: an old palette icon flight must not clear a newer flight")
@@ -649,7 +651,7 @@ struct MotionSourceContractTests {
         contains(motion, "static let open = Animation.spring(\n            response: 0.15,", "Open must ride the launcher-fast 150ms spring-family rise")
         contains(motion, "static let close = Animation.spring(\n            response: 0.14,", "Close must settle on the ~140ms critically damped exit spring")
         contains(motion, "static let riseDistance: CGFloat = 8", "The unified open-rise/close-sink travel is 8pt (prototype splits 8 in / 6 out)")
-        contains(motion, "static let settleScale: CGFloat = 0.985", "Close terminal scale must be 0.985")
+        doesNotContain(motion, "settleScale", "Panel motion must not scale the native-view subtree (~45 NSViews resample per interpolated frame)")
         contains(motion, "static let highlightSlide = Animation.spring(response: 0.2, dampingFraction: 1.0, blendDuration: 0)", "The highlight must snap on the mature-launcher fast spring, never the laggy pill spring")
 
         // Open/close share one directional animation owner; every close path
@@ -657,13 +659,17 @@ struct MotionSourceContractTests {
         contains(root, "presentation.shows\n                    ? ToolMotion.PaletteMotion.open\n                    : ToolMotion.PaletteMotion.close,", "One directional selector must own open vs close arcs")
         contains(root, "value: presentation.shows", "The palette arcs must stay keyed on the stable presentation state")
 
-        // The scrim dims on its own 200ms arc, independent of the panel.
-        contains(root, ".opacity(isPresented ? 1 : 0)", "The scrim must dim through presentation state, not the panel progress")
-        contains(root, "? ToolMotion.PaletteMotion.scrimIn\n                            : ToolMotion.PaletteMotion.scrimOut,", "The scrim must own its independent directional arcs")
+        // The scrim dims through the same single panel progress as the panel
+        // (0.30 ceiling); no independent directional scrim arcs may queue
+        // beside the panel's animation.
+        contains(root, ".opacity(geometry.opacity * 0.30)", "The scrim must dim through the single panel progress interpolation")
+        doesNotContain(root, "ToolMotion.PaletteMotion.scrim", "The scrim must not own an independent animation arc beside the panel progress")
 
-        // Geometry: one continuous mapping (no hard-switch on reversal).
+        // Geometry: one continuous mapping (no hard-switch on reversal), and
+        // no scale channel that would resample the native-view subtree.
         contains(commandPalette, "ToolMotion.PaletteMotion.riseDistance * (1 - progress)", "Offset must derive from the shared 8pt travel")
-        contains(commandPalette, "1 - (1 - ToolMotion.PaletteMotion.settleScale) * (1 - progress)", "Scale must settle through the 0.985 terminal value")
+        doesNotContain(commandPalette, "scaleEffect", "Panel motion must not scale the native-view subtree")
+        doesNotContain(commandPalette, "let scale: CGFloat", "Palette geometry must expose only opacity and translation channels")
 
         // Content is instantly visible: no per-row arrival gate exists, so
         // rapid ⌘K toggling never frames a blank list (mature launchers
@@ -672,7 +678,7 @@ struct MotionSourceContractTests {
         doesNotContain(commandPalette, "CommandPaletteRowArrivalModifier(", "Rows must mount fully visible; the panel arc owns the entrance")
         // The panel is an opaque indexSurface, never a transient system
         // material: materials flash a bright placeholder frame under the
-        // open/close opacity+scale arcs (the rapid-⌘K "white block").
+        // open/close opacity arc (the rapid-⌘K "white block").
         contains(commandPalette, ".indexSurface(", "The palette panel must use the unified opaque surface channel")
         doesNotContain(commandPalette, ".toolSurface(", "The palette panel must not use the transient system material")
 

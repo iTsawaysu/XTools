@@ -25,7 +25,6 @@ final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePres
     private var revealRequestToken = 0
     private weak var searchField: NSTextField?
     private weak var searchCoordinator: AppKitSearchFieldCoordinator?
-    private var searchSession: Int?
 
     init(
         session: Int,
@@ -51,6 +50,23 @@ final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePres
         withTransaction(ToolMotion.disabledTransaction) {
             sessionModel?.beginSession(session, actions: actions)
             resume(session: session)
+            // The persistent native field resets with the session while the
+            // panel is still invisible: the text is cleared here (beginSession
+            // already reset the model query) and focus scheduling is re-armed
+            // after the previous session's close invalidation.
+            searchField?.stringValue = ""
+            searchCoordinator?.rearmFocusRequests()
+            // Enable the persistent field ahead of the SwiftUI update pass and
+            // attempt focus on this runloop turn — waiting for the scheduled
+            // retry chain used to leave the first ~50ms of the open arc
+            // without a cursor. A failed attempt (the first open has no
+            // window yet) falls through to the [0.05, 0.15] retry chain; a
+            // succeeded one makes those retries no-ops (already first
+            // responder with the field editor owned).
+            if let field = searchField {
+                field.isEnabled = true
+                field.window?.makeFirstResponder(field)
+            }
             sessionRevealRequest = makeRevealRequest(
                 source: .openReset,
                 snapshot: sessionModel?.snapshot,
@@ -108,20 +124,16 @@ final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePres
 
     func attachSearchField(
         _ field: NSTextField,
-        coordinator: AppKitSearchFieldCoordinator,
-        session: Int
+        coordinator: AppKitSearchFieldCoordinator
     ) {
         searchField = field
         searchCoordinator = coordinator
-        searchSession = session
-        field.isEnabled = liveSession == session
     }
 
     func detachSearchField(_ field: NSTextField) {
         guard searchField === field else { return }
         searchField = nil
         searchCoordinator = nil
-        searchSession = nil
     }
 
     func commandPaletteDidClose(session: Int) {
@@ -130,7 +142,9 @@ final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePres
         revealRegistry.suspend(session: session)
         pointerMovementTracker.clear()
 
-        guard searchSession == session else { return }
+        // The persistent field stays in the retained tree after close, so the
+        // close path owns dropping its field editor and disabling input —
+        // exactly the editor teardown the per-session rebuild used to do.
         searchCoordinator?.invalidateFocusRequests()
         searchField?.isEnabled = false
         if let field = searchField,
@@ -232,17 +246,15 @@ struct CommandPaletteView: View {
         isPresentationReady && canRequestSearchFocus()
     }
 
-    private func isInputSessionLive(_ inputSession: Int) -> Bool {
-        inputSession == presentationSession
-            && inputSession == sessionModel.session
-            && isLiveSession()
-    }
-
-    private func queryBinding(inputSession: Int) -> Binding<String> {
+    /// Field callbacks guard on live presentation state instead of a
+    /// body-time captured session: the native field persists across
+    /// sessions, so only the live readiness checks can reject a replaced
+    /// or closed presentation.
+    private var queryBinding: Binding<String> {
         Binding(
             get: { sessionModel.query },
             set: { query in
-                guard isInputSessionLive(inputSession) else { return }
+                guard isLiveSession() else { return }
                 updateQuery(query)
             }
         )
@@ -580,7 +592,6 @@ struct CommandPaletteView: View {
         let _ = contentLifecycle.updateActions(actions)
         let snapshot = sessionModel.snapshot
         let activeItemID = sessionModel.navigationState.activeRowID(in: snapshot)
-        let inputSession = sessionModel.session
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: CommandPaletteMetrics.searchHeaderSpacing) {
                 Image(systemName: "magnifyingglass")
@@ -589,47 +600,47 @@ struct CommandPaletteView: View {
 
                 CommandPaletteSearchField(
                     placeholder: "搜索工具或命令…",
-                    text: queryBinding(inputSession: inputSession),
+                    text: queryBinding,
                     focusToken: focusToken,
-                    presentationSession: inputSession,
+                    isSessionActive: isPresentationReady,
+                    presentationSession: presentationSession,
                     canRequestFocus: {
-                        isInputSessionLive(inputSession)
+                        isLiveSession()
                     },
                     contentLifecycle: contentLifecycle,
                     onSubmit: {
-                        guard isInputSessionLive(inputSession) else { return }
+                        guard isLiveSession() else { return }
                         activateActive()
                     },
                     onMoveUp: {
-                        guard isInputSessionLive(inputSession) else { return }
+                        guard isLiveSession() else { return }
                         moveActive(by: -1)
                     },
                     onMoveDown: {
-                        guard isInputSessionLive(inputSession) else { return }
+                        guard isLiveSession() else { return }
                         moveActive(by: 1)
                     },
                     onMoveToFirst: {
-                        guard isInputSessionLive(inputSession) else { return }
+                        guard isLiveSession() else { return }
                         moveActiveToBoundary(delta: -1, targetIndex: 0)
                     },
                     onMoveToLast: {
-                        guard isInputSessionLive(inputSession) else { return }
+                        guard isLiveSession() else { return }
                         moveActiveToBoundary(delta: 1, targetIndex: .max)
                     },
                     onPageUp: {
-                        guard isInputSessionLive(inputSession) else { return }
+                        guard isLiveSession() else { return }
                         moveActiveByPage(delta: -1)
                     },
                     onPageDown: {
-                        guard isInputSessionLive(inputSession) else { return }
+                        guard isLiveSession() else { return }
                         moveActiveByPage(delta: 1)
                     },
                     onCancel: {
-                        guard isInputSessionLive(inputSession) else { return }
+                        guard isLiveSession() else { return }
                         onDismiss()
                     }
                 )
-                .id(inputSession)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .frame(height: 24)
 
@@ -675,9 +686,9 @@ struct CommandPaletteView: View {
         }
         .frame(width: 560)
         // Opaque surface, deliberately NOT the system material: a transient
-        // `.regular` material re-composites under the open/close opacity +
-        // scale arcs and flashes a bright placeholder frame (the “white
-        // block” on rapid ⌘K). The palette is also the densest reading
+        // `.regular` material re-composites under the open/close opacity arc
+        // and flashes a bright placeholder frame (the “white block” on rapid
+        // ⌘K). The palette is also the densest reading
         // surface, which the surface policy keeps opaque for readability.
         .indexSurface(
             .modal,
@@ -714,6 +725,10 @@ struct CommandPaletteView: View {
         .onChange(of: presentationSession) { _ in
             preparePresentationIfNeeded()
             highlightFlightAnimated = false
+            // A rapid reopen must not paint the floating highlight at the
+            // previous session's row frames before the list republishes
+            // anchors.
+            rowAnchors = [:]
         }
         .onChange(of: isPresented) { _ in
             preparePresentationIfNeeded()
@@ -728,14 +743,16 @@ struct CommandPaletteView: View {
 
 struct CommandPaletteVisibilityGeometry: Equatable {
     let opacity: Double
-    let scale: CGFloat
     let offsetY: CGFloat
 
-    /// Wave 2 prototype mapping (MOTION cmdkIn/cmdkOut): the panel rises
-    /// from `riseDistance` below while fading in, settling through the
-    /// `settleScale` scale; close reverses the same continuous function on
-    /// the exit arc. One shared mapping keeps rapid open/close reversals
-    /// continuous — the presentation never hard-switches geometry mid-flight.
+    /// Presentation mapping (MOTION cmdkIn/cmdkOut): the panel rises from
+    /// `riseDistance` below while fading in; close reverses the same
+    /// continuous function on the exit arc. One shared mapping keeps rapid
+    /// open/close reversals continuous — the presentation never hard-switches
+    /// geometry mid-flight. Deliberately opacity+translation only: a scale
+    /// channel would resample the retained native-view subtree (~45 NSViews)
+    /// on every interpolated frame and quantize the open arc into brightness
+    /// steps.
     static func resolve(
         progress: CGFloat,
         reduceMotion: Bool
@@ -743,9 +760,6 @@ struct CommandPaletteVisibilityGeometry: Equatable {
         let progress = min(max(progress, 0), 1)
         return Self(
             opacity: Double(progress),
-            scale: reduceMotion
-                ? 1
-                : 1 - (1 - ToolMotion.PaletteMotion.settleScale) * (1 - progress),
             offsetY: reduceMotion
                 ? 0
                 : ToolMotion.PaletteMotion.riseDistance * (1 - progress)
