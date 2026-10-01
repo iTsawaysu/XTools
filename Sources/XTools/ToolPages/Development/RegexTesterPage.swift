@@ -2,7 +2,7 @@ import SwiftUI
 import XToolsCore
 
 @MainActor
-final class RegexToolWorkspaceModel: ObservableObject {
+final class RegexToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicting {
     static let key = ToolWorkspaceKey<RegexToolWorkspaceModel>(toolID: "regex-tester") { _ in
         RegexToolWorkspaceModel()
     }
@@ -43,6 +43,13 @@ final class RegexToolWorkspaceModel: ObservableObject {
         pattern = ""
         flags = "g"
         text = ""
+    }
+
+    /// 离开工具时释放匹配报告（可达 10k 匹配 + 捕获记录）与挂起的防抖执行；
+    /// pattern/flags/text 草稿保留，回到工具后下一次编辑照常重跑。
+    func evictHeavyPayloads() {
+        debouncer.cancel()
+        execution.invalidate()
     }
 }
 

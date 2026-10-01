@@ -33,7 +33,14 @@ final class SourceControlWorkspaceModel: ObservableObject {
     @Published private(set) var scanProgress: SourceControlScanProgress?
     @Published private(set) var isUpdating = false
     @Published private(set) var diagnostic: SourceControlDiagnostic?
-    @Published private(set) var operationResults: [SourceControlOperationResult] = []
+    /// 行内操作结果按仓库 id（= path）字典存储：模型侧一次写入，行渲染
+    /// 读取 O(1)——此前每行 5 处 `last(where:)` 线性扫 + 每轮渲染重建
+    /// outcomesByID 字典是 O(n²) churn。写入方保持「同仓库后写覆盖」语义，
+    /// 与旧数组的 removeAll+append 一致。
+    @Published private(set) var operationResultsByID: [String: SourceControlOperationResult] = [:]
+    /// operationResultsByID 的变更代数：sortedForDisplay 的 memoize 以此
+    /// 识别结果集身份，避免无变化时每轮 body 重建排序。
+    private var operationResultsGeneration = 0
     @Published private(set) var failureSummary: [UpdateFailureSummary] = []
     @Published private(set) var lastCompletion: UpdateCompletionSummary?
     /// 持久保留的最近一次批量结果计数（汇总条数据源）；新扫描/改路径清除。
@@ -100,8 +107,15 @@ final class SourceControlWorkspaceModel: ObservableObject {
 
     func appendOperationResult(_ result: SourceControlOperationResult, generation expectedGeneration: Int? = nil) {
         if let expectedGeneration, expectedGeneration != generation { return }
-        operationResults.removeAll { $0.repository.id == result.repository.id }
-        operationResults.append(result)
+        operationResultsByID[result.repository.id] = result
+        operationResultsGeneration &+= 1
+    }
+
+    /// 结果集整体替换（清空/重置）：所有清空路径统一走这里以推进 memoize 代数。
+    private func replaceOperationResults(_ newValue: [String: SourceControlOperationResult]) {
+        if newValue.isEmpty, operationResultsByID.isEmpty { return }
+        operationResultsByID = newValue
+        operationResultsGeneration &+= 1
     }
 
     func setPath(_ value: String) {
@@ -119,7 +133,7 @@ final class SourceControlWorkspaceModel: ObservableObject {
         selectedPaths = []
         scanProgress = nil
         diagnostic = nil
-        operationResults = []
+        replaceOperationResults([:])
         failureSummary = []
         lastRunSummary = nil
         lastScanFoundNothing = false
@@ -154,7 +168,7 @@ final class SourceControlWorkspaceModel: ObservableObject {
         lastScanFoundNothing = false
         // 手动重扫意味着重新观察现场：上次运行的行内结果徽章一并作废，
         // 避免展示与新鲜扫描数据矛盾的「已更新/已跳过」。
-        operationResults = []
+        replaceOperationResults([:])
         task = Task { [weak self] in
             guard let self else { return }
             do {
@@ -272,7 +286,7 @@ final class SourceControlWorkspaceModel: ObservableObject {
     func forceUpdateSkipped() {
         guard !isScanning, !isUpdating else { return }
         let targets = repositories.filter { repository in
-            guard let outcome = operationResults.last(where: { $0.repository.id == repository.id })?.outcome else { return false }
+            guard let outcome = operationResultsByID[repository.id]?.outcome else { return false }
             if case .skipped = outcome { return true }
             return false
         }
@@ -305,11 +319,18 @@ final class SourceControlWorkspaceModel: ObservableObject {
         isUpdating = true
         diagnostic = nil
         if resetResults {
-            operationResults = []
+            replaceOperationResults([:])
             failureSummary = []
         } else {
-            let targetIDs = Set(targets.map(\.id))
-            operationResults.removeAll { targetIDs.contains($0.repository.id) }
+            var results = operationResultsByID
+            var mutated = false
+            for target in targets where results[target.id] != nil {
+                results.removeValue(forKey: target.id)
+                mutated = true
+            }
+            if mutated {
+                replaceOperationResults(results)
+            }
         }
         updateRunCompleted = 0
         updateRunTotal = targets.count
@@ -349,15 +370,48 @@ final class SourceControlWorkspaceModel: ObservableObject {
 
     /// 列表展示排序：需要用户关注的状态靠前，已最新垫底。
     /// 失败 > 待更新 > 需处理（含被跳过）> 已更新 > 已最新，同级按路径自然序。
+    /// 输入（可见行集合 + 结果集代数）未变时直接复用上次排序输出：排序的
+    /// localizedStandardCompare 是行渲染热路径里最贵的一步。
     func sortedForDisplay(_ repositories: [SourceControlRepository]) -> [SourceControlRepository] {
-        Self.displayOrder(of: repositories, results: operationResults)
+        if displayOrderCacheHasInput,
+           displayOrderCacheInput == repositories,
+           displayOrderCacheResultsGeneration == operationResultsGeneration {
+            return displayOrderCacheOutput
+        }
+        let sorted = Self.displayOrder(
+            of: repositories,
+            outcomesByID: operationResultsByID.mapValues(\.outcome)
+        )
+        displayOrderCacheHasInput = true
+        displayOrderCacheInput = repositories
+        displayOrderCacheResultsGeneration = operationResultsGeneration
+        displayOrderCacheOutput = sorted
+        return sorted
     }
 
+    private var displayOrderCacheHasInput = false
+    private var displayOrderCacheInput: [SourceControlRepository] = []
+    private var displayOrderCacheResultsGeneration = -1
+    private var displayOrderCacheOutput: [SourceControlRepository] = []
+
+    /// 测试与旧调用方保留的数组入口；内部统一走字典版本。
     static func displayOrder(
         of repositories: [SourceControlRepository],
         results: [SourceControlOperationResult]
     ) -> [SourceControlRepository] {
-        let outcomesByID = Dictionary(results.map { ($0.repository.id, $0.outcome) }, uniquingKeysWith: { _, last in last })
+        displayOrder(
+            of: repositories,
+            outcomesByID: Dictionary(
+                results.map { ($0.repository.id, $0.outcome) },
+                uniquingKeysWith: { _, last in last }
+            )
+        )
+    }
+
+    static func displayOrder(
+        of repositories: [SourceControlRepository],
+        outcomesByID: [String: SourceControlOperationOutcome]
+    ) -> [SourceControlRepository] {
         func attentionRank(_ repository: SourceControlRepository) -> Int {
             if case .failed = outcomesByID[repository.id] { return 0 }
             if repository.isFastForwardCandidate, repository.behind > 0 { return 1 }
@@ -375,11 +429,10 @@ final class SourceControlWorkspaceModel: ObservableObject {
 
     /// 从本次运行的目标推导类型化完成计数与失败汇总。
     private func publishCompletion(for targets: [SourceControlRepository]) {
-        let outcomesByID = Dictionary(operationResults.map { ($0.repository.id, $0.outcome) }, uniquingKeysWith: { _, last in last })
         var updated = 0, upToDate = 0, skipped = 0, failed = 0
         var failures: [UpdateFailureSummary] = []
         for target in targets {
-            switch outcomesByID[target.id] {
+            switch operationResultsByID[target.id]?.outcome {
             case .updated: updated += 1
             case .upToDate: upToDate += 1
             case .skipped: skipped += 1
@@ -467,6 +520,10 @@ private struct SourceControlWorkspaceContent: View {
     /// Shift 范围选择的锚点行。
     @State private var lastClickedPath: String?
     @State private var showsFailureSheet = false
+    /// 目录输入的本地草稿：路径改用 commit-on-submit 语义（回车/失焦才
+    /// setPath）。此前每个按键都会取消运行中的扫描、推进 generation、同步
+    /// 写偏好存储并清空全部扫描派生态——逐字输入等于连续自毁现场。
+    @State private var pathDraft = ""
 
     private var visibleRepositories: [SourceControlRepository] {
         let query = repositoryQuery.trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase
@@ -524,7 +581,8 @@ private struct SourceControlWorkspaceContent: View {
                 .keyboardShortcut(.cancelAction)
                 .disabled(!(workspace.isScanning || workspace.isUpdating))
                 .accessibilityHidden(true)
-            Button("") { workspace.scan() }
+            // ⌘R 不经过字段失焦：扫描前先提交草稿，语义与回车一致。
+            Button("") { scanFromCommittedPath() }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(!workspace.canScan)
                 .accessibilityHidden(true)
@@ -573,13 +631,23 @@ private struct SourceControlWorkspaceContent: View {
 
     /// 目录栏：路径输入 + 尾部内嵌的目录选择与扫描/取消图标按钮，
     /// 与 IndexSearchInput 的清空按钮同一形态，避免扫描动作独占一个按钮位。
+    /// 输入过程只写本地草稿；回车（onSubmit）或失焦（onFocusChange false）
+    /// 才提交 setPath——与仓库 IndexNumberInput 的提交语义一致。
     private var directoryField: some View {
         let isBusy = workspace.isScanning || workspace.isUpdating
         return IndexTextInput(
             placeholder: "工作区目录，例如 ~/work",
-            text: Binding(get: { workspace.path }, set: workspace.setPath),
+            text: $pathDraft,
             trailingInset: 80,
-            onSubmit: { workspace.scan() }
+            onSubmit: { scanFromCommittedPath() },
+            onFocusChange: { focused in
+                if focused {
+                    // 进入编辑以已提交路径为草稿基线（IndexNumberInput 同款）。
+                    pathDraft = workspace.path
+                } else {
+                    commitPath()
+                }
+            }
         )
         .overlay(alignment: .trailing) {
             HStack(spacing: 2) {
@@ -593,7 +661,7 @@ private struct SourceControlWorkspaceContent: View {
                 IndexIconButton(
                     systemImage: isBusy ? "xmark" : "arrow.clockwise",
                     help: isBusy ? "取消" : "扫描仓库",
-                    action: { isBusy ? workspace.cancel() : workspace.scan() }
+                    action: { isBusy ? workspace.cancel() : scanFromCommittedPath() }
                 )
                 .frame(width: 32, height: 32)
                 .toolMotionIconSwap(id: isBusy)
@@ -604,6 +672,31 @@ private struct SourceControlWorkspaceContent: View {
             .arrowCursorOnHover()
         }
         .accessibilityElement(children: .contain)
+        .onAppear { pathDraft = workspace.path }
+        // 目录选择面板等外部路径变更始终回写草稿：点击按钮不必然先结束
+        // 字段编辑，权威路径落地后草稿必须跟随，避免失焦时用旧草稿覆盖。
+        .onChange(of: workspace.path) { newPath in pathDraft = newPath }
+    }
+
+    /// 把草稿提交到 workspace；空草稿不提交（避免误清已记住的目录），
+    /// 与已提交路径等价时也不重复触发 setPath 的全状态重置。
+    private func commitPath() {
+        let trimmed = pathDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            pathDraft = workspace.path
+            return
+        }
+        if trimmed == workspace.path.trimmingCharacters(in: .whitespacesAndNewlines) {
+            pathDraft = workspace.path
+            return
+        }
+        workspace.setPath(trimmed)
+    }
+
+    /// ⌘R / 扫描按钮共用：先落盘草稿再扫描，保证扫描用的一定是输入框里可见的路径。
+    private func scanFromCommittedPath() {
+        commitPath()
+        workspace.scan()
     }
 
     private var repositoryPanel: some View {
@@ -781,7 +874,7 @@ private struct SourceControlWorkspaceContent: View {
         let isSelected = workspace.selectedPaths.contains(repository.path)
         let isActive = workspace.activeUpdatePath == repository.path
         // 行内重试回放当时的快照（拉取前执行器会重新校验磁盘状态）。
-        let failedResult = workspace.operationResults.last(where: { $0.repository.id == repository.id })
+        let failedResult = workspace.operationResultsByID[repository.id]
         let hasFailure = failedResult?.outcome.isFailure == true
         return HStack(spacing: 8) {
             Button {
@@ -952,13 +1045,13 @@ private struct SourceControlWorkspaceContent: View {
 
     /// 行尾「强制更新」入口只挂在被跳过的行上（结果类型驱动，不解析文案）。
     private func skippedResult(of repository: SourceControlRepository) -> SourceControlOperationResult? {
-        guard let result = workspace.operationResults.last(where: { $0.repository.id == repository.id }),
+        guard let result = workspace.operationResultsByID[repository.id],
               case .skipped = result.outcome else { return nil }
         return result
     }
 
     private func repositoryStatusTitle(_ repository: SourceControlRepository) -> String {
-        if let result = workspace.operationResults.last(where: { $0.repository.id == repository.id }) {
+        if let result = workspace.operationResultsByID[repository.id] {
             switch result.outcome {
             case .updated: return "已更新"
             case .upToDate: return "已最新"
@@ -975,7 +1068,7 @@ private struct SourceControlWorkspaceContent: View {
     /// 避免与右侧状态徽章重复的「与远端一致」填充文案。
     private func repositoryDetail(_ repository: SourceControlRepository) -> String? {
         if workspace.activeUpdatePath == repository.path { return "正在拉取最新代码…" }
-        if let result = workspace.operationResults.last(where: { $0.repository.id == repository.id }),
+        if let result = workspace.operationResultsByID[repository.id],
            case let .failed(diagnostic) = result.outcome {
             return diagnostic.summary
         }
@@ -1002,7 +1095,7 @@ private struct SourceControlWorkspaceContent: View {
     }
 
     private func repositoryStatusTone(_ repository: SourceControlRepository) -> IndexBadgeTone {
-        if let result = workspace.operationResults.last(where: { $0.repository.id == repository.id }) {
+        if let result = workspace.operationResultsByID[repository.id] {
             switch result.outcome {
             case .updated, .upToDate: return .success
             case .failed: return .warning

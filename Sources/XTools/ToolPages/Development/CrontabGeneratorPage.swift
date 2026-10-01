@@ -89,7 +89,7 @@ private struct IndexCrontabWorkspaceContent: View {
                 IndexTextInput(placeholder: "*/5 * * * *", text: $workspace.expression, height: 44, alignment: .center)
                     .font(ToolTypography.valueMedium)
                     .onChange(of: workspace.expression) { _ in
-                        workspace.debouncer.schedule(.milliseconds(250)) { validate() }
+                        workspace.debouncer.schedule(IndexDebouncer.keystrokeDebounce) { validate() }
                     }
                     .indexWorkspaceDiagnostic(workspace.error)
             }

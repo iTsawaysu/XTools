@@ -30,9 +30,10 @@ enum AppThemePreference: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .system: return "主题:跟随系统"
-        case .light: return "主题:浅色"
-        case .dark: return "主题:深色"
+        // 中文排版惯例：标签与值之间用全角冒号。
+        case .system: return "主题：跟随系统"
+        case .light: return "主题：浅色"
+        case .dark: return "主题：深色"
         }
     }
 
@@ -620,10 +621,14 @@ struct RootView: View {
                 .keyboardShortcut(",", modifiers: .command)
 
             ForEach(Array(registry.categoryGroups().enumerated()), id: \.offset) { index, group in
-                Button("Category \(group.category.title)") {
-                    _ = navigationActions.selectCategory(at: index)
+                // 只给前 9 个分类赋 ⌘1-⌘9：第 10 个分类的 Character("10")
+                // 会在 body 求值期触发 precondition 崩溃。
+                if index < 9 {
+                    Button("Category \(group.category.title)") {
+                        _ = navigationActions.selectCategory(at: index)
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
                 }
-                .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
             }
 
             Button("Cancel", action: cancelCurrentMode)

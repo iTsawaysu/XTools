@@ -2,7 +2,7 @@ import XToolsCore
 import SwiftUI
 
 @MainActor
-final class DiffToolWorkspaceModel: ObservableObject {
+final class DiffToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicting {
     @Published var left = "" {
         didSet { draftDidChange() }
     }
@@ -56,6 +56,12 @@ final class DiffToolWorkspaceModel: ObservableObject {
             left = ""
             right = ""
         }
+    }
+
+    /// 离开工具时释放对齐后的 diff 行集（大文本可达十数 MB）；输入草稿保留，
+    /// 回到工具后下一次编辑会照常重算（对齐 Base64/图片的 evict 语义）。
+    func evictHeavyPayloads() {
+        execution.invalidate(resetTo: DiffExecutionBinding())
     }
 
     private func draftDidChange() {

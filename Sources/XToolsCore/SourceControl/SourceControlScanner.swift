@@ -196,11 +196,6 @@ private func cleanLine(_ value: String?) -> String {
     value?.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
 }
 
-private func cleanSHA(_ value: String?) -> String? {
-    guard let line = value?.split(whereSeparator: \.isNewline).first else { return nil }
-    return line.split(whereSeparator: \.isWhitespace).first.map(String.init)
-}
-
 private func cleanLines(_ value: String?) -> [String] { value?.split(whereSeparator: \.isNewline).map(String.init) ?? [] }
 
 private func parseRemote(_ lines: [String]) -> (name: String?, url: String?) {

@@ -8,11 +8,15 @@ public struct JSONExactTextIdentity: Hashable, Comparable, Sendable {
     /// 与构造两个 identity 后 `==` 完全等价的字节级比较，但不做任何拷贝。
     /// 大文本的"是否需要 setText"守卫应走这条零分配路径。
     public static func isExactlyEqual(_ left: String, _ right: String) -> Bool {
-        left.utf8.elementsEqual(right.utf8)
+        // O(1) 长度早退：每键守卫的常见情形是「长度不同 → 必不等」（输入框
+        // 旧值 vs 编辑器新值），先比计数可把原 O(文档) 的逐字节遍历降为 O(1)；
+        // 等长时再走逐字节，语义与原实现完全一致。
+        guard left.utf8.count == right.utf8.count else { return false }
+        return left.utf8.elementsEqual(right.utf8)
     }
 
     public static func == (left: Self, right: Self) -> Bool {
-        left.text.utf8.elementsEqual(right.text.utf8)
+        isExactlyEqual(left.text, right.text)
     }
 
     public func hash(into hasher: inout Hasher) {

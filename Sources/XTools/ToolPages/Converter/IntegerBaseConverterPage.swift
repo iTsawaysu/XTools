@@ -38,7 +38,7 @@ final class IntegerBaseToolWorkspaceModel: ObservableObject {
     init(
         preferences: ToolPreferenceStore,
         synchronousDigitLimit: Int = 128,
-        backgroundDebounce: Duration = .milliseconds(180),
+        backgroundDebounce: Duration = IndexDebouncer.keystrokeDebounce,
         renderer: @escaping IntegerBasePreparedRenderer = IntegerBaseConverter.conversions(from:),
         backgroundRenderer: IntegerBaseBackgroundRenderer? = nil
     ) {

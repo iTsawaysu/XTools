@@ -84,4 +84,43 @@ struct WorkspacePayloadEvictionTests {
         #expect(jwt.session.generateSecret == "secret-stays")
         #expect(jwt.session.generatePayload == #"{"sub":"x"}"#)
     }
+
+    @Test func diffWorkspaceEvictsRowsButKeepsDrafts() async {
+        let workspace = DiffToolWorkspaceModel(kind: .text)
+        workspace.left = "alpha\nbeta\n"
+        workspace.right = "alpha\ngamma\n"
+        // 等待防抖后的 diff 计算落地，让 binding 持有对齐行集。
+        let deadline = Date().addingTimeInterval(5)
+        while workspace.diffRows.isEmpty, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(!workspace.diffRows.isEmpty)
+
+        workspace.evictHeavyPayloads()
+        #expect(workspace.diffRows.isEmpty)
+        #expect(workspace.left == "alpha\nbeta\n")
+        #expect(workspace.right == "alpha\ngamma\n")
+        #expect(workspace.execution.isRunning == false)
+    }
+
+    @Test func regexWorkspaceEvictsReportButKeepsDrafts() async {
+        let repository = ToolWorkspaceRepository(defaults: Self.defaults())
+        let workspace = repository.model(for: RegexToolWorkspaceModel.key)
+        workspace.pattern = "a+"
+        workspace.text = "aaa bb aaa"
+        // 页面经由 debouncer 触发执行；测试直接执行同一入口即可拿到报告。
+        workspace.execution.run(pattern: workspace.pattern, text: workspace.text, flags: workspace.flags)
+        let deadline = Date().addingTimeInterval(5)
+        while workspace.execution.report == nil, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(workspace.execution.report != nil)
+
+        workspace.evictHeavyPayloads()
+        #expect(workspace.execution.report == nil)
+        #expect(workspace.execution.reportSourceText == nil)
+        #expect(workspace.execution.isRunning == false)
+        #expect(workspace.pattern == "a+")
+        #expect(workspace.text == "aaa bb aaa")
+    }
 }

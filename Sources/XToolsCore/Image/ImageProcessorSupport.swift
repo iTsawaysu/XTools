@@ -6,6 +6,21 @@ import ImageIO
 import UniformTypeIdentifiers
 
 
+/// CIContext 按 Apple 文档是线程安全的，但其声明不是 Sendable；这个
+/// 包装向 Swift 6 显式声明该事实。进程级共享一个 context 避免每次
+/// 透明度检测/灰度渲染都冷启动 Metal 管线；cacheIntermediates:false
+/// 让两条纯函数渲染路径互不残留状态。
+private final class SharedCIContextBox: @unchecked Sendable {
+    let context = CIContext(options: [.cacheIntermediates: false])
+}
+
+extension ImageProcessor {
+    /// 为什么不按调用建 context：transparencyState 与 renderGrayscale 每次新建
+    /// 都付出 Metal 设备/管线编译的冷启动成本；输出均为纯函数 CGImage，共享
+    /// 无状态冲突。参考 EmojiStringCache 的 @unchecked Sendable 先例。
+    fileprivate static let sharedCIContext = SharedCIContextBox().context
+}
+
 extension ImageProcessor {
     struct ImageProperties {
         let width: Int
@@ -262,7 +277,7 @@ extension ImageProcessor {
 
         let stripHeight = min(64, height)
         var alpha = [UInt8](repeating: 0, count: width * stripHeight)
-        let context = CIContext(options: [.cacheIntermediates: false])
+        let context = sharedCIContext
         let ciImage = CIImage(cgImage: image)
 
         var originY = 0
@@ -407,7 +422,7 @@ extension ImageProcessor {
             throw ImageProcessorError.renderingFailed
         }
 
-        let context = CIContext()
+        let context = sharedCIContext
         let extent = CGRect(x: 0, y: 0, width: sourceImage.width, height: sourceImage.height)
         guard let output = context.createCGImage(outputImage, from: extent) else {
             throw ImageProcessorError.renderingFailed

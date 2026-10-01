@@ -45,7 +45,7 @@ final class HashTextToolWorkspaceModel: ObservableObject {
         self.init(
             preferences: preferences,
             digestOperation: Self.defaultDigestOperation,
-            debounce: .milliseconds(180),
+            debounce: IndexDebouncer.keystrokeDebounce,
             realtimeUTF8ByteLimit: Self.realtimeUTF8ByteLimit
         )
     }

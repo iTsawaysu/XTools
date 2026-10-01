@@ -55,7 +55,7 @@ final class HTMLToMarkdownSession: ObservableObject {
         extractor: any HTMLReadableArticleExtracting = WebKitHTMLReadableArticleExtractor(),
         urlOperation: HTMLToMarkdownURLOperation? = nil,
         manualOperation: @escaping HTMLToMarkdownManualOperation = HTMLToMarkdownSession.defaultManualOperation,
-        manualDebounce: Duration = .milliseconds(250)
+        manualDebounce: Duration = IndexDebouncer.keystrokeDebounce
     ) {
         if let urlOperation {
             self.urlOperation = urlOperation

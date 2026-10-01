@@ -25,7 +25,8 @@ typealias StringObfuscationBackgroundRenderer = @Sendable (
 @MainActor
 final class StringObfuscatorToolWorkspaceModel: ObservableObject {
     static let synchronousInputByteLimit = 64 * 1_024
-    static let backgroundDebounce: Duration = .milliseconds(180)
+    // 档位收口：键盘输入类防抖统一走 IndexDebouncer.keystrokeDebounce（200ms）。
+    static let backgroundDebounce: Duration = IndexDebouncer.keystrokeDebounce
 
     static let key = ToolWorkspaceKey<StringObfuscatorToolWorkspaceModel>(toolID: "string-obfuscator") { preferences in
         StringObfuscatorToolWorkspaceModel(preferences: preferences)

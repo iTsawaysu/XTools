@@ -76,13 +76,11 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                     )
                 },
                 inputHeader: {
-                    AnyView(
-                        HStack(spacing: 6) {
-                            urlInput
-                            fetchButton
-                                .fixedSize(horizontal: true, vertical: false)
-                        }
-                    )
+                    HStack(spacing: 6) {
+                        urlInput
+                        fetchButton
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
                 },
                 outputControl: {
                     IndexSegmentedControl(

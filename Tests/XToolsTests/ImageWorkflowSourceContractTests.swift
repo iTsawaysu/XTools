@@ -135,6 +135,7 @@ struct ImageWorkflowSourceContractTests {
         let preferences = try readSource("Sources/XTools/AppShell/ToolPreferenceStore.swift")
 
         contains(stage, "struct IndexImagePreviewStage", "Image tools must share an explicit image preview stage semantic")
+        contains(stage, "enum IndexImagePreviewStageMetrics", "Image preview stage metrics must stay in one non-generic namespace")
         contains(stage, "static let defaultMaxDisplayWidth: CGFloat = 720", "Image preview stages must define a maximum display width")
         contains(stage, "static let defaultMaxDisplayHeight: CGFloat = 480", "Image preview stages must define a maximum display height")
         contains(stage, ".aspectRatio(contentMode: .fit)", "Image preview stages must show complete proportional images")

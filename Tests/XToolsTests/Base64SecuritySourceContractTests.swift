@@ -18,7 +18,7 @@ struct Base64SecuritySourceContractTests {
         contains(source, "replacementChar.first ?? \"*\"", "String obfuscator must keep first replacement character with star fallback")
         doesNotContain(source, "Label(\"混淆\", systemImage: \"play.fill\")", "String obfuscator must not retain an explicit execution button")
         contains(source, "static let synchronousInputByteLimit = 64 * 1_024", "String masking must keep benchmark-bounded small input on the immediate path")
-        contains(source, "static let backgroundDebounce: Duration = .milliseconds(180)", "String masking must debounce large-input background work")
+        contains(source, "static let backgroundDebounce: Duration = IndexDebouncer.keystrokeDebounce", "String masking must debounce large-input background work on the unified keystroke cadence")
         contains(source, "@Published var input = \"\" {", "String masking input changes must be model-owned")
         contains(source, "func setReplacementCharacter(_ newValue: String)", "Replacement-character normalization must remain model-owned")
         contains(source, "outputProcessingText: workspace.isProcessing ? \"正在更新遮蔽结果…\" : nil", "Large string masking must use the stable workbench processing surface")

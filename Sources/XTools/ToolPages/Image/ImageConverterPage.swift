@@ -78,6 +78,12 @@ private struct IndexImageConverterWorkspaceContent: View {
     @Binding var transparencyFillMode: ImageTransparencyFillMode
     @Binding var customTransparencyFillHex: String
     @State private var isImageDropTargeted = false
+    /// 质量滑杆拖动是连续变更：每个 tick 直接触发 convert() 会对全量
+    /// decode+encode 风暴逐一取消重跑。对齐 ImageWatermarkPage 的
+    /// previewDebouncer 配方（ADR-0018：连续变更短防抖、离散变更立即），
+    /// 仅滑杆走 90ms trailing 防抖；AsyncWorkGate 的取消语义保持不变。
+    @State private var qualityDebouncer = IndexDebouncer()
+    private static let qualityDebounceDelay: Duration = .milliseconds(90)
 
     private var convertedAssessment: ImageOutputAssessment? {
         session.assessment(for: .conversion)
@@ -135,7 +141,11 @@ private struct IndexImageConverterWorkspaceContent: View {
                         .frame(width: 160)
                         .accessibilityLabel("转换质量")
                         .accessibilityValue("\(Int(quality * 100))%")
-                        .onChange(of: quality) { _ in convert() }
+                        .onChange(of: quality) { _ in
+                            qualityDebouncer.schedule(Self.qualityDebounceDelay) {
+                                convert()
+                            }
+                        }
                     Text("\(Int(quality * 100))%")
                         .font(ToolTypography.monoCaption)
                         .foregroundStyle(ToolTheme.textSecondary)

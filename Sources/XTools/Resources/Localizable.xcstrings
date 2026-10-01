@@ -364,13 +364,13 @@
     "主题" : {
       "extractionState" : "manual"
     },
-    "主题:浅色" : {
+    "主题：浅色" : {
       "extractionState" : "manual"
     },
-    "主题:深色" : {
+    "主题：深色" : {
       "extractionState" : "manual"
     },
-    "主题:跟随系统" : {
+    "主题：跟随系统" : {
       "extractionState" : "manual"
     },
     "也可拖入单个普通文件" : {

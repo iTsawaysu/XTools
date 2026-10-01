@@ -513,7 +513,9 @@ struct MotionSourceContractTests {
         contains(shared, "IndexResultCardStack(items: snapshot, revealsItems: false)", "Short result cards must leave structural motion to the shared presence owner")
         contains(shared, "indexGeneratedResultValueMotion(index: index, limit: valueMotionLimit)", "Generated result cards must choose text motion from the bounded slot budget")
 
-        contains(imageStage, "ObjectIdentifier(image).hashValue", "Image preview reveal must key off image replacement rather than pixels or processing loops")
+        // C4 修复后 identity 持 ObjectIdentifier 本体（Equatable）而非 hashValue：
+        // 哈希冲突曾会把换图误判为未变而吞掉 reveal 动画，契约随之改锚本体比较。
+        contains(imageStage, "ObjectIdentifier(image)", "Image preview reveal must key off image replacement rather than pixels or processing loops")
         contains(imageStage, ".toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)", "Image preview stage must use a lightweight shared transition")
         contains(imageStage, "replacementMotion == .animated", "Image preview stage must animate image/placeholder identity only when the caller keeps the default replacement policy")
         contains(imageStage, "ToolMotion.animation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion)", "Animated image replacement must retain the shared Reduce Motion-aware preset")

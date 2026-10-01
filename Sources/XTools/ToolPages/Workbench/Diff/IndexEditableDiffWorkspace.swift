@@ -40,10 +40,18 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     @State private var navigationRequest: DiffDifferenceNavigationRequest?
     @State private var navigationProgress = DiffDifferenceNavigationProgress(current: nil, total: 0)
 
-    /// 一次共享的全文裁剪：诊断文案、语气与差异导航都读取这两个结论。
-    /// 它是存储属性：每次视图值重建（即每次父级 body 求值）只计算一次，
-    /// 避免对大文本的重复全量 trim。
-    let diffSummary: (isIdentical: Bool, differenceBlockCount: Int)
+    /// 一次共享的全文扫描结论：诊断文案、语气、差异导航与空态判断都读取
+    /// 这份缓存。它是存储属性：每次视图值重建（即每次父级 body 求值）只
+    /// 计算一次；两侧「非空」结论同时被 diagnosticText 复用，body 期不再
+    /// 做任何 O(n) 全文扫描。
+    struct DiffSummary {
+        let leftNonEmpty: Bool
+        let rightNonEmpty: Bool
+        let isIdentical: Bool
+        let differenceBlockCount: Int
+    }
+
+    let diffSummary: DiffSummary
 
     init(
         inputTitle: String = "原始文本",
@@ -91,8 +99,9 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
         )
     }
 
-    /// 一次共享的全文裁剪：body 里诊断文案、语气与差异导航都会读取这两个
-    /// 结论，合并计算避免对大文本重复全量 trim。
+    /// 「非空」用 contains(where:) 首个非空白字符即返回（零拷贝、早退），
+    /// 取代 trimmingCharacters 的全文分配；Character.isWhitespace 与
+    /// .whitespacesAndNewlines 覆盖同一 Unicode 空白集合，语义等价。
     static func computeDiffSummary(
         left: String,
         right: String,
@@ -100,9 +109,9 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
         resultState: DiffExecutionResultState,
         syntax: IndexDiffSyntax,
         error: String?
-    ) -> (isIdentical: Bool, differenceBlockCount: Int) {
-        let leftNonEmpty = !left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let rightNonEmpty = !right.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    ) -> DiffSummary {
+        let leftNonEmpty = left.contains { !$0.isWhitespace }
+        let rightNonEmpty = right.contains { !$0.isWhitespace }
 
         var identical = false
         if resultState == .current,
@@ -121,7 +130,12 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
             && (leftNonEmpty || rightNonEmpty)
         let blocks = inputsPresent ? differenceBlockCount(in: rows) : 0
 
-        return (identical, blocks)
+        return DiffSummary(
+            leftNonEmpty: leftNonEmpty,
+            rightNonEmpty: rightNonEmpty,
+            isIdentical: identical,
+            differenceBlockCount: blocks
+        )
     }
 
     private var canNavigateDifferences: Bool {
@@ -153,8 +167,8 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
         if let droppedFileDiagnostic { return droppedFileDiagnostic }
         // Running/stale notes only make sense once there is something to
         // compare; toggling options on empty panes must stay visually quiet.
-        let hasInput = !left.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || !right.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        // 「非空」结论直接复用 init 期算好的 diffSummary，body 期不做 O(n) 全文扫描。
+        let hasInput = diffSummary.leftNonEmpty || diffSummary.rightNonEmpty
         if resultState == .running {
             return hasInput ? "正在对比…" : nil
         }
@@ -596,6 +610,9 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         private var isApplyingDividerRatio = false
         private let storedDividerRatio: CGFloat = 0.5
         private var currentRows: [DiffAlignedRow] = []
+        /// 派生数据缓存的 rows 身份：仅在 rows 值真正变化时递增（值相等
+        /// 的数组替换不递增——decoration 只由 row 值派生，无需失效）。
+        private var currentRowsGeneration = 0
         private var currentSyntax: IndexDiffSyntax = .plain
         private var latestLeftDisplayText = ""
         private var latestRightDisplayText = ""
@@ -868,6 +885,9 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
 
             let projectionChanged = composition.rows != currentRows
             currentRows = composition.rows
+            if projectionChanged {
+                currentRowsGeneration &+= 1
+            }
             updateDifferenceHunks(resetNavigation: projectionChanged)
             leftFoldPlaceholders = Dictionary(
                 composition.rows.compactMap { row in
@@ -1456,15 +1476,75 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             return textView.string.isEmpty && !textView.hasMarkedText()
         }
 
+        /// A1 缓存门：rows 身份与两侧 buffer revision 都未变时，freshness
+        /// 结论与 decorations 是纯派生数据，直接复用——跳过 rowsMatchVisibleText
+        /// 的全文拆行比对与 DiffEditorDecorations 重建（这两步原本在每次
+        /// SwiftUI body 触发的 updateNSView → render 路径上都按 O(全文) 执行）。
+        /// 失效条件覆盖：文本编辑（revision 变化）与 diff 行集替换（rows
+        /// 身份变化）。窗口尺寸/可见范围不参与失效——视口裁剪由
+        /// applyDecorations(to:) 的 span 门负责，这里不缓存任何视口相关
+        /// 状态（符合 ADR-0009：无 display buffer）。
+        private struct DecorationCache {
+            var rowsGeneration: Int
+            var leftRevision: Int
+            var rightRevision: Int
+            var syntax: IndexDiffSyntax
+            var isFresh: Bool
+            var decorations: DiffEditorDecorations?
+        }
+        private var decorationCache: DecorationCache?
+
         private func applyDecorations() {
-            guard rowsMatchVisibleText() else {
-                clearDecorations()
+            // revision 从 0 递增，-1 仅表示编辑器尚未创建。
+            let leftRevision = (leftTextView as? IndexDiffTextView)?.diffTextIndex.revision ?? -1
+            let rightRevision = (rightTextView as? IndexDiffTextView)?.diffTextIndex.revision ?? -1
+            if let cache = decorationCache,
+               cache.rowsGeneration == currentRowsGeneration,
+               cache.leftRevision == leftRevision,
+               cache.rightRevision == rightRevision,
+               cache.syntax == currentSyntax {
+                // 输入法组合期间缓冲文本是临时 marked text：无论缓存是否
+                // 命中都保持清空状态，等提交后再重建（onCompositionChange
+                // 已即时 clear，这里防止迟到路径把高亮挂回组合态）。
+                if !cache.isFresh || leftTextView?.hasMarkedText() == true || rightTextView?.hasMarkedText() == true {
+                    if decorationsAreCurrent {
+                        clearDecorations()
+                    }
+                } else if let decorations = cache.decorations {
+                    decorationsAreCurrent = true
+                    applyDecorations(to: leftTextView, lineDecorations: decorations.left, syntax: currentSyntax, foldPlaceholders: leftFoldPlaceholders)
+                    applyDecorations(to: rightTextView, lineDecorations: decorations.right, syntax: currentSyntax, foldPlaceholders: rightFoldPlaceholders)
+                }
                 return
             }
 
+            guard rowsMatchVisibleText() else {
+                decorationCache = DecorationCache(
+                    rowsGeneration: currentRowsGeneration,
+                    leftRevision: leftRevision,
+                    rightRevision: rightRevision,
+                    syntax: currentSyntax,
+                    isFresh: false,
+                    decorations: nil
+                )
+                clearDecorations()
+                return
+            }
+            let decorations = DiffEditorDecorations(rows: currentRows)
+            decorationCache = DecorationCache(
+                rowsGeneration: currentRowsGeneration,
+                leftRevision: leftRevision,
+                rightRevision: rightRevision,
+                syntax: currentSyntax,
+                isFresh: true,
+                decorations: decorations
+            )
+            publishDecorations(decorations)
+        }
+
+        private func publishDecorations(_ decorations: DiffEditorDecorations) {
             decorationGeneration &+= 1
             decorationsAreCurrent = true
-            let decorations = DiffEditorDecorations(rows: currentRows)
             (leftTextView as? IndexDiffTextView)?.lineDecorations = decorations.left
             (rightTextView as? IndexDiffTextView)?.lineDecorations = decorations.right
             applyDecorations(to: leftTextView, lineDecorations: decorations.left, syntax: currentSyntax, foldPlaceholders: leftFoldPlaceholders)

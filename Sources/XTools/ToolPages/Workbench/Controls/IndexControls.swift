@@ -644,6 +644,9 @@ struct IndexSegmentedControl: View {
             }
         }
         .padding(2)
+        // 分段控件是一个 AX 组：子段保持各自可达，但组有统一标签语义
+        //（调用方可用 .accessibilityLabel 命名，同 EmojiPickerPage 先例）。
+        .accessibilityElement(children: .contain)
         // Wave 2 sliding cursor: the selected fill floats behind the segments
         // but ABOVE the tray's opaque editorBackground — stacking it outside
         // that background would hide it completely.

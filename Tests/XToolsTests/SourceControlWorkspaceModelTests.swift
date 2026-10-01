@@ -47,7 +47,7 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
         model.update()
         await waitUntil { !model.isUpdating && !model.isScanning }
 
-        let outcomes = model.operationResults.map(\.outcome)
+        let outcomes = model.operationResultsByID.values.map(\.outcome)
         XCTAssertEqual(outcomes.filter { if case .upToDate = $0 { return true }; return false }.count, total - 1)
         XCTAssertEqual(model.failureSummary.count, 1)
         XCTAssertEqual(model.failureSummary.first?.repository.path, brokenPath)
@@ -67,17 +67,17 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
         XCTAssertEqual(model.failureSummary.count, 1)
 
         await fixture.git.setFailingPullPaths([])
-        let brokenOutcomeBefore = model.operationResults.first { $0.repository.path == brokenPath }?.outcome
+        let brokenOutcomeBefore = model.operationResultsByID[brokenPath]?.outcome
         XCTAssertTrue({ if case .failed = brokenOutcomeBefore { return true }; return false }())
 
         model.retryFailures()
         await waitUntil { !model.isUpdating && !model.isScanning }
 
         XCTAssertTrue(model.failureSummary.isEmpty)
-        let brokenOutcome = model.operationResults.first { $0.repository.path == brokenPath }?.outcome
+        let brokenOutcome = model.operationResultsByID[brokenPath]?.outcome
         XCTAssertTrue({ if case .upToDate = brokenOutcome { return true }; return false }(), "重试后失败仓库应变为已最新")
         // 未失败的仓库结果在重试批次中被保留。
-        let alphaOutcome = model.operationResults.first { !$0.repository.path.hasSuffix("broken") }?.outcome
+        let alphaOutcome = model.operationResultsByID.values.first { !$0.repository.path.hasSuffix("broken") }?.outcome
         XCTAssertTrue({ if case .upToDate = alphaOutcome { return true }; return false }())
     }
 
@@ -102,7 +102,7 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
         model.retryFailures()
         await waitUntil { !model.isUpdating && !model.isScanning }
 
-        let brokenOutcome = model.operationResults.first { $0.repository.path == brokenPath }?.outcome
+        let brokenOutcome = model.operationResultsByID[brokenPath]?.outcome
         XCTAssertTrue({ if case .upToDate = brokenOutcome { return true }; return false }(), "回退快照后重试应真正执行拉取")
     }
 
@@ -120,18 +120,18 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
         await waitUntil { !model.isUpdating && !model.isScanning }
         XCTAssertEqual(model.lastRunSummary?.skippedCount, 1)
         XCTAssertEqual(model.lastRunSummary?.upToDateCount, 1)
-        let dirtyOutcome = model.operationResults.first { $0.repository.path == dirtyPath }?.outcome
+        let dirtyOutcome = model.operationResultsByID[dirtyPath]?.outcome
         XCTAssertTrue({ if case .skipped = dirtyOutcome { return true }; return false }())
 
         // 用户显式强制：脏仓库也应执行 pull 并成功。
         model.forceUpdateSkipped()
         await waitUntil { !model.isUpdating && !model.isScanning }
 
-        let forcedOutcome = model.operationResults.first { $0.repository.path == dirtyPath }?.outcome
+        let forcedOutcome = model.operationResultsByID[dirtyPath]?.outcome
         XCTAssertTrue({ if case .upToDate = forcedOutcome { return true }; return false }(), "强制更新应真正执行拉取")
         XCTAssertEqual(model.lastRunSummary?.skippedCount, 0, "强制批次不应再有跳过")
         // 未参与强制批次的仓库结果保留。
-        let cleanOutcome = model.operationResults.first { !$0.repository.path.hasSuffix("dirty") }?.outcome
+        let cleanOutcome = model.operationResultsByID.values.first { !$0.repository.path.hasSuffix("dirty") }?.outcome
         XCTAssertTrue({ if case .upToDate = cleanOutcome { return true }; return false }())
     }
 
@@ -170,12 +170,12 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
         await waitUntil { !model.isScanning }
         model.update()
         await waitUntil { !model.isUpdating && !model.isScanning }
-        XCTAssertFalse(model.operationResults.isEmpty, "更新运行后应有行内结果")
+        XCTAssertFalse(model.operationResultsByID.isEmpty, "更新运行后应有行内结果")
 
         model.scan()
         await waitUntil { !model.isScanning }
 
-        XCTAssertTrue(model.operationResults.isEmpty, "手动重扫应清空上次运行的结果徽章")
+        XCTAssertTrue(model.operationResultsByID.isEmpty, "手动重扫应清空上次运行的结果徽章")
         XCTAssertTrue(model.failureSummary.isEmpty)
     }
 
@@ -237,8 +237,8 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
         model.update(visible: visible)
         await waitUntil { !model.isUpdating && !model.isScanning }
 
-        XCTAssertEqual(model.operationResults.count, 2, "只应更新可见的仓库")
-        XCTAssertFalse(model.operationResults.contains { $0.repository.path == model.repositories[2].path })
+        XCTAssertEqual(model.operationResultsByID.count, 2, "只应更新可见的仓库")
+        XCTAssertNil(model.operationResultsByID[model.repositories[2].path], "不可见仓库不应被更新")
     }
 
     func testRemoteHostParsesHTTPSAndSCPLikeRemotes() {
