@@ -118,6 +118,7 @@ public enum JWTVerifier {
         case missingSecret
         case invalidSignature
         case parseError
+        case invalidHeaderJSON
 
         /// 验证失败的文案以 core 为单一真相源；会话层直接透传，
         /// 避免 core 更新文案时页面停留旧版。
@@ -133,6 +134,8 @@ public enum JWTVerifier {
                 return "JWT 签名无效。"
             case .parseError:
                 return "JWT 格式无效，无法执行本地检查。"
+            case .invalidHeaderJSON:
+                return "JWT Header 不是有效 JSON。"
             }
         }
     }
@@ -152,8 +155,19 @@ public enum JWTVerifier {
         } catch {
             throw VerificationError.parseError
         }
-        guard let headerJSON = try? JSONSerialization.jsonObject(with: headerData) as? [String: Any],
-              let algorithmName = headerJSON["alg"] as? String else {
+        let headerJSON: [String: Any]
+        do {
+            let decoded = try JSONSerialization.jsonObject(with: headerData)
+            guard let object = decoded as? [String: Any] else {
+                throw VerificationError.invalidHeaderJSON
+            }
+            headerJSON = object
+        } catch let error as VerificationError {
+            throw error
+        } catch {
+            throw VerificationError.invalidHeaderJSON
+        }
+        guard let algorithmName = headerJSON["alg"] as? String else {
             throw VerificationError.missingAlgorithm
         }
 
@@ -293,41 +307,45 @@ public enum JWTVerifier {
         let now = Date().timeIntervalSince1970
 
         if let expValue = payload["exp"] {
-            guard let exp = JWTNumericDate.timestamp(expValue) else {
+            // 非法 NumericDate 不提前返回：置失败后继续展示后续 claim（nbf/iat）。
+            if let exp = JWTNumericDate.timestamp(expValue) {
+                let passed = now < exp
+                let message = passed
+                    ? "未过期（\(formatDate(exp))）"
+                    : "已过期（\(formatDate(exp))）"
+                details.append(VerificationItem(
+                    name: "过期时间 (exp)",
+                    status: passed ? .passed : .failed,
+                    message: message,
+                    category: .expiration
+                ))
+                if !passed {
+                    isValid = false
+                }
+            } else {
                 details.append(invalidNumericDateItem(name: "过期时间 (exp)", category: .expiration))
-                return (false, details)
-            }
-            let passed = now < exp
-            let message = passed
-                ? "未过期（\(formatDate(exp))）"
-                : "已过期（\(formatDate(exp))）"
-            details.append(VerificationItem(
-                name: "过期时间 (exp)",
-                status: passed ? .passed : .failed,
-                message: message,
-                category: .expiration
-            ))
-            if !passed {
                 isValid = false
             }
         }
 
         if let nbfValue = payload["nbf"] {
-            guard let nbf = JWTNumericDate.timestamp(nbfValue) else {
+            // 同 exp：非法值置失败后继续，不吞掉后续 iat。
+            if let nbf = JWTNumericDate.timestamp(nbfValue) {
+                let passed = now >= nbf
+                let message = passed
+                    ? "已生效"
+                    : "尚未生效（生效时间：\(formatDate(nbf))）"
+                details.append(VerificationItem(
+                    name: "生效时间 (nbf)",
+                    status: passed ? .passed : .failed,
+                    message: message,
+                    category: .expiration
+                ))
+                if !passed {
+                    isValid = false
+                }
+            } else {
                 details.append(invalidNumericDateItem(name: "生效时间 (nbf)", category: .expiration))
-                return (false, details)
-            }
-            let passed = now >= nbf
-            let message = passed
-                ? "已生效"
-                : "尚未生效（生效时间：\(formatDate(nbf))）"
-            details.append(VerificationItem(
-                name: "生效时间 (nbf)",
-                status: passed ? .passed : .failed,
-                message: message,
-                category: .expiration
-            ))
-            if !passed {
                 isValid = false
             }
         }
@@ -373,11 +391,16 @@ public enum JWTVerifier {
         return difference == 0
     }
 
-    private static func formatDate(_ timestamp: TimeInterval) -> String {
-        let date = Date(timeIntervalSince1970: timestamp)
+    /// DateFormatter 构造昂贵（~ms 级），缓存复用。NSDateFormatter 在
+    /// macOS 10.9+ 并发调用 string(from:) 线程安全，只读共享无状态突变。
+    nonisolated(unsafe) private static let claimDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         formatter.timeZone = TimeZone.current
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static func formatDate(_ timestamp: TimeInterval) -> String {
+        claimDateFormatter.string(from: Date(timeIntervalSince1970: timestamp))
     }
 }

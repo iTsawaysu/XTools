@@ -23,6 +23,22 @@ struct BasicAuthCodecTests {
         #expect(credentials.password == "p@ss:w0rd!")
     }
 
+    @Test func parsesUnpaddedAndBase64URLTokens() throws {
+        // 网关/openssl 输出的 token 常不带填充，或用 base64url 字母表（-_）。
+        let standard = Base64Conversion.encode("us?er:pass") // dXM/ZXI6cGFzcw==（含 '/'）
+        #expect(standard.contains("/") && standard.hasSuffix("=="))
+
+        let unpadded = standard.replacingOccurrences(of: "=", with: "")
+        let urlForm = unpadded
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+
+        let expected = BasicAuthCodec.Credentials(username: "us?er", password: "pass")
+        #expect(try BasicAuthCodec.parse(standard) == expected)
+        #expect(try BasicAuthCodec.parse(unpadded) == expected)
+        #expect(try BasicAuthCodec.parse(urlForm) == expected)
+    }
+
     @Test func acceptsEmptyUsernameOrPassword() throws {
         #expect(try BasicAuthCodec.parse("OnBhc3M=") == .init(username: "", password: "pass"))
         #expect(try BasicAuthCodec.parse("dXNlcjo=") == .init(username: "user", password: ""))

@@ -75,6 +75,97 @@ struct JWTSignerTests {
         }
     }
 
+    @Test func unpaddedBase64SecretSignsAndRoundTrips() throws {
+        // 43 字符无填充的 HS256 密钥（32 字节）是 API 输出的常见形态。
+        let padded = Data((0..<32).map { UInt8($0) }).base64EncodedString()
+        let unpadded = String(padded.dropLast())
+        #expect(padded.count == 44)
+        #expect(unpadded.count == 43)
+
+        let paddedToken = try JWTSigner.sign(config: .init(
+            algorithm: .hs256,
+            payloadJSON: Self.payload,
+            advancedHeaderJSON: "",
+            secret: padded,
+            secretEncoding: .base64
+        ))
+        let unpaddedToken = try JWTSigner.sign(config: .init(
+            algorithm: .hs256,
+            payloadJSON: Self.payload,
+            advancedHeaderJSON: "",
+            secret: unpadded,
+            secretEncoding: .base64
+        ))
+
+        #expect(paddedToken.token == unpaddedToken.token)
+
+        let verified = try JWTVerifier.verify(
+            token: unpaddedToken.token,
+            config: .init(secret: unpadded, secretEncoding: .base64)
+        )
+        #expect(verified.summary == .verified)
+    }
+
+    @Test func base64URLSecretMatchesStandardAlphabet() throws {
+        // 32 字节密钥，标准字母表编码同时含 `+` 与 `/`。
+        var key: [UInt8] = []
+        for _ in 0..<10 {
+            key.append(contentsOf: [0xFB, 0xFF, 0xEF])
+        }
+        key.append(contentsOf: [0xFB, 0xFF])
+        let standard = Data(key).base64EncodedString()
+        let urlForm = standard
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+        #expect(standard.contains("+") && standard.contains("/"))
+
+        let standardToken = try JWTSigner.sign(config: .init(
+            algorithm: .hs256,
+            payloadJSON: Self.payload,
+            advancedHeaderJSON: "",
+            secret: standard,
+            secretEncoding: .base64
+        ))
+        let urlToken = try JWTSigner.sign(config: .init(
+            algorithm: .hs256,
+            payloadJSON: Self.payload,
+            advancedHeaderJSON: "",
+            secret: urlForm,
+            secretEncoding: .base64
+        ))
+
+        #expect(standardToken.token == urlToken.token)
+    }
+
+    @Test func foldedBase64SecretMatchesSingleLine() throws {
+        // openssl `base64` 输出按 64 字符折行，整段粘贴必须可用。
+        var key: [UInt8] = []
+        for index in 0..<64 {
+            key.append(UInt8((index * 7 + 3) & 0xFF))
+        }
+        let encoded = Data(key).base64EncodedString()
+        #expect(encoded.count == 88)
+        let folded = "\(encoded.prefix(64))\n\(encoded.dropFirst(64))"
+        #expect(!folded.isEmpty)
+
+        let singleLine = try JWTSigner.sign(config: .init(
+            algorithm: .hs256,
+            payloadJSON: Self.payload,
+            advancedHeaderJSON: "",
+            secret: encoded,
+            secretEncoding: .base64
+        ))
+        let wrapped = try JWTSigner.sign(config: .init(
+            algorithm: .hs256,
+            payloadJSON: Self.payload,
+            advancedHeaderJSON: "",
+            secret: folded,
+            secretEncoding: .base64
+        ))
+
+        #expect(singleLine.token == wrapped.token)
+    }
+
     @Test(arguments: [
         (JWTAlgorithm.hs256, 31, 32),
         (.hs384, 47, 48),

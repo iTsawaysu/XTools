@@ -514,6 +514,23 @@ struct SQLFormattingTests {
         #expect(output.contains("category_id\n"))
     }
 
+    /// `(` 与 `.` 之后的 `*` 是限定符（`count(*)`、`t.*`），不得插入空格；
+    /// 乘法 `a * b` 的间距保持不变。
+    @Test func starQualifiersStayAttachedInsideFunctionsAndAfterDots() throws {
+        let countStar = try SQLFormatting.format("SELECT count(*) FROM t")
+        #expect(countStar.contains("count(*)"))
+        #expect(!countStar.contains("count( *)"))
+
+        let qualified = try SQLFormatting.format("SELECT t.*, count(*) FROM t")
+        #expect(qualified.contains("t.*"))
+        #expect(!qualified.contains("t. *"))
+        #expect(qualified.contains("count(*)"))
+        #expect(!qualified.contains("count( *)"))
+
+        let multiplication = try SQLFormatting.format("SELECT a * b FROM t")
+        #expect(multiplication.contains("a * b"))
+    }
+
     // MARK: - Line endings
 
     /// 行注释必须在任何换行形式上终止。Swift 里 `\r\n` 是**单个** Character

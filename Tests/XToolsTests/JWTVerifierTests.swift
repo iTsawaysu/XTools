@@ -271,6 +271,47 @@ struct JWTVerifierTests {
         #expect(!result.isValid)
     }
 
+    @Test func invalidExpirationStillShowsLaterClaims() throws {
+        let past = Int(Date().timeIntervalSince1970 - 3600)
+        let token = Self.makeToken(
+            header: #"{"alg":"HS256","typ":"JWT"}"#,
+            payload: #"{"exp":"tomorrow","nbf":\#(past),"iat":1516239022}"#
+        )
+
+        let result = try JWTVerifier.verify(token: token, config: .init(secret: nil))
+
+        let exp = try #require(result.details.first { $0.name.contains("exp") })
+        #expect(!exp.passed)
+        #expect(exp.message.contains("NumericDate"))
+
+        let nbf = try #require(result.details.first { $0.name.contains("nbf") })
+        #expect(nbf.passed)
+        #expect(nbf.message == "已生效")
+
+        let iat = try #require(result.details.first { $0.name.contains("iat") })
+        #expect(iat.status == .informational)
+
+        #expect(result.summary == .failed)
+    }
+
+    @Test func invalidNotBeforeStillShowsIssuedAt() throws {
+        let token = Self.makeToken(
+            header: #"{"alg":"HS256","typ":"JWT"}"#,
+            payload: #"{"nbf":"soon","iat":1516239022}"#
+        )
+
+        let result = try JWTVerifier.verify(token: token, config: .init(secret: nil))
+
+        let nbf = try #require(result.details.first { $0.name.contains("nbf") })
+        #expect(!nbf.passed)
+        #expect(nbf.message.contains("NumericDate"))
+
+        let iat = try #require(result.details.first { $0.name.contains("iat") })
+        #expect(iat.status == .informational)
+
+        #expect(result.summary == .failed)
+    }
+
     @Test func invalidIssuedAtTypeFailsClaimsValidation() throws {
         let token = Self.makeToken(
             header: #"{"alg":"HS256","typ":"JWT"}"#,
@@ -333,6 +374,25 @@ struct JWTVerifierTests {
         let token = Self.makeToken(header: #"{"typ":"JWT"}"#, payload: #"{"sub":"x"}"#)
 
         #expect(throws: JWTVerifier.VerificationError.missingAlgorithm) {
+            _ = try JWTVerifier.verify(token: token, config: .init(secret: nil))
+        }
+    }
+
+    @Test func nonJSONHeaderThrowsInvalidHeaderJSONInsteadOfMissingAlgorithm() throws {
+        let token = "\(Self.base64URL("not json")).\(Self.encodeJSON(#"{"sub":"x"}"#)).signature"
+
+        #expect(throws: JWTVerifier.VerificationError.invalidHeaderJSON) {
+            _ = try JWTVerifier.verify(token: token, config: .init(secret: nil))
+        }
+        #expect(
+            JWTVerifier.VerificationError.invalidHeaderJSON.errorDescription == "JWT Header 不是有效 JSON。"
+        )
+    }
+
+    @Test func nonObjectHeaderThrowsInvalidHeaderJSON() throws {
+        let token = "\(Self.encodeJSON("[1]")).\(Self.encodeJSON(#"{"sub":"x"}"#)).signature"
+
+        #expect(throws: JWTVerifier.VerificationError.invalidHeaderJSON) {
             _ = try JWTVerifier.verify(token: token, config: .init(secret: nil))
         }
     }
