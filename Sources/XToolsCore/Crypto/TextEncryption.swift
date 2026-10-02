@@ -153,7 +153,9 @@ public enum TextEncryptionService {
         if normalizedCiphertext.hasPrefix(modernPrefix) {
             throw Error.modernCiphertextWithLegacyAlgorithm
         }
-        guard let data = Data(base64Encoded: String(normalizedCiphertext)) else {
+        guard let data = try? Base64Conversion.decodeData(normalizedCiphertext) else {
+            // 共享宽容解码（去空白/base64url/自动补填充）：密文来自 openssl、
+            // 各类库与终端复制，无填充与 base64url 形态按真实输入对待。
             throw Error.invalidBase64
         }
 
@@ -243,7 +245,7 @@ public enum TextEncryptionService {
         guard normalizedCiphertext.hasPrefix(modernPrefix) else {
             // 反向错配：选了 AES-GCM 但密文能解出 OpenSSL 的 Salted__ 头——
             // 给出算法切换指引，而不是笼统的「格式与算法不匹配」。
-            if let data = Data(base64Encoded: normalizedCiphertext),
+            if let data = try? Base64Conversion.decodeData(normalizedCiphertext),
                data.starts(with: Data(saltedHeader)) {
                 throw Error.legacyCiphertextWithModernAlgorithm
             }
@@ -251,7 +253,7 @@ public enum TextEncryptionService {
         }
 
         let encodedPayload = String(normalizedCiphertext.dropFirst(modernPrefix.count))
-        guard let payload = Data(base64Encoded: encodedPayload) else {
+        guard let payload = try? Base64Conversion.decodeData(encodedPayload) else {
             throw Error.invalidBase64
         }
 

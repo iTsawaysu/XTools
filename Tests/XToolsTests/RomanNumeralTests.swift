@@ -62,6 +62,22 @@ struct RomanNumeralTests {
         #expect(RomanNumeralConverter.toNumber("") == nil)
     }
 
+    @Test func outOfRangeRomanReportsRangeNotArrangement() {
+        // 合法字符但数值越界（MMMM = 4000）：问题在数值本身，不是排列写法。
+        #expect(throws: RomanNumeralConverter.ValidationIssue.romanOutOfRange) {
+            _ = try RomanNumeralConverter.validatedNumber(fromRoman: "MMMM")
+        }
+        #expect(throws: RomanNumeralConverter.ValidationIssue.romanOutOfRange) {
+            _ = try RomanNumeralConverter.validatedNumber(fromRoman: "MMMMCMXCIX")
+        }
+        #expect(
+            RomanNumeralConverter.ValidationIssue.romanOutOfRange.errorDescription
+                == "数值超出 1–3999 支持范围。"
+        )
+        // 边界内最大值仍正常。
+        #expect((try? RomanNumeralConverter.validatedNumber(fromRoman: "MMMCMXCIX")) == 3999)
+    }
+
     @Test func strictConversionDoesNotSilentlyRemoveInvalidCharacters() {
         #expect(throws: RomanNumeralConverter.ValidationIssue.invalidArabicCharacter) {
             _ = try RomanNumeralConverter.validatedRoman(fromArabic: "12a3")
@@ -82,7 +98,7 @@ struct RomanNumeralTests {
     @Test func validationIssuesUseFactualMessages() {
         let issues: [RomanNumeralConverter.ValidationIssue] = [
             .emptyInput, .invalidArabicCharacter, .arabicOutOfRange,
-            .invalidRomanCharacter, .nonCanonicalRoman,
+            .invalidRomanCharacter, .nonCanonicalRoman, .romanOutOfRange,
         ]
         for issue in issues {
             ToolDiagnosticContract.expectFactual(issue.errorDescription ?? "")

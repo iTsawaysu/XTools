@@ -322,7 +322,7 @@ struct TextWorkbenchSourceContractTests {
         contains(converter, "workspaceSemantic: .copyTransformWorkspace", "Shared converter must own the copy-transform workspace semantic")
         contains(converter, "workspace.changeMode(to: $0, backfillModeTransition: backfillModeTransition)", "Shared converter must route mode changes through the workspace execution model")
         contains(converter, "completedRequest == IndexConverterRequest(input: input, mode: mode)", "Shared converter must only backfill a completed result for the current request identity")
-        contains(converter, "if clearsFailedInput {", "A failed request must clear its invalid input instead of executing it in the next mode")
+        doesNotContain(converter, "clearsFailedInput", "A failed request must keep its input so switching modes retries the same text in the other direction")
         contains(converter, "inputCaretPlacementRequestToken: workspace.inputReplacementToken == 0 ? nil : workspace.inputReplacementToken", "Successful mode backfill must request caret placement through the shared editor seam")
         contains(converter, "inputByteCount > synchronousInputByteLimit", "Shared converter must classify large requests by UTF-8 input cost")
         contains(converter, "outputProcessingText: workspace.isProcessing ? \"正在转换…\" : nil", "Shared converter must expose real processing state through the existing workbench surface")

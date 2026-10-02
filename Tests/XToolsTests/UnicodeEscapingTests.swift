@@ -68,13 +68,12 @@ struct UnicodeEscapingTests {
         #expect(UnicodeEscaping.decode("\\ud83dA") == "\\ud83dA")
     }
 
-    @Test func strictDecodeClassifiesMalformedEscapes() {
+    @Test func strictDecodeClassifiesMalformedEscapes() throws {
         #expect(throws: UnicodeEscaping.DecodingError.incompleteEscape) {
             _ = try UnicodeEscaping.decodeValidated("\\u12")
         }
-        #expect(throws: UnicodeEscaping.DecodingError.invalidHexEscape) {
-            _ = try UnicodeEscaping.decodeValidated("\\u12G4")
-        }
+        // `\u` 后跟非十六进制不是转义序列：按字面量放行（如 `\u12G4`）。
+        #expect((try? UnicodeEscaping.decodeValidated("\\u12G4")) == "\\u12G4")
         #expect(throws: UnicodeEscaping.DecodingError.isolatedHighSurrogate) {
             _ = try UnicodeEscaping.decodeValidated("\\ud83d")
         }
@@ -82,6 +81,13 @@ struct UnicodeEscapingTests {
             _ = try UnicodeEscaping.decodeValidated("\\ude00")
         }
         #expect((try? UnicodeEscaping.decodeValidated("text \\u0041 \\ud83d\\ude00")) == "text A 😀")
+    }
+
+    @Test func strictDecodePassesThroughWindowsPathsWithUPathSegment() throws {
+        // `C:\users\tmp` 的 `\u` 后是非十六进制：普通路径文本，整体放行。
+        #expect((try? UnicodeEscaping.decodeValidated("C:\\users\\tmp")) == "C:\\users\\tmp")
+        // 字面量 `\u` 与完整转义可共存：后续完整转义仍正常解码。
+        #expect((try? UnicodeEscaping.decodeValidated("C:\\users\\u0041")) == "C:\\usersA")
     }
 
     @Test func decodingErrorsUseFactualMessages() {

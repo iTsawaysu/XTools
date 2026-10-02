@@ -21,7 +21,7 @@ public enum ASCIIBinaryConversion {
             case .asciiOutOfRange:
                 return "ASCII 十进制数值必须在 0–127 之间。"
             case .invalidBinaryCharacter:
-                return "二进制输入只能包含 0 和 1，以及分隔空白。"
+                return "二进制输入只能包含 0 和 1，以空白或逗号分隔。"
             case .incompleteBinaryByte:
                 return "二进制输入的有效位数必须是 8 的倍数。"
             case .invalidUTF8:
@@ -93,7 +93,11 @@ public enum ASCIIBinaryConversion {
     }
 
     private static func validatedBinaryBytes(from input: String) throws -> [UInt8] {
-        let bits = input.filter { !$0.isWhitespace }
+        // 与 ASCII 十进制分词同一规则：空白或逗号均为分隔符（与自家
+        // validatedASCIIToText 统一，逗号在两个方向行为一致）。
+        let bits = input.split { character in
+            character.isWhitespace || character == ","
+        }.joined()
         guard !bits.isEmpty else { return [] }
         guard bits.allSatisfy({ $0 == "0" || $0 == "1" }) else {
             throw ConversionError.invalidBinaryCharacter

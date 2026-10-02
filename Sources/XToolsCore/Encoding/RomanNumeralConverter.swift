@@ -7,6 +7,7 @@ public enum RomanNumeralConverter {
         case arabicOutOfRange
         case invalidRomanCharacter
         case nonCanonicalRoman
+        case romanOutOfRange
 
         public var errorDescription: String? {
             switch self {
@@ -20,6 +21,8 @@ public enum RomanNumeralConverter {
                 return "罗马数字只能包含 I、V、X、L、C、D、M。"
             case .nonCanonicalRoman:
                 return "罗马数字的排列不符合标准写法。"
+            case .romanOutOfRange:
+                return "数值超出 1–3999 支持范围。"
             }
         }
     }
@@ -109,6 +112,11 @@ public enum RomanNumeralConverter {
             total += current < next ? -current : current
         }
 
+        // 先报「超出范围」再校验排列：MMMM（4000）这类合法字符但越界的
+        // 输入，问题在数值本身，不该误导为排列写法错误。
+        guard (1...3999).contains(total) else {
+            throw ValidationIssue.romanOutOfRange
+        }
         guard let canonical = toRoman(total), canonical == normalized else {
             throw ValidationIssue.nonCanonicalRoman
         }

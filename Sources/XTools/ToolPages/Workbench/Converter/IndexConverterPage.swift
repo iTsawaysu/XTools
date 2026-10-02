@@ -123,11 +123,12 @@ final class IndexConverterToolWorkspaceModel: ObservableObject {
     ) {
         guard newMode != mode else { return }
 
-        let clearsFailedInput = error != nil
+        // 只有 backfill 语义会替换输入（output → input）；其余情形一律保留
+        // 用户文本——出错后切方向是为了换方向重试，清空输入反而丢上下文。
+        // 出错态 output 为空、completedRequest 为 nil，backfill 守卫自然拦下。
         let nextInput: String?
         if backfillModeTransition(mode, newMode),
            !isProcessing,
-           !clearsFailedInput,
            !output.isEmpty,
            completedRequest == IndexConverterRequest(input: input, mode: mode) {
             nextInput = output
@@ -137,10 +138,7 @@ final class IndexConverterToolWorkspaceModel: ObservableObject {
 
         isApplyingControlledMutation = true
         mode = newMode
-        if clearsFailedInput {
-            input = ""
-            inputReplacementToken = 0
-        } else if let nextInput {
+        if let nextInput {
             input = nextInput
             inputReplacementSequence &+= 1
             inputReplacementToken = inputReplacementSequence

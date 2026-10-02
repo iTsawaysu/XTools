@@ -133,13 +133,22 @@ public enum UnicodeEscaping {
             var hex = ""
             for _ in 0..<4 {
                 guard cursor < value.endIndex else {
+                    // 输入在四位十六进制写完前结束：真正的截断，仍报错。
                     throw DecodingError.incompleteEscape
                 }
                 guard value[cursor].isASCIIHexDigit else {
-                    throw DecodingError.invalidHexEscape
+                    // `\u` 后跟非十六进制（如 C:\users\tmp）：不是转义序列，
+                    // 按字面量放行——与宽松 decode 的 parseEscape 判定一致。
+                    break
                 }
                 hex.append(value[cursor])
                 cursor = value.index(after: cursor)
+            }
+
+            guard hex.count == 4 else {
+                // 字面量 `\u`：从 u 之后继续扫描，后续仍可能有完整转义。
+                index = value.index(after: uIndex)
+                continue
             }
 
             guard let codeUnit = UInt16(hex, radix: 16) else {

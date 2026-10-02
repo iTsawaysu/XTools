@@ -249,7 +249,7 @@ struct IndexConverterWorkspaceExecutionTests {
     }
 
     @MainActor
-    @Test func failedOutputClearsInvalidInputOnModeChange() {
+    @Test func failedOutputKeepsInputOnModeChangeAndRetriesNewDirection() {
         let counter = LockedConverterCallRecorder()
         let model = makeModel(
             synchronousInputByteLimit: 64,
@@ -268,11 +268,14 @@ struct IndexConverterWorkspaceExecutionTests {
 
         model.changeMode(to: "dec", backfillModeTransition: { _, _ in true })
 
-        #expect(model.input.isEmpty)
-        #expect(model.output.isEmpty)
+        // 出错后切方向保留用户文本，并立即按新方向重试。
+        #expect(model.mode == "dec")
+        #expect(model.input == "invalid")
+        #expect(model.output == "decoded:invalid")
         #expect(model.error == nil)
         #expect(counter.calls == [
-            .init(input: "invalid", mode: "enc")
+            .init(input: "invalid", mode: "enc"),
+            .init(input: "invalid", mode: "dec")
         ])
     }
 

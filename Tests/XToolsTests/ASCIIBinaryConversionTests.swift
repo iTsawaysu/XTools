@@ -65,6 +65,9 @@ struct ASCIIBinaryConversionTests {
         #expect(ASCIIBinaryConversion.binaryToText("01000001 01000010") == "AB")
         #expect(ASCIIBinaryConversion.binaryToText("0100000101000010") == "AB")
         #expect(ASCIIBinaryConversion.binaryToText("0100 0001 0100 0010") == "AB")
+        // 逗号与空白同为分隔符：与 ASCII 十进制方向（"65,66,67"）规则统一。
+        #expect(ASCIIBinaryConversion.binaryToText("01000001,01000010") == "AB")
+        #expect(ASCIIBinaryConversion.binaryToText("01000001, 01000010,01000011") == "ABC")
         // Round-trips multibyte UTF-8.
         #expect(ASCIIBinaryConversion.binaryToText("11000011 10101001") == "é")
     }
@@ -73,6 +76,7 @@ struct ASCIIBinaryConversionTests {
         // No tokens -> empty byte array -> empty string (not nil).
         #expect(ASCIIBinaryConversion.binaryToText("") == "")
         #expect(ASCIIBinaryConversion.binaryToText("   ") == "")
+        #expect(ASCIIBinaryConversion.binaryToText(" , , ") == "")
     }
 
     @Test func returnsNilForMalformedBinary() {

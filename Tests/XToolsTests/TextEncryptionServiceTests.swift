@@ -166,6 +166,58 @@ struct TextEncryptionServiceTests {
         #expect(plaintext == "plain")
     }
 
+    @Test func legacyDecryptAcceptsUnpaddedCiphertext() throws {
+        let ciphertext = try TextEncryptionService.encrypt("plain", password: "secret", algorithm: .aes)
+        let unpadded = ciphertext.trimmingCharacters(in: CharacterSet(charactersIn: "="))
+        #expect(unpadded != ciphertext, "Expected the vector to carry Base64 padding")
+
+        let plaintext = try TextEncryptionService.decrypt(unpadded, password: "secret", algorithm: .aes)
+
+        #expect(plaintext == "plain")
+    }
+
+    @Test func modernDecryptAcceptsUnpaddedCiphertext() throws {
+        let ciphertext = try TextEncryptionService.encrypt("plain", password: "secret", algorithm: .aesGCM)
+        let unpadded = Self.modernPrefix
+            + String(ciphertext.dropFirst(Self.modernPrefix.count))
+                .trimmingCharacters(in: CharacterSet(charactersIn: "="))
+        #expect(unpadded != ciphertext, "Expected the vector to carry Base64 padding")
+
+        let plaintext = try TextEncryptionService.decrypt(unpadded, password: "secret", algorithm: .aesGCM)
+
+        #expect(plaintext == "plain")
+    }
+
+    @Test func legacyDecryptAcceptsBase64URLCiphertext() throws {
+        // 固定向量含 "+"，转成 base64url（-_、去填充）后必须仍可解密。
+        let urlSafe = "U2FsdGVkX18xMjM0NTY3OL6cbdLbc08RGJjKnfIc-Ik"
+
+        let plaintext = try TextEncryptionService.decrypt(urlSafe, password: "secret", algorithm: .aes)
+
+        #expect(plaintext == "hello")
+    }
+
+    @Test func modernDecryptAcceptsBase64URLCiphertext() throws {
+        let ciphertext = try TextEncryptionService.encrypt("plain", password: "secret", algorithm: .aesGCM)
+        let payload = String(ciphertext.dropFirst(Self.modernPrefix.count))
+        let data = try #require(Data(base64Encoded: payload))
+        let urlSafe = Self.modernPrefix + Base64Conversion.encodeBase64URL(data)
+
+        let plaintext = try TextEncryptionService.decrypt(urlSafe, password: "secret", algorithm: .aesGCM)
+
+        #expect(plaintext == "plain")
+    }
+
+    @Test func garbageCiphertextStillReportsInvalidBase64() {
+        // 余 1 长度（不可能是 Base64）与字母表外字符都仍拒绝。
+        #expect(throws: TextEncryptionService.Error.invalidBase64) {
+            _ = try TextEncryptionService.decrypt("not base64", password: "secret", algorithm: .aes)
+        }
+        #expect(throws: TextEncryptionService.Error.invalidBase64) {
+            _ = try TextEncryptionService.decrypt(Self.modernPrefix + "@@@@", password: "secret", algorithm: .aesGCM)
+        }
+    }
+
     @Test func legacyVectorWithWrongPasswordReportsDecryptionFailed() throws {
         // Legacy CBC has no authentication: other ciphertexts may yield valid
         // padding and UTF-8 under a wrong password. This fixed vector rejects it.
