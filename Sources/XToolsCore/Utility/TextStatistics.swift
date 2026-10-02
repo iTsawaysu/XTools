@@ -49,11 +49,13 @@ public enum TextStatistics {
         var characters = 0
         var nonWhitespaceCharacters = 0
         var lineBreaks = 0
+        var endsWithLineBreak = false
         for character in input {
             if characters.isMultiple(of: 1_024), shouldCancel() { throw CancellationError() }
             characters += 1
             if !character.isWhitespace { nonWhitespaceCharacters += 1 }
             if character.isNewline { lineBreaks += 1 }
+            endsWithLineBreak = character.isNewline
         }
         if shouldCancel() { throw CancellationError() }
 
@@ -66,10 +68,25 @@ public enum TextStatistics {
             characters: characters,
             nonWhitespaceCharacters: nonWhitespaceCharacters,
             words: words,
-            lines: input.isEmpty ? 0 : lineBreaks + 1,
+            // 对齐 wc：末尾换行是行终止符而非新行（"a\n" = 1 行、"\n" = 0 行、
+            // 空文本 = 0 行）；无末尾换行时最后一行仍需计数。
+            lines: wcStyleLineCount(isEmpty: input.isEmpty, inputCount: input.count, lineBreaks: lineBreaks, endsWithLineBreak: endsWithLineBreak),
             sentences: sentences,
             bytes: bytes
         )
+    }
+
+    /// wc 风格行数：仅一个换行符的输入（空行内容）为 0 行；以换行结尾时
+    /// 末尾换行不另起一行；不以换行结尾时最后一行仍计数。
+    private static func wcStyleLineCount(
+        isEmpty: Bool,
+        inputCount: Int,
+        lineBreaks: Int,
+        endsWithLineBreak: Bool
+    ) -> Int {
+        if isEmpty { return 0 }
+        if !endsWithLineBreak { return lineBreaks + 1 }
+        return inputCount == 1 ? 0 : lineBreaks
     }
 
     private static func countTokens(

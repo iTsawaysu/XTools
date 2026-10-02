@@ -241,7 +241,20 @@ public struct ImageRGBColor: Codable, Equatable, Sendable {
     public init?(hex: String) {
         let trimmed = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalized = trimmed.first == "#" ? String(trimmed.dropFirst()) : trimmed
-        guard normalized.count == 6, let value = UInt32(normalized, radix: 16) else {
+
+        // CSS 简写：#ABC → #AABBCC；#ABCD → #AABBCCDD（alpha 分量对不透明
+        // 填充无意义，展开时取 RGB 部分）。其余长度或不合法十六进制 → nil。
+        let expanded: String
+        switch normalized.count {
+        case 3, 4:
+            expanded = normalized.prefix(3).map { String(repeating: $0, count: 2) }.joined()
+        case 6, 8:
+            expanded = String(normalized.prefix(6))
+        default:
+            return nil
+        }
+
+        guard let value = UInt32(expanded, radix: 16) else {
             return nil
         }
 

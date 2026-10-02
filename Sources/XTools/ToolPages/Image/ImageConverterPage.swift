@@ -78,6 +78,9 @@ private struct IndexImageConverterWorkspaceContent: View {
     @Binding var transparencyFillMode: ImageTransparencyFillMode
     @Binding var customTransparencyFillHex: String
     @State private var isImageDropTargeted = false
+    /// 自定义透明填充色无效时的就地诊断；有效或未启用自定义时为 nil。
+    /// 与 session.error 同槽展示（页面既有错误机制），但优先级更高。
+    @State private var transparencyFillError: String?
     /// 质量滑杆拖动是连续变更：每个 tick 直接触发 convert() 会对全量
     /// decode+encode 风暴逐一取消重跑。对齐 ImageWatermarkPage 的
     /// previewDebouncer 配方（ADR-0018：连续变更短防抖、离散变更立即），
@@ -170,14 +173,14 @@ private struct IndexImageConverterWorkspaceContent: View {
 
                     if transparencyFillMode == .custom {
                         IndexTextInput(
-                            placeholder: "#RRGGBB",
+                            placeholder: "#RGB 或 #RRGGBB",
                             text: $customTransparencyFillHex,
                             height: 30,
                             alignment: .center,
                             selectAllOnFocus: true,
                             onSubmit: normalizeCustomTransparencyFillHex
                         )
-                        .frame(width: 92)
+                        .frame(width: 118)
                         .accessibilityLabel("自定义透明区域填充颜色")
                         .accessibilityValue(customTransparencyFillAccessibilityValue)
                         .onChange(of: customTransparencyFillHex) { _ in convert() }
@@ -187,6 +190,9 @@ private struct IndexImageConverterWorkspaceContent: View {
                 .accessibilityLabel("透明区域填充颜色")
                 .accessibilityValue(transparencyFillAccessibilityValue)
                 .help("JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。")
+                // 自定义色无效时就地诊断（页面外壳按优先级合并 workspace 诊断），
+                // 不再让 convert() 静默清空输出。
+                .indexWorkspaceDiagnostic(transparencyFillError)
             }
 
         }
@@ -362,9 +368,18 @@ private struct IndexImageConverterWorkspaceContent: View {
     private func convert() {
         ensureSupportedTargetFormat()
         guard canConvert else {
+            // 自定义填充色无效时给出就地诊断，而不是静默清空输出。
+            if transparencyFillMode == .custom,
+               requiresTransparencyFill,
+               selectedTransparencyFill == nil {
+                transparencyFillError = "自定义透明填充颜色无效：请输入 #RGB、#RGBA、#RRGGBB 或 #RRGGBBAA 格式的十六进制颜色。"
+            } else {
+                transparencyFillError = nil
+            }
             session.clearOutput()
             return
         }
+        transparencyFillError = nil
         session.renderInBackground(operation: .conversion, converterRenderer())
     }
 
@@ -382,8 +397,9 @@ private struct IndexImageConverterWorkspaceContent: View {
     }
 
     private func normalizeCustomTransparencyFillHex() {
-        customTransparencyFillHex = ImageRGBColor(hex: customTransparencyFillHex)?.hexString
-            ?? ImageRGBColor.white.hexString
+        // 无效输入保留原文并依赖 convert() 的就地诊断，不再静默重置为白色。
+        guard let color = ImageRGBColor(hex: customTransparencyFillHex) else { return }
+        customTransparencyFillHex = color.hexString
     }
 
     private func converterRenderer() -> ImageBackgroundOutputRenderer {

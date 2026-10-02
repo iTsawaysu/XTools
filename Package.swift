@@ -56,7 +56,10 @@ let package = Package(
             resources: [
                 // emoji-test.txt 只随编译工具携带：运行时 bundle 不再包含该
                 // 669KB 的 Unicode 数据源（plist 才是运行时目录）。
-                .copy("emoji-test.txt")
+                // zh-annotations.xml（CLDR zh 注解）同样只作编译输入，
+                // 其关键词在编译期并入 plist 的 searchText。
+                .copy("emoji-test.txt"),
+                .copy("zh-annotations.xml")
             ]
         ),
         .testTarget(

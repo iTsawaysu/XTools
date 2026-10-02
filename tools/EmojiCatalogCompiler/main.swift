@@ -19,7 +19,20 @@ do {
     }
     let sourceData = try String(contentsOf: sourceURL, encoding: .utf8)
 
-    let data = try EmojiCatalog.compilePrecompiledCatalogData(sourceData: sourceData)
+    // CLDR zh 注解（LDML annotations）同样只随编译工具 bundle 提供：
+    // 解析出的中文关键词并入 searchText，使目录支持中文搜索。
+    guard let annotationsURL = Bundle.module.url(forResource: "zh-annotations", withExtension: "xml") else {
+        FileHandle.standardError.write(
+            Data("缺少编译输入 zh-annotations.xml：应位于 tools/EmojiCatalogCompiler 并随工具 bundle 提供。\n".utf8)
+        )
+        exit(EXIT_FAILURE)
+    }
+    let annotationsXML = try String(contentsOf: annotationsURL, encoding: .utf8)
+
+    let data = try EmojiCatalog.compilePrecompiledCatalogData(
+        sourceData: sourceData,
+        chineseAnnotationsXML: annotationsXML
+    )
     let outputURL = URL(fileURLWithPath: outputPath)
     try FileManager.default.createDirectory(
         at: outputURL.deletingLastPathComponent(),

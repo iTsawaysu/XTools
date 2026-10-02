@@ -38,9 +38,22 @@ struct ImageProcessingTests {
         #expect(ImageRGBColor(hex: "#336699") == ImageRGBColor(red: 0x33, green: 0x66, blue: 0x99))
         #expect(ImageRGBColor(hex: " ffffff ") == .white)
         #expect(ImageRGBColor.black.hexString == "#000000")
-        #expect(ImageRGBColor(hex: "#123") == nil)
-        #expect(ImageRGBColor(hex: "##FFFFFF") == nil)
         #expect(ImageRGBColor(hex: "not-a-color") == nil)
+        #expect(ImageRGBColor(hex: "##FFFFFF") == nil)
+
+        // 2026-10 更新：接受 CSS 3/4 位简写；#123 不再返回 nil。
+        #expect(ImageRGBColor(hex: "#123") == ImageRGBColor(red: 0x11, green: 0x22, blue: 0x33))
+        #expect(ImageRGBColor(hex: "ABC") == ImageRGBColor(red: 0xAA, green: 0xBB, blue: 0xCC))
+        // 4 位简写的 alpha 分量对不透明填充无意义，取 RGB 部分。
+        #expect(ImageRGBColor(hex: "#ABCD") == ImageRGBColor(red: 0xAA, green: 0xBB, blue: 0xCC))
+        // 8 位（#RRGGBBAA）同样取 RGB 部分。
+        #expect(ImageRGBColor(hex: "#AABBCCDD") == ImageRGBColor(red: 0xAA, green: 0xBB, blue: 0xCC))
+
+        // 其余形态仍判无效。
+        #expect(ImageRGBColor(hex: "#12") == nil)
+        #expect(ImageRGBColor(hex: "#12345") == nil)
+        #expect(ImageRGBColor(hex: "#GGGGGG") == nil)
+        #expect(ImageRGBColor(hex: "") == nil)
     }
 
     @Test func compressionPreferencesUseUserLevelQualityOrder() {

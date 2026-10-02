@@ -91,7 +91,8 @@ private struct IndexDateTimeWorkspaceContent: View {
             placeholder: "选择或粘贴时间",
             timeZone: TimeZone.current,
             onCommit: applyFromHumanTimeInput,
-            onInvalidPaste: showHumanPasteError
+            onInvalidPaste: showHumanPasteError,
+            onNonexistentLocalTime: showNonexistentLocalTimeError
         )
     }
 
@@ -152,6 +153,10 @@ private struct IndexDateTimeWorkspaceContent: View {
 
     private func showHumanPasteError() {
         workspace.humanError = "无法识别时间。支持 ISO 8601 或 yyyy-MM-dd HH:mm:ss。"
+    }
+
+    private func showNonexistentLocalTimeError() {
+        workspace.humanError = "该本地时间因夏令时切换不存在，请改用跳变后的一小时（如 03:30）。"
     }
 
     private func clearAll() {

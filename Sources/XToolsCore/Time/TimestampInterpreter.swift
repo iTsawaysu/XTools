@@ -15,6 +15,8 @@ public enum TimestampInterpreter {
     public enum ValidationIssue: LocalizedError, Equatable {
         case nonIntegerFormat
         case outOfRange
+        /// 越界且位数形态像毫秒时间戳（12–14 位纯数字）：附毫秒提示而非泛化越界文案。
+        case outOfRangePossiblyMilliseconds
 
         public var errorDescription: String? {
             switch self {
@@ -22,6 +24,8 @@ public enum TimestampInterpreter {
                 return "Unix 时间戳只能包含整数秒，可在开头使用负号。"
             case .outOfRange:
                 return "Unix 时间戳超出公元 1 年至 9999 年的支持范围。"
+            case .outOfRangePossiblyMilliseconds:
+                return "Unix 时间戳超出公元 1 年至 9999 年的支持范围；这可能是毫秒时间戳（本工具接受秒）。"
             }
         }
     }
@@ -37,7 +41,11 @@ public enum TimestampInterpreter {
 
         let seconds = NSDecimalNumber(decimal: decimal).doubleValue
         guard isSupportedEpochSeconds(seconds) else {
-            return .invalid(.outOfRange)
+            return .invalid(
+                looksLikeMillisecondTimestamp(trimmed)
+                    ? .outOfRangePossiblyMilliseconds
+                    : .outOfRange
+            )
         }
         return .valid(seconds)
     }
@@ -79,6 +87,13 @@ public enum TimestampInterpreter {
             value.utf8.formIndex(after: &index)
         }
         return true
+    }
+
+    /// 12–14 位纯数字（允许负号）在按秒解释越界时，按毫秒时间戳形态提示。
+    /// 12 位以内且 ≤ 上限的秒时间戳照常有效，其余长度保持原越界文案。
+    private static func looksLikeMillisecondTimestamp(_ value: String) -> Bool {
+        let digits = value.hasPrefix("-") ? String(value.dropFirst()) : value
+        return (12...14).contains(digits.count)
     }
 
     private static func isSupportedEpochSeconds(_ value: Double) -> Bool {

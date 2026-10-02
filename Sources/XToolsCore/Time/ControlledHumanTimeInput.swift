@@ -64,18 +64,24 @@ public enum HumanDateTimeSegment: CaseIterable, Equatable, Hashable, Sendable {
 public enum ControlledHumanTimePasteResult: Equatable, Sendable {
     case accepted(Date)
     case rejected
+    /// 粘贴文本格式合法，但该本地时间因夏令时切换不存在。
+    case rejectedNonexistentLocalTime
 }
 
 public struct ControlledHumanTimeInput: Equatable, Sendable {
     public private(set) var components: HumanDateTimeComponents?
     public private(set) var activeSegment: HumanDateTimeSegment
     public private(set) var draft: String
+    /// 最近一次 commitActiveSegment 的失败原因；成功或无草稿时为 nil。
+    /// UI 据此把“静默 nil”区分为可解释诊断（夏令时空洞）。
+    public private(set) var lastCommitFailure: HumanDateTimeConversion.ParseFailure?
     private var didAutoAdvanceAfterDigit: Bool
 
     public init() {
         self.components = nil
         self.activeSegment = .year
         self.draft = ""
+        self.lastCommitFailure = nil
         self.didAutoAdvanceAfterDigit = false
     }
 
@@ -83,6 +89,7 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
         self.components = Self.normalized(components)
         self.activeSegment = .year
         self.draft = ""
+        self.lastCommitFailure = nil
         self.didAutoAdvanceAfterDigit = false
     }
 
@@ -152,6 +159,7 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
         components = HumanDateTimeConversion.components(from: date, timeZone: timeZone)
         activeSegment = .year
         draft = ""
+        lastCommitFailure = nil
         didAutoAdvanceAfterDigit = false
     }
 
@@ -159,12 +167,14 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
         components = nil
         activeSegment = .year
         draft = ""
+        lastCommitFailure = nil
         didAutoAdvanceAfterDigit = false
     }
 
     public mutating func select(_ segment: HumanDateTimeSegment) {
         activeSegment = segment
         draft = ""
+        lastCommitFailure = nil
         didAutoAdvanceAfterDigit = false
     }
 
@@ -231,6 +241,7 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
 
     @discardableResult
     public mutating func commitActiveSegment(timeZone: TimeZone, advance: Bool = false) -> Date? {
+        lastCommitFailure = nil
         guard var nextComponents = components else {
             draft = ""
             didAutoAdvanceAfterDigit = false
@@ -254,16 +265,25 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
         }
         didAutoAdvanceAfterDigit = false
 
-        return HumanDateTimeConversion.date(from: nextComponents, timeZone: timeZone)
+        switch HumanDateTimeConversion.parseResult(from: nextComponents, timeZone: timeZone) {
+        case .date(let date):
+            return date
+        case .failure(let failure):
+            lastCommitFailure = failure
+            return nil
+        }
     }
 
     public mutating func paste(_ text: String, timeZone: TimeZone) -> ControlledHumanTimePasteResult {
-        guard let date = HumanDateTimeConversion.date(fromText: text, timeZone: timeZone) else {
+        switch HumanDateTimeConversion.parseResult(fromText: text, timeZone: timeZone) {
+        case .date(let date):
+            replace(with: date, timeZone: timeZone)
+            return .accepted(date)
+        case .failure(.nonexistentLocalTime):
+            return .rejectedNonexistentLocalTime
+        case .failure:
             return .rejected
         }
-
-        replace(with: date, timeZone: timeZone)
-        return .accepted(date)
     }
 
     public static func lastDay(year: Int, month: Int) -> Int {

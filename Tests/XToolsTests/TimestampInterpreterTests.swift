@@ -17,7 +17,24 @@ struct TimestampInterpreterTests {
         #expect(TimestampInterpreter.evaluate("1718900000") == .valid(1_718_900_000))
         #expect(TimestampInterpreter.evaluate("1718900000.5") == .invalid(.nonIntegerFormat))
         #expect(TimestampInterpreter.evaluate("+1") == .invalid(.nonIntegerFormat))
-        #expect(TimestampInterpreter.evaluate("253402300800") == .invalid(.outOfRange))
+        // 12 位越界秒（恰好超上限一位）：按毫秒时间戳形态提示。
+        #expect(TimestampInterpreter.evaluate("253402300800") == .invalid(.outOfRangePossiblyMilliseconds))
+    }
+
+    @Test func outOfRangeValuesShapedLikeMillisecondsCarryMillisecondHint() {
+        // 12–14 位纯数字按秒解释越界 → 附毫秒提示，帮助 13 位毫秒粘贴者。
+        #expect(TimestampInterpreter.evaluate("1718900000000") == .invalid(.outOfRangePossiblyMilliseconds))
+        #expect(TimestampInterpreter.evaluate("17189000000000") == .invalid(.outOfRangePossiblyMilliseconds))
+        #expect(TimestampInterpreter.evaluate("-999999999999") == .invalid(.outOfRangePossiblyMilliseconds))
+
+        // 其他长度的越界保持原语义；12 位以内的合法秒不受影响。
+        #expect(TimestampInterpreter.evaluate("-62135596801") == .invalid(.outOfRange))
+        #expect(TimestampInterpreter.evaluate("999999999999999999999999") == .invalid(.outOfRange))
+        #expect(TimestampInterpreter.evaluate("253402300799") == .valid(253_402_300_799))
+
+        let message = TimestampInterpreter.ValidationIssue.outOfRangePossiblyMilliseconds.errorDescription ?? ""
+        #expect(message.contains("毫秒"))
+        ToolDiagnosticContract.expectFactual(message)
     }
 
     @Test func timestampDiagnosticsAreFactualAndDoNotEchoPastedLogs() {

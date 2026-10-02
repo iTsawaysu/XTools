@@ -3456,6 +3456,18 @@
     },
     "同步本地 Git 仓库的最新代码。" : {
       "extractionState" : "manual"
+    },
+    "加尔各答" : {
+      "extractionState" : "manual"
+    },
+    "该本地时间因夏令时切换不存在，请改用跳变后的一小时（如 03:30）。" : {
+      "extractionState" : "manual"
+    },
+    "自定义透明填充颜色无效：请输入 #RGB、#RGBA、#RRGGBB 或 #RRGGBBAA 格式的十六进制颜色。" : {
+      "extractionState" : "manual"
+    },
+    "#RGB 或 #RRGGBB" : {
+      "extractionState" : "manual"
     }
   },
   "version" : "1.0"
