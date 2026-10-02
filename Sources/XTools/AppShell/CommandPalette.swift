@@ -178,7 +178,7 @@ struct CommandPaletteView: View {
     let focusToken: Int
     let presentationSession: Int
     let canRequestSearchFocus: AppKitSearchFieldCoordinator.FocusRequestValidity
-    let onSelectTool: (ToolID) -> Void
+    let onSelectTool: (ToolID, String?) -> Void
     let onRunCommand: (CommandActionID) -> Void
     let onRequestFocus: () -> Void
     let onDismiss: () -> Void
@@ -203,7 +203,7 @@ struct CommandPaletteView: View {
         presentationSession: Int,
         canRequestSearchFocus: @escaping AppKitSearchFieldCoordinator.FocusRequestValidity,
         usage: any PaletteUsageScoring = NoPaletteUsage(),
-        onSelectTool: @escaping (ToolID) -> Void,
+        onSelectTool: @escaping (ToolID, String?) -> Void,
         onRunCommand: @escaping (CommandActionID) -> Void,
         onRequestFocus: @escaping () -> Void,
         onDismiss: @escaping () -> Void
@@ -260,8 +260,20 @@ struct CommandPaletteView: View {
 
     private func updateQuery(_ query: String) {
         guard isLiveSession(), sessionModel.setQuery(query) else { return }
-        rowAnchors = [:]
+        pruneRowAnchors(to: sessionModel.snapshot)
         requestActiveReveal(for: .queryReset, in: sessionModel.snapshot)
+    }
+
+    /// 查询变更只裁剪已消失行的锚点，而不是整表清空：行集身份不变的键入
+    /// （如 "base6" → "base64"，同样的两行）不会让 ForEach 重算
+    /// anchorPreference，整表清空后 onPreferenceChange 不再触发，浮动
+    /// 高亮从此解析不到活动行（上下键只剩行内键盘焦点环）。仍挂载行的
+    /// Anchor 在 resolve 时读取当前几何，位置随新布局自动更新，不会在
+    /// 旧位置残影；被移除的行不可能成为活动行，死键没有解析机会。
+    private func pruneRowAnchors(to snapshot: CommandPaletteRowSnapshot) {
+        guard !rowAnchors.isEmpty else { return }
+        let liveIDs = Set(snapshot.rows.filter(\.isSelectable).map(\.id))
+        rowAnchors = rowAnchors.filter { liveIDs.contains($0.key) }
     }
 
     private func moveActive(by delta: Int) {
@@ -363,7 +375,10 @@ struct CommandPaletteView: View {
         }
         guard let toolID = sessionModel.navigationState.toolID(for: item) else { return }
         requestActiveReveal(for: .directActivation)
-        onSelectTool(toolID)
+        // Keyword-tier matches carry the matched alias's hub segment, so a
+        // search for "url" selecting 文本编码 lands directly on the URL
+        // segment (same deep-link channel as the SmartPaste banner).
+        onSelectTool(toolID, sessionModel.snapshot.deepLinkSegment(for: item))
     }
 
     private func requestActiveReveal(for source: CommandPaletteActiveChangeSource) {
@@ -422,7 +437,8 @@ struct CommandPaletteView: View {
         activeItemID: String?,
         selectableIndex: Int?,
         sectionCount: Int?,
-        highlightRanges: [Range<String.Index>]
+        highlightRanges: [Range<String.Index>],
+        subtitleAnnotation: CommandPaletteSubtitleAnnotation?
     ) -> some View {
         switch item {
         case .sectionTitle(let text):
@@ -432,7 +448,8 @@ struct CommandPaletteView: View {
                 id: entry.id,
                 title: entry.title,
                 highlightRanges: highlightRanges,
-                subtitle: entry.categoryTitle,
+                subtitle: subtitleAnnotation?.text ?? entry.categoryTitle,
+                subtitleHighlightRanges: subtitleAnnotation?.highlightRanges ?? [],
                 systemImage: entry.systemImage,
                 isActive: item.id == activeItemID,
                 isKeyboardActive: item.id == activeItemID
@@ -512,14 +529,16 @@ struct CommandPaletteView: View {
         activeItemID: String?,
         selectableIndex: Int?,
         sectionCount: Int?,
-        highlightRanges: [Range<String.Index>]
+        highlightRanges: [Range<String.Index>],
+        subtitleAnnotation: CommandPaletteSubtitleAnnotation?
     ) -> some View {
         paletteItemView(
             for: item,
             activeItemID: activeItemID,
             selectableIndex: selectableIndex,
             sectionCount: sectionCount,
-            highlightRanges: highlightRanges
+            highlightRanges: highlightRanges,
+            subtitleAnnotation: subtitleAnnotation
         )
         .padding(.horizontal, 9)
         .padding(.vertical, 1)
@@ -555,7 +574,8 @@ struct CommandPaletteView: View {
                         activeItemID: activeItemID,
                         selectableIndex: snapshot.selectableIndex(of: item),
                         sectionCount: Self.sectionCount(for: item, in: snapshot),
-                        highlightRanges: snapshot.titleHighlightRanges(for: item)
+                        highlightRanges: snapshot.titleHighlightRanges(for: item),
+                        subtitleAnnotation: snapshot.subtitleAnnotation(for: item)
                     )
                 }
             }

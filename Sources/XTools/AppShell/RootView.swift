@@ -512,8 +512,17 @@ struct RootView: View {
     /// Launch a tool from the command palette, capturing the row icon's
     /// takeoff point so the icon can fly to the arriving page's title rail.
     /// Sidebar and keyboard launches skip the flight — the palette is the one
-    /// surface whose geometry this owns.
-    private func launchFromPalette(_ toolID: ToolID) {
+    /// surface whose geometry this owns. A keyword-tier match carries the
+    /// matched alias's hub segment: write the one-shot segment hint BEFORE
+    /// switching (same channel as the SmartPaste banner) so the arriving hub
+    /// consumes it and overrides its remembered segment.
+    private func launchFromPalette(_ toolID: ToolID, segment: String?) {
+        if let segment {
+            hubSegmentEntryHint.request = HubSegmentEntryHint.Request(
+                toolID: toolID,
+                segment: segment
+            )
+        }
         iconFlight.cancelPendingLaunch()
         paletteRecents.recordLaunch(toolID)
         if viewModel.selectedToolID != toolID,
@@ -762,7 +771,7 @@ private struct CommandPaletteOverlayHost: View {
     let baseActions: [CommandActionEntry]
     let reduceMotion: Bool
     let usage: any PaletteUsageScoring
-    let onSelectTool: (ToolID) -> Void
+    let onSelectTool: (ToolID, String?) -> Void
     let onRunCommand: (CommandActionID) -> Void
     let onRequestFocus: () -> Void
     let onDismiss: () -> Void

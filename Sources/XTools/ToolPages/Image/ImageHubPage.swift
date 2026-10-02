@@ -65,6 +65,7 @@ struct IndexImageHubPage: View {
 /// Hub 时四个会话的重载荷按 toolID 一并驱逐（ToolWorkspacePayloadEvicting）。
 private struct IndexImageHubContent: View {
     @ObservedObject var workspace: ImageHubWorkspaceModel
+    @EnvironmentObject var entryHint: HubSegmentEntryHint
 
     var body: some View {
         IndexPage("图片处理", subtitle: workspace.segment.subtitle, workspaceSemantic: .imagePreviewStage) {
@@ -75,6 +76,8 @@ private struct IndexImageHubContent: View {
             )
             segmentContent
         }
+        .onAppear { consumeEntryHintIfNeeded() }
+        .onChange(of: entryHint.request) { _ in consumeEntryHintIfNeeded() }
     }
 
     private var segmentSelection: Binding<String> {
@@ -95,5 +98,15 @@ private struct IndexImageHubContent: View {
         case .grayscale: IndexImageGrayscaleSegment()
         case .favicon: IndexFaviconGeneratorSegment()
         }
+    }
+
+    /// 深链分段提示（⌘K 关键词命中本 Hub 别名时写入；SmartPaste 同通道）：
+    /// 进入本工具或工具已打开时一次性消费（先清 request 再设分段，避免滞留
+    /// 覆盖后续手动切换；仅消费指向本工具的请求，其余 Hub 的请求原样保留）。
+    private func consumeEntryHintIfNeeded() {
+        guard let request = entryHint.request, request.toolID == "image-tools" else { return }
+        entryHint.request = nil
+        guard let segment = ImageHubWorkspaceModel.Segment(rawValue: request.segment) else { return }
+        workspace.segment = segment
     }
 }

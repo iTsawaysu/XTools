@@ -32,7 +32,11 @@ struct ToolRegistry {
         self.searchRecordByID = Dictionary(uniqueKeysWithValues: tools.map { tool in
             (
                 tool.id,
-                ToolSearchRecord(title: tool.title, keywords: tool.keywords)
+                ToolSearchRecord(
+                    title: tool.title,
+                    keywords: tool.keywords,
+                    aliases: tool.aliases
+                )
             )
         })
     }
@@ -158,12 +162,17 @@ extension ToolRegistry {
         ],
         tools: [
             // MARK: - 编码与转换
+            // Hub 别名的 label 与页面分段 label 一致、segment 即分段 rawValue；
+            // matching 逐字吸收原有功能性关键词，保证命中 tier/score 不变。
             RegisteredTool(
                 id: "base64-file-converter",
                 title: "Base64 文件",
                 categoryID: .converter,
                 systemImage: "doc",
-                keywords: ["base64", "file", "encode", "decode", "文件", "dataurl"]
+                keywords: ["base64", "file", "encode", "decode", "文件"],
+                aliases: [
+                    ToolAlias("Data URL", matching: ["dataurl", "data url"])
+                ]
             ) {
                 IndexBase64FilePage()
             },
@@ -172,11 +181,12 @@ extension ToolRegistry {
                 title: "文本编码",
                 categoryID: .converter,
                 systemImage: "text.quote",
-                keywords: [
-                    "base64", "encode", "decode",
-                    "url", "percent",
-                    "ascii", "binary", "text", "convert", "二进制",
-                    "unicode", "escape"
+                keywords: ["encode", "decode", "text", "convert"],
+                aliases: [
+                    ToolAlias("Base64", matching: ["base64"], segment: "base64"),
+                    ToolAlias("URL", matching: ["url", "percent"], segment: "url"),
+                    ToolAlias("ASCII/二进制", matching: ["ascii", "binary", "二进制"], segment: "ascii"),
+                    ToolAlias("Unicode", matching: ["unicode", "escape"], segment: "unicode")
                 ]
             ) {
                 IndexEncodingHubPage()
@@ -186,7 +196,13 @@ extension ToolRegistry {
                 title: "进制转换",
                 categoryID: .converter,
                 systemImage: "arrow.left.arrow.right.square",
-                keywords: ["integer", "base", "binary", "octal", "hex", "decimal", "进制"]
+                keywords: ["integer", "base", "进制"],
+                aliases: [
+                    ToolAlias("二进制", matching: ["binary"]),
+                    ToolAlias("八进制", matching: ["octal"]),
+                    ToolAlias("十进制", matching: ["decimal"]),
+                    ToolAlias("十六进制", matching: ["hex", "hexadecimal"])
+                ]
             ) {
                 IndexBaseConverterPage()
             },
@@ -204,7 +220,14 @@ extension ToolRegistry {
                 title: "大小写转换",
                 categoryID: .converter,
                 systemImage: "textformat.size",
-                keywords: ["case", "upper", "lower", "camel", "snake", "kebab", "大小写"]
+                keywords: ["case", "大小写"],
+                aliases: [
+                    ToolAlias("camelCase", matching: ["camel"]),
+                    ToolAlias("snake_case", matching: ["snake"]),
+                    ToolAlias("kebab-case", matching: ["kebab"]),
+                    ToolAlias("大写", matching: ["upper"]),
+                    ToolAlias("小写", matching: ["lower"])
+                ]
             ) {
                 IndexCaseConverterPage()
             },
@@ -215,7 +238,14 @@ extension ToolRegistry {
                 title: "Hash 文本",
                 categoryID: .crypto,
                 systemImage: "number",
-                keywords: ["hash", "md5", "sha1", "sha256", "sha512", "sha3", "digest", "摘要"]
+                keywords: ["hash", "digest", "摘要"],
+                aliases: [
+                    ToolAlias("MD5", matching: ["md5"]),
+                    ToolAlias("SHA-1", matching: ["sha1", "sha-1"]),
+                    ToolAlias("SHA-256", matching: ["sha256", "sha-256"]),
+                    ToolAlias("SHA-512", matching: ["sha512", "sha-512"]),
+                    ToolAlias("SHA-3", matching: ["sha3", "sha-3"])
+                ]
             ) {
                 IndexHashTextPage()
             },
@@ -224,7 +254,10 @@ extension ToolRegistry {
                 title: "文本加密",
                 categoryID: .crypto,
                 systemImage: "lock",
-                keywords: ["encrypt", "decrypt", "aes", "cipher", "加密", "解密"]
+                keywords: ["encrypt", "decrypt", "cipher", "加密", "解密"],
+                aliases: [
+                    ToolAlias("AES", matching: ["aes"])
+                ]
             ) {
                 IndexTextEncryptionPage()
             },
@@ -242,7 +275,12 @@ extension ToolRegistry {
                 title: "生成器",
                 categoryID: .crypto,
                 systemImage: "shuffle",
-                keywords: ["token", "uuid", "password", "random", "secret", "generate", "guid", "unique", "identifier", "随机", "生成", "密码", "强度"]
+                keywords: ["random", "secret", "generate", "unique", "identifier", "随机", "生成", "强度"],
+                aliases: [
+                    ToolAlias("Token", matching: ["token"], segment: "token"),
+                    ToolAlias("UUID", matching: ["uuid", "guid"], segment: "uuid"),
+                    ToolAlias("密码", matching: ["password"], segment: "password")
+                ]
             ) {
                 IndexGeneratorHubPage()
             },
@@ -253,7 +291,13 @@ extension ToolRegistry {
                 title: "格式化",
                 categoryID: .development,
                 systemImage: "curlybraces.square",
-                keywords: ["json", "xml", "yaml", "yml", "sql", "format", "prettify", "beautify", "minify", "compress", "格式化", "美化", "压缩"]
+                keywords: ["format", "prettify", "beautify", "minify", "compress", "格式化", "美化", "压缩"],
+                aliases: [
+                    ToolAlias("JSON", matching: ["json"], segment: "json"),
+                    ToolAlias("XML", matching: ["xml"], segment: "xml"),
+                    ToolAlias("YAML", matching: ["yaml", "yml"], segment: "yaml"),
+                    ToolAlias("SQL", matching: ["sql"], segment: "sql")
+                ]
             ) {
                 IndexFormatterHubPage()
             },
@@ -262,7 +306,11 @@ extension ToolRegistry {
                 title: "对比",
                 categoryID: .development,
                 systemImage: "square.split.2x1",
-                keywords: ["json", "text", "diff", "compare", "difference", "对比"]
+                keywords: ["diff", "compare", "difference", "对比"],
+                aliases: [
+                    ToolAlias("JSON", matching: ["json"], segment: "json"),
+                    ToolAlias("文本", matching: ["text"], segment: "text")
+                ]
             ) {
                 IndexDiffHubPage()
             },
@@ -383,11 +431,12 @@ extension ToolRegistry {
                 title: "图片处理",
                 categoryID: .image,
                 systemImage: "photo.on.rectangle.angled",
-                keywords: [
-                    "image", "convert", "format", "png", "jpg", "webp", "图片", "转换",
-                    "compress", "optimize", "压缩",
-                    "grayscale", "filter", "灰度",
-                    "favicon", "icon", "generate", "图标", "生成"
+                keywords: ["image", "图片", "generate", "生成"],
+                aliases: [
+                    ToolAlias("格式转换", matching: ["convert", "format", "转换", "png", "jpg", "webp"], segment: "convert"),
+                    ToolAlias("压缩", matching: ["compress", "optimize", "压缩"], segment: "compress"),
+                    ToolAlias("灰度", matching: ["grayscale", "filter", "灰度"], segment: "grayscale"),
+                    ToolAlias("Favicon", matching: ["favicon", "icon", "图标"], segment: "favicon")
                 ]
             ) {
                 IndexImageHubPage()
@@ -406,7 +455,12 @@ extension ToolRegistry {
                 title: "颜色转换",
                 categoryID: .image,
                 systemImage: "paintpalette",
-                keywords: ["color", "hex", "rgb", "hsl", "picker"]
+                keywords: ["color", "picker"],
+                aliases: [
+                    ToolAlias("HEX", matching: ["hex"]),
+                    ToolAlias("RGB", matching: ["rgb"]),
+                    ToolAlias("HSL", matching: ["hsl"])
+                ]
             ) {
                 IndexColorPage()
             },

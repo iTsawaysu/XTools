@@ -50,24 +50,40 @@ struct CommandPaletteSection: Equatable {
     let rows: [CommandPaletteRowProjection]
 }
 
+/// One tool row's composed match-reason subtitle: the category title plus
+/// the matched alias labels, with highlight ranges into `text` covering the
+/// matched label fragments (painted in the same accent as title ranges).
+struct CommandPaletteSubtitleAnnotation: Equatable {
+    let text: String
+    let highlightRanges: [Range<String.Index>]
+}
+
 /// The palette's one cached row list. Selectable navigation is precomputed,
 /// and `titleHighlightRangesByID` carries the engine's title-match ranges
 /// (keyed by row id) so row rendering never re-runs matching. Rows own no
-/// other derived per-row state.
+/// other derived per-row state — keyword-tier alias hits likewise arrive
+/// pre-composed as subtitle annotations (`subtitleAnnotationsByID`), and
+/// their deep-link segments (`deepLinkSegmentsByID`).
 struct CommandPaletteRowSnapshot: Equatable {
     let rows: [CommandPaletteRowProjection]
     private let selectableRows: [CommandPaletteRowProjection]
     private let selectableIndicesByID: [String: Int]
     let titleHighlightRangesByID: [String: [Range<String.Index>]]
+    let subtitleAnnotationsByID: [String: CommandPaletteSubtitleAnnotation]
+    let deepLinkSegmentsByID: [String: String]
     let sectionCountsByTitle: [String: Int]
 
     init(
         rows: [CommandPaletteRowProjection],
         titleHighlightRangesByID: [String: [Range<String.Index>]] = [:],
+        subtitleAnnotationsByID: [String: CommandPaletteSubtitleAnnotation] = [:],
+        deepLinkSegmentsByID: [String: String] = [:],
         sectionCountsByTitle: [String: Int] = [:]
     ) {
         self.rows = rows
         self.titleHighlightRangesByID = titleHighlightRangesByID
+        self.subtitleAnnotationsByID = subtitleAnnotationsByID
+        self.deepLinkSegmentsByID = deepLinkSegmentsByID
         self.sectionCountsByTitle = sectionCountsByTitle
 
         var selectableRows: [CommandPaletteRowProjection] = []
@@ -101,6 +117,14 @@ struct CommandPaletteRowSnapshot: Equatable {
 
     func titleHighlightRanges(for row: CommandPaletteRowProjection) -> [Range<String.Index>] {
         titleHighlightRangesByID[row.id] ?? []
+    }
+
+    func subtitleAnnotation(for row: CommandPaletteRowProjection) -> CommandPaletteSubtitleAnnotation? {
+        subtitleAnnotationsByID[row.id]
+    }
+
+    func deepLinkSegment(for row: CommandPaletteRowProjection) -> String? {
+        deepLinkSegmentsByID[row.id]
     }
 }
 
@@ -190,7 +214,9 @@ struct CommandPaletteNavigationState: Equatable {
     /// no-results row.
     static func snapshot(
         sections: [CommandPaletteSection],
-        titleHighlightRangesByID: [String: [Range<String.Index>]] = [:]
+        titleHighlightRangesByID: [String: [Range<String.Index>]] = [:],
+        subtitleAnnotationsByID: [String: CommandPaletteSubtitleAnnotation] = [:],
+        deepLinkSegmentsByID: [String: String] = [:]
     ) -> CommandPaletteRowSnapshot {
         var rows: [CommandPaletteRowProjection] = []
         var sectionCountsByTitle: [String: Int] = [:]
@@ -207,6 +233,8 @@ struct CommandPaletteNavigationState: Equatable {
         return CommandPaletteRowSnapshot(
             rows: rows.isEmpty ? [.empty] : rows,
             titleHighlightRangesByID: titleHighlightRangesByID,
+            subtitleAnnotationsByID: subtitleAnnotationsByID,
+            deepLinkSegmentsByID: deepLinkSegmentsByID,
             sectionCountsByTitle: sectionCountsByTitle
         )
     }
@@ -216,7 +244,9 @@ struct CommandPaletteNavigationState: Equatable {
     static func snapshot(
         for entries: [ToolNavigationCommandEntry],
         actions: [CommandActionEntry] = [],
-        titleHighlightRangesByID: [String: [Range<String.Index>]] = [:]
+        titleHighlightRangesByID: [String: [Range<String.Index>]] = [:],
+        subtitleAnnotationsByID: [String: CommandPaletteSubtitleAnnotation] = [:],
+        deepLinkSegmentsByID: [String: String] = [:]
     ) -> CommandPaletteRowSnapshot {
         snapshot(
             sections: [
@@ -229,7 +259,9 @@ struct CommandPaletteNavigationState: Equatable {
                     rows: entries.map(CommandPaletteRowProjection.tool)
                 ),
             ],
-            titleHighlightRangesByID: titleHighlightRangesByID
+            titleHighlightRangesByID: titleHighlightRangesByID,
+            subtitleAnnotationsByID: subtitleAnnotationsByID,
+            deepLinkSegmentsByID: deepLinkSegmentsByID
         )
     }
 

@@ -81,6 +81,7 @@ struct CommandPaletteRow: View {
     let title: String
     var highlightRanges: [Range<String.Index>] = []
     let subtitle: String?
+    var subtitleHighlightRanges: [Range<String.Index>] = []
     let systemImage: String
     var isActive: Bool = false
     var isKeyboardActive: Bool = false
@@ -108,15 +109,21 @@ struct CommandPaletteRow: View {
                     }
 
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(Self.attributedTitle(title, highlightRanges: highlightRanges))
+                    Text(Self.accentHighlighted(
+                        title,
+                        baseColor: ToolTheme.textPrimary,
+                        highlightRanges: highlightRanges
+                    ))
                         .font(ToolTypography.bodyLarge)
-                        .foregroundStyle(ToolTheme.textPrimary)
                         .lineLimit(1)
 
                     if let subtitle {
-                        Text(subtitle)
+                        Text(Self.accentHighlighted(
+                            subtitle,
+                            baseColor: ToolTheme.textTertiary,
+                            highlightRanges: subtitleHighlightRanges
+                        ))
                             .font(ToolTypography.caption)
-                            .foregroundStyle(ToolTheme.textTertiary)
                             .lineLimit(1)
                     }
                 }
@@ -149,31 +156,38 @@ struct CommandPaletteRow: View {
         .toolInteractionFeedback()
     }
 
-    /// Accent-paints the engine's matched title ranges. Ranges arrive
-    /// prebuilt with the snapshot (one engine pass per query, shared with
-    /// ranking), so rendering never re-runs matching and keyword/pinyin-only
-    /// hits simply paint nothing.
-    static func attributedTitle(
-        _ title: String,
+    /// Accent-paints the engine's matched ranges over a base color. Title
+    /// and subtitle ranges arrive prebuilt with the snapshot (one engine
+    /// pass per query, shared with ranking), so rendering never re-runs
+    /// matching and keyword/pinyin-only hits simply paint nothing.
+    static func accentHighlighted(
+        _ text: String,
+        baseColor: Color,
         highlightRanges: [Range<String.Index>]
     ) -> AttributedString {
         guard !highlightRanges.isEmpty else {
-            return AttributedString(title)
+            var plain = AttributedString(text)
+            plain.foregroundColor = baseColor
+            return plain
         }
 
         var attributed = AttributedString()
-        var cursor = title.startIndex
+        var cursor = text.startIndex
         for range in highlightRanges {
             if cursor < range.lowerBound {
-                attributed += AttributedString(String(title[cursor..<range.lowerBound]))
+                var segment = AttributedString(String(text[cursor..<range.lowerBound]))
+                segment.foregroundColor = baseColor
+                attributed += segment
             }
-            var matched = AttributedString(String(title[range]))
+            var matched = AttributedString(String(text[range]))
             matched.foregroundColor = ToolTheme.accentHover
             attributed += matched
             cursor = range.upperBound
         }
-        if cursor < title.endIndex {
-            attributed += AttributedString(String(title[cursor...]))
+        if cursor < text.endIndex {
+            var tail = AttributedString(String(text[cursor...]))
+            tail.foregroundColor = baseColor
+            attributed += tail
         }
         return attributed
     }

@@ -1,52 +1,127 @@
 import Foundation
 import os
 
-/// One prebuilt searchable corpus: a title plus alias keywords.
+/// Alias ownership attached to one keyword-tier match surface: the display
+/// label to report, the hub segment to deep-link, and — only when the surface
+/// IS the label's own text — the label text so highlight ranges can map back
+/// to the original label string. Variants and pinyin projections inherit the
+/// label/segment but carry no label text, so their hits show the label
+/// unhighlighted.
+struct ToolSearchAliasSurface: Sendable {
+    let label: String
+    let segment: String?
+    let labelText: ToolSearchText?
+}
+
+/// One keyword-tier match surface plus the alias it reports for (nil = a
+/// plain recall keyword with nothing to display).
+struct ToolSearchKeywordEntry: Sendable {
+    let text: ToolSearchText
+    let alias: ToolSearchAliasSurface?
+}
+
+/// One prebuilt searchable corpus: a title plus alias-owned surfaces and
+/// alias keywords.
 ///
 /// Records fold (case- and diacritic-insensitive) their text at build time,
 /// so registry construction stays cheap and every keystroke only runs
-/// comparisons against the folded forms. Pinyin projection is deliberately
-/// NOT part of construction: the first ICU Han→Latin transliteration in a
-/// process costs ~45ms of engine construction (subsequent calls ~35µs), so
-/// pinning it to registry init would tax app launch. It materializes lazily,
-/// once per record, on the first query that falls through to the keyword
-/// tier — the app prewarms the engine in the background at startup
+/// comparisons against the folded forms. Alias labels join the corpus in
+/// title form (they carry a grapheme map, so label hits report highlight
+/// ranges); variants and plain keywords are fold-only. Exact folded
+/// duplicates drop out here — the earlier surface wins, and alias labels are
+/// appended before their variants, so an alias label beats its own identical
+/// variant and reports ranges. Pinyin projection is deliberately NOT part of
+/// construction: the first ICU Han→Latin transliteration in a process costs
+/// ~45ms of engine construction (subsequent calls ~35µs), so pinning it to
+/// registry init would tax app launch. It materializes lazily, once per
+/// record, on the first query that falls through to the keyword tier — the
+/// app prewarms the engine in the background at startup
 /// (`ToolSearchEngine.prewarmTransliterationEngine`), making even that first
-/// materialization cheap.
+/// materialization cheap. A pinyin variant inherits its source's alias
+/// ownership (label + segment, no label ranges).
 final class ToolSearchRecord: Sendable {
     let titleText: ToolSearchText
 
+    private struct PinyinSource {
+        let source: String
+        let alias: ToolSearchAliasSurface?
+    }
+
     private struct KeywordState {
-        var folded: [ToolSearchText]
-        var sources: [String]
-        var combined: [ToolSearchText]?
+        var folded: [ToolSearchKeywordEntry]
+        var pinyinSources: [PinyinSource]
+        var combined: [ToolSearchKeywordEntry]?
     }
 
     private let keywordState: OSAllocatedUnfairLock<KeywordState>
 
-    init(title: String, keywords: [String]) {
+    init(title: String, keywords: [String], aliases: [ToolAlias] = []) {
         self.titleText = ToolSearchText(title: title)
+
+        var folded: [ToolSearchKeywordEntry] = []
+        var pinyinSources: [PinyinSource] = [PinyinSource(source: title, alias: nil)]
+        var seenFolded: Set<[Character]> = []
+
+        func appendSurface(
+            _ source: String,
+            text: ToolSearchText,
+            alias: ToolSearchAliasSurface?
+        ) {
+            guard !source.isEmpty, seenFolded.insert(text.folded).inserted else { return }
+            folded.append(ToolSearchKeywordEntry(text: text, alias: alias))
+            if source.containsIdeograph {
+                pinyinSources.append(PinyinSource(source: source, alias: alias))
+            }
+        }
+
+        for alias in aliases {
+            let labelText = ToolSearchText(title: alias.label)
+            appendSurface(
+                alias.label,
+                text: labelText,
+                alias: ToolSearchAliasSurface(
+                    label: alias.label,
+                    segment: alias.segment,
+                    labelText: labelText
+                )
+            )
+            for variant in alias.matching {
+                appendSurface(
+                    variant,
+                    text: ToolSearchText(foldedSource: variant),
+                    alias: ToolSearchAliasSurface(
+                        label: alias.label,
+                        segment: alias.segment,
+                        labelText: nil
+                    )
+                )
+            }
+        }
+        for keyword in keywords {
+            appendSurface(keyword, text: ToolSearchText(foldedSource: keyword), alias: nil)
+        }
+
         self.keywordState = OSAllocatedUnfairLock(
             initialState: KeywordState(
-                folded: keywords.map { ToolSearchText(foldedSource: $0) },
-                sources: [title] + keywords,
+                folded: folded,
+                pinyinSources: pinyinSources,
                 combined: nil
             )
         )
     }
 
-    /// Folded aliases plus engine-generated pinyin projections (full
-    /// syllables + initials), so “时间戳转换” also matches “sjz” and
+    /// Folded alias/keyword surfaces plus engine-generated pinyin projections
+    /// (full syllables + initials), so “时间戳转换” also matches “sjz” and
     /// “shijian”. Engine-uniform for every record — there is deliberately no
     /// per-entry alias configuration. Builds the pinyin layer once per record
     /// under the lock; later calls return the cached combined list.
-    func keywordTextsForMatching() -> [ToolSearchText] {
+    func keywordEntriesForMatching() -> [ToolSearchKeywordEntry] {
         keywordState.withLock { state in
             if let combined = state.combined {
                 return combined
             }
             let combined = state.folded
-                + Self.pinyinKeywordTexts(for: state.sources)
+                + Self.pinyinKeywordEntries(for: state.pinyinSources)
             state.combined = combined
             return combined
         }
@@ -55,29 +130,48 @@ final class ToolSearchRecord: Sendable {
     /// Pinyin projection turns Han titles and aliases into latin
     /// searchables. `toLatin` is the ICU Han→Latin (Mandarin pinyin)
     /// channel: it transliterates Han characters and leaves other scripts
-    /// alone.
-    private static func pinyinKeywordTexts(for sources: [String]) -> [ToolSearchText] {
-        var variants: [String] = []
+    /// alone. Each projection keeps its source's alias ownership minus the
+    /// label text — a pinyin hit displays the label but cannot highlight
+    /// inside it.
+    private static func pinyinKeywordEntries(
+        for sources: [PinyinSource]
+    ) -> [ToolSearchKeywordEntry] {
+        var variants: [(String, ToolSearchAliasSurface?)] = []
         var seen: Set<String> = []
 
-        func append(_ variant: String) {
+        func append(_ variant: String, alias: ToolSearchAliasSurface?) {
             guard !variant.isEmpty, seen.insert(variant).inserted else { return }
-            variants.append(variant)
+            variants.append((variant, alias))
         }
 
-        for source in sources where source.containsIdeograph {
-            guard let latin = source
+        for entry in sources {
+            guard entry.source.containsIdeograph,
+                  let latin = entry.source
                 .applyingTransform(.toLatin, reverse: false)?
                 .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
             else { continue }
             let syllables = latin.split { $0.isWhitespace }
             guard !syllables.isEmpty else { continue }
 
-            append(syllables.map(String.init).joined())
-            append(syllables.compactMap { $0.first { $0.isLetter } }.map(String.init).joined())
+            let aliasWithoutLabel = entry.alias.map { alias in
+                ToolSearchAliasSurface(label: alias.label, segment: alias.segment, labelText: nil)
+            }
+            append(
+                syllables.map(String.init).joined(),
+                alias: aliasWithoutLabel
+            )
+            append(
+                syllables.compactMap { $0.first { $0.isLetter } }.map(String.init).joined(),
+                alias: aliasWithoutLabel
+            )
         }
 
-        return variants.map { ToolSearchText(foldedSource: $0) }
+        return variants.map { variant, alias in
+            ToolSearchKeywordEntry(
+                text: ToolSearchText(foldedSource: variant),
+                alias: alias
+            )
+        }
     }
 }
 
@@ -208,14 +302,34 @@ enum ToolSearchEngine {
         }
     }
 
+    /// One alias that the query matched: the display label, its hub segment
+    /// (for deep-link activation), and — when the match landed on the label's
+    /// own surface — merged highlight ranges into the original label string.
+    struct AliasMatch: Equatable {
+        let label: String
+        let segment: String?
+        let labelRanges: [Range<String.Index>]
+    }
+
     /// One record's combined result for a whole query. `titleRanges` are
     /// merged, sorted ranges into the ORIGINAL title string, ready for
-    /// highlight rendering; keyword-tier matches carry none.
+    /// highlight rendering; keyword-tier matches carry none. `aliasMatches`
+    /// are the query's keyword-tier alias hits (deduped by label, ranked by
+    /// contribution score, capped) for match-reason display, and
+    /// `deepLinkSegment` is the best-scoring matched alias that owns a hub
+    /// segment. Ranking reads only `tier`/`score` — alias reporting is
+    /// display metadata and never reorders results.
     struct Match: Equatable {
         let tier: Tier
         let score: Int
         let titleRanges: [Range<String.Index>]
+        let aliasMatches: [AliasMatch]
+        let deepLinkSegment: String?
     }
+
+    /// How many distinct matched aliases a row displays; more than two
+    /// crowds the subtitle past its one-line budget.
+    static let aliasDisplayLimit = 2
 
     /// fzf scoring constants (see fzf's algo.go): a boundary bonus is
     /// deliberately cancelled by ~8 characters of gap, which keeps this a
@@ -252,19 +366,66 @@ enum ToolSearchEngine {
         var tier = Tier.titlePrefix
         var score = 0
         var titleRanges: [Range<String.Index>] = []
+        var aliasContributions: [(alias: AliasMatch, score: Int, position: Int)] = []
 
         for token in tokens {
             guard let tokenMatch = matchToken(Array(token), in: record) else { return nil }
             tier = max(tier, tokenMatch.tier)
             score += tokenMatch.score
             titleRanges.append(contentsOf: tokenMatch.titleRanges)
+            if let alias = tokenMatch.alias {
+                aliasContributions.append((alias, tokenMatch.score, aliasContributions.count))
+            }
         }
+
+        let aliases = aggregateAliases(aliasContributions)
 
         return Match(
             tier: tier,
             score: score,
-            titleRanges: mergeSorted(titleRanges)
+            titleRanges: mergeSorted(titleRanges),
+            aliasMatches: Array(aliases.prefix(aliasDisplayLimit)).map(\.alias),
+            deepLinkSegment: aliases
+                .first(where: { $0.alias.segment != nil })?.alias.segment
         )
+    }
+
+    /// Fuses per-token alias hits into per-label results: a label matched by
+    /// several tokens merges its label-surface highlight ranges (they all map
+    /// into the same label string) and keeps the best contribution score;
+    /// labels order by score with first-seen as the tiebreak.
+    private static func aggregateAliases(
+        _ contributions: [(alias: AliasMatch, score: Int, position: Int)]
+    ) -> [(alias: AliasMatch, score: Int, position: Int)] {
+        var bestByLabel: [String: (alias: AliasMatch, score: Int, position: Int)] = [:]
+        bestByLabel.reserveCapacity(contributions.count)
+
+        for contribution in contributions {
+            guard var accumulated = bestByLabel[contribution.alias.label] else {
+                bestByLabel[contribution.alias.label] = contribution
+                continue
+            }
+            if !contribution.alias.labelRanges.isEmpty {
+                accumulated.alias = AliasMatch(
+                    label: accumulated.alias.label,
+                    segment: accumulated.alias.segment,
+                    labelRanges: mergeSorted(
+                        accumulated.alias.labelRanges + contribution.alias.labelRanges
+                    )
+                )
+            }
+            if contribution.score > accumulated.score {
+                accumulated.score = contribution.score
+            }
+            bestByLabel[contribution.alias.label] = accumulated
+        }
+
+        return bestByLabel.values.sorted { left, right in
+            if left.score != right.score {
+                return left.score > right.score
+            }
+            return left.position < right.position
+        }
     }
 
     // MARK: - Tokens
@@ -273,6 +434,7 @@ enum ToolSearchEngine {
         let tier: Tier
         let score: Int
         let titleRanges: [Range<String.Index>]
+        let alias: AliasMatch?
     }
 
     private static func matchToken(
@@ -286,33 +448,83 @@ enum ToolSearchEngine {
             return TokenMatch(
                 tier: tier,
                 score: best.score,
-                titleRanges: [title.originalRange(for: best.range)]
+                titleRanges: [title.originalRange(for: best.range)],
+                alias: nil
             )
         }
 
-        if let best = record.keywordTextsForMatching()
-            .compactMap({ bestContiguous(token, in: $0) })
-            .max(by: { $0.score > $1.score })
+        if let best = record.keywordEntriesForMatching()
+            .compactMap({ entry -> (entry: ToolSearchKeywordEntry, match: ContiguousMatch)? in
+                bestContiguous(token, in: entry.text).map { (entry, $0) }
+            })
+            .max(by: { $0.match.score > $1.match.score })
         {
-            return TokenMatch(tier: .keywordContains, score: best.score, titleRanges: [])
+            return TokenMatch(
+                tier: .keywordContains,
+                score: best.match.score,
+                titleRanges: [],
+                alias: aliasMatch(for: best.entry, contiguous: best.match)
+            )
         }
 
         if let alignment = fuzzyAlign(token, in: title) {
             return TokenMatch(
                 tier: .titleSubsequence,
                 score: alignment.score,
-                titleRanges: alignment.positions.map { title.originalRange(for: $0..<$0 + 1) }
+                titleRanges: alignment.positions.map { title.originalRange(for: $0..<$0 + 1) },
+                alias: nil
             )
         }
 
-        if let best = record.keywordTextsForMatching()
-            .compactMap({ fuzzyAlign(token, in: $0) })
-            .max(by: { $0.score > $1.score })
+        if let best = record.keywordEntriesForMatching()
+            .compactMap({ entry -> (entry: ToolSearchKeywordEntry, alignment: Alignment)? in
+                fuzzyAlign(token, in: entry.text).map { (entry, $0) }
+            })
+            .max(by: { $0.alignment.score > $1.alignment.score })
         {
-            return TokenMatch(tier: .keywordSubsequence, score: best.score, titleRanges: [])
+            return TokenMatch(
+                tier: .keywordSubsequence,
+                score: best.alignment.score,
+                titleRanges: [],
+                alias: aliasMatch(for: best.entry, alignment: best.alignment)
+            )
         }
 
         return nil
+    }
+
+    /// Projects a winning keyword-tier alignment onto its entry's alias.
+    /// Label ranges only exist when the winning surface is the label's own
+    /// text (title form, grapheme-mapped); variant and pinyin hits display
+    /// the label without inner highlighting.
+    private static func aliasMatch(
+        for entry: ToolSearchKeywordEntry,
+        contiguous: ContiguousMatch
+    ) -> AliasMatch? {
+        guard let alias = entry.alias else { return nil }
+        let ranges: [Range<String.Index>]
+        if let labelText = alias.labelText {
+            ranges = [labelText.originalRange(for: contiguous.range)]
+        } else {
+            ranges = []
+        }
+        return AliasMatch(label: alias.label, segment: alias.segment, labelRanges: ranges)
+    }
+
+    private static func aliasMatch(
+        for entry: ToolSearchKeywordEntry,
+        alignment: Alignment
+    ) -> AliasMatch? {
+        guard let alias = entry.alias else { return nil }
+        let ranges: [Range<String.Index>]
+        if let labelText = alias.labelText {
+            ranges = mergeSorted(
+                alignment.positions.map { labelText.originalRange(for: $0..<$0 + 1) }
+            )
+        } else {
+            ranges = []
+        }
+        return AliasMatch(label: alias.label, segment: alias.segment, labelRanges: ranges)
     }
 
     // MARK: - Contiguous matching

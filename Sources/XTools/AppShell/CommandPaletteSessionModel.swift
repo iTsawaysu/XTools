@@ -349,10 +349,76 @@ final class CommandPaletteSessionModel: ObservableObject {
             titleHighlightRangesByID["command.\(action.id.rawValue)"] = match.titleRanges
         }
 
+        var subtitleAnnotationsByID: [String: CommandPaletteSubtitleAnnotation] = [:]
+        var deepLinkSegmentsByID: [String: String] = [:]
+        subtitleAnnotationsByID.reserveCapacity(projection.entries.count)
+        for (entry, match) in zip(projection.entries, projection.matches) {
+            guard let match else { continue }
+            if !match.aliasMatches.isEmpty {
+                subtitleAnnotationsByID[entry.id] = Self.composedSubtitle(
+                    categoryTitle: entry.categoryTitle,
+                    aliasMatches: match.aliasMatches
+                )
+            }
+            if let segment = match.deepLinkSegment {
+                deepLinkSegmentsByID[entry.id] = segment
+            }
+        }
+
         return CommandPaletteNavigationState.snapshot(
             for: projection.entries,
             actions: matchedActions.map(\.0),
-            titleHighlightRangesByID: titleHighlightRangesByID
+            titleHighlightRangesByID: titleHighlightRangesByID,
+            subtitleAnnotationsByID: subtitleAnnotationsByID,
+            deepLinkSegmentsByID: deepLinkSegmentsByID
+        )
+    }
+
+    /// Composes a keyword-tier match-reason subtitle: the category title
+    /// plus each matched alias label, with label-local highlight ranges
+    /// offset into the composed string so rendering paints the matched
+    /// fragments in the shared accent.
+    private static func composedSubtitle(
+        categoryTitle: String?,
+        aliasMatches: [ToolSearchEngine.AliasMatch]
+    ) -> CommandPaletteSubtitleAnnotation {
+        // Segments assembled left to right; ranges recorded as character
+        // offsets so each label's ranges survive the offset shift.
+        var text = ""
+        var ranges: [Range<Int>] = []
+
+        func appendLabel(_ aliasMatch: ToolSearchEngine.AliasMatch) {
+            let base = text.count
+            text += aliasMatch.label
+            for range in aliasMatch.labelRanges {
+                let lower = base + aliasMatch.label.distance(
+                    from: aliasMatch.label.startIndex,
+                    to: range.lowerBound
+                )
+                let upper = base + aliasMatch.label.distance(
+                    from: aliasMatch.label.startIndex,
+                    to: range.upperBound
+                )
+                ranges.append(lower..<upper)
+            }
+        }
+
+        if let categoryTitle, !categoryTitle.isEmpty {
+            text += categoryTitle + " · "
+        }
+        appendLabel(aliasMatches[0])
+        for aliasMatch in aliasMatches.dropFirst() {
+            text += " · "
+            appendLabel(aliasMatch)
+        }
+
+        let sortedRanges = ranges.sorted { $0.lowerBound < $1.lowerBound }
+        return CommandPaletteSubtitleAnnotation(
+            text: text,
+            highlightRanges: sortedRanges.map { range in
+                text.index(text.startIndex, offsetBy: range.lowerBound)
+                    ..< text.index(text.startIndex, offsetBy: range.upperBound)
+            }
         )
     }
 
