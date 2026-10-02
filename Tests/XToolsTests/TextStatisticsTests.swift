@@ -50,6 +50,18 @@ struct TextStatisticsTests {
         #expect(stats.words == 3)
     }
 
+    @Test func countsLinesLikeWcIgnoringTrailingNewline() {
+        // 2026-10 更新：末尾换行按 wc 语义是行终止符而非新行。
+        #expect(TextStatistics.analyze("a\n").lines == 1)
+        #expect(TextStatistics.analyze("\n").lines == 0)
+        #expect(TextStatistics.analyze("a").lines == 1)
+        #expect(TextStatistics.analyze("").lines == 0)
+        #expect(TextStatistics.analyze("a\nb").lines == 2)
+        #expect(TextStatistics.analyze("a\nb\n").lines == 2)
+        #expect(TextStatistics.analyze("\n\n").lines == 2)
+        #expect(TextStatistics.analyze("a\r\n").lines == 1)
+    }
+
     @Test func countsLinesTreatingCRLFAsOneLineBreak() {
         // Regression: components(separatedBy: .newlines) split \r\n into two
         // separators and over-counted lines; grapheme-level counting treats

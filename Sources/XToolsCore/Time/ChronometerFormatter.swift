@@ -88,6 +88,17 @@ public struct ChronometerState: Equatable, Sendable {
 public enum ChronometerFormatter {
     public static func format(_ interval: TimeInterval) -> String {
         let milliseconds = max(0, Int(interval * 1000))
+        // ≥1 小时改用 h:mm:ss.ff（如 1:01:01.50）；<1 小时保持 mm:ss.ff，
+        // 避免"61:01.23"这种把小时折进分钟的读数。
+        if milliseconds >= 3_600_000 {
+            return String(
+                format: "%d:%02d:%02d.%02d",
+                milliseconds / 3_600_000,
+                (milliseconds % 3_600_000) / 60_000,
+                (milliseconds % 60_000) / 1000,
+                (milliseconds % 1000) / 10
+            )
+        }
         return String(
             format: "%02d:%02d.%02d",
             milliseconds / 60_000,

@@ -57,7 +57,7 @@ enum TimezoneCityCatalog {
             TimezoneInfo(timezone: TimeZone(identifier: "Asia/Singapore")!, name: "新加坡", region: "亚洲"),
             TimezoneInfo(timezone: TimeZone(identifier: "Asia/Hong_Kong")!, name: "香港", region: "亚洲"),
             TimezoneInfo(timezone: TimeZone(identifier: "Asia/Bangkok")!, name: "曼谷", region: "亚洲"),
-            TimezoneInfo(timezone: TimeZone(identifier: "Asia/Kolkata")!, name: "德里", region: "亚洲"),
+            TimezoneInfo(timezone: TimeZone(identifier: "Asia/Kolkata")!, name: "加尔各答", region: "亚洲"),
             TimezoneInfo(timezone: TimeZone(identifier: "Asia/Dubai")!, name: "迪拜", region: "亚洲")
         ]),
         TimezoneRegion(region: "欧洲", timezones: [

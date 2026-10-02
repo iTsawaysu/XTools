@@ -8,12 +8,21 @@ struct EmojiCategorizationTests {
         let decoded = try #require(EmojiCatalog.decodePrecompiledCatalog(data))
 
         // emoji-test.txt 已移出运行时 bundle：交叉校验从仓库编译工具目录读取
-        // 后注入，语义与原先（运行时解析 txt）保持一致。
+        // 后注入，语义与原先（运行时解析 txt）保持一致。zh-annotations.xml
+        // （CLDR zh 注解）与 plist 编译管线同步注入，二者缺一不可。
         let sourceURL = try sourcePackageRoot()
             .appendingPathComponent("tools/EmojiCatalogCompiler/emoji-test.txt")
         let sourceData = try String(contentsOf: sourceURL, encoding: .utf8)
+        let annotationsURL = try sourcePackageRoot()
+            .appendingPathComponent("tools/EmojiCatalogCompiler/zh-annotations.xml")
+        let annotationsXML = try String(contentsOf: annotationsURL, encoding: .utf8)
 
-        #expect(decoded == EmojiCatalog.buildSourceCatalog(sourceData: sourceData))
+        #expect(
+            decoded == EmojiCatalog.buildSourceCatalog(
+                sourceData: sourceData,
+                chineseAnnotationsXML: annotationsXML
+            )
+        )
         #expect(decoded == EmojiCatalog.groups)
     }
 
@@ -116,6 +125,39 @@ struct EmojiCategorizationTests {
         #expect(browseSymbols.filter { $0 == "▶" }.count == 2)
         #expect(EmojiCatalog.specialSymbolCount == Set(browseSymbols).count)
         #expect(group.entries.count == EmojiCatalog.specialSymbolCount)
+    }
+
+    @Test func chineseKeywordSearchHitsCoreVocabulary() {
+        // CLDR zh 注解并入 searchText 后，核心中文词汇必须命中。
+        let dogMatches = EmojiCatalog.entries(matching: "狗", limit: 50)
+        let coffeeMatches = EmojiCatalog.entries(matching: "咖啡", limit: 50)
+        let heartMatches = EmojiCatalog.entries(matching: "爱心", limit: 50)
+        let rocketMatches = EmojiCatalog.entries(matching: "火箭", limit: 50)
+
+        #expect(dogMatches.contains { canonicalGlyph($0.base) == "🐕" })
+        #expect(dogMatches.contains { canonicalGlyph($0.base) == "🐶" })
+        #expect(coffeeMatches.contains { canonicalGlyph($0.base) == "☕" })
+        // “爱心”是 CLDR 给 🤎/🤍 等心形 emoji 的注解关键词（❤️ 的短名是“红心”）。
+        #expect(heartMatches.contains { $0.base == "🤎" || $0.base == "🤍" })
+        #expect(rocketMatches.contains { $0.base == "🚀" })
+    }
+
+    @Test func chineseKeywordSearchKeepsEnglishSearchWorking() {
+        // 中文关键词并入不得挤掉既有英文搜索语义（coffee 不是 ☕ 的英文
+        // 名——其 Unicode 名为 hot beverage，故用 beverage 断言）。
+        #expect(EmojiCatalog.entries(matching: "dog", limit: 50).contains { canonicalGlyph($0.base) == "🐕" })
+        #expect(EmojiCatalog.entries(matching: "beverage", limit: 50).contains { canonicalGlyph($0.base) == "☕" })
+        #expect(EmojiCatalog.entries(matching: "rocket", limit: 50).contains { $0.base == "🚀" })
+    }
+
+    @Test func scalarFallbackCatalogStaysUsableWithoutPrecompiledData() {
+        // 预编译 plist 缺失/损坏时的运行时降级路径：scalar 内建兜底 +
+        // 特殊符号组仍产出可用目录（groups 的 guard-else 走同一组合）。
+        let fallback = EmojiCatalog.buildSourceCatalog(sourceData: nil)
+
+        #expect(!fallback.isEmpty)
+        #expect(fallback.contains { $0.name == EmojiCatalog.specialSymbolGroupName })
+        #expect(fallback.allSatisfy { !$0.entries.isEmpty })
     }
 
     @Test func bilingualSearchFindsEmojiAndSpecialSymbols() {

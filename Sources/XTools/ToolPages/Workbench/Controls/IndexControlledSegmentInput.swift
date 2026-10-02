@@ -49,6 +49,8 @@ struct IndexControlledDateInput<TrailingAccessory: View>: View {
             helpText: helpText,
             onCommit: onCommit,
             onInvalidPaste: onInvalidPaste,
+            // 纯日期输入无时间分量，不会产生夏令时空洞。
+            onNonexistentLocalTime: {},
             onFocusChange: onFocusChange,
             trailingAccessory: trailingAccessory
         )
@@ -135,6 +137,7 @@ struct IndexControlledHumanTimeInput<TrailingAccessory: View>: View {
     private let helpText: String
     private let onCommit: (Date) -> Void
     private let onInvalidPaste: () -> Void
+    private let onNonexistentLocalTime: () -> Void
     private let onFocusChange: (Bool) -> Void
     private let trailingAccessory: () -> TrailingAccessory
 
@@ -147,6 +150,7 @@ struct IndexControlledHumanTimeInput<TrailingAccessory: View>: View {
         help: String = "支持粘贴 ISO 8601 或 yyyy-MM-dd HH:mm:ss",
         onCommit: @escaping (Date) -> Void,
         onInvalidPaste: @escaping () -> Void,
+        onNonexistentLocalTime: @escaping () -> Void = {},
         onFocusChange: @escaping (Bool) -> Void = { _ in },
         @ViewBuilder trailingAccessory: @escaping () -> TrailingAccessory
     ) {
@@ -158,13 +162,14 @@ struct IndexControlledHumanTimeInput<TrailingAccessory: View>: View {
         self.helpText = help
         self.onCommit = onCommit
         self.onInvalidPaste = onInvalidPaste
+        self.onNonexistentLocalTime = onNonexistentLocalTime
         self.onFocusChange = onFocusChange
         self.trailingAccessory = trailingAccessory
     }
 
     var body: some View {
         IndexControlledSegmentInput(
-            adapter: Self.adapter(input: $input),
+            adapter: Self.adapter(input: $input, onNonexistentLocalTime: onNonexistentLocalTime),
             placeholder: placeholder,
             timeZone: timeZone,
             autoFocus: autoFocus,
@@ -172,13 +177,17 @@ struct IndexControlledHumanTimeInput<TrailingAccessory: View>: View {
             helpText: helpText,
             onCommit: onCommit,
             onInvalidPaste: onInvalidPaste,
+            onNonexistentLocalTime: onNonexistentLocalTime,
             onFocusChange: onFocusChange,
             trailingAccessory: trailingAccessory
         )
     }
 
     @MainActor
-    private static func adapter(input: Binding<ControlledHumanTimeInput>) -> IndexControlledSegmentInputAdapter {
+    private static func adapter(
+        input: Binding<ControlledHumanTimeInput>,
+        onNonexistentLocalTime: @escaping () -> Void
+    ) -> IndexControlledSegmentInputAdapter {
         IndexControlledSegmentInputAdapter(
             displayText: { input.wrappedValue.displayText },
             displayRangeForActiveSegment: {
@@ -199,10 +208,16 @@ struct IndexControlledHumanTimeInput<TrailingAccessory: View>: View {
                     return .accepted(date)
                 case .rejected:
                     return .rejected
+                case .rejectedNonexistentLocalTime:
+                    return .rejectedNonexistentLocalTime
                 }
             },
             commitActiveSegment: { timeZone in
-                input.wrappedValue.commitActiveSegment(timeZone: timeZone)
+                let date = input.wrappedValue.commitActiveSegment(timeZone: timeZone)
+                if date == nil, input.wrappedValue.lastCommitFailure == .nonexistentLocalTime {
+                    onNonexistentLocalTime()
+                }
+                return date
             },
             canMovePrevious: {
                 !input.wrappedValue.isFirstSegment
@@ -230,6 +245,7 @@ extension IndexControlledHumanTimeInput where TrailingAccessory == EmptyView {
         help: String = "支持粘贴 ISO 8601 或 yyyy-MM-dd HH:mm:ss",
         onCommit: @escaping (Date) -> Void,
         onInvalidPaste: @escaping () -> Void,
+        onNonexistentLocalTime: @escaping () -> Void = {},
         onFocusChange: @escaping (Bool) -> Void = { _ in }
     ) {
         self.init(
@@ -241,6 +257,7 @@ extension IndexControlledHumanTimeInput where TrailingAccessory == EmptyView {
             help: help,
             onCommit: onCommit,
             onInvalidPaste: onInvalidPaste,
+            onNonexistentLocalTime: onNonexistentLocalTime,
             onFocusChange: onFocusChange
         ) {
             EmptyView()
@@ -257,6 +274,7 @@ private struct IndexControlledSegmentInput<TrailingAccessory: View>: View {
     let helpText: String
     let onCommit: (Date) -> Void
     let onInvalidPaste: () -> Void
+    let onNonexistentLocalTime: () -> Void
     let onFocusChange: (Bool) -> Void
     let trailingAccessory: () -> TrailingAccessory
 
@@ -271,6 +289,7 @@ private struct IndexControlledSegmentInput<TrailingAccessory: View>: View {
             contentInsets: IndexTextFieldContentInsets(leading: 11, trailing: trailingInset),
             onCommit: onCommit,
             onInvalidPaste: onInvalidPaste,
+            onNonexistentLocalTime: onNonexistentLocalTime,
             onFocusChange: { focused in
                 isFocused = focused
                 onFocusChange(focused)
@@ -294,6 +313,7 @@ private struct IndexControlledSegmentInput<TrailingAccessory: View>: View {
 private enum IndexControlledSegmentPasteResult {
     case accepted(Date)
     case rejected
+    case rejectedNonexistentLocalTime
 }
 
 @MainActor
@@ -319,6 +339,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
     let contentInsets: IndexTextFieldContentInsets
     let onCommit: (Date) -> Void
     let onInvalidPaste: () -> Void
+    let onNonexistentLocalTime: () -> Void
     let onFocusChange: (Bool) -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -327,6 +348,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
             timeZone: timeZone,
             onCommit: onCommit,
             onInvalidPaste: onInvalidPaste,
+            onNonexistentLocalTime: onNonexistentLocalTime,
             onFocusChange: onFocusChange
         )
     }
@@ -348,6 +370,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
         context.coordinator.timeZone = timeZone
         context.coordinator.onCommit = onCommit
         context.coordinator.onInvalidPaste = onInvalidPaste
+        context.coordinator.onNonexistentLocalTime = onNonexistentLocalTime
         context.coordinator.onFocusChange = onFocusChange
         textField.segmentHandler = context.coordinator
         configure(textField)
@@ -392,6 +415,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
         var timeZone: TimeZone
         var onCommit: (Date) -> Void
         var onInvalidPaste: () -> Void
+        var onNonexistentLocalTime: () -> Void
         var onFocusChange: (Bool) -> Void
 
         private var didFocus = false
@@ -401,12 +425,14 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
             timeZone: TimeZone,
             onCommit: @escaping (Date) -> Void,
             onInvalidPaste: @escaping () -> Void,
+            onNonexistentLocalTime: @escaping () -> Void = {},
             onFocusChange: @escaping (Bool) -> Void
         ) {
             self.adapter = adapter
             self.timeZone = timeZone
             self.onCommit = onCommit
             self.onInvalidPaste = onInvalidPaste
+            self.onNonexistentLocalTime = onNonexistentLocalTime
             self.onFocusChange = onFocusChange
         }
 
@@ -485,6 +511,8 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
                 onCommit(date)
             case .rejected:
                 onInvalidPaste()
+            case .rejectedNonexistentLocalTime:
+                onNonexistentLocalTime()
             }
             syncTextField(textField)
             return true

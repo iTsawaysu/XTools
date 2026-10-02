@@ -426,23 +426,152 @@ public enum EmojiCatalog {
     /// 从 emoji-test.txt 文本构建完整目录；文本为空或解析不出分组时降级为
     /// scalar 派生目录。sourceData 由编译工具（tools/EmojiCatalogCompiler）
     /// 或测试注入——运行时不再携带 txt，因此没有无参版本。
-    package static func buildSourceCatalog(sourceData: String?) -> [EmojiGroup] {
+    /// chineseAnnotationsXML 为可选的 CLDR zh 注解（LDML annotations），
+    /// 其关键词会并入各条目的 searchText 使中文搜索命中。
+    package static func buildSourceCatalog(
+        sourceData: String?,
+        chineseAnnotationsXML: String? = nil
+    ) -> [EmojiGroup] {
+        var groups: [EmojiGroup]
         if let sourceData, !sourceData.isEmpty {
-            let groups = parseEmojiTestData(sourceData)
-            if !groups.isEmpty {
-                return groups + [buildSpecialSymbolGroup()]
-            }
+            let parsed = parseEmojiTestData(sourceData)
+            groups = parsed.isEmpty ? buildFallbackFromScalarProperties() : parsed
+        } else {
+            groups = buildFallbackFromScalarProperties()
         }
+        groups.append(buildSpecialSymbolGroup())
 
-        return buildFallbackFromScalarProperties() + [buildSpecialSymbolGroup()]
+        if let chineseAnnotationsXML, !chineseAnnotationsXML.isEmpty {
+            groups = applyingChineseAnnotations(chineseAnnotationsXML, to: groups)
+        }
+        return groups
     }
 
     /// 编译预编译目录：sourceData 必须由调用方注入（编译工具从自身 bundle 读
     /// emoji-test.txt），保证 XToolsCore 的运行时资源不含该 txt。
-    package static func compilePrecompiledCatalogData(sourceData: String) throws -> Data {
+    package static func compilePrecompiledCatalogData(
+        sourceData: String,
+        chineseAnnotationsXML: String? = nil
+    ) throws -> Data {
         let encoder = PropertyListEncoder()
         encoder.outputFormat = .binary
-        return try encoder.encode(PrecompiledCatalog(groups: buildSourceCatalog(sourceData: sourceData)))
+        return try encoder.encode(
+            PrecompiledCatalog(
+                groups: buildSourceCatalog(
+                    sourceData: sourceData,
+                    chineseAnnotationsXML: chineseAnnotationsXML
+                )
+            )
+        )
+    }
+
+    /// 把 CLDR zh 注解的关键词并入每条条目的 searchText（去重）。cp 对齐使用
+    /// 与搜索一致的规范形（去 FE0E/FE0F）：CLDR 注解的 cp 已移除 FE0F，而
+    /// emoji-test.txt 的完整限定序列通常携带 FE0F。解析失败时原样返回。
+    private static func applyingChineseAnnotations(_ xml: String, to groups: [EmojiGroup]) -> [EmojiGroup] {
+        let keywordsByGlyph = parseChineseAnnotations(xml)
+        guard !keywordsByGlyph.isEmpty else { return groups }
+
+        func entryWithAnnotations(_ entry: EmojiEntry) -> EmojiEntry {
+            guard let keywords = keywordsByGlyph[canonicalGlyphKey(entry.base)], !keywords.isEmpty else {
+                return entry
+            }
+            var seen = Set(entry.searchText.split(separator: " ").map(String.init))
+            var additions: [String] = []
+            for keyword in keywords {
+                let normalized = normalizedEmojiSearchText(keyword)
+                guard !normalized.isEmpty, seen.insert(normalized).inserted else { continue }
+                additions.append(normalized)
+            }
+            guard !additions.isEmpty else { return entry }
+
+            let searchText = ((entry.searchText.isEmpty ? [] : [entry.searchText]) + additions)
+                .joined(separator: " ")
+            return EmojiEntry(
+                base: entry.base,
+                name: entry.name,
+                aliases: entry.aliases,
+                skinToneCapable: entry.skinToneCapable,
+                searchText: searchText
+            )
+        }
+
+        return groups.map { group in
+            EmojiGroup(
+                name: group.name,
+                entries: group.entries.map(entryWithAnnotations),
+                sections: group.sections.map { section in
+                    EmojiSection(
+                        name: section.name,
+                        subsections: section.subsections.map { subsection in
+                            EmojiSubsection(
+                                name: subsection.name,
+                                entries: subsection.entries.map(entryWithAnnotations)
+                            )
+                        }
+                    )
+                }
+            )
+        }
+    }
+
+    private static func parseChineseAnnotations(_ xml: String) -> [String: [String]] {
+        guard let data = xml.data(using: .utf8) else { return [:] }
+        let collector = ChineseAnnotationCollector()
+        let parser = XMLParser(data: data)
+        parser.delegate = collector
+        guard parser.parse() else { return [:] }
+        return collector.keywordsByGlyph
+    }
+
+    /// LDML annotations 收集器：annotation 正文按 | 分隔为关键词，
+    /// type="tts" 条目的正文即短名，一并并入。按文档顺序去重，
+    /// 保证同一输入生成可复现的目录。
+    private final class ChineseAnnotationCollector: NSObject, XMLParserDelegate {
+        private var seenKeywords: [String: Set<String>] = [:]
+        private(set) var keywordsByGlyph: [String: [String]] = [:]
+        private var glyph: String?
+        private var text = ""
+
+        func parser(
+            _ parser: XMLParser,
+            didStartElement elementName: String,
+            namespaceURI: String?,
+            qualifiedName qName: String?,
+            attributes attributeDict: [String: String] = [:]
+        ) {
+            guard elementName == "annotation", let cp = attributeDict["cp"] else {
+                glyph = nil
+                return
+            }
+            glyph = cp
+            text = ""
+        }
+
+        func parser(_ parser: XMLParser, foundCharacters string: String) {
+            guard glyph != nil else { return }
+            text += string
+        }
+
+        func parser(
+            _ parser: XMLParser,
+            didEndElement elementName: String,
+            namespaceURI: String?,
+            qualifiedName qName: String?
+        ) {
+            defer { glyph = nil }
+            guard elementName == "annotation", let glyph else { return }
+
+            let keywords = text
+                .split(separator: "|", omittingEmptySubsequences: true)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+
+            let key = canonicalGlyphKey(glyph)
+            for keyword in keywords where seenKeywords[key, default: []].insert(keyword).inserted {
+                keywordsByGlyph[key, default: []].append(keyword)
+            }
+        }
     }
 
     private static func parseEmojiTestData(_ data: String) -> [EmojiGroup] {
