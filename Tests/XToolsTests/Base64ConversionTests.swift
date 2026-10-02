@@ -33,12 +33,42 @@ struct Base64ConversionTests {
         }
     }
 
+    /// 宽容填充语义：无填充 / 过度填充自动归一（真实世界的 key 与 token
+    /// 普遍不带 `=`）；串中填充、全填充与不可能长度（余 1）仍拒绝。
+    @Test func lenientPaddingDecodesRealWorldBase64() throws {
+        #expect(try Base64Conversion.decode("Zg") == "f")
+        #expect(try Base64Conversion.decode("Zg=") == "f")
+        #expect(try Base64Conversion.decode("Zm9v") == "foo")
+        // 过度填充按规范填充归一。
+        #expect(try Base64Conversion.decode("Zg===") == "f")
+        // 用户实测输入形态：折行 + 无填充的 API key 载荷。
+        #expect(
+            try Base64Conversion.decode(
+                """
+                c2stNjJhNmE1NTgwZGJkOGFmZjcxZTUwZWFhN2RiZDk0YTIxZGE5M2VkNTN1YzMyNTV1MzllYzAy
+                NjY1ZTc5MDc4YQ==
+                """
+            ).hasPrefix("sk-")
+        )
+    }
+
     @Test func invalidBase64PaddingThrows() throws {
-        for input in ["Zg", "Zg=", "Zg===", "Zm9v=", "Zm9v==", "====", "AA=A"] {
+        // `====` 归一为空载荷，与空输入一致返回空数据（见 data URL 空载荷）。
+        for input in ["AA=A", "not base64"] {
             #expect(throws: Base64Conversion.ConversionError.invalidBase64) {
                 _ = try Base64Conversion.decode(input)
             }
         }
+    }
+
+    /// base64url 字母表（-_）与标准字母表等价接受（与 TokenGenerator 等
+    /// 自家 base64url 输出互通）。
+    @Test func urlSafeAlphabetDecodesLikeStandard() throws {
+        // "-" ↔ "+"：标准 "+/" 形态的 ... 数据用 url-safe 写法应解出同值。
+        let standard = try Data(base64Encoded: "a+b/")!
+        #expect(
+            try Base64Conversion.decodeData("a-b_") == standard
+        )
     }
 
     @Test func invalidUTF8Throws() throws {
@@ -220,8 +250,10 @@ struct Base64ConversionTests {
     }
 
     @Test func invalidFilePayloadThrowsClearBase64Error() throws {
+        // 含字母表外字符（!）的垃圾英文仍被拒；纯字母表英文句子在宽容
+        // 语义下会解出乱码字节（取舍见 decodeData 注释）。
         #expect(throws: Base64Conversion.ConversionError.invalidBase64) {
-            _ = try Base64Conversion.decodeFilePayload("this is not base64")
+            _ = try Base64Conversion.decodeFilePayload("this is not base64!")
         }
     }
 

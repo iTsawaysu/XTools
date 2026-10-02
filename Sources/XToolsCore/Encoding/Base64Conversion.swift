@@ -339,15 +339,66 @@ public enum Base64Conversion {
     }
 
     public static func decodeData(_ value: String) throws -> Data {
-        let sanitized = value.filter { !$0.isWhitespace }
-        // 刻意要求规范的带填充 Base64：放宽会引入误判——
-        // 例如 `this is not base64` 去掉空白后全落在 Base64 字母表内，
-        // 补齐填充即可解出垃圾字节。该严格性由 Base64ConversionTests 锁定。
-        guard isValidPaddedBase64(sanitized),
-              let data = Data(base64Encoded: sanitized) else {
+        // 宽容解码（对齐成熟工具的现实输入）：去空白 + base64url 字母表
+        // 归一（-_ → +/）+ 尾部填充剥离后按长度规范补 `=`。
+        // 真实世界的 Base64——API key、JWT、openssl 输出——普遍不带填充或
+        // 使用 base64url 字母表；长度余 1（不可能的 Base64 长度）与字母表
+        // 外字符、串中填充仍拒绝。纯字母表的英文句子现在会解出乱码而非
+        // 报错（`not base64` 9 字符余 1 仍拒绝），取舍与语义由
+        // Base64ConversionTests 锁定。
+        guard let payload = normalizedBase64Payload(value) else {
+            throw ConversionError.invalidBase64
+        }
+        if payload.isEmpty {
+            return Data()
+        }
+        guard payload.count % 4 != 1,
+              let data = Data(base64Encoded: paddedBase64(payload)) else {
             throw ConversionError.invalidBase64
         }
         return data
+    }
+
+    /// 归一：Unicode 级去空白（折行/缩进/全角空格），再单趟完成
+    /// base64url 字母表映射、校验与尾部填充剥离。返回 nil 表示存在
+    /// 字母表外字符或串中填充。
+    static func normalizedBase64Payload(_ value: String) -> [UInt8]? {
+        let stripped = value.filter { !$0.isWhitespace }
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(stripped.utf8.count)
+        for byte in stripped.utf8 {
+            let mapped: UInt8
+            switch byte {
+            case UInt8(ascii: "-"):
+                mapped = UInt8(ascii: "+")
+            case UInt8(ascii: "_"):
+                mapped = UInt8(ascii: "/")
+            default:
+                mapped = byte
+            }
+            guard isBase64Alphabet(mapped) || mapped == UInt8(ascii: "=") else {
+                return nil
+            }
+            bytes.append(mapped)
+        }
+        // 剥离尾部填充；若剥离后仍有 '='（串中填充），视为非法。
+        var endIndex = bytes.count
+        while endIndex > 0, bytes[endIndex - 1] == UInt8(ascii: "=") {
+            endIndex -= 1
+        }
+        guard !bytes[..<endIndex].contains(UInt8(ascii: "=")) else {
+            return nil
+        }
+        bytes.removeSubrange(endIndex...)
+        return bytes
+    }
+
+    /// 规范补齐填充（调用前保证 count % 4 != 1）。载荷是 ASCII 字母表
+    /// 字节，UTF-8 解码无损。
+    static func paddedBase64(_ payload: [UInt8]) -> String {
+        let padding = (4 - payload.count % 4) % 4
+        return String(decoding: payload, as: UTF8.self)
+            + String(repeating: "=", count: padding)
     }
 
     public static func encodeBase64URL(_ data: Data) -> String {
@@ -411,32 +462,6 @@ public enum Base64Conversion {
 
     private static func base64ByteWindow(forCharacterLimit characterLimit: Int) -> Int {
         max(3, ((max(4, characterLimit) + 3) / 4) * 3)
-    }
-
-    private static func isValidPaddedBase64(_ value: String) -> Bool {
-        let bytes = Array(value.utf8)
-        guard bytes.count.isMultiple(of: 4) else {
-            return false
-        }
-
-        var paddingCount = 0
-        var hasSeenPadding = false
-
-        for byte in bytes {
-            if byte == UInt8(ascii: "=") {
-                hasSeenPadding = true
-                paddingCount += 1
-                guard paddingCount <= 2 else {
-                    return false
-                }
-            } else {
-                guard !hasSeenPadding, isBase64Alphabet(byte) else {
-                    return false
-                }
-            }
-        }
-
-        return true
     }
 
     private static func isBase64Alphabet(_ byte: UInt8) -> Bool {
