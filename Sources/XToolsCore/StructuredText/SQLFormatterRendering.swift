@@ -120,6 +120,13 @@ extension SQLFormatter {
             return
         }
 
+        // `count(*)` 与 `t.*`：`(` / `.` 后的 `*` 是限定符的组成部分，
+        // 不加空格；后续 token（`,`、`)`、word）各自补齐需要的间隔。
+        if value == "*", let last = current.last, last == "(" || last == "." {
+            appendRaw(value)
+            return
+        }
+
         trimTrailingSpace()
         appendRaw(" \(value) ")
         lastWordNormalized = nil

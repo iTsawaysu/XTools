@@ -45,9 +45,8 @@ public enum JWTSecretMaterial {
         case .utf8:
             bytes = Array(secret.utf8)
         case .base64:
-            guard !secret.contains(where: \.isWhitespace) else {
-                throw ResolutionError.invalidBase64
-            }
+            // 空白（openssl 折行密钥整段粘贴等）由共享入口 decodeData 在归一时
+            // 剥离；无填充/base64url 也在那里统一补齐。这里不再前置拦截。
             let data: Data
             do {
                 data = try Base64Conversion.decodeData(secret)
