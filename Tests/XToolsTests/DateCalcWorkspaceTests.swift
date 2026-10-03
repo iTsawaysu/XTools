@@ -31,7 +31,7 @@ struct DateCalcWorkspaceTests {
         #expect(session.end == reference)
         #expect(session.base == reference)
         #expect(session.includeEndDate == false)
-        #expect(session.op == "1")
+        #expect(session.op == .add)
         #expect(session.amount == 30)
         #expect(session.unit == .day)
         #expect(session.startInputError == nil)
@@ -54,7 +54,8 @@ struct DateCalcWorkspaceTests {
         #expect(session.startInputError == nil)
         #expect(session.endInputError == nil)
         #expect(session.totalDaysText == "9 天")
-        #expect(session.direction == "结束日期在后")
+        #expect(session.weeksDaysText == "1 周 2 天")
+        #expect(session.direction == "结束日期较晚")
     }
 
     @Test func commitStartDoesNotReplaceControlledInput() {
@@ -75,6 +76,15 @@ struct DateCalcWorkspaceTests {
         #expect(session.start == next)
         #expect(session.startInputError == nil)
         #expect(session.startInput.displayText == DateOnlyConversion.string(from: next))
+    }
+
+    @Test func weekdayCaptionsFollowFieldDates() {
+        var session = DateCalcWorkspace(referenceDate: fixedReference())
+        session.applyStartDate(day(2026, 7, 6))
+        session.applyEndDate(day(2026, 7, 12))
+        #expect(session.startWeekdayText == "周一")
+        #expect(session.endWeekdayText == "周日")
+        #expect(session.baseWeekdayText == "周\(session.weekdaySymbol(for: session.base))")
     }
 
     @Test func invalidPasteMessagesAreChineseGolden() {
@@ -107,16 +117,26 @@ struct DateCalcWorkspaceTests {
         #expect(session.totalDaysText == "1 天")
     }
 
+    @Test func breakdownStatsExposeCalendarUnitsAndWeekdays() {
+        var session = DateCalcWorkspace(referenceDate: fixedReference())
+        // Monday 2026-07-06 → Friday 2026-07-10: exclusive mode counts Mon–Thu.
+        session.setDiffRange(start: day(2026, 7, 6), end: day(2026, 7, 10))
+        #expect(session.breakdownStats.map(\.0) == ["年", "月", "天", "工作日"])
+        #expect(session.breakdownStats[3].1 == "4")
+        session.includeEndDate = true
+        #expect(session.breakdownStats[3].1 == "5")
+    }
+
     @Test func directionWhenEndIsEarlier() {
         var session = DateCalcWorkspace(referenceDate: fixedReference())
         session.setDiffRange(start: day(2026, 5, 10), end: day(2026, 5, 1))
-        #expect(session.direction == "结束日期在前")
+        #expect(session.direction == "结束日期较早")
         #expect(session.totalDaysText == "9 天")
     }
 
     @Test func addThirtyDaysProducesExpectedResult() {
         var session = DateCalcWorkspace(referenceDate: day(2026, 1, 1))
-        session.op = "1"
+        session.op = .add
         session.amount = 30
         session.unit = .day
         #expect(session.resultDateText == "2026-01-31")
@@ -125,72 +145,73 @@ struct DateCalcWorkspaceTests {
 
     @Test func subtractOneWeek() {
         var session = DateCalcWorkspace(referenceDate: day(2026, 1, 15))
-        session.op = "-1"
+        session.op = .subtract
         session.amount = 1
         session.unit = .weekOfYear
         #expect(session.resultDateText == "2026-01-08")
     }
 
-    @Test func presetNext7Days() {
-        let reference = day(2026, 7, 15)
-        var session = DateCalcWorkspace(referenceDate: reference)
-        session.applyPreset(.next7Days)
-        #expect(session.start == session.normalized(Date()))
-        let expectedEnd = session.cal.date(byAdding: .day, value: 7, to: session.start) ?? session.start
-        #expect(session.end == expectedEnd)
-        #expect(session.startInputError == nil)
+    @Test func resultCaptionPhrasesRelationToToday() {
+        let today = day(2026, 7, 15)
+        var session = DateCalcWorkspace(referenceDate: today)
+        session.base = today
+
+        session.op = .add
+        session.amount = 30
+        session.unit = .day
+        #expect(session.resultRelativeToTodayText(relativeTo: today) == "距今天 30 天")
+
+        session.op = .subtract
+        session.amount = 7
+        session.unit = .day
+        #expect(session.resultRelativeToTodayText(relativeTo: today) == "距今已过 7 天")
+
+        session.amount = 0
+        #expect(session.resultRelativeToTodayText(relativeTo: today) == "就是今天")
     }
 
-    @Test func presetNext30Days() {
+    @Test func presetRestOfMonthCountsTodayToMonthEnd() {
         var session = DateCalcWorkspace(referenceDate: fixedReference())
-        session.applyPreset(.next30Days)
-        let expectedEnd = session.cal.date(byAdding: .day, value: 30, to: session.start) ?? session.start
-        #expect(session.end == expectedEnd)
-        #expect(session.totals.days == 30)
-    }
-
-    @Test func presetThisMonth() {
-        let reference = day(2026, 7, 15)
-        var session = DateCalcWorkspace(referenceDate: reference)
-        // Freeze "today" semantics: applyPreset uses Date() not referenceDate.
-        // We still verify structure: start is month start, end is month last day for current calendar month of Date().
-        session.applyPreset(.thisMonth)
+        session.startInputError = "stale"
+        session.endInputError = "stale"
+        session.applyPreset(.restOfMonth)
         let today = session.normalized(Date())
         guard let interval = session.cal.dateInterval(of: .month, for: today),
               let lastDay = session.cal.date(byAdding: .day, value: -1, to: interval.end) else {
             Issue.record("calendar month interval unavailable")
             return
         }
-        #expect(session.start == interval.start)
+        #expect(session.start == today)
         #expect(session.end == lastDay)
+        #expect(session.startInputError == nil)
+        #expect(session.endInputError == nil)
     }
 
-    @Test func presetThisYear() {
+    @Test func presetRestOfYearCountsTodayToYearEnd() {
         var session = DateCalcWorkspace(referenceDate: fixedReference())
-        session.applyPreset(.thisYear)
+        session.applyPreset(.restOfYear)
         let today = session.normalized(Date())
         guard let interval = session.cal.dateInterval(of: .year, for: today),
               let lastDay = session.cal.date(byAdding: .day, value: -1, to: interval.end) else {
             Issue.record("calendar year interval unavailable")
             return
         }
-        #expect(session.start == interval.start)
+        #expect(session.start == today)
         #expect(session.end == lastDay)
     }
 
     @Test func presetTitlesMatchVisibleChips() {
-        #expect(DateCalcWorkspace.DiffPreset.next7Days.title == "未来 7 天")
-        #expect(DateCalcWorkspace.DiffPreset.next30Days.title == "未来 30 天")
-        #expect(DateCalcWorkspace.DiffPreset.thisMonth.title == "本月")
-        #expect(DateCalcWorkspace.DiffPreset.thisYear.title == "今年")
-        #expect(DateCalcWorkspace.DiffPreset.allCases.count == 4)
+        #expect(DateCalcWorkspace.DiffPreset.restOfMonth.title == "本月剩余")
+        #expect(DateCalcWorkspace.DiffPreset.restOfYear.title == "今年剩余")
+        #expect(DateCalcWorkspace.DiffPreset.allCases.count == 2)
     }
 
-    @Test func breakdownStatsLabelsAreChinese() {
-        var session = DateCalcWorkspace(referenceDate: day(2024, 1, 1))
-        session.setDiffRange(start: day(2024, 1, 1), end: day(2025, 3, 5))
-        let labels = session.breakdownStats.map(\.0)
-        #expect(labels == ["年", "月", "天"])
+    @Test func opEnumDrivesSignedAddition() {
+        #expect(DateCalcWorkspace.Op.add.sign == 1)
+        #expect(DateCalcWorkspace.Op.subtract.sign == -1)
+        #expect(DateCalcWorkspace.Op.add.label == "加")
+        #expect(DateCalcWorkspace.Op.subtract.label == "减")
+        #expect(DateCalcWorkspace.Op.allCases.count == 2)
     }
 
     @Test func setTodayPathsClearErrors() {

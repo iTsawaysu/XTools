@@ -629,14 +629,14 @@ struct TimeWorkspaceRetentionTests {
 
         workspace.session.includeEndDate = true
         workspace.session.amount = 45
-        workspace.session.op = "0"
+        workspace.session.op = .subtract
         workspace.session.markStartInvalidPaste()
 
         let restored = repository.model(for: DateCalcToolWorkspaceModel.key)
         #expect(restored === workspace)
         #expect(restored.session.includeEndDate)
         #expect(restored.session.amount == 45)
-        #expect(restored.session.op == "0")
+        #expect(restored.session.op == .subtract)
         #expect(restored.session.startInputError != nil)
 
         let relaunched = ToolWorkspaceRepository(defaults: defaults)
@@ -644,7 +644,7 @@ struct TimeWorkspaceRetentionTests {
         #expect(relaunched !== workspace)
         #expect(!relaunched.session.includeEndDate)
         #expect(relaunched.session.amount == 30)
-        #expect(relaunched.session.op == "1")
+        #expect(relaunched.session.op == .add)
         #expect(relaunched.session.startInputError == nil)
     }
 

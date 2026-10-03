@@ -80,6 +80,38 @@ public enum DateCalcEngine {
         )
     }
 
+    /// Weekdays (Monday–Friday) inside the day interval between the two dates,
+    /// order-independent. Exclusive mode counts the same half-open interval as
+    /// `totals`; inclusive mode counts both boundary days, so a lone weekday
+    /// yields 1 and a lone weekend day yields 0.
+    public static func weekdayCount(
+        from: Date,
+        to: Date,
+        calendar: Calendar,
+        includeEndDate: Bool = false
+    ) -> Int {
+        let lo = calendar.startOfDay(for: min(from, to))
+        let hiBase = calendar.startOfDay(for: max(from, to))
+        let hi = includeEndDate
+            ? (calendar.date(byAdding: .day, value: 1, to: hiBase) ?? hiBase)
+            : hiBase
+        let span = calendar.dateComponents([.day], from: lo, to: hi).day ?? 0
+        guard span > 0 else { return 0 }
+
+        let fullWeeks = span / 7
+        let remainder = span % 7
+        // Calendar weekday numbering is 1 = Sunday … 7 = Saturday.
+        let startWeekday = calendar.component(.weekday, from: lo)
+        var weekdays = fullWeeks * 5
+        for offset in 0..<remainder {
+            let weekday = (startWeekday - 1 + offset) % 7 + 1
+            if weekday != 1 && weekday != 7 {
+                weekdays += 1
+            }
+        }
+        return weekdays
+    }
+
     public static func add(value: Int, unit: Unit, to date: Date, calendar: Calendar) -> Date {
         var components = DateComponents()
         components.setValue(value, for: unit.component)

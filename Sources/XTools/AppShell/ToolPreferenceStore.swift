@@ -449,6 +449,12 @@ enum TextDevelopmentToolPreferenceKeys {
         default: "base64",
         allowedValues: ["base64", "url", "ascii", "unicode"]
     )
+    /// 「日期计算」上次使用的模式（interval/offset），重启后恢复。
+    static let dateCalcMode = ToolPreferenceKey<String>.string(
+        "tools.dateCalc.mode.v1",
+        default: "interval",
+        allowedValues: ["interval", "offset"]
+    )
     static let integerBase = ToolPreferenceKey<String>.string(
         "tools.integerBase.inputBase.v1",
         default: "10",

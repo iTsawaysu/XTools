@@ -1,6 +1,19 @@
 import Foundation
 
 public struct DateCalcWorkspace: Equatable, Sendable {
+    public enum Op: String, CaseIterable, Sendable {
+        case add
+        case subtract
+
+        public var sign: Int {
+            self == .add ? 1 : -1
+        }
+
+        public var label: String {
+            self == .add ? "加" : "减"
+        }
+    }
+
     // MARK: - Range side
 
     public var start: Date
@@ -16,7 +29,7 @@ public struct DateCalcWorkspace: Equatable, Sendable {
     public var base: Date
     public var baseInput: ControlledDateInput
     public var baseInputError: String?
-    public var op: String
+    public var op: Op
     public var amount: Int
     public var unit: DateCalcEngine.Unit
 
@@ -33,7 +46,7 @@ public struct DateCalcWorkspace: Equatable, Sendable {
         self.endInputError = nil
         self.includeEndDate = false
         self.baseInputError = nil
-        self.op = "1"
+        self.op = .add
         self.amount = 30
         self.unit = DateCalcEngine.Unit.day
     }
@@ -62,18 +75,41 @@ public struct DateCalcWorkspace: Equatable, Sendable {
 
     public var breakdownStats: [(String, String)] {
         let b = breakdown
-        return [("年", "\(b.years)"), ("月", "\(b.months)"), ("天", "\(b.days)")]
+        let weekdays = DateCalcEngine.weekdayCount(
+            from: start,
+            to: end,
+            calendar: cal,
+            includeEndDate: includeEndDate
+        )
+        return [("年", "\(b.years)"), ("月", "\(b.months)"), ("天", "\(b.days)"), ("工作日", "\(weekdays)")]
     }
 
     public var totalDaysText: String {
         "\(abs(totals.days)) 天"
     }
 
+    public var weeksDaysText: String {
+        let absDays = abs(totals.days)
+        return "\(absDays / 7) 周 \(absDays % 7) 天"
+    }
+
     public var direction: String {
         if cal.isDate(start, inSameDayAs: end) {
             return "同一天"
         }
-        return end > start ? "结束日期在后" : "结束日期在前"
+        return end > start ? "结束日期较晚" : "结束日期较早"
+    }
+
+    public var startWeekdayText: String {
+        "周\(weekdaySymbol(for: start))"
+    }
+
+    public var endWeekdayText: String {
+        "周\(weekdaySymbol(for: end))"
+    }
+
+    public var baseWeekdayText: String {
+        "周\(weekdaySymbol(for: base))"
     }
 
     public var diffError: String? {
@@ -83,7 +119,7 @@ public struct DateCalcWorkspace: Equatable, Sendable {
     // MARK: - Add derived
 
     public var resultDate: Date {
-        DateCalcEngine.add(value: (op == "1" ? 1 : -1) * amount, unit: unit, to: base, calendar: cal)
+        DateCalcEngine.add(value: op.sign * amount, unit: unit, to: base, calendar: cal)
     }
 
     public var resultDateText: String {
@@ -94,55 +130,48 @@ public struct DateCalcWorkspace: Equatable, Sendable {
         "周\(weekdaySymbol(for: resultDate))"
     }
 
+    /// How the calculated result relates to today, phrased the way mature
+    /// date calculators present it (the dominant use is "today ± N days").
+    public func resultRelativeToTodayText(relativeTo today: Date = Date()) -> String {
+        let todayStart = normalized(today)
+        let resultStart = normalized(resultDate)
+        if cal.isDate(todayStart, inSameDayAs: resultStart) {
+            return "就是今天"
+        }
+        let days = abs(cal.dateComponents([.day], from: todayStart, to: resultStart).day ?? 0)
+        return resultStart > todayStart ? "距今天 \(days) 天" : "距今已过 \(days) 天"
+    }
+
     public var resultCopyText: String {
         "\(resultDateText) \(resultWeekdayText)"
     }
 
     // MARK: - Presets
 
+    /// 倒计时快捷范围（今天 → 边界日）：答案事先未知的范围才值得做成预设。
     public enum DiffPreset: String, CaseIterable, Sendable {
-        case next7Days
-        case next30Days
-        case thisMonth
-        case thisYear
+        case restOfMonth
+        case restOfYear
 
         public var title: String {
             switch self {
-            case .next7Days: return "未来 7 天"
-            case .next30Days: return "未来 30 天"
-            case .thisMonth: return "本月"
-            case .thisYear: return "今年"
+            case .restOfMonth: return "本月剩余"
+            case .restOfYear: return "今年剩余"
             }
+        }
+
+        fileprivate var boundaryComponent: Calendar.Component {
+            self == .restOfMonth ? .month : .year
         }
     }
 
     public mutating func applyPreset(_ preset: DiffPreset) {
-        switch preset {
-        case .next7Days:
-            let today = normalized(Date())
-            let future = cal.date(byAdding: .day, value: 7, to: today) ?? today
-            setDiffRange(start: today, end: future)
-        case .next30Days:
-            let today = normalized(Date())
-            let future = cal.date(byAdding: .day, value: 30, to: today) ?? today
-            setDiffRange(start: today, end: future)
-        case .thisMonth:
-            let today = normalized(Date())
-            guard let interval = cal.dateInterval(of: .month, for: today),
-                  let lastDay = cal.date(byAdding: .day, value: -1, to: interval.end) else {
-                setDiffRange(start: today, end: today)
-                return
-            }
-            setDiffRange(start: interval.start, end: lastDay)
-        case .thisYear:
-            let today = normalized(Date())
-            guard let interval = cal.dateInterval(of: .year, for: today),
-                  let lastDay = cal.date(byAdding: .day, value: -1, to: interval.end) else {
-                setDiffRange(start: today, end: today)
-                return
-            }
-            setDiffRange(start: interval.start, end: lastDay)
+        let today = normalized(Date())
+        guard let interval = cal.dateInterval(of: preset.boundaryComponent, for: today),
+              let lastDay = cal.date(byAdding: .day, value: -1, to: interval.end) else {
+            return
         }
+        setDiffRange(start: today, end: lastDay)
     }
 
     // MARK: - Orchestration

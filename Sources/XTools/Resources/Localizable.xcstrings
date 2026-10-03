@@ -742,7 +742,7 @@
     "动作" : {
       "extractionState" : "manual"
     },
-    "包含结束日（+1 天）" : {
+    "包含结束日" : {
       "extractionState" : "manual"
     },
     "包含首尾日期" : {
@@ -1381,6 +1381,9 @@
     "把图片另存为不同格式；不用于压缩体积。" : {
       "extractionState" : "manual"
     },
+    "把结束日期当天也计入结果（+1 天）" : {
+      "extractionState" : "manual"
+    },
     "折叠未变更行" : {
       "extractionState" : "manual"
     },
@@ -1640,6 +1643,9 @@
       "extractionState" : "manual"
     },
     "日期计算" : {
+      "extractionState" : "manual"
+    },
+    "日期间隔" : {
       "extractionState" : "manual"
     },
     "时区" : {

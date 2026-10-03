@@ -109,6 +109,40 @@ struct DateCalcEngineTests {
         #expect(inclusive.minutes == exclusive.minutes + (24 * 60))
     }
 
+    @Test func weekdayCountFollowsTotalsIntervalSemantics() {
+        let calendar = gregorianUTC()
+        // Monday 2026-07-06 → Friday 2026-07-10.
+        let monday = date(calendar, 2026, 7, 6, 0, 0)
+        let friday = date(calendar, 2026, 7, 10, 0, 0)
+
+        #expect(DateCalcEngine.weekdayCount(from: monday, to: friday, calendar: calendar) == 4)
+        #expect(DateCalcEngine.weekdayCount(from: monday, to: friday, calendar: calendar, includeEndDate: true) == 5)
+        #expect(DateCalcEngine.weekdayCount(from: friday, to: monday, calendar: calendar) == 4)
+    }
+
+    @Test func weekdayCountHandlesWeekendAndBoundaryDays() {
+        let calendar = gregorianUTC()
+        let monday = date(calendar, 2026, 7, 6, 0, 0)
+        let saturday = date(calendar, 2026, 7, 11, 0, 0)
+        let sunday = date(calendar, 2026, 7, 12, 0, 0)
+
+        #expect(DateCalcEngine.weekdayCount(from: saturday, to: saturday, calendar: calendar) == 0)
+        #expect(DateCalcEngine.weekdayCount(from: saturday, to: saturday, calendar: calendar, includeEndDate: true) == 0)
+        #expect(DateCalcEngine.weekdayCount(from: sunday, to: sunday, calendar: calendar, includeEndDate: true) == 0)
+        #expect(DateCalcEngine.weekdayCount(from: monday, to: monday, calendar: calendar, includeEndDate: true) == 1)
+    }
+
+    @Test func weekdayCountSpansWholeYearsInConstantTime() {
+        let calendar = gregorianUTC()
+        // 2026-01-01 is a Thursday: 365 calendar days = 52 weeks + 1 remainder
+        // day (a Thursday), so 52 * 5 + 1 = 261 weekdays.
+        let newYear = date(calendar, 2026, 1, 1, 0, 0)
+        let nextNewYear = date(calendar, 2027, 1, 1, 0, 0)
+
+        #expect(DateCalcEngine.weekdayCount(from: newYear, to: nextNewYear, calendar: calendar) == 261)
+        #expect(DateCalcEngine.weekdayCount(from: nextNewYear, to: newYear, calendar: calendar) == 261)
+    }
+
     @Test func totalsInclusiveModePreservesReverseDirection() {
         let calendar = gregorianUTC()
         let from = date(calendar, 2026, 1, 10, 0, 0)
