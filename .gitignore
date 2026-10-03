@@ -17,6 +17,7 @@ DerivedData/
 
 # 构建与打包输出
 dist/
+build-verify/
 
 # Xcode 用户配置与个人工作区偏好
 xcuserdata/

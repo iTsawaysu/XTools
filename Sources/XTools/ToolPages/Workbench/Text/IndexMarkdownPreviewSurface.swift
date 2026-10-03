@@ -1,9 +1,9 @@
-import MarkdownUI
+import AppKit
 import SwiftUI
 import XToolsCore
 
-/// Rendered Markdown preview backed by swift-markdown-ui (full GFM: tables,
-/// task lists, fenced code, images) with a Clay-matched theme. This is the
+/// Rendered Markdown preview backed by the in-house GFM renderer
+/// (swift-cmark parsing + IndexMarkdownPreviewContent Clay views). This is the
 /// `.markdownPreview` output presentation; monospaced source reading stays on
 /// `IndexReadOnlyTextSurface`.
 struct IndexMarkdownPreviewSurface: View {
@@ -19,6 +19,7 @@ struct IndexMarkdownPreviewSurface: View {
     @State private var remoteImageAuthorization = MarkdownRemoteImageAuthorizationState()
     @State private var remoteImageDetection = MarkdownRemoteImageDetectionState()
     @State private var remoteImageLoader: MarkdownRemoteImageSession?
+    @State private var parseCache = MarkdownParseCache()
 
     init(
         text: String,
@@ -51,6 +52,10 @@ struct IndexMarkdownPreviewSurface: View {
         remoteImageDetection.containsRemoteImages(for: authorizationScope)
     }
 
+    private var parsedBlocks: [MarkdownBlock] {
+        self.parseCache.blocks(for: self.exactTextIdentity, text: self.text)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if containsRemoteImages, !remoteImagesAuthorized {
@@ -59,29 +64,26 @@ struct IndexMarkdownPreviewSurface: View {
 
             ZStack(alignment: .topLeading) {
                 ScrollView(.vertical) {
-                    Markdown(text)
-                        .markdownTheme(.indexClay)
-                        .markdownImageProvider(
-                            MarkdownPreviewImageProvider(
-                                authorized: remoteImagesAuthorized,
-                                policy: remoteImagePolicy,
-                                session: remoteImageLoader
-                            )
+                    IndexMarkdownPreviewContent(
+                        blocks: self.parsedBlocks,
+                        imageProvider: MarkdownPreviewImageProvider(
+                            authorized: remoteImagesAuthorized,
+                            policy: remoteImagePolicy,
+                            session: remoteImageLoader
+                        ),
+                        inlineImageProvider: MarkdownPreviewInlineImageProvider(
+                            authorized: remoteImagesAuthorized,
+                            policy: remoteImagePolicy,
+                            session: remoteImageLoader
                         )
-                        .markdownInlineImageProvider(
-                            MarkdownPreviewInlineImageProvider(
-                                authorized: remoteImagesAuthorized,
-                                policy: remoteImagePolicy,
-                                session: remoteImageLoader
-                            )
-                        )
-                        // MarkdownUI caches inline images by inline nodes, not
-                        // provider identity. Refresh this read-only tree when
-                        // authorization changes so revoked images cannot linger.
-                        .id(remoteImagesAuthorized ? remoteImageLoader?.id : nil)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .padding(14)
+                    )
+                    // Inline image caches key by image source, not provider
+                    // identity. Refresh this read-only tree when authorization
+                    // changes so revoked images cannot linger.
+                    .id(remoteImagesAuthorized ? remoteImageLoader?.id : nil)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(14)
                 }
                 .opacity(text.isEmpty ? 0 : 1)
                 .accessibilityHidden(text.isEmpty)
@@ -167,6 +169,25 @@ struct IndexMarkdownPreviewSurface: View {
         remoteImageAuthorization.revoke()
         remoteImageLoader?.cancel()
         remoteImageLoader = nil
+    }
+}
+
+/// 单条目解析缓存：授权开关等 body 重算不再重新解析未变化的文档。
+/// 只在 MainActor（视图内）访问；故意不做成 Observable——缓存变化永不触发
+/// 视图刷新，identity 由 JSONExactTextIdentity 保证字节级一致。
+@MainActor
+final class MarkdownParseCache {
+    private var cachedIdentity: JSONExactTextIdentity?
+    private var cachedBlocks: [MarkdownBlock] = []
+
+    func blocks(for identity: JSONExactTextIdentity, text: String) -> [MarkdownBlock] {
+        if self.cachedIdentity == identity {
+            return self.cachedBlocks
+        }
+        let blocks = MarkdownDocument.parse(text)
+        self.cachedIdentity = identity
+        self.cachedBlocks = blocks
+        return blocks
     }
 }
 
@@ -284,52 +305,65 @@ struct MarkdownRemoteImagePolicy: Sendable {
 
 enum MarkdownRemoteImageDetector {
     static let maximumSourceByteCount = 5 * 1024 * 1024
-    static let maximumRenderedHTMLByteCount = 10 * 1024 * 1024
 
+    /// 与预览的加载行为严格对齐：只有 Markdown 语法的图片（含引用式，解析期
+    /// 已由 cmark 解析为 image 节点）会经图片出口加载；原始 HTML（`<img>`）在
+    /// 预览中按纯文本渲染，因此不算可加载图片。直接遍历 GFM AST 判定。
     static func containsRemoteImage(in markdown: String) -> Bool {
         guard !markdown.isEmpty,
               markdown.utf8.count <= maximumSourceByteCount else {
             return false
         }
-
-        // MarkdownUI renders raw HTML as text and does not route `<img>`
-        // through either image provider. Remove those tags before asking the
-        // same public GFM parser used by the preview to resolve inline and
-        // reference-style Markdown images. Code spans/fences remain protected
-        // by the parser and therefore cannot become image nodes.
-        let markdownWithoutRawImages = markdown.replacingOccurrences(
-            of: #"(?is)<img\b[^>]*>"#,
-            with: "",
-            options: .regularExpression
-        )
-        let renderedHTML = MarkdownContent(markdownWithoutRawImages).renderHTML()
-        guard renderedHTML.utf8.count <= maximumRenderedHTMLByteCount else {
-            return false
-        }
-
-        let pattern = #"(?is)<img\b[^>]*\bsrc\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s>]+))"#
-        guard let expression = try? NSRegularExpression(pattern: pattern) else {
-            return false
-        }
-
-        let fullRange = NSRange(renderedHTML.startIndex..., in: renderedHTML)
-        for match in expression.matches(in: renderedHTML, range: fullRange) {
-            for captureIndex in 1...3 where match.range(at: captureIndex).location != NSNotFound {
-                guard let range = Range(match.range(at: captureIndex), in: renderedHTML),
-                      let url = URL(string: String(renderedHTML[range])),
-                      let scheme = url.scheme?.lowercased(),
-                      scheme == "http" || scheme == "https",
-                      url.host?.isEmpty == false else {
-                    continue
-                }
-                return true
-            }
-        }
-        return false
+        return MarkdownDocument.parse(markdown).contains { $0.containsLoadableRemoteImage }
     }
 }
 
-struct MarkdownPreviewImageProvider: ImageProvider {
+private extension MarkdownBlock {
+    var containsLoadableRemoteImage: Bool {
+        switch self {
+        case .paragraph(let content), .heading(_, let content):
+            return content.contains { $0.containsLoadableRemoteImage }
+        case .blockquote(let children):
+            return children.contains { $0.containsLoadableRemoteImage }
+        case .bulletedList(_, let items), .numberedList(_, _, let items):
+            return items.contains { $0.children.contains { $0.containsLoadableRemoteImage } }
+        case .taskList(_, let items):
+            return items.contains { $0.children.contains { $0.containsLoadableRemoteImage } }
+        case .table(_, let rows):
+            return rows.contains { row in
+                row.cells.contains { $0.content.contains { $0.containsLoadableRemoteImage } }
+            }
+        case .codeBlock, .htmlBlock, .thematicBreak:
+            return false
+        }
+    }
+}
+
+private extension MarkdownInline {
+    var containsLoadableRemoteImage: Bool {
+        switch self {
+        case .image(let source, _):
+            return Self.isLoadableRemoteURL(source)
+        case .link(_, let children), .emphasis(let children), .strong(let children),
+            .strikethrough(let children):
+            return children.contains { $0.containsLoadableRemoteImage }
+        case .text, .softBreak, .lineBreak, .code, .html:
+            return false
+        }
+    }
+
+    private static func isLoadableRemoteURL(_ source: String) -> Bool {
+        guard let url = URL(string: source),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              url.host?.isEmpty == false else {
+            return false
+        }
+        return true
+    }
+}
+
+struct MarkdownPreviewImageProvider {
     typealias Loader = (URL) -> AnyView
 
     let authorized: Bool
@@ -349,6 +383,11 @@ struct MarkdownPreviewImageProvider: ImageProvider {
         }
     }
 
+    /// 环境缺省出口：未授权占位；正常链路由 Surface 注入当前会话的出口。
+    static var unavailable: Self {
+        .init(authorized: false, policy: .httpAndHTTPSOnly)
+    }
+
     @ViewBuilder
     func makeImage(url: URL?) -> some View {
         let decision = url.map {
@@ -366,7 +405,7 @@ struct MarkdownPreviewImageProvider: ImageProvider {
     }
 }
 
-struct MarkdownPreviewInlineImageProvider: InlineImageProvider {
+struct MarkdownPreviewInlineImageProvider {
     typealias Loader = @Sendable (URL, String) async throws -> Image
 
     let authorized: Bool
@@ -388,6 +427,11 @@ struct MarkdownPreviewInlineImageProvider: InlineImageProvider {
             guard !session.isCancelled else { throw CancellationError() }
             return Image(image.image, scale: 1, label: Text(label))
         }
+    }
+
+    /// 环境缺省出口：未授权占位；正常链路由 Surface 注入当前会话的出口。
+    static var unavailable: Self {
+        .init(authorized: false, policy: .httpAndHTTPSOnly)
     }
 
     func image(with url: URL, label: String) async throws -> Image {
@@ -443,87 +487,4 @@ enum MarkdownRemoteImageLoadDecision: Equatable {
             return nil
         }
     }
-}
-
-@MainActor
-private enum IndexClayMarkdownPalette {
-    static let text = ToolTheme.textPrimary
-    static let accent = ToolTheme.accent
-    static let field = ToolTheme.editorBackground
-}
-
-@MainActor
-extension Theme {
-    /// Prose reading theme mapped onto the Clay design tokens: warm
-    /// primary/secondary text, Clay accent links, and code surfaces that
-    /// match the editor field background. Built in stages: one long builder
-    /// chain overloads the type checker under StrictConcurrency.
-    static let indexClay: Theme = {
-        let inline = Theme()
-            .text {
-                ForegroundColor(IndexClayMarkdownPalette.text)
-                FontSize(13)
-            }
-            .code {
-                FontFamilyVariant(.monospaced)
-                FontSize(12)
-                BackgroundColor(IndexClayMarkdownPalette.field)
-            }
-            .link {
-                ForegroundColor(IndexClayMarkdownPalette.accent)
-                UnderlineStyle(Text.LineStyle(pattern: .solid))
-            }
-            .strong {
-                FontWeight(.semibold)
-            }
-
-        let withHeadings = inline
-            .heading1 { configuration in
-                configuration.label
-                    .markdownMargin(top: 20, bottom: 10)
-                    .markdownTextStyle {
-                        FontWeight(.semibold)
-                        FontSize(20)
-                        ForegroundColor(IndexClayMarkdownPalette.text)
-                    }
-            }
-            .heading2 { configuration in
-                configuration.label
-                    .markdownMargin(top: 16, bottom: 8)
-                    .markdownTextStyle {
-                        FontWeight(.semibold)
-                        FontSize(16)
-                        ForegroundColor(IndexClayMarkdownPalette.text)
-                    }
-            }
-            .heading3 { configuration in
-                configuration.label
-                    .markdownMargin(top: 12, bottom: 6)
-                    .markdownTextStyle {
-                        FontWeight(.semibold)
-                        FontSize(14)
-                        ForegroundColor(IndexClayMarkdownPalette.text)
-                    }
-            }
-
-        return withHeadings
-            .codeBlock { configuration in
-                configuration.label
-                    .markdownTextStyle {
-                        FontFamilyVariant(.monospaced)
-                        FontSize(12)
-                    }
-                    .padding(12)
-                    .background(IndexClayMarkdownPalette.field)
-                    .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
-                    .markdownMargin(top: 8, bottom: 8)
-            }
-            .table { configuration in
-                configuration.label
-                    .markdownMargin(top: 8, bottom: 8)
-                    .markdownTableBackgroundStyle(
-                        .alternatingRows(IndexClayMarkdownPalette.field, IndexClayMarkdownPalette.field)
-                    )
-            }
-    }()
 }

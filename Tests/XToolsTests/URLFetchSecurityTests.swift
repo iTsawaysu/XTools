@@ -9,13 +9,33 @@ struct URLFetchSecurityTests {
             "0:0:0:0:0:0:0:1", "::", "fe90::1", "febf::1",
             "ff02::1", "2002:c0a8:101::1", "2001:0::1",
             "::ffff:127.0.0.1", "::ffff:192.168.1.1", "[fe80::1]",
-            "192.0.0.1", "198.18.0.1", "224.0.0.1"
+            "192.0.0.1", "198.51.100.7", "203.0.113.9", "224.0.0.1"
         ]
         for host in blocked {
             #expect(URLFetchHostPolicy.evaluate(host: host) == .deny, "\(host)")
         }
+        // 198.18.0.0/15 是本机代理客户端 fake-IP 模式的标记网段（代理 DNS 把
+        // 公网域名解析到这里，由 TUN 接管转发），必须放行，否则代理用户所有
+        // URL 抓取都会被误判为私有地址。
+        let fakeIPProxyAddresses = ["198.18.0.78", "198.19.10.5"]
+        for host in fakeIPProxyAddresses {
+            #expect(URLFetchHostPolicy.evaluate(host: host) == .allow, "\(host)")
+        }
         #expect(URLFetchHostPolicy.evaluate(host: "2606:4700:4700::1111") == .allow)
         #expect(URLFetchHostPolicy.evaluate(host: "::ffff:8.8.8.8") == .allow)
+    }
+
+    @Test func fakeIPDNSAnswersAreAllowedWhileRealPrivateAnswersStayDenied() async {
+        let fakeIPAnswer = await URLFetchHostPolicy.evaluateResolvedHost(
+            "www.pdai.tech", timeout: 1,
+            resolver: { _, _ in ["198.18.0.78"] }
+        )
+        let mixedFakeIPAndPublic = await URLFetchHostPolicy.evaluateResolvedHost(
+            "www.pdai.tech", timeout: 1,
+            resolver: { _, _ in ["198.18.0.78", "93.184.216.34"] }
+        )
+        #expect(fakeIPAnswer == .allow)
+        #expect(mixedFakeIPAndPublic == .allow)
     }
 
     @Test func separatesDNSFailureFromPrivateAnswers() async {

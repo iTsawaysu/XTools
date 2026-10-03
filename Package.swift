@@ -13,11 +13,9 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/scinfu/SwiftSoup.git", from: "2.13.6"),
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.3"),
-        // Vendored 0.5.2 with a local patch: bare `Document` references are
-        // qualified as `CommonMark.Document` because the macOS 27 SDK's
-        // SwiftUI exports its own `Document`, which makes upstream 0.5.2
-        // fail to compile. Upstream is in maintenance mode.
-        .package(path: "Vendor/swift-markdown-ui")
+        // Markdown 预览的解析内核：SwiftUI 渲染层是 XTools 自有的
+        // MarkdownDocument/IndexMarkdownPreviewContent（ToolPages/Workbench/Text）。
+        .package(url: "https://github.com/swiftlang/swift-cmark.git", from: "0.8.0")
     ],
     targets: [
         .target(
@@ -40,7 +38,8 @@ let package = Package(
             name: "XTools",
             dependencies: [
                 "XToolsCore",
-                .product(name: "MarkdownUI", package: "swift-markdown-ui")
+                .product(name: "cmark-gfm", package: "swift-cmark"),
+                .product(name: "cmark-gfm-extensions", package: "swift-cmark")
             ],
             resources: [
                 .process("Resources")

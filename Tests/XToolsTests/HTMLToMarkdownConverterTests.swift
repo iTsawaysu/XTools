@@ -1,7 +1,7 @@
 import XToolsCore
 import Foundation
-@_spi(XToolsTesting) import MarkdownUI
 import Testing
+@testable import XTools
 
 struct HTMLToMarkdownConverterTests {
     // MARK: - Headings
@@ -68,7 +68,7 @@ struct HTMLToMarkdownConverterTests {
         \\[literal link\\](https\\://example.com) and ---
         """)
 
-        let parsedHTML = MarkdownContent(markdown).renderHTML()
+        let parsedHTML = MarkdownDocument.parse(markdown).renderHTML()
         #expect(!parsedHTML.contains("<h1>"))
         #expect(!parsedHTML.contains("<ul>"))
         #expect(!parsedHTML.contains("<ol>"))
@@ -88,7 +88,7 @@ struct HTMLToMarkdownConverterTests {
         """
 
         let markdown = HTMLToMarkdownConverter.convert(html)
-        let parsedHTML = MarkdownContent(markdown).renderHTML()
+        let parsedHTML = MarkdownDocument.parse(markdown).renderHTML()
 
         #expect(parsedHTML.components(separatedBy: "<p>").count - 1 == 4)
         #expect(!parsedHTML.contains("<h1>"))
@@ -102,7 +102,7 @@ struct HTMLToMarkdownConverterTests {
         let markdown = HTMLToMarkdownConverter.convert(
             "<p>\(expected)</p>"
         )
-        let parsed = MarkdownContent(markdown)
+        let parsed = MarkdownDocument.parse(markdown)
 
         #expect(markdown.contains("user@<!-- -->example.com"))
         #expect(!parsed.renderHTML().contains("<a "))
@@ -112,7 +112,7 @@ struct HTMLToMarkdownConverterTests {
 
     @Test func markdownUIParserDoesNotCreateMailtoForCommentSeparatedEmail() {
         let markdown = HTMLToMarkdownConverter.convert("<p>user@example.com</p>")
-        let vendorRenderedHTML = MarkdownContent(markdown).renderHTML()
+        let vendorRenderedHTML = MarkdownDocument.parse(markdown).renderHTML()
 
         #expect(markdown == "user@<!-- -->example.com")
         #expect(!vendorRenderedHTML.contains("mailto:"))
@@ -122,7 +122,7 @@ struct HTMLToMarkdownConverterTests {
     @Test func markdownUIAttributedRendererShowsLiteralEmailWithoutCommentOrLink() throws {
         let markdown = HTMLToMarkdownConverter.convert("<p>user@example.com</p>")
         let attributed = try #require(
-            MarkdownContent(markdown).renderFirstTextBlockAttributedString()
+            MarkdownDocument.parse(markdown).renderFirstTextBlockAttributedString()
         )
 
         #expect(String(attributed.characters) == "user@example.com")
@@ -141,7 +141,7 @@ struct HTMLToMarkdownConverterTests {
 
         for (html, expected) in samples {
             let markdown = HTMLToMarkdownConverter.convert(html)
-            let parsed = MarkdownContent(markdown)
+            let parsed = MarkdownDocument.parse(markdown)
 
             #expect(parsed.renderPlainText() == expected)
             #expect(!parsed.renderHTML().contains("<code>"))
@@ -152,7 +152,7 @@ struct HTMLToMarkdownConverterTests {
     @Test func preservesBlockMarkerTextSplitAcrossRootInlineNodes() {
         let markdown = HTMLToMarkdownConverter.convert("<span>-</span> literal root text")
 
-        #expect(MarkdownContent(markdown).renderHTML() == "<p>- literal root text</p>\n")
+        #expect(MarkdownDocument.parse(markdown).renderHTML() == "<p>- literal root text</p>\n")
     }
 
     @Test func convertsImagesInBothAttributeOrders() {
@@ -357,7 +357,7 @@ struct HTMLToMarkdownConverterTests {
         let markdown = HTMLToMarkdownConverter.convert(html)
 
         #expect(markdown == "| Value | Other |\n| --- | --- |\n| `a\\|b` | x |")
-        #expect(MarkdownContent(markdown).renderHTML().contains("<code>a|b</code>"))
+        #expect(MarkdownDocument.parse(markdown).renderHTML().contains("<code>a|b</code>"))
     }
 
     /// `select("tr")` 是递归匹配：嵌套表格的内层行曾被同时算进外层表格，

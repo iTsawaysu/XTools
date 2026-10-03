@@ -47,7 +47,10 @@ MIN_SYSTEM_VERSION="13.0"
 # Share the default SwiftPM cache with `swift build` / `swift test`.
 BUILD_DIR="$PROJECT_DIR/.build"
 LEGACY_SCRATCH_DIR="$PROJECT_DIR/.swiftpm-build"
-OUTPUT_DIR="$PROJECT_DIR/build"
+# 隔离验证打包：OUTPUT_DIR=/some/dir ./build.sh build 可把 .app 装到别处，
+# 配合 KEEP_RUNNING_APP=1 在不终止用户运行中窗口的前提下产出验证包
+# （quality-guidelines 的 non-terminating harness 要求）。
+OUTPUT_DIR="${OUTPUT_DIR:-$PROJECT_DIR/build}"
 LEGACY_DIST_DIR="$PROJECT_DIR/dist"
 APP_PATH="$OUTPUT_DIR/$APP_NAME"
 APP_CONTENTS="$APP_PATH/Contents"
@@ -351,7 +354,10 @@ package_app() {
   fi
 
   step "Packaging $APP_PATH ($configuration)..."
-  stop_existing_app
+  # 默认终止运行中的实例（同路径换包）；隔离目录打包时允许保留用户窗口。
+  if [[ -z "${KEEP_RUNNING_APP:-}" ]]; then
+    stop_existing_app
+  fi
   mkdir -p "$OUTPUT_DIR" "$APP_MACOS" "$APP_RESOURCES"
 
   cp "$build_binary" "$APP_BINARY"

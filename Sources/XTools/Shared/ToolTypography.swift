@@ -65,6 +65,14 @@ enum ToolTypography {
     /// Keycap label for keyboard shortcuts (⌘↩, ⌘K) ensuring crisp glyph rendering.
     static let keycap = Font.system(size: 11, weight: .medium)
 
+    // MARK: - Markdown Preview (indexClay)
+
+    /// Markdown prose baseline (13pt) and code block face for the rendered
+    /// preview; heading sizes stay composed in MarkdownFontProperties so nested
+    /// inline styles can merge over them.
+    static let markdownProse = Font.system(size: 13)
+    static let markdownCodeBlock = Font.system(size: 12, weight: .regular, design: .monospaced)
+
     // MARK: - Monospaced Values (semibold mono for codes & numeric badges)
 
     /// Semibold mono code badge (HTTP status codes, keycode chips).

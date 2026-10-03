@@ -34,6 +34,7 @@ struct HTMLToMarkdownPreviewWorkspaceTests {
 
     @Test func defaultProvidersDoNotBypassApplicationResourceBudgets() throws {
         let source = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexMarkdownPreviewSurface.swift")
+        doesNotContain(source, "import MarkdownUI", "The preview must render through the in-house GFM stack, not the retired vendored library.")
         doesNotContain(source, "DefaultImageProvider.default", "Block images must not enter the third-party unbounded loader.")
         doesNotContain(source, "DefaultInlineImageProvider.default", "Inline images must share the application loader budgets.")
         contains(source, ".onDisappear", "Leaving preview must revoke and cancel the image scope.")
@@ -232,8 +233,8 @@ struct HTMLToMarkdownPreviewWorkspaceTests {
 
     @Test func sharedPreviewConfiguresBothMarkdownImageProviderPaths() throws {
         let source = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexMarkdownPreviewSurface.swift")
-        contains(source, ".markdownImageProvider(", "Block images must use the controlled provider.")
-        contains(source, ".markdownInlineImageProvider(", "Inline images must use the controlled provider.")
+        contains(source, "imageProvider: MarkdownPreviewImageProvider(", "Block images must use the controlled provider.")
+        contains(source, "inlineImageProvider: MarkdownPreviewInlineImageProvider(", "Inline images must use the controlled provider.")
         contains(source, "MarkdownRemoteImageAuthorizationState", "Image authorization must be scoped to the current result.")
         contains(source, "markdownPreviewAuthorizationGeneration", "Input changes must revoke authorization even when output text repeats.")
         contains(source, ".task(id: authorizationScope)", "Remote-image detection must run as result-scoped asynchronous work.")
