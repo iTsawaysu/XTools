@@ -118,6 +118,7 @@ final class CommandPaletteRevealRegistry: NSObject {
     private var pendingRebindSession: Int?
     private var isRebindScheduled = false
 
+    #if DEBUG
     var debugEntryCount: Int {
         entries.count
     }
@@ -133,6 +134,7 @@ final class CommandPaletteRevealRegistry: NSObject {
     func debugIsObserving(_ clipView: NSClipView) -> Bool {
         observedClipViews[ObjectIdentifier(clipView)] != nil
     }
+    #endif
 
     private struct PendingKeyboardReveal {
         let itemID: String

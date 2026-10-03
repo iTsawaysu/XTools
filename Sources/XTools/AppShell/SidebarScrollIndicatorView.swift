@@ -172,10 +172,12 @@ final class SidebarScrollIndicatorView: NSView {
         setLaneHovered(false)
     }
 
+    #if DEBUG
     /// Test-support: resolved knob geometry and visibility, mirroring
     /// `debugTrackState` for the scroll indicator lane.
     var debugKnobFrame: CGRect { knobLayer.frame }
     var debugOpacity: Float { knobLayer.opacity }
+    #endif
 
     func setLaneHovered(_ hovered: Bool) {
         guard isLaneHovered != hovered else { return }

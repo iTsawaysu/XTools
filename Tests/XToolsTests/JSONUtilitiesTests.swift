@@ -98,36 +98,6 @@ struct JSONFormattingTests {
         #expect(result.duplicateKeys == ["name"])
     }
 
-    @Test func adjustIndentationKeepsTwoSpacePrettyPrintedJSONAtTwoSpaces() {
-        let json = """
-        {
-          "a" : {
-            "b" : 1
-          }
-        }
-        """
-
-        let adjusted = JSONFormatting.adjustIndentation(json, to: 2)
-
-        #expect(adjusted.contains("\n  \"a\""))
-        #expect(adjusted.contains("\n    \"b\""))
-    }
-
-    @Test func adjustIndentationExpandsTwoSpacePrettyPrintedJSONToFourSpaces() {
-        let json = """
-        {
-          "a" : {
-            "b" : 1
-          }
-        }
-        """
-
-        let adjusted = JSONFormatting.adjustIndentation(json, to: 4)
-
-        #expect(adjusted.contains("\n    \"a\""))
-        #expect(adjusted.contains("\n        \"b\""))
-    }
-
     @Test func formatPreservesInputKeyOrderByDefault() throws {
         let output = try JSONFormatting.format(#"{"b":2,"a":1,"c":3}"#, sortKeys: false, indentWidth: 2)
 

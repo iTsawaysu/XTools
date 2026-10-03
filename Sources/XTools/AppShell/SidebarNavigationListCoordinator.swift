@@ -254,6 +254,7 @@ final class SidebarNavigationListCoordinator {
             && currentConfiguration.colorScheme == configuration.colorScheme
     }
 
+    #if DEBUG
     func cachedTrackObjectIdentifier(for trackID: String) -> ObjectIdentifier? {
         tracksByID[trackID].map(ObjectIdentifier.init)
     }
@@ -270,6 +271,7 @@ final class SidebarNavigationListCoordinator {
             selectionIndicator.alphaValue > 0.5
         )
     }
+    #endif
 
     @discardableResult
     func activatePresentationTool(_ toolID: ToolID) -> Bool {

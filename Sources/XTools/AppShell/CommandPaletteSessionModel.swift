@@ -66,9 +66,11 @@ final class CommandPaletteSessionModel: ObservableObject {
 
     private var landingCache: LandingCacheEntry?
 
+    #if DEBUG
     /// Blank-query snapshot requests served from the landing cache without
     /// recomposing sections (test hook).
     private(set) var landingCacheHitCount = 0
+    #endif
 
     @Published private var state: State
 
@@ -441,7 +443,9 @@ final class CommandPaletteSessionModel: ObservableObject {
         )
         let sections: [CommandPaletteSection]
         if let landingCache, landingCache.key == key {
+            #if DEBUG
             landingCacheHitCount += 1
+            #endif
             sections = landingCache.sections
         } else {
             CommandPaletteTrace.count(.rowSnapshot)

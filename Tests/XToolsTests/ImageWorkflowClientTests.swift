@@ -914,12 +914,14 @@ struct ImageWorkflowClientTests {
             render: { _ in first }
         )
         try await Self.waitForOutput(in: session, matching: first)
-        session.render(operation: .conversion) { _ in throw ImageSessionTestError.renderFailed }
+        session.renderInBackground(operation: .conversion) { _ in throw ImageSessionTestError.renderFailed }
+        try await Self.waitUntil { session.error != nil }
         #expect(session.output == nil)
         #expect(session.outputImage == nil)
         #expect(session.error == "图片格式转换失败。")
 
-        session.render(operation: .conversion) { _ in second }
+        session.renderInBackground(operation: .conversion) { _ in second }
+        try await Self.waitForOutput(in: session, matching: second)
         #expect(session.output == second)
         #expect(session.outputImage?.size.width ?? 0 > 0)
         #expect(session.error == nil)

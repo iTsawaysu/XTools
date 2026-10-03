@@ -281,7 +281,10 @@ final class SourceControlWorkspaceModelTests: XCTestCase {
 
         let ordered = SourceControlWorkspaceModel.displayOrder(
             of: [latest, updated, attention, zetaLatest, failed, outdated],
-            results: results
+            outcomesByID: Dictionary(
+                results.map { ($0.repository.id, $0.outcome) },
+                uniquingKeysWith: { _, last in last }
+            )
         )
 
         XCTAssertEqual(ordered, [failed, outdated, attention, updated, latest, zetaLatest])

@@ -1,5 +1,6 @@
 import AppKit
 
+#if DEBUG
 struct SidebarNavigationTrackDebugState: Equatable {
     let frameHeight: CGFloat
     let contentHeight: CGFloat
@@ -11,6 +12,7 @@ struct SidebarNavigationTrackDebugState: Equatable {
     let areHostedControlsEnabled: Bool
     let isHovered: Bool
 }
+#endif
 
 @MainActor
 final class SidebarNavigationTrackView: NSView {
@@ -134,6 +136,7 @@ final class SidebarNavigationTrackView: NSView {
         return frame
     }
 
+    #if DEBUG
     var debugState: SidebarNavigationTrackDebugState {
         SidebarNavigationTrackDebugState(
             frameHeight: frame.height,
@@ -147,6 +150,7 @@ final class SidebarNavigationTrackView: NSView {
             isHovered: hoverState.isHovered
         )
     }
+    #endif
 
     private func applyAccessibilityHidden(_ isHidden: Bool, to view: NSView) {
         // NSAccessibilityHidden on a hosting container hides its complete
@@ -163,12 +167,14 @@ final class SidebarNavigationTrackView: NSView {
         }
     }
 
+    #if DEBUG
     private func controlsAreEnabled(in view: NSView) -> Bool {
         if let control = view as? NSControl, !control.isEnabled {
             return false
         }
         return view.subviews.allSatisfy(controlsAreEnabled(in:))
     }
+    #endif
 }
 
 @MainActor

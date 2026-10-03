@@ -394,20 +394,6 @@ final class SourceControlWorkspaceModel: ObservableObject {
     private var displayOrderCacheResultsGeneration = -1
     private var displayOrderCacheOutput: [SourceControlRepository] = []
 
-    /// 测试与旧调用方保留的数组入口；内部统一走字典版本。
-    static func displayOrder(
-        of repositories: [SourceControlRepository],
-        results: [SourceControlOperationResult]
-    ) -> [SourceControlRepository] {
-        displayOrder(
-            of: repositories,
-            outcomesByID: Dictionary(
-                results.map { ($0.repository.id, $0.outcome) },
-                uniquingKeysWith: { _, last in last }
-            )
-        )
-    }
-
     static func displayOrder(
         of repositories: [SourceControlRepository],
         outcomesByID: [String: SourceControlOperationOutcome]

@@ -45,14 +45,6 @@ public enum JWTVerifier {
             self.signatureStatus = signatureStatus
             self.details = details
         }
-
-        /// Compatibility initializer for page-local error fallbacks while callers
-        /// migrate to the explicit summary/signature model.
-        public init(isValid: Bool, details: [VerificationItem]) {
-            self.summary = isValid ? .verified : .failed
-            self.signatureStatus = isValid ? .verified : .failed
-            self.details = details
-        }
     }
 
     public struct VerificationItem: Equatable, Sendable {
@@ -100,15 +92,6 @@ public enum JWTVerifier {
             self.message = message
             self.category = category
             self.reason = reason
-        }
-
-        public init(name: String, passed: Bool, message: String, category: Category) {
-            self.init(
-                name: name,
-                status: passed ? .passed : .failed,
-                message: message,
-                category: category
-            )
         }
     }
 
