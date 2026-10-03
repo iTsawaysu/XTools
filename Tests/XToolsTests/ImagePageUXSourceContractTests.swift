@@ -26,8 +26,11 @@ struct ImagePageUXSourceContractTests {
     }
 
     @Test func imagePreviewPagesKeepCanonicalEmptyStateAndPreviewSurface() throws {
-        // 格式转换/压缩合并进「图片处理」Hub 后，页面壳断言改锚 Hub 文件。
+        // 格式转换/压缩合并进「图片处理」Hub 后，页面壳断言改锚 Hub 文件；
+        // 空态/进度分支收敛进共享 ImageUploadPendingState 后，空态文案断言
+        // 改锚共享文件，页面断言改锚共享占位装配。
         let imageHub = try readSource("Sources/XTools/ToolPages/Image/ImageHubPage.swift")
+        let uploadSupport = try readSource("Sources/XTools/ToolPages/Image/ImageWorkflowSupport.swift")
         let converter = try readSource("Sources/XTools/ToolPages/Image/ImageConverterPage.swift")
         let compressor = try readSource("Sources/XTools/ToolPages/Image/ImageCompressorPage.swift")
         let watermark = try readSource("Sources/XTools/ToolPages/Image/ImageWatermarkPage.swift")
@@ -35,16 +38,16 @@ struct ImagePageUXSourceContractTests {
         contains(imageHub, "workspaceSemantic: .imagePreviewStage", "Image hub must keep the image preview workspace semantic")
         contains(watermark, "workspaceSemantic: .liveImagePreviewStage", "Image watermark must keep the live preview workspace semantic")
 
+        contains(uploadSupport, "IndexEmptyStateCopy.autoGenerate(\"图片\")", "The shared upload pending state must use canonical generated-content copy")
         for source in [converter, watermark] {
-            contains(source, "IndexEmptyStateCopy.autoGenerate(\"图片\")", "Image upload empty states must use canonical generated-content copy")
+            contains(source, "ImageUploadPendingState(", "Image upload empty states must mount the shared pending state")
             contains(source, "IndexImagePreviewStage", "Image pages must render previews through the shared stage")
             contains(source, "fileInputPanelClient", "Image pages must use the sheet-based file input client")
             contains(source, "fileOutputPanelClient", "Image pages must use the sheet-based file output client")
         }
         contains(compressor, "IndexImageComparisonCard(", "Image compressor must render both previews through the shared comparison card")
-        contains(compressor, "IndexEmptyStateCopy.autoGenerate(\"图片\")", "Image compressor upload empty state must use canonical generated-content copy")
         contains(compressor, "fileInputPanelClient", "Image compressor must use the sheet-based file input client")
-        contains(compressor, "fileOutputPanelClient", "Image compressor must use the sheet-based file output client")
+        contains(compressor, "fileOutputPanelClient", "Image compressor must use the sheet-based file output panel client")
     }
 
     @Test func colorPickerUsesNaturalHeightSemanticAndSharedSpacing() throws {

@@ -143,9 +143,10 @@ struct IndexScrollableKV: View {
     }
 
     var body: some View {
-        IndexScrollableResultPresence(
+        IndexResultPresence(
             value: rows.isEmpty ? nil : rows,
-            updateID: presenceUpdateID
+            updateID: presenceUpdateID,
+            scrollable: true
         ) { snapshot, animatesRowInsertion in
             resultSurface(snapshot, animatesRowInsertion: animatesRowInsertion)
         } empty: {
@@ -283,15 +284,6 @@ struct IndexResultCardItem: Identifiable {
         self.badgeText = badgeText
         self.badgeTone = badgeTone
         self.copyHelp = copyHelp
-    }
-}
-
-struct IndexDerivedResultCardList: View {
-    let items: [IndexResultCardItem]
-    var emptyText = IndexEmptyStateCopy.autoShow("内容")
-
-    var body: some View {
-        IndexShortResultCardList(items: items, emptyText: emptyText)
     }
 }
 

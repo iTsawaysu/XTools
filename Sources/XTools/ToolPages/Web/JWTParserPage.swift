@@ -82,16 +82,18 @@ private struct IndexJWTWorkspaceContent: View {
                 IndexFlowLayout(spacing: 8, lineSpacing: 8) {
                     IndexOptionGroup {
                         IndexOptionLabel("算法")
-                        IndexOptionPicker(
+                        IndexSegmentedControl(
                             items: JWTAlgorithm.allCases.map { ($0.rawValue, $0.rawValue) },
-                            selection: generateAlgorithmBinding
+                            selection: generateAlgorithmBinding,
+                            selectionStyle: .filled
                         )
                     }
                     IndexOptionGroup {
                         IndexOptionLabel("密钥格式")
-                        IndexOptionPicker(
+                        IndexSegmentedControl(
                             items: Self.secretEncodingItems,
-                            selection: generateSecretEncodingBinding
+                            selection: generateSecretEncodingBinding,
+                            selectionStyle: .filled
                         )
                     }
                 }
@@ -302,9 +304,9 @@ private struct IndexJWTWorkspaceContent: View {
 
     private func registeredClaimRow(_ insight: JWTRegisteredClaimInsight) -> some View {
         HStack(alignment: .top, spacing: 9) {
-            Image(systemName: registeredClaimIcon(insight.status))
+            Image(systemName: JWTStatusChrome(insight.status).symbol)
                 .font(.system(size: ToolMetrics.IconSize.medium, weight: .semibold))
-                .foregroundStyle(registeredClaimColor(insight.status))
+                .foregroundStyle(JWTStatusChrome(insight.status).color)
                 .frame(width: 16, height: 16)
                 .accessibilityHidden(true)
 
@@ -327,7 +329,7 @@ private struct IndexJWTWorkspaceContent: View {
 
                 Text(insight.explanation)
                     .font(ToolTypography.caption)
-                    .foregroundStyle(registeredClaimColor(insight.status))
+                    .foregroundStyle(JWTStatusChrome(insight.status).color)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -356,9 +358,10 @@ private struct IndexJWTWorkspaceContent: View {
                 VStack(alignment: .leading, spacing: 12) {
                     IndexOptionGroup {
                         IndexOptionLabel("密钥格式")
-                        IndexOptionPicker(
+                        IndexSegmentedControl(
                             items: Self.secretEncodingItems,
-                            selection: parseSecretEncodingBinding
+                            selection: parseSecretEncodingBinding,
+                            selectionStyle: .filled
                         )
                     }
 
@@ -438,8 +441,8 @@ private struct IndexJWTWorkspaceContent: View {
 
                         ForEach(Array(presentation.details.enumerated()), id: \.offset) { _, item in
                             HStack(alignment: .top, spacing: 6) {
-                                Image(systemName: verificationIcon(item.status))
-                                    .foregroundStyle(verificationColor(item.status))
+                                Image(systemName: JWTStatusChrome(item.status).symbol)
+                                    .foregroundStyle(JWTStatusChrome(item.status).color)
                                 Text("\(item.name)：\(item.message)")
                                     .font(ToolTypography.body)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -467,8 +470,8 @@ private struct IndexJWTWorkspaceContent: View {
         _ axis: JWTWorkspaceSession.LocalCheckPresentation.Axis
     ) -> some View {
         HStack(alignment: .top, spacing: 6) {
-            Image(systemName: localCheckIcon(axis.status))
-                .foregroundStyle(localCheckColor(axis.status))
+            Image(systemName: JWTStatusChrome(axis.status).symbol)
+                .foregroundStyle(JWTStatusChrome(axis.status).color)
             VStack(alignment: .leading, spacing: 2) {
                 Text(axis.title)
                     .font(ToolTypography.label)
@@ -555,64 +558,61 @@ private struct IndexJWTWorkspaceContent: View {
         status == .warning || status == .failed
     }
 
-    private func localCheckIcon(
-        _ status: JWTWorkspaceSession.LocalCheckPresentation.Axis.Status
-    ) -> String {
-        jwtStatusChrome(status).symbol
-    }
+    /// JWT 三处同形状态枚举（本地检查轴/验签项/注册声明洞察）共享的状态
+    /// chrome：统一折算到这一个枚举再取符号/颜色；仅注册声明洞察的
+    /// informational 沿用次级色空心图标的历史形态（muted）。
+    private enum JWTStatusChrome {
+        case informational
+        case informationalMuted
+        case passed
+        case warning
+        case failed
 
-    private func localCheckColor(
-        _ status: JWTWorkspaceSession.LocalCheckPresentation.Axis.Status
-    ) -> Color {
-        jwtStatusChrome(status).color
-    }
-
-    private func verificationIcon(_ status: JWTVerifier.VerificationItem.Status) -> String {
-        jwtStatusChrome(status).symbol
-    }
-
-    private func verificationColor(_ status: JWTVerifier.VerificationItem.Status) -> Color {
-        jwtStatusChrome(status).color
-    }
-
-    private func registeredClaimIcon(_ status: JWTRegisteredClaimInsight.Status) -> String {
-        jwtStatusChrome(status).symbol
-    }
-
-    private func registeredClaimColor(_ status: JWTRegisteredClaimInsight.Status) -> Color {
-        jwtStatusChrome(status).color
-    }
-
-    private func jwtStatusChrome(
-        _ status: JWTWorkspaceSession.LocalCheckPresentation.Axis.Status
-    ) -> (symbol: String, color: Color) {
-        switch status {
-        case .informational: return ("info.circle.fill", ToolTheme.info)
-        case .passed: return ("checkmark.circle.fill", ToolTheme.success)
-        case .warning: return ("exclamationmark.triangle.fill", ToolTheme.warning)
-        case .failed: return ("xmark.circle.fill", ToolTheme.error)
+        init(_ status: JWTWorkspaceSession.LocalCheckPresentation.Axis.Status) {
+            switch status {
+            case .informational: self = .informational
+            case .passed: self = .passed
+            case .warning: self = .warning
+            case .failed: self = .failed
+            }
         }
-    }
 
-    private func jwtStatusChrome(
-        _ status: JWTVerifier.VerificationItem.Status
-    ) -> (symbol: String, color: Color) {
-        switch status {
-        case .informational: return ("info.circle.fill", ToolTheme.info)
-        case .passed: return ("checkmark.circle.fill", ToolTheme.success)
-        case .warning: return ("exclamationmark.triangle.fill", ToolTheme.warning)
-        case .failed: return ("xmark.circle.fill", ToolTheme.error)
+        init(_ status: JWTVerifier.VerificationItem.Status) {
+            switch status {
+            case .informational: self = .informational
+            case .passed: self = .passed
+            case .warning: self = .warning
+            case .failed: self = .failed
+            }
         }
-    }
 
-    private func jwtStatusChrome(
-        _ status: JWTRegisteredClaimInsight.Status
-    ) -> (symbol: String, color: Color) {
-        switch status {
-        case .informational: return ("info.circle", ToolTheme.textSecondary)
-        case .passed: return ("checkmark.circle.fill", ToolTheme.success)
-        case .warning: return ("exclamationmark.triangle.fill", ToolTheme.warning)
-        case .failed: return ("xmark.circle.fill", ToolTheme.error)
+        init(_ status: JWTRegisteredClaimInsight.Status) {
+            switch status {
+            case .informational: self = .informationalMuted
+            case .passed: self = .passed
+            case .warning: self = .warning
+            case .failed: self = .failed
+            }
+        }
+
+        var symbol: String {
+            switch self {
+            case .informational: return "info.circle.fill"
+            case .informationalMuted: return "info.circle"
+            case .passed: return "checkmark.circle.fill"
+            case .warning: return "exclamationmark.triangle.fill"
+            case .failed: return "xmark.circle.fill"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .informational: return ToolTheme.info
+            case .informationalMuted: return ToolTheme.textSecondary
+            case .passed: return ToolTheme.success
+            case .warning: return ToolTheme.warning
+            case .failed: return ToolTheme.error
+            }
         }
     }
 

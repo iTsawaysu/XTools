@@ -467,7 +467,7 @@ struct UIInfrastructureSourceTests {
         contains(textComponents, ".frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)", "Output surfaces must keep non-scrolling content top-aligned instead of centering it in tall panes")
         contains(sharedComponents, "struct IndexScrollableKV: View", "Shared scrollable KV remains available for explicit scrolling exceptions")
         contains(resultPresence, "if presentation.phase == .empty", "Scrollable result presence must render empty content without a ScrollView")
-        contains(resultPresence, "} else if let displayedValue {\n            ScrollView {", "Scrollable result presence must create its internal ScrollView only for non-empty history")
+        contains(resultPresence, "} else if let displayedValue, scrollable {\n            ScrollView {", "Scrollable result presence must create its internal ScrollView only for non-empty history")
         contains(chronometer, "IndexScrollableKV(rows: lapRows, emptyText: IndexEmptyStateCopy.noRecords, copyable: false, valueMotion: .immediate)", "Chronometer must keep leaf text replacement immediate while structural presence owns lap motion")
         contains(httpStatus, "if filtered.isEmpty {\n                    emptyState\n                } else {\n                    List(filtered) { row in", "HTTP status empty search results must stay outside the native list")
     }

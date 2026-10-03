@@ -77,10 +77,9 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
 
     let maximumItemCount: Int
 
-    private var panelTask: Task<Void, Never>?
+    private var panelRequests = PanelRequestBox()
     private var importTask: Task<Void, Never>?
     private var conversionTask: Task<Void, Never>?
-    private var activePanelRequestID: UUID?
     private let importGate = AsyncWorkGate()
     private let renderGate = AsyncWorkGate()
     /// convertAll 重读磁盘时使用的最近一次导入管线（含 reader 与内容类型）。
@@ -99,7 +98,7 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
     }
 
     deinit {
-        panelTask?.cancel()
+        panelRequests.cancel()
         importTask?.cancel()
         conversionTask?.cancel()
         try? FileManager.default.removeItem(at: spoolDirectory)
@@ -138,10 +137,9 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
         importPublisher: @escaping BatchConversionImportPublisher = { _, publish in publish() },
         onImport: @escaping () -> Void = {}
     ) {
-        guard panelTask == nil else { return }
-        let requestID = UUID()
-        activePanelRequestID = requestID
-        panelTask = Task { @MainActor [weak self] in
+        guard !panelRequests.hasActiveRequest else { return }
+        let requestID = panelRequests.begin()
+        panelRequests.attach(Task { @MainActor [weak self] in
             do {
                 let urls = try await filePanel.selectFiles(
                     FileInputPanelRequest(
@@ -150,10 +148,10 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
                     )
                 )
                 guard let urls, !urls.isEmpty else {
-                    self?.finishPanelRequest(id: requestID)
+                    self?.panelRequests.finish(id: requestID)
                     return
                 }
-                guard let self, self.finishPanelRequest(id: requestID) else { return }
+                guard let self, self.panelRequests.finish(id: requestID) else { return }
                 self.receiveImageURLs(
                     urls,
                     allowedContentTypes: allowedContentTypes,
@@ -162,12 +160,12 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
                     onImport: onImport
                 )
             } catch is CancellationError {
-                self?.finishPanelRequest(id: requestID)
+                self?.panelRequests.finish(id: requestID)
             } catch {
-                guard let self, self.finishPanelRequest(id: requestID) else { return }
+                guard let self, self.panelRequests.finish(id: requestID) else { return }
                 self.error = FileInputPanelFailure.diagnosticMessage(for: error)
             }
-        }
+        })
     }
 
     func receiveImageURLs(
@@ -178,7 +176,7 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
         onImport: @escaping () -> Void = {}
     ) {
         guard !urls.isEmpty else { return }
-        cancelPanelRequest()
+        panelRequests.cancel()
         cancelActiveWork()
         error = nil
         isImporting = true
@@ -317,7 +315,7 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
     }
 
     func reset() {
-        cancelPanelRequest()
+        panelRequests.cancel()
         cancelActiveWork()
         removeSpoolDirectory()
         items = []
@@ -542,17 +540,4 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
         cancelConversion()
     }
 
-    @discardableResult
-    private func finishPanelRequest(id: UUID) -> Bool {
-        guard activePanelRequestID == id else { return false }
-        activePanelRequestID = nil
-        panelTask = nil
-        return true
-    }
-
-    private func cancelPanelRequest() {
-        activePanelRequestID = nil
-        panelTask?.cancel()
-        panelTask = nil
-    }
 }

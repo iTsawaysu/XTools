@@ -92,27 +92,6 @@ public enum JSONFormatting {
         )
     }
 
-    public static func adjustIndentation(_ json: String, to spaces: Int) -> String {
-        let targetSpaces = max(0, spaces)
-
-        let lines = json.split(separator: "\n", omittingEmptySubsequences: false)
-        let sourceIndentWidth = lines.lazy
-            .map { $0.prefix(while: { $0 == " " }).count }
-            .filter { $0 > 0 }
-            .min()
-
-        guard let sourceIndentWidth else {
-            return json
-        }
-
-        return lines.lazy.map { line in
-            let leadingSpaces = line.prefix(while: { $0 == " " }).count
-            let indentLevel = leadingSpaces / sourceIndentWidth
-            let newIndent = String(repeating: " ", count: indentLevel * targetSpaces)
-            return newIndent + line.drop(while: { $0 == " " })
-        }.joined(separator: "\n")
-    }
-
     public static func escapeJSON(_ string: String) -> String {
         "\"\(escapeString(string))\""
     }
@@ -291,21 +270,27 @@ public enum JSONFormatting {
                 try output.append(chunk)
                 chunk = ""
             }
-            switch scalar {
-            case "\"": chunk += "\\\""
-            case "\\": chunk += "\\\\"
-            case "\u{08}": chunk += "\\b"
-            case "\u{0C}": chunk += "\\f"
-            case "\n": chunk += "\\n"
-            case "\r": chunk += "\\r"
-            case "\t": chunk += "\\t"
-            case let scalar where scalar.value < 0x20:
-                chunk += String(format: "\\u%04X", scalar.value)
-            default: chunk.unicodeScalars.append(scalar)
-            }
+            appendEscapedScalar(scalar, to: &chunk)
         }
         try output.append(chunk)
         try output.append("\"")
+    }
+
+    /// JSON 字符串转义的逐标量 switch,由可取消的 `appendEscaped(_:to:)` 与
+    /// 非抛出的 `escapeString(_:)` 共用,保证两条路径逐 case 一致。
+    private static func appendEscapedScalar(_ scalar: Unicode.Scalar, to string: inout String) {
+        switch scalar {
+        case "\"": string += "\\\""
+        case "\\": string += "\\\\"
+        case "\u{08}": string += "\\b"
+        case "\u{0C}": string += "\\f"
+        case "\n": string += "\\n"
+        case "\r": string += "\\r"
+        case "\t": string += "\\t"
+        case let scalar where scalar.value < 0x20:
+            string += String(format: "\\u%04X", scalar.value)
+        default: string.unicodeScalars.append(scalar)
+        }
     }
 
     private static func orderedObjectPairs(
@@ -373,26 +358,7 @@ public enum JSONFormatting {
         result.reserveCapacity(value.utf8.count)
 
         for scalar in value.unicodeScalars {
-            switch scalar {
-            case "\"":
-                result.append("\\\"")
-            case "\\":
-                result.append("\\\\")
-            case "\u{08}":
-                result.append("\\b")
-            case "\u{0C}":
-                result.append("\\f")
-            case "\n":
-                result.append("\\n")
-            case "\r":
-                result.append("\\r")
-            case "\t":
-                result.append("\\t")
-            case let scalar where scalar.value < 0x20:
-                result.append(String(format: "\\u%04X", scalar.value))
-            default:
-                result.unicodeScalars.append(scalar)
-            }
+            appendEscapedScalar(scalar, to: &result)
         }
 
         return result

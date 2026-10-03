@@ -244,12 +244,13 @@ private struct IndexImageWatermarkWorkspaceContent: View {
 
                 IndexOptionGroup {
                     IndexOptionLabel("颜色")
-                    IndexInlinePicker(
+                    IndexSegmentedControl(
                         items: [
                             (ImageWatermarkTextColor.white, "白色"),
                             (.black, "黑色")
                         ],
-                        selection: $textColor
+                        selection: $textColor,
+                        selectionStyle: .filled
                     )
                     .onChange(of: textColor) { _ in recipeDidChange(previewCadence: .immediate) }
 
@@ -268,19 +269,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                     if session.source == nil {
                         watermarkTextField
 
-                        if session.isProcessing {
-                            IndexProgressLabel(message: "正在读取图片…")
-                                .foregroundStyle(ToolTheme.textSecondary)
-                                .accessibilityLabel("正在读取图片")
-                        } else {
-                            IndexEmptyState(
-                                title: "选择图片开始添加水印",
-                                systemImage: "photo.on.rectangle.angled",
-                                message: IndexEmptyStateCopy.autoGenerate("图片"),
-                                density: .list
-                            )
-                            .frame(maxWidth: .infinity, minHeight: 128)
-                        }
+                        ImageUploadPendingState(isProcessing: session.isProcessing, title: "选择图片开始添加水印")
                     } else {
                         ViewThatFits(in: .horizontal) {
                             HStack(alignment: .center, spacing: 24) {
@@ -422,25 +411,15 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         return "\(source.url.lastPathComponent)，\(metadata.pixelWidth) 乘 \(metadata.pixelHeight)，\(metadata.format?.displayName ?? "未知格式")，\(ByteSizeFormatter.format(bytes: metadata.byteCount))"
     }
 
-    @ViewBuilder
-    private var imageSelectionActions: some View {
-        HStack(spacing: 8) {
-            Button(action: selectImage) {
-                Label(session.source == nil ? "选择图片" : "更换图片", systemImage: "photo")
-                    .font(ToolTypography.buttonSmall)
-            }
-            .buttonStyle(IndexSmallButtonStyle())
-            .accessibilityLabel(session.source == nil ? "选择要添加水印的图片" : "更换要添加水印的图片")
-
-            if session.source != nil {
-                Button(action: clearImage) {
-                    Label("清除图片", systemImage: IndexActionSymbol.removeResource)
-                        .font(ToolTypography.buttonSmall)
-                }
-                .buttonStyle(IndexSmallButtonStyle())
-                .accessibilityLabel("清除当前水印图片")
-            }
-        }
+    private var imageSelectionActions: ImageSelectionActionRow {
+        ImageSelectionActionRow(
+            hasSource: session.source != nil,
+            selectAccessibilityLabel: "选择要添加水印的图片",
+            replaceAccessibilityLabel: "更换要添加水印的图片",
+            clearAccessibilityLabel: "清除当前水印图片",
+            onSelect: selectImage,
+            onClear: clearImage
+        )
     }
 
     private func clearImage() {
@@ -452,12 +431,16 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         }
     }
 
+    private var uploadInteractions: ImageUploadInteractions {
+        ImageUploadInteractions(reduceMotion: reduceMotion)
+    }
+
     private func selectImage() {
         session.selectImage(
             filePanel: fileInputPanelClient,
             allowedContentTypes: ImageWorkflowClient.standardImageContentTypes,
             operation: .watermark,
-            selectionPublisher: publishSelectedImage,
+            selectionPublisher: uploadInteractions.publishSelection,
             onSelection: renderInitialPreview,
             renderProvider: { watermarkRenderer() },
             render: watermarkRenderer()
@@ -469,7 +452,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
             url,
             allowedContentTypes: ImageWorkflowClient.standardImageContentTypes,
             operation: .watermark,
-            selectionPublisher: publishSelectedImage,
+            selectionPublisher: uploadInteractions.publishSelection,
             onSelection: renderInitialPreview,
             renderProvider: { watermarkRenderer() },
             render: watermarkRenderer()
@@ -480,14 +463,8 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         previewDebouncer.cancel()
         finalDebouncer.cancel()
         previewSession.reset()
-        withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
+        uploadInteractions.rejectMultipleDrop {
             session.rejectImageInput(SingleFileDropResolver.multipleFilesDiagnostic)
-        }
-    }
-
-    private func publishSelectedImage(_ selection: ImageInputSelection, _ publish: () -> Void) {
-        withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
-            publish()
         }
     }
 
@@ -562,14 +539,8 @@ private struct IndexImageWatermarkWorkspaceContent: View {
 
     private func saveImage() {
         Task { @MainActor in
-            switch await session.save(workflow: .watermark, defaultBasename: "watermarked", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient) {
-            case .saved:
-                toastCenter?.show(ToolFeedbackCopy.savedFile, tone: .success)
-            case let .failed(message):
-                toastCenter?.show(message, tone: .error)
-            case .cancelled, .blocked, .partiallySaved:
-                break
-            }
+            let outcome = await session.save(workflow: .watermark, defaultBasename: "watermarked", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
+            ImageSaveOutcomeToasts.presentSingleOutput(outcome, toastCenter: toastCenter)
         }
     }
 }

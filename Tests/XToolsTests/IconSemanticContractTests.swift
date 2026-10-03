@@ -297,9 +297,13 @@ struct IconSemanticContractTests {
             "Sources/XTools/ToolPages/Image/ImageGrayscalePage.swift",
             "Sources/XTools/ToolPages/Image/ImageWatermarkPage.swift",
         ]
+        // 图片页的「选择/更换/清除」动作行收敛进共享 ImageSelectionActionRow 后，
+        // 清除图标断言改锚共享组件，页面断言改锚共享动作行装配。
+        let imageUploadSupport = try readSource("Sources/XTools/ToolPages/Image/ImageWorkflowSupport.swift")
+        contains(imageUploadSupport, "systemImage: IndexActionSymbol.removeResource", "The shared image selection action row must reserve trash for removing the selected image resource")
         for path in imageResourceConsumers {
             let source = try readSource(path)
-            contains(source, "systemImage: IndexActionSymbol.removeResource", "\(path) must reserve trash for removing the selected image resource")
+            contains(source, "ImageSelectionActionRow(", "\(path) must clear its selected image resource through the shared action row")
             contains(source, "systemImage: IndexActionSymbol.save", "\(path) must use the shared file-save symbol")
         }
     }
@@ -384,8 +388,10 @@ struct IconSemanticContractTests {
         contains(titlebar, #"isFavorite ? "star.fill" : "star""#, "Toolbar favorite state must keep filled and unfilled symbols")
         contains(sidebar, #"isFavorite ? "star.fill" : "star""#, "Sidebar favorite state must keep filled and unfilled symbols")
         contains(timezone, #"isFavorite ? "star.fill" : "star""#, "Timezone favorite state must keep filled and unfilled symbols")
-        occurrenceCount(jwt, #"return ("checkmark.circle.fill""#, 3, "JWT status mappings must keep the approved success symbol")
-        occurrenceCount(jwt, #"return ("xmark.circle.fill""#, 3, "JWT status mappings must keep the approved failure symbol")
+        // JWT 三处状态枚举的符号/颜色 chrome 收敛进单一 JWTStatusChrome 后，
+        // 成功/失败符号各只剩一份共享映射。
+        #expect(jwt.components(separatedBy: "return \"checkmark.circle.fill\"").count - 1 == 1, "The shared JWT status chrome must keep the approved success symbol exactly once")
+        #expect(jwt.components(separatedBy: "return \"xmark.circle.fill\"").count - 1 == 1, "The shared JWT status chrome must keep the approved failure symbol exactly once")
         #expect(reviewedDynamicSymbols.isSubset(of: reviewedMacOS13Symbols))
     }
 

@@ -336,7 +336,7 @@ struct FileTypeDetectorSessionTests {
         contains(page, ".indexDropZone(", "File detector reset must preserve the shared drop target")
         contains(page, "IndexPanel(\"检测结果\")", "File detector reset must preserve the existing result panel")
         contains(session, "func reset()", "File detector reset must be owned by the retained session")
-        contains(session, "cancelPanelRequest()", "File detector reset must cancel a pending panel request")
+        contains(session, "panelRequests.cancel()", "File detector reset must cancel a pending panel request through the shared panel request box")
         contains(session, "cancelInspection()", "File detector reset must cancel and generation-invalidate inspection")
     }
 

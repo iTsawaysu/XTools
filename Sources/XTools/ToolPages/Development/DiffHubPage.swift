@@ -8,11 +8,10 @@ final class DiffHubWorkspaceModel: ObservableObject {
 
     /// Hub 分段：rawValue 即 IndexSegmentedControl 的 item id，
     /// 顺序 JSON | 文本（用户原始表述顺序，亦为合并前注册表顺序）。
-    enum Segment: String, CaseIterable, Sendable {
+    enum Segment: String, CaseIterable, Sendable, HubSegmentIdentifier {
         case json
         case text
 
-        var id: String { rawValue }
         var label: String {
             switch self {
             case .json: return "JSON"
@@ -58,46 +57,18 @@ struct IndexDiffHubPage: View {
 /// 合并前 json-diff/text-diff），切换分段或离开再回来不丢输入与结果。
 private struct IndexDiffHubContent: View {
     @ObservedObject var workspace: DiffHubWorkspaceModel
-    @EnvironmentObject var entryHint: HubSegmentEntryHint
 
     var body: some View {
-        IndexPage("对比", subtitle: workspace.segment.subtitle, workspaceSemantic: .editableDiffWorkspace) {
-            IndexSegmentedControl(
-                items: DiffHubWorkspaceModel.Segment.allCases.map { ($0.id, $0.label) },
-                selection: segmentSelection,
-                density: .regular
-            )
-            segmentContent
-        }
-        .onAppear { consumeEntryHintIfNeeded() }
-        .onChange(of: entryHint.request) { _ in consumeEntryHintIfNeeded() }
-    }
-
-    private var segmentSelection: Binding<String> {
-        Binding(
-            get: { workspace.segment.rawValue },
-            set: { value in
-                guard let newSegment = DiffHubWorkspaceModel.Segment(rawValue: value) else { return }
-                workspace.segment = newSegment
+        HubSegmentPage(
+            title: "对比",
+            toolID: "diff",
+            workspaceSemantic: .editableDiffWorkspace,
+            segment: $workspace.segment
+        ) { segment in
+            switch segment {
+            case .json: IndexJSONDiffSegment()
+            case .text: IndexTextDiffSegment()
             }
-        )
-    }
-
-    @ViewBuilder
-    private var segmentContent: some View {
-        switch workspace.segment {
-        case .json: IndexJSONDiffSegment()
-        case .text: IndexTextDiffSegment()
         }
-    }
-
-    /// 深链分段提示（⌘K 关键词命中本 Hub 别名时写入；SmartPaste 同通道）：
-    /// 进入本工具或工具已打开时一次性消费（先清 request 再设分段，避免滞留
-    /// 覆盖后续手动切换；仅消费指向本工具的请求，其余 Hub 的请求原样保留）。
-    private func consumeEntryHintIfNeeded() {
-        guard let request = entryHint.request, request.toolID == "diff" else { return }
-        entryHint.request = nil
-        guard let segment = DiffHubWorkspaceModel.Segment(rawValue: request.segment) else { return }
-        workspace.segment = segment
     }
 }

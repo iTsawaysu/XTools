@@ -2,9 +2,40 @@ import AppKit
 import SwiftUI
 import XToolsCore
 
+/// Clamps the live selection into the current UTF-16 text length before
+/// scroll-to-reveal: large programmatic replacements can leave a stale
+/// selected range that would crash AppKit when scrolled raw.
+private func clampedSelectedRange(for textView: NSTextView) -> NSRange {
+    let textLength = (textView.string as NSString).length
+    let selectedRange = textView.selectedRange()
+    let rawLocation = selectedRange.location == NSNotFound ? textLength : selectedRange.location
+    let location = min(max(0, rawLocation), textLength)
+    let upperBound = min(max(location, selectedRange.upperBound), textLength)
+    return NSRange(location: location, length: upperBound - location)
+}
+
 // MARK: - Caret
 
-final class IndexCaretTextView: NSTextView, IndexAsymmetricTextContainerSurface {
+/// Shared 2pt caret widening for native text surfaces: the hairline 1pt
+/// insertion point is nearly invisible, so every custom text view widens
+/// both the caret draw rect and its invalidation rect by the same amount.
+class IndexCaretWideningTextView: NSTextView {
+    let caretWidth: CGFloat = 2
+
+    override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
+        var widened = rect
+        widened.size.width = caretWidth
+        super.drawInsertionPoint(in: widened, color: color, turnedOn: flag)
+    }
+
+    override func setNeedsDisplay(_ invalidRect: NSRect, avoidAdditionalLayout flag: Bool) {
+        var widened = invalidRect
+        widened.size.width += caretWidth
+        super.setNeedsDisplay(widened, avoidAdditionalLayout: flag)
+    }
+}
+
+final class IndexCaretTextView: IndexCaretWideningTextView, IndexAsymmetricTextContainerSurface {
     private var droppedFile: IndexDroppedTextFile?
     var sharedDroppedFile: IndexDroppedTextFile? {
         didSet {
@@ -17,8 +48,6 @@ final class IndexCaretTextView: NSTextView, IndexAsymmetricTextContainerSurface 
     var leadingTextContainerInset: CGFloat {
         textContainerInset.width
     }
-
-    private let caretWidth: CGFloat = 2
 
     /// Private undo stack used only when this view acts as a single-line field
     private let fieldEditorUndo = IndexPrivateUndoStack()
@@ -38,18 +67,6 @@ final class IndexCaretTextView: NSTextView, IndexAsymmetricTextContainerSurface 
     override func unmarkText() {
         super.unmarkText()
         onCompositionChange?(false)
-    }
-
-    override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
-        var widened = rect
-        widened.size.width = caretWidth
-        super.drawInsertionPoint(in: widened, color: color, turnedOn: flag)
-    }
-
-    override func setNeedsDisplay(_ invalidRect: NSRect, avoidAdditionalLayout flag: Bool) {
-        var widened = invalidRect
-        widened.size.width += caretWidth
-        super.setNeedsDisplay(widened, avoidAdditionalLayout: flag)
     }
 
     var onFileDrop: ((String) -> Void)?
@@ -1049,15 +1066,6 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
         }
     }
 
-    private func clampedSelectedRange(for textView: NSTextView) -> NSRange {
-        let textLength = (textView.string as NSString).length
-        let selectedRange = textView.selectedRange()
-        let rawLocation = selectedRange.location == NSNotFound ? textLength : selectedRange.location
-        let location = min(max(0, rawLocation), textLength)
-        let upperBound = min(max(location, selectedRange.upperBound), textLength)
-        return NSRange(location: location, length: upperBound - location)
-    }
-
     @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
@@ -1141,43 +1149,14 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
             textView.scrollRangeToVisible(clampedSelectedRange(for: textView))
         }
 
-        private func clampedSelectedRange(for textView: NSTextView) -> NSRange {
-            let textLength = (textView.string as NSString).length
-            let selectedRange = textView.selectedRange()
-            let rawLocation = selectedRange.location == NSNotFound ? textLength : selectedRange.location
-            let location = min(max(0, rawLocation), textLength)
-            let upperBound = min(max(location, selectedRange.upperBound), textLength)
-            return NSRange(location: location, length: upperBound - location)
-        }
-
         private func configureUndoManager() {
             privateUndo.configureLevels(inputPolicy?.undoLevels)
         }
     }
 }
 
-private final class IndexTextKit2ViewportScrollView: NSScrollView {
-    private var isSynchronizing = false
-
-    override func tile() {
-        super.tile()
-        synchronizeGeometryIfNeeded()
-    }
-
-    override func layout() {
-        super.layout()
-        synchronizeGeometryIfNeeded()
-    }
-
-    override func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(newSize)
-        synchronizeGeometryIfNeeded()
-    }
-
-    private func synchronizeGeometryIfNeeded() {
-        guard !isSynchronizing else { return }
-        isSynchronizing = true
-        defer { isSynchronizing = false }
+private final class IndexTextKit2ViewportScrollView: IndexTextViewportScrollView {
+    override func synchronizeDocumentGeometry() {
         guard let textView = documentView as? NSTextView else { return }
 
         let viewportSize = contentSize
@@ -1521,7 +1500,45 @@ enum IndexEditorLineNumberGutter {
 /// with the editor. The overlay is presentation-only: hit-test transparent,
 /// decorative for accessibility, and never touches text storage.
 @MainActor
-final class IndexEditorLineNumberGutterView: NSView {
+/// Shared chrome for line-number columns: flipped coordinates, hit-test
+/// transparency, the arrow cursor, the trailing hairline, and right-aligned
+/// monospaced label attributes. Subclasses own their line enumeration
+/// (TextKit 1 fragments vs TextKit 2 line blocks) and status coloring — the
+/// bounded TextKit 2 viewport must never reach a legacy layout manager, so
+/// enumeration never lives here.
+class IndexLineNumberColumnView: NSView {
+    override var isFlipped: Bool { true }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        nil
+    }
+
+    /// The number column is chrome, not selectable content: keep the arrow
+    /// cursor over it even though the column stays hit-test transparent.
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .arrow)
+    }
+
+    /// Trailing hairline separating the number column from the text viewport.
+    func drawTrailingHairline() {
+        let hairline = NSRect(x: bounds.width - 0.5, y: 0, width: 0.5, height: bounds.height)
+        NSColor(ToolTheme.border).setFill()
+        NSBezierPath(rect: hairline).fill()
+    }
+
+    /// Right-aligned monospaced attributes shared by line-number labels.
+    static func labelAttributes(color: NSColor) -> [NSAttributedString.Key: Any] {
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .right
+        return [
+            .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
+            .foregroundColor: color,
+            .paragraphStyle: paragraphStyle
+        ]
+    }
+}
+
+final class IndexEditorLineNumberGutterView: IndexLineNumberColumnView {
     static let numberColumnWidth: CGFloat = 34
 
     weak var scrollView: NSScrollView?
@@ -1530,8 +1547,6 @@ final class IndexEditorLineNumberGutterView: NSView {
     private var newlineOffsetsDirty = true
     private var newlineOffsets: [Int] = []
     private nonisolated(unsafe) var boundsObserver: NSObjectProtocol?
-
-    override var isFlipped: Bool { true }
 
     init(scrollView: NSScrollView, textView: NSTextView) {
         self.scrollView = scrollView
@@ -1604,16 +1619,6 @@ final class IndexEditorLineNumberGutterView: NSView {
         needsDisplay = true
     }
 
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        nil
-    }
-
-    /// The number column is chrome, not selectable content: keep the arrow
-    /// cursor over it even though the gutter stays hit-test transparent.
-    override func resetCursorRects() {
-        addCursorRect(bounds, cursor: .arrow)
-    }
-
     /// The scroll view is frame-managed (no Auto Layout), so the gutter keeps
     /// its own frame in sync at draw time; autoresizing covers live resizes
     /// between draws.
@@ -1639,9 +1644,7 @@ final class IndexEditorLineNumberGutterView: NSView {
             return
         }
 
-        let hairline = NSRect(x: IndexEditorLineNumberGutter.width - 0.5, y: 0, width: 0.5, height: bounds.height)
-        NSColor(ToolTheme.border).setFill()
-        NSBezierPath(rect: hairline).fill()
+        drawTrailingHairline()
 
         let nsText = textView.string as NSString
         if newlineOffsetsDirty {
@@ -1660,13 +1663,7 @@ final class IndexEditorLineNumberGutterView: NSView {
         let terminal = terminalLineNumberFragment()
         guard glyphRange.length > 0 || nsText.length == 0 || terminal != nil else { return }
 
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.alignment = .right
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
-            .foregroundColor: NSColor(ToolTheme.textTertiary),
-            .paragraphStyle: paragraphStyle
-        ]
+        let attributes = IndexLineNumberColumnView.labelAttributes(color: NSColor(ToolTheme.textTertiary))
 
         if nsText.length == 0 {
             let defaultLineHeight = layoutManager.defaultLineHeight(for: textView.font ?? .monospacedSystemFont(ofSize: 12.5, weight: .regular))
@@ -1866,30 +1863,50 @@ final class IndexLeadingLockedClipView: NSClipView {
     }
 }
 
-private final class IndexTextAreaScrollView: NSScrollView {
-    weak var lineNumberGutter: IndexEditorLineNumberGutterView?
-    var growsWithContent = false
+/// NSScrollView base that funnels the tile()/layout()/setFrameSize() geometry
+/// callbacks through one reentrancy-guarded synchronization hook, so text
+/// viewports keep their document geometry in sync whenever AppKit re-tiles
+/// them. Subclasses implement their per-surface geometry step.
+class IndexTextViewportScrollView: NSScrollView {
     private var isSynchronizing = false
 
-    override func tile() {
+    final override func tile() {
         super.tile()
         synchronizeGeometryIfNeeded()
     }
 
-    override func layout() {
+    final override func layout() {
         super.layout()
-        synchronizeGeometryIfNeeded()
+        layoutSynchronizeStep()
     }
 
-    override func setFrameSize(_ newSize: NSSize) {
+    final override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         synchronizeGeometryIfNeeded()
     }
 
-    private func synchronizeGeometryIfNeeded() {
+    /// Layout callbacks may fire while a gated synchronization is already in
+    /// flight; surfaces whose step must run there regardless override this.
+    func layoutSynchronizeStep() {
+        synchronizeGeometryIfNeeded()
+    }
+
+    func synchronizeGeometryIfNeeded() {
         guard !isSynchronizing else { return }
         isSynchronizing = true
         defer { isSynchronizing = false }
+        synchronizeDocumentGeometry()
+    }
+
+    /// The per-surface document geometry step; subclasses override.
+    func synchronizeDocumentGeometry() {}
+}
+
+private final class IndexTextAreaScrollView: IndexTextViewportScrollView {
+    weak var lineNumberGutter: IndexEditorLineNumberGutterView?
+    var growsWithContent = false
+
+    override func synchronizeDocumentGeometry() {
         synchronizeTextGeometry()
         if let gutter = lineNumberGutter, abs(gutter.frame.height - bounds.height) > 0.5 {
             gutter.frame = NSRect(x: 0, y: 0, width: IndexEditorLineNumberGutter.width, height: bounds.height)
@@ -1936,15 +1953,6 @@ enum IndexTextAreaScrollPositioning {
             layoutManager.ensureLayout(for: textContainer)
         }
         textView.scrollRangeToVisible(clampedSelectedRange(for: textView))
-    }
-
-    private static func clampedSelectedRange(for textView: NSTextView) -> NSRange {
-        let textLength = (textView.string as NSString).length
-        let selectedRange = textView.selectedRange()
-        let rawLocation = selectedRange.location == NSNotFound ? textLength : selectedRange.location
-        let location = min(max(0, rawLocation), textLength)
-        let upperBound = min(max(location, selectedRange.upperBound), textLength)
-        return NSRange(location: location, length: upperBound - location)
     }
 }
 

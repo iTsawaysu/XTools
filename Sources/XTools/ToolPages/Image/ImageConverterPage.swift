@@ -133,9 +133,10 @@ private struct IndexImageConverterWorkspaceContent: View {
                             .foregroundStyle(ToolTheme.textSecondary)
                             .fixedSize(horizontal: true, vertical: false)
                     } else {
-                        IndexInlinePicker(
+                        IndexSegmentedControl(
                             items: outputFormats.map { ($0, $0.displayName) },
-                            selection: $targetFormat
+                            selection: $targetFormat,
+                            selectionStyle: .filled
                         )
                         .accessibilityLabel("目标格式")
                         .accessibilityValue(targetFormat.displayName)
@@ -172,13 +173,14 @@ private struct IndexImageConverterWorkspaceContent: View {
                 if requiresTransparencyFill {
                     IndexOptionGroup {
                         IndexOptionLabel("透明填充")
-                        IndexInlinePicker(
+                        IndexSegmentedControl(
                             items: [
                                 (ImageTransparencyFillMode.white, "白色"),
                                 (.black, "黑色"),
                                 (.custom, "自定义")
                             ],
-                            selection: $transparencyFillMode
+                            selection: $transparencyFillMode,
+                            selectionStyle: .filled
                         )
                         .accessibilityLabel("透明区域填充颜色")
                         .accessibilityValue(transparencyFillAccessibilityValue)
@@ -215,20 +217,8 @@ private struct IndexImageConverterWorkspaceContent: View {
                     imageSelectionActions
 
                     if session.items.isEmpty {
-                        if session.isImporting {
-                            IndexProgressLabel(message: "正在读取图片…")
-                                .foregroundStyle(ToolTheme.textSecondary)
-                                .accessibilityLabel("正在读取图片")
-                        } else {
-                            IndexEmptyState(
-                                title: "选择图片开始转换",
-                                systemImage: "photo.on.rectangle.angled",
-                                message: IndexEmptyStateCopy.autoGenerate("图片"),
-                                density: .list
-                            )
-                            // 空态在铺满的输入区内垂直居中，构成完整的拖放区观感。
-                            .frame(maxWidth: .infinity, minHeight: 128, maxHeight: .infinity)
-                        }
+                        // 空态在铺满的输入区内垂直居中，构成完整的拖放区观感。
+                        ImageUploadPendingState(isProcessing: session.isImporting, title: "选择图片开始转换", fillsHeight: true)
                     } else if let singleItem = session.singleItem {
                         singleImageStage(singleItem)
                     } else {
@@ -253,29 +243,22 @@ private struct IndexImageConverterWorkspaceContent: View {
         )
     }
 
-    @ViewBuilder
-    private var imageSelectionActions: some View {
-        HStack(spacing: 8) {
-            Button(action: addImages) {
-                Label(session.items.isEmpty ? "选择图片" : "添加图片", systemImage: "photo")
-                    .font(ToolTypography.buttonSmall)
-            }
-            .buttonStyle(IndexSmallButtonStyle())
-            .accessibilityLabel(session.items.isEmpty ? "选择要转换的图片" : "添加要转换的图片")
-
-            if !session.items.isEmpty {
-                Button {
-                    withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
-                        session.reset()
-                    }
-                } label: {
-                    Label("清空图片", systemImage: IndexActionSymbol.removeResource)
-                        .font(ToolTypography.buttonSmall)
+    private var imageSelectionActions: ImageSelectionActionRow {
+        ImageSelectionActionRow(
+            hasSource: !session.items.isEmpty,
+            selectAccessibilityLabel: "选择要转换的图片",
+            replaceAccessibilityLabel: "添加要转换的图片",
+            clearAccessibilityLabel: "清除全部转换图片",
+            onSelect: addImages,
+            onClear: {
+                withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
+                    session.reset()
                 }
-                .buttonStyle(IndexSmallButtonStyle())
-                .accessibilityLabel("清除全部转换图片")
-            }
-        }
+                resumePendingConversions()
+            },
+            changeTitle: "添加图片",
+            clearTitle: "清空图片"
+        )
     }
 
     /// N=1 时行密度放宽：大缩略图 + 底部摘要/保存按钮，贴近既有单张观感。

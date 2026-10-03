@@ -8,12 +8,11 @@ final class GeneratorHubWorkspaceModel: ObservableObject {
 
     /// Hub 分段：rawValue 即 IndexSegmentedControl 的 item id，
     /// 顺序 Token | UUID | 密码（用户确认顺序，亦为合并前注册表顺序）。
-    enum Segment: String, CaseIterable, Sendable {
+    enum Segment: String, CaseIterable, Sendable, HubSegmentIdentifier {
         case token
         case uuid
         case password
 
-        var id: String { rawValue }
         var label: String {
             switch self {
             case .token: return "Token"
@@ -62,47 +61,19 @@ struct IndexGeneratorHubPage: View {
 /// 再回来不丢配方与结果。
 private struct IndexGeneratorHubContent: View {
     @ObservedObject var workspace: GeneratorHubWorkspaceModel
-    @EnvironmentObject var entryHint: HubSegmentEntryHint
 
     var body: some View {
-        IndexPage("生成器", subtitle: workspace.segment.subtitle, workspaceSemantic: .queryListWorkspace) {
-            IndexSegmentedControl(
-                items: GeneratorHubWorkspaceModel.Segment.allCases.map { ($0.id, $0.label) },
-                selection: segmentSelection,
-                density: .regular
-            )
-            segmentContent
-        }
-        .onAppear { consumeEntryHintIfNeeded() }
-        .onChange(of: entryHint.request) { _ in consumeEntryHintIfNeeded() }
-    }
-
-    private var segmentSelection: Binding<String> {
-        Binding(
-            get: { workspace.segment.rawValue },
-            set: { value in
-                guard let newSegment = GeneratorHubWorkspaceModel.Segment(rawValue: value) else { return }
-                workspace.segment = newSegment
+        HubSegmentPage(
+            title: "生成器",
+            toolID: "generator",
+            workspaceSemantic: .queryListWorkspace,
+            segment: $workspace.segment
+        ) { segment in
+            switch segment {
+            case .token: IndexTokenGeneratorSegment()
+            case .uuid: IndexUUIDGeneratorSegment()
+            case .password: IndexPasswordGeneratorSegment()
             }
-        )
-    }
-
-    @ViewBuilder
-    private var segmentContent: some View {
-        switch workspace.segment {
-        case .token: IndexTokenGeneratorSegment()
-        case .uuid: IndexUUIDGeneratorSegment()
-        case .password: IndexPasswordGeneratorSegment()
         }
-    }
-
-    /// 深链分段提示（⌘K 关键词命中本 Hub 别名时写入；SmartPaste 同通道）：
-    /// 进入本工具或工具已打开时一次性消费（先清 request 再设分段，避免滞留
-    /// 覆盖后续手动切换；仅消费指向本工具的请求，其余 Hub 的请求原样保留）。
-    private func consumeEntryHintIfNeeded() {
-        guard let request = entryHint.request, request.toolID == "generator" else { return }
-        entryHint.request = nil
-        guard let segment = GeneratorHubWorkspaceModel.Segment(rawValue: request.segment) else { return }
-        workspace.segment = segment
     }
 }

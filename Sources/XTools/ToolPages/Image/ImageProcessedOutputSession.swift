@@ -18,13 +18,12 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
     @Published private(set) var error: String?
     @Published private(set) var isProcessing = false
 
-    private var panelTask: Task<Void, Never>?
+    private var panelRequests = PanelRequestBox()
     private var selectionTask: Task<Void, Never>?
-    private var activePanelRequestID: UUID?
     private let renderGate = AsyncWorkGate()
 
     deinit {
-        panelTask?.cancel()
+        panelRequests.cancel()
         selectionTask?.cancel()
     }
 
@@ -52,18 +51,17 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
         renderProvider: ImageBackgroundOutputRendererProvider? = nil,
         render: @escaping ImageBackgroundOutputRenderer
     ) {
-        guard panelTask == nil else { return }
-        let requestID = UUID()
-        activePanelRequestID = requestID
-        panelTask = Task { @MainActor [weak self] in
+        guard !panelRequests.hasActiveRequest else { return }
+        let requestID = panelRequests.begin()
+        panelRequests.attach(Task { @MainActor [weak self] in
             do {
                 guard let url = try await filePanel.selectFile(
                     FileInputPanelRequest(allowedContentTypes: allowedContentTypes)
                 ) else {
-                    self?.finishPanelRequest(id: requestID)
+                    self?.panelRequests.finish(id: requestID)
                     return
                 }
-                guard let self, self.finishPanelRequest(id: requestID) else { return }
+                guard let self, self.panelRequests.finish(id: requestID) else { return }
                 self.receiveImageURL(
                     url,
                     allowedContentTypes: allowedContentTypes,
@@ -77,12 +75,12 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
                     render: render
                 )
             } catch is CancellationError {
-                self?.finishPanelRequest(id: requestID)
+                self?.panelRequests.finish(id: requestID)
             } catch {
-                guard let self, self.finishPanelRequest(id: requestID) else { return }
+                guard let self, self.panelRequests.finish(id: requestID) else { return }
                 self.error = FileInputPanelFailure.diagnosticMessage(for: error)
             }
-        }
+        })
     }
 
     func receiveImageURL(
@@ -97,7 +95,7 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
         renderProvider: ImageBackgroundOutputRendererProvider? = nil,
         render: @escaping ImageBackgroundOutputRenderer
     ) {
-        cancelPanelRequest()
+        panelRequests.cancel()
         cancelRender()
         source = nil
         output = nil
@@ -141,36 +139,12 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
     }
 
     func rejectImageInput(_ diagnostic: String) {
-        cancelPanelRequest()
+        panelRequests.cancel()
         cancelRender()
         source = nil
         output = nil
         outputImage = nil
         error = diagnostic
-    }
-
-    func render(
-        operation: ImageProcessingOperation,
-        _ render: ImageProcessedOutputRenderer
-    ) {
-        error = nil
-        guard let source else {
-            clearOutput()
-            return
-        }
-
-        do {
-            let nextOutput = try render(source)
-            output = nextOutput
-            outputImage = NSImage(data: nextOutput.data)
-        } catch {
-            output = nil
-            outputImage = nil
-            self.error = ImageWorkflowFailure.diagnosticMessage(
-                for: error,
-                unknownFailure: .processingFailed(operation)
-            )
-        }
     }
 
     func clearOutput() {
@@ -181,7 +155,7 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
     }
 
     func reset() {
-        cancelPanelRequest()
+        panelRequests.cancel()
         cancelRender()
         source = nil
         output = nil
@@ -297,20 +271,6 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
         selectionTask = nil
         isProcessing = false
         renderGate.invalidate()
-    }
-
-    @discardableResult
-    private func finishPanelRequest(id: UUID) -> Bool {
-        guard activePanelRequestID == id else { return false }
-        activePanelRequestID = nil
-        panelTask = nil
-        return true
-    }
-
-    private func cancelPanelRequest() {
-        activePanelRequestID = nil
-        panelTask?.cancel()
-        panelTask = nil
     }
 }
 

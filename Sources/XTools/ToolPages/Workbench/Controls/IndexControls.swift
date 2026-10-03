@@ -593,7 +593,7 @@ private struct IndexIconButtonActiveAccessibility: ViewModifier {
 
 // MARK: - IndexSegmentedControl
 
-struct IndexSegmentedControl: View {
+struct IndexSegmentedControl<Value: Hashable>: View {
     enum Density {
         case regular
         case compact
@@ -613,32 +613,117 @@ struct IndexSegmentedControl: View {
         }
     }
 
-    let items: [(String, String)]
-    @Binding var selection: String
+    /// How the selected segment renders: the shared floating spring cursor,
+    /// or the inline matched-geometry fill the compact option pickers use
+    /// (nested pill, control-label typography, tone-aware tray border).
+    enum SelectionStyle {
+        case cursor
+        case filled
+    }
+
+    let items: [(Value, String)]
+    @Binding var selection: Value
     let density: Density
+    let selectionStyle: SelectionStyle
+    var tone: ToolFeedbackTone? = nil
 
     /// Segment bounds published to the shared cursor layer (same anchor
     /// family as the command-palette selection highlight).
-    @State private var segmentAnchors: [String: Anchor<CGRect>] = [:]
+    @State private var segmentAnchors: [Value: Anchor<CGRect>] = [:]
+    @Namespace private var filledSelectionNamespace
 
     init(
-        items: [(String, String)],
-        selection: Binding<String>,
-        density: Density = .regular
+        items: [(Value, String)],
+        selection: Binding<Value>,
+        density: Density = .regular,
+        selectionStyle: SelectionStyle = .cursor,
+        tone: ToolFeedbackTone? = nil
     ) {
         self.items = items
         self._selection = selection
         self.density = density
+        self.selectionStyle = selectionStyle
+        self.tone = tone
     }
 
     var body: some View {
+        if selectionStyle == .filled {
+            filledBody
+        } else {
+            cursorBody
+        }
+    }
+
+    // MARK: Filled selection (the former IndexOptionPicker)
+
+    private var filledBody: some View {
+        HStack(spacing: 2) {
+            ForEach(items, id: \.0) { item in
+                FilledItem(
+                    label: item.1,
+                    isSelected: selection == item.0,
+                    namespace: filledSelectionNamespace
+                ) {
+                    selection = item.0
+                }
+            }
+        }
+        .padding(2)
+        .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                .strokeBorder(tone?.tint.opacity(0.7) ?? ToolTheme.border, lineWidth: 1)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .toolAnimation(ToolMotion.Preset.settle, value: selection)
+    }
+
+    /// One filled-selection segment: selected fill springs between segments
+    /// through matched geometry inside the tray.
+    private struct FilledItem: View {
+        let label: String
+        let isSelected: Bool
+        let namespace: Namespace.ID
+        let action: () -> Void
+
+        var body: some View {
+            Button(action: action) {
+                Text(label)
+                    .font(ToolTypography.controlLabel(weight: isSelected ? .semibold : .medium))
+                    .foregroundStyle(isSelected ? ToolTheme.accentHover : ToolTheme.textSecondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 11)
+                    .frame(height: 24)
+                    .background {
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
+                                .fill(ToolTheme.selectionFill)
+                                .matchedGeometryEffect(id: "selection", in: namespace)
+                        }
+                    }
+                    .overlay {
+                        if isSelected {
+                            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
+                                .strokeBorder(ToolTheme.selectionStroke, lineWidth: 1)
+                        }
+                    }
+                    .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    // MARK: Floating cursor selection
+
+    private var cursorBody: some View {
         HStack(spacing: 2) {
             ForEach(items, id: \.0) { item in
                 Item(label: item.1, isSelected: selection == item.0, density: density) {
                     selection = item.0
                 }
                 .anchorPreference(
-                    key: IndexSegmentedCursorAnchorKey.self,
+                    key: IndexSegmentedCursorAnchorKey<Value>.self,
                     value: .bounds
                 ) { [item.0: $0] }
             }
@@ -664,7 +749,7 @@ struct IndexSegmentedControl: View {
                 .strokeBorder(ToolTheme.border, lineWidth: 1)
         }
         .fixedSize(horizontal: true, vertical: false)
-        .onPreferenceChange(IndexSegmentedCursorAnchorKey.self) { segmentAnchors = $0 }
+        .onPreferenceChange(IndexSegmentedCursorAnchorKey<Value>.self) { segmentAnchors = $0 }
     }
 
     /// A single segment. Holds its own hover state so unselected segments give
@@ -706,12 +791,12 @@ struct IndexSegmentedControl: View {
 
 /// Segment bounds, published once per segment and resolved by the cursor
 /// layer in tray coordinates (command-palette row-anchor family).
-private struct IndexSegmentedCursorAnchorKey: PreferenceKey {
-    static let defaultValue: [String: Anchor<CGRect>] = [:]
+private struct IndexSegmentedCursorAnchorKey<Value: Hashable>: PreferenceKey {
+    static var defaultValue: [Value: Anchor<CGRect>] { [:] }
 
     static func reduce(
-        value: inout [String: Anchor<CGRect>],
-        nextValue: () -> [String: Anchor<CGRect>]
+        value: inout [Value: Anchor<CGRect>],
+        nextValue: () -> [Value: Anchor<CGRect>]
     ) {
         value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
@@ -765,13 +850,13 @@ private struct IndexSegmentedCursorFlightEffect: GeometryEffect {
 /// font metric swaps) glue the cursor to the new frame instantly — the same
 /// selection-keyed intent gating the palette highlight uses, so the stretch
 /// envelope never replays while the window is being dragged.
-private struct IndexSegmentedCursorLayer: View {
+private struct IndexSegmentedCursorLayer<Value: Hashable>: View {
     let activeFrame: CGRect?
-    let selection: String
+    let selection: Value
 
     @State private var flight: IndexSegmentedCursorFlight?
     @State private var settledFrame: CGRect?
-    @State private var settledSelection: String?
+    @State private var settledSelection: Value?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Settled selection still holds the previous segment during the render
@@ -823,40 +908,31 @@ private struct IndexSegmentedCursorLayer: View {
 
 // MARK: - IndexSwitch
 
-struct IndexSwitch: View {
+/// Shared native-toggle wrapper: the Toggle role, state announcement, and
+/// fixed-size wrapping both switch names route through.
+private struct IndexToggleSurface<Style: ToggleStyle>: View {
     let title: String
     @Binding var isOn: Bool
+    let style: Style
 
     var body: some View {
         Toggle(isOn: $isOn) {
             Text(title)
         }
-        .toggleStyle(IndexSwitchToggleStyle())
+        .toggleStyle(style)
         .accessibilityValue(isOn ? "已开启" : "已关闭")
         .fixedSize(horizontal: true, vertical: false)
     }
 }
 
-struct IndexSwitchToggleStyle: ToggleStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        Button {
-            configuration.isOn.toggle()
-        } label: {
-            HStack(spacing: 9) {
-                IndexSwitchTrack(
-                    isOn: configuration.isOn,
-                    offBackground: ToolTheme.editorBackground,
-                    offBorder: ToolTheme.border,
-                    offThumb: ToolTheme.textSecondary
-                )
+/// The standalone spine switch: one member of the option-switch family with
+/// the plain button, editor-background track, and secondary label.
+struct IndexSwitch: View {
+    let title: String
+    @Binding var isOn: Bool
 
-                configuration.label
-                    .font(ToolTypography.bodyPlain)
-                    .foregroundStyle(ToolTheme.textSecondary)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
+    var body: some View {
+        IndexToggleSurface(title: title, isOn: $isOn, style: IndexOptionSwitchToggleStyle(style: .standalone))
     }
 }
 
@@ -936,7 +1012,10 @@ struct IndexOptionDivider: View {
 }
 
 struct IndexOptionSwitch: View {
-    enum Style: Sendable {
+    enum Style: Sendable, Equatable {
+        /// The standalone spine switch look (former IndexSwitch): plain
+        /// button, editor-background track, secondary label.
+        case standalone
         case switchToggle
         case embeddedSwitch
         case button
@@ -953,12 +1032,7 @@ struct IndexOptionSwitch: View {
     }
 
     var body: some View {
-        Toggle(isOn: $isOn) {
-            Text(title)
-        }
-        .toggleStyle(IndexOptionSwitchToggleStyle(style: style))
-        .accessibilityValue(isOn ? "已开启" : "已关闭")
-        .fixedSize(horizontal: true, vertical: false)
+        IndexToggleSurface(title: title, isOn: $isOn, style: IndexOptionSwitchToggleStyle(style: style))
     }
 }
 
@@ -966,10 +1040,38 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
     var style: IndexOptionSwitch.Style = .switchToggle
 
     func makeBody(configuration: Configuration) -> some View {
+        Group {
+            if style == .standalone {
+                toggleLabel(configuration)
+                    .buttonStyle(.plain)
+            } else {
+                toggleLabel(configuration)
+                    .buttonStyle(IndexOptionPressableButtonStyle())
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func toggleLabel(_ configuration: Configuration) -> some View {
         Button {
             configuration.isOn.toggle()
         } label: {
             switch style {
+            case .standalone:
+                HStack(spacing: 9) {
+                    IndexSwitchTrack(
+                        isOn: configuration.isOn,
+                        offBackground: ToolTheme.editorBackground,
+                        offBorder: ToolTheme.border,
+                        offThumb: ToolTheme.textSecondary
+                    )
+
+                    configuration.label
+                        .font(ToolTypography.bodyPlain)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                }
+                .contentShape(Rectangle())
+
             case .switchToggle:
                 HStack(spacing: 6) {
                     IndexSwitchTrack(
@@ -1000,7 +1102,6 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
                 IndexOptionButtonLabel(configuration: configuration)
             }
         }
-        .buttonStyle(IndexOptionPressableButtonStyle())
     }
 }
 
@@ -1141,56 +1242,6 @@ private struct IndexOptionButtonLabel: View {
     }
 }
 
-struct IndexOptionPicker<Value: Hashable>: View {
-    let items: [(Value, String)]
-    @Binding var selection: Value
-    var tone: ToolFeedbackTone? = nil
-    @Namespace private var selectionNamespace
-
-    var body: some View {
-        HStack(spacing: 2) {
-            ForEach(items, id: \.0) { item in
-                Button {
-                    selection = item.0
-                } label: {
-                    let isSelected = selection == item.0
-
-                    Text(item.1)
-                        .font(ToolTypography.controlLabel(weight: isSelected ? .semibold : .medium))
-                        .foregroundStyle(isSelected ? ToolTheme.accentHover : ToolTheme.textSecondary)
-                        .lineLimit(1)
-                        .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, 11)
-                        .frame(height: 24)
-                        .background {
-                            if isSelected {
-                                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-                                    .fill(ToolTheme.selectionFill)
-                                    .matchedGeometryEffect(id: "selection", in: selectionNamespace)
-                            }
-                        }
-                        .overlay {
-                            if isSelected {
-                                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-                                    .strokeBorder(ToolTheme.selectionStroke, lineWidth: 1)
-                            }
-                        }
-                        .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(2)
-        .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                .strokeBorder(tone?.tint.opacity(0.7) ?? ToolTheme.border, lineWidth: 1)
-        }
-        .fixedSize(horizontal: true, vertical: false)
-        .toolAnimation(ToolMotion.Preset.settle, value: selection)
-    }
-}
-
 struct IndexOptionMenu: View {
     let items: [(String, String)]
     @Binding var selection: String
@@ -1235,12 +1286,6 @@ struct IndexOptionMenu: View {
         .fixedSize(horizontal: true, vertical: false)
     }
 }
-
-/// Legacy name kept for call-site compatibility — one implementation.
-typealias IndexInlinePicker<Value: Hashable> = IndexOptionPicker<Value>
-
-
-
 
 // MARK: - IndexSlider
 

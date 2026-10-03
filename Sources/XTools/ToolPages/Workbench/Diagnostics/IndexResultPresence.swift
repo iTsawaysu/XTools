@@ -1,6 +1,13 @@
 import XToolsCore
 import SwiftUI
 
+/// Bounded empty/result presence host: one clipped height track that reveals
+/// natural-height results and collapses back to the empty state.
+///
+/// The default renders results inline at natural height; the `scrollable`
+/// initializer renders the result phase inside an internal ScrollView whose
+/// viewport never exceeds the proposed container height (the Chronometer
+/// history owner).
 struct IndexResultPresence<
     Value,
     UpdateID: Equatable,
@@ -11,13 +18,15 @@ struct IndexResultPresence<
     let updateID: UpdateID
     let motion: IndexResultPresenceMotionPolicy
     let firstAppearance: IndexResultPresenceFirstAppearancePolicy
-    private let resultContent: (Value) -> ResultContent
+    let scrollable: Bool
+    private let resultContent: (Value, Bool) -> ResultContent
     private let emptyContent: () -> EmptyContent
 
     @State private var presentation: IndexResultPresenceState<Value>
     @State private var visibleHeight: CGFloat?
     @State private var emptyHeight: CGFloat?
     @State private var resultHeight: CGFloat?
+    @State private var appearanceStartsCollapsed = false
     @State private var resultOpacity: Double
     @State private var completionRequest: IndexResultPresenceCompletion?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -34,6 +43,27 @@ struct IndexResultPresence<
         self.updateID = updateID
         self.motion = motion
         self.firstAppearance = firstAppearance
+        scrollable = false
+        resultContent = { snapshot, _ in result(snapshot) }
+        emptyContent = empty
+        _presentation = State(initialValue: IndexResultPresenceState(initialValue: value))
+        _resultOpacity = State(initialValue: value == nil ? 0 : 1)
+    }
+
+    /// Scrollable presence: the result phase lives in an internal ScrollView
+    /// capped to the GeometryReader viewport instead of growing the page.
+    init(
+        value: Value?,
+        updateID: UpdateID,
+        scrollable: Bool,
+        @ViewBuilder result: @escaping (Value, Bool) -> ResultContent,
+        @ViewBuilder empty: @escaping () -> EmptyContent
+    ) {
+        self.value = value
+        self.updateID = updateID
+        motion = .animated
+        firstAppearance = .animated
+        self.scrollable = scrollable
         resultContent = result
         emptyContent = empty
         _presentation = State(initialValue: IndexResultPresenceState(initialValue: value))
@@ -41,7 +71,21 @@ struct IndexResultPresence<
     }
 
     var body: some View {
-        clippedTrack
+        if scrollable {
+            GeometryReader { proxy in
+                presenceTrack(maximumHeight: proxy.size.height)
+                    .task(id: proxy.size.height) {
+                        updateMaximumHeight(proxy.size.height)
+                    }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        } else {
+            presenceTrack(maximumHeight: nil)
+        }
+    }
+
+    private func presenceTrack(maximumHeight: CGFloat?) -> some View {
+        clippedTrack(maximumHeight: maximumHeight)
             .allowsHitTesting(presentation.phase != .exiting)
             .accessibilityHidden(presentation.phase == .exiting)
             .overlay(alignment: .topLeading) {
@@ -53,30 +97,38 @@ struct IndexResultPresence<
                 updateEmptyHeight(height)
             }
             .onPreferenceChange(IndexResultPresenceResultHeightKey.self) { height in
-                updateResultHeight(height)
+                updateResultHeight(height, maximumHeight: maximumHeight)
             }
             .task(id: updateID) {
-                applyTarget(value, reduceMotion: reduceMotion || motion == .immediate)
+                applyTarget(value, reduceMotion: reduceMotion || motion == .immediate, maximumHeight: maximumHeight)
             }
             .onChange(of: reduceMotion) { enabled in
                 if enabled {
-                    applyTarget(value, reduceMotion: true)
+                    applyTarget(value, reduceMotion: true, maximumHeight: maximumHeight)
                 }
             }
             .task(id: completionRequest) {
                 guard let completionRequest else { return }
-                await finalize(completionRequest)
+                await finalize(completionRequest, maximumHeight: maximumHeight)
             }
     }
 
-    private var clippedTrack: some View {
-        visibleContent
-            .frame(height: visibleHeight, alignment: .top)
-            .clipped()
+    @ViewBuilder
+    private func clippedTrack(maximumHeight: CGFloat?) -> some View {
+        if scrollable {
+            visibleContent(maximumHeight: maximumHeight)
+                .frame(height: visibleHeight, alignment: .top)
+                .clipped()
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+        } else {
+            visibleContent(maximumHeight: maximumHeight)
+                .frame(height: visibleHeight, alignment: .top)
+                .clipped()
+        }
     }
 
     @ViewBuilder
-    private var visibleContent: some View {
+    private func visibleContent(maximumHeight: CGFloat?) -> some View {
         if presentation.phase == .empty {
             emptyContent()
                 .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -84,8 +136,21 @@ struct IndexResultPresence<
                 .background {
                     heightReader(key: IndexResultPresenceEmptyHeightKey.self)
                 }
+        } else if let displayedValue, scrollable {
+            ScrollView {
+                resultContent(displayedValue, presentation.phase == .presented)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(minHeight: emptyHeight ?? 0, alignment: .topLeading)
+                    .background {
+                        heightReader(key: IndexResultPresenceResultHeightKey.self)
+                    }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: resultViewportHeight(maximumHeight: maximumHeight ?? 0), alignment: .top)
+            .opacity(resultOpacity)
         } else if let displayedValue {
-            resultContent(displayedValue)
+            resultContent(displayedValue, presentation.phase == .presented)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
                 .fixedSize(horizontal: false, vertical: true)
                 .opacity(resultOpacity)
@@ -124,8 +189,32 @@ struct IndexResultPresence<
         }
     }
 
+    /// The scrollable result viewport: the visible track height capped to the
+    /// container, falling back to the capped content height while opening.
+    private func resultViewportHeight(maximumHeight: CGFloat) -> CGFloat {
+        let maximumHeight = max(0, maximumHeight)
+        let proposedHeight = visibleHeight
+            ?? cappedResultHeight(maximumHeight: maximumHeight)
+            ?? maximumHeight
+        return min(maximumHeight, max(0, proposedHeight))
+    }
+
+    private func cappedResultHeight(maximumHeight: CGFloat) -> CGFloat? {
+        guard let resultHeight else { return nil }
+        return min(resultHeight, max(0, maximumHeight))
+    }
+
+    private func collapsedPresenceHeight(
+        fullHeight: CGFloat,
+        emptyHeight: CGFloat
+    ) -> CGFloat {
+        let emptyBaseline = min(fullHeight, emptyHeight)
+        guard abs(fullHeight - emptyBaseline) <= 0.5 else { return emptyBaseline }
+        return max(0, emptyBaseline - ToolMotion.Distance.medium)
+    }
+
     @MainActor
-    private func applyTarget(_ target: Value?, reduceMotion: Bool) {
+    private func applyTarget(_ target: Value?, reduceMotion: Bool, maximumHeight: CGFloat?) {
         var next = presentation
         let action = next.update(
             to: target,
@@ -140,302 +229,20 @@ struct IndexResultPresence<
 
             switch action {
             case let .appear(_, fadesIn):
+                if scrollable { appearanceStartsCollapsed = fadesIn }
                 if fadesIn {
                     resultHeight = nil
                     resultOpacity = 0
                     visibleHeight = emptyHeight
                 }
             case .exit:
-                break
+                if scrollable { appearanceStartsCollapsed = false }
             case .settle:
-                resultOpacity = target == nil ? 0 : 1
-                visibleHeight = target == nil ? emptyHeight : nil
-            case .none, .update:
-                break
-            }
-        }
-
-        switch action {
-        case let .appear(generation, _):
-            if let resultHeight {
-                startAppearance(generation: generation, height: resultHeight)
-            }
-        case let .exit(generation):
-            if let emptyHeight {
-                startExit(generation: generation, height: emptyHeight)
-            }
-        case .none, .update, .settle:
-            break
-        }
-    }
-
-    @MainActor
-    private func updateEmptyHeight(_ height: CGFloat) {
-        guard height > 0 else { return }
-        emptyHeight = height
-
-        switch presentation.phase {
-        case .empty:
-            setVisibleHeightImmediately(height)
-        case .exiting where completionRequest == nil:
-            startExit(generation: presentation.generation, height: height)
-        case .appearing, .presented, .exiting:
-            break
-        }
-    }
-
-    @MainActor
-    private func updateResultHeight(_ height: CGFloat) {
-        guard height > 0 else { return }
-        resultHeight = height
-
-        switch presentation.phase {
-        case .appearing where completionRequest == nil:
-            startAppearance(generation: presentation.generation, height: height)
-        case .presented:
-            setVisibleHeightImmediately(height)
-        case .empty, .appearing, .exiting:
-            break
-        }
-    }
-
-    @MainActor
-    private func startAppearance(generation: Int, height: CGFloat) {
-        guard presentation.phase == .appearing,
-              presentation.generation == generation,
-              completionRequest == nil else { return }
-
-        withToolAnimation(ToolMotion.Preset.resultPresenceAppearance, reduceMotion: reduceMotion) {
-            visibleHeight = height
-            resultOpacity = 1
-        }
-        completionRequest = .appearance(generation: generation)
-    }
-
-    @MainActor
-    private func startExit(generation: Int, height: CGFloat) {
-        guard presentation.phase == .exiting,
-              presentation.generation == generation,
-              completionRequest == nil else { return }
-
-        withToolAnimation(ToolMotion.Preset.resultPresenceExit, reduceMotion: reduceMotion) {
-            visibleHeight = height
-            resultOpacity = 0
-        }
-        completionRequest = .exit(generation: generation)
-    }
-
-    @MainActor
-    private func setVisibleHeightImmediately(_ height: CGFloat) {
-        guard visibleHeight == nil || abs((visibleHeight ?? height) - height) > 0.5 else { return }
-        withTransaction(ToolMotion.disabledTransaction) {
-            visibleHeight = height
-        }
-    }
-
-    @MainActor
-    private func finalize(_ request: IndexResultPresenceCompletion) async {
-        do {
-            try await Task.sleep(nanoseconds: UInt64(request.duration * 1_000_000_000))
-        } catch {
-            return
-        }
-        guard !Task.isCancelled else { return }
-
-        var next = presentation
-        guard next.finish(request) else { return }
-
-        withTransaction(ToolMotion.disabledTransaction) {
-            presentation = next
-            completionRequest = nil
-            resultOpacity = next.phase == .empty ? 0 : 1
-            visibleHeight = next.phase == .empty ? emptyHeight : resultHeight
-        }
-    }
-}
-
-struct IndexScrollableResultPresence<
-    Value,
-    UpdateID: Equatable,
-    ResultContent: View,
-    EmptyContent: View
->: View {
-    let value: Value?
-    let updateID: UpdateID
-    private let resultContent: (Value, Bool) -> ResultContent
-    private let emptyContent: () -> EmptyContent
-
-    @State private var presentation: IndexResultPresenceState<Value>
-    @State private var visibleHeight: CGFloat?
-    @State private var emptyHeight: CGFloat?
-    @State private var resultContentHeight: CGFloat?
-    @State private var appearanceStartsCollapsed = false
-    @State private var resultOpacity: Double
-    @State private var completionRequest: IndexResultPresenceCompletion?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    init(
-        value: Value?,
-        updateID: UpdateID,
-        @ViewBuilder result: @escaping (Value, Bool) -> ResultContent,
-        @ViewBuilder empty: @escaping () -> EmptyContent
-    ) {
-        self.value = value
-        self.updateID = updateID
-        resultContent = result
-        emptyContent = empty
-        _presentation = State(initialValue: IndexResultPresenceState(initialValue: value))
-        _resultOpacity = State(initialValue: value == nil ? 0 : 1)
-    }
-
-    var body: some View {
-        GeometryReader { proxy in
-            clippedTrack(maximumHeight: proxy.size.height)
-                .allowsHitTesting(presentation.phase != .exiting)
-                .accessibilityHidden(presentation.phase == .exiting)
-                .overlay(alignment: .topLeading) {
-                    if presentation.phase != .empty {
-                        emptyMeasurement
-                    }
-                }
-                .onPreferenceChange(IndexScrollableResultPresenceEmptyHeightKey.self) { height in
-                    updateEmptyHeight(height)
-                }
-                .onPreferenceChange(IndexScrollableResultPresenceContentHeightKey.self) { height in
-                    updateResultHeight(height, maximumHeight: proxy.size.height)
-                }
-                .task(id: updateID) {
-                    applyTarget(value, reduceMotion: reduceMotion, maximumHeight: proxy.size.height)
-                }
-                .onChange(of: reduceMotion) { enabled in
-                    if enabled {
-                        applyTarget(value, reduceMotion: true, maximumHeight: proxy.size.height)
-                    }
-                }
-                .task(id: completionRequest) {
-                    guard let completionRequest else { return }
-                    await finalize(completionRequest, maximumHeight: proxy.size.height)
-                }
-                .task(id: proxy.size.height) {
-                    updateMaximumHeight(proxy.size.height)
-                }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private func clippedTrack(maximumHeight: CGFloat) -> some View {
-        visibleContent(maximumHeight: maximumHeight)
-            .frame(height: visibleHeight, alignment: .top)
-            .clipped()
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-
-    @ViewBuilder
-    private func visibleContent(maximumHeight: CGFloat) -> some View {
-        if presentation.phase == .empty {
-            emptyContent()
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                .fixedSize(horizontal: false, vertical: true)
-                .background {
-                    heightReader(key: IndexScrollableResultPresenceEmptyHeightKey.self)
-                }
-        } else if let displayedValue {
-            ScrollView {
-                resultContent(displayedValue, presentation.phase == .presented)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(minHeight: emptyHeight ?? 0, alignment: .topLeading)
-                    .background {
-                        heightReader(key: IndexScrollableResultPresenceContentHeightKey.self)
-                    }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: resultViewportHeight(maximumHeight: maximumHeight), alignment: .top)
-            .opacity(resultOpacity)
-        }
-    }
-
-    private var displayedValue: Value? {
-        switch presentation.phase {
-        case .empty:
-            nil
-        case .appearing, .presented:
-            value ?? presentation.snapshot
-        case .exiting:
-            presentation.snapshot
-        }
-    }
-
-    private var emptyMeasurement: some View {
-        emptyContent()
-            .frame(maxWidth: .infinity, alignment: .topLeading)
-            .fixedSize(horizontal: false, vertical: true)
-            .hidden()
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-            .background {
-                heightReader(key: IndexScrollableResultPresenceEmptyHeightKey.self)
-            }
-    }
-
-    private func heightReader<Key: PreferenceKey>(key: Key.Type) -> some View where Key.Value == CGFloat {
-        GeometryReader { proxy in
-            Color.clear.preference(key: key, value: proxy.size.height)
-        }
-    }
-
-    private func resultViewportHeight(maximumHeight: CGFloat) -> CGFloat {
-        let maximumHeight = max(0, maximumHeight)
-        let proposedHeight = visibleHeight
-            ?? cappedResultHeight(maximumHeight: maximumHeight)
-            ?? maximumHeight
-        return min(maximumHeight, max(0, proposedHeight))
-    }
-
-    private func cappedResultHeight(maximumHeight: CGFloat) -> CGFloat? {
-        guard let resultContentHeight else { return nil }
-        return min(resultContentHeight, max(0, maximumHeight))
-    }
-
-    private func collapsedPresenceHeight(
-        fullHeight: CGFloat,
-        emptyHeight: CGFloat
-    ) -> CGFloat {
-        let emptyBaseline = min(fullHeight, emptyHeight)
-        guard abs(fullHeight - emptyBaseline) <= 0.5 else { return emptyBaseline }
-        return max(0, emptyBaseline - ToolMotion.Distance.medium)
-    }
-
-    @MainActor
-    private func applyTarget(
-        _ target: Value?,
-        reduceMotion: Bool,
-        maximumHeight: CGFloat
-    ) {
-        var next = presentation
-        let action = next.update(to: target, reduceMotion: reduceMotion)
-        guard action != .none else { return }
-
-        withTransaction(ToolMotion.disabledTransaction) {
-            presentation = next
-            completionRequest = nil
-
-            switch action {
-            case let .appear(_, fadesIn):
-                appearanceStartsCollapsed = fadesIn
-                if fadesIn {
-                    resultContentHeight = nil
-                    resultOpacity = 0
-                    visibleHeight = emptyHeight
-                }
-            case .exit:
-                appearanceStartsCollapsed = false
-            case .settle:
-                appearanceStartsCollapsed = false
+                if scrollable { appearanceStartsCollapsed = false }
                 resultOpacity = target == nil ? 0 : 1
                 visibleHeight = target == nil
                     ? emptyHeight
-                    : cappedResultHeight(maximumHeight: maximumHeight)
+                    : (scrollable ? cappedResultHeight(maximumHeight: maximumHeight ?? 0) : nil)
             case .none, .update:
                 break
             }
@@ -443,15 +250,19 @@ struct IndexScrollableResultPresence<
 
         switch action {
         case let .appear(generation, _):
-            if let height = cappedResultHeight(maximumHeight: maximumHeight) {
-                startAppearance(generation: generation, height: height)
+            if scrollable {
+                if let height = cappedResultHeight(maximumHeight: maximumHeight ?? 0) {
+                    startAppearance(generation: generation, height: height)
+                }
+            } else if let resultHeight {
+                startAppearance(generation: generation, height: resultHeight)
             }
         case let .exit(generation):
             if let emptyHeight {
                 startExit(
                     generation: generation,
                     height: emptyHeight,
-                    resultHeight: visibleHeight ?? emptyHeight
+                    resultHeight: scrollable ? (visibleHeight ?? emptyHeight) : nil
                 )
             }
         case .none, .update, .settle:
@@ -471,7 +282,7 @@ struct IndexScrollableResultPresence<
             startExit(
                 generation: presentation.generation,
                 height: height,
-                resultHeight: visibleHeight ?? height
+                resultHeight: scrollable ? (visibleHeight ?? height) : nil
             )
         case .appearing, .presented, .exiting:
             break
@@ -479,16 +290,20 @@ struct IndexScrollableResultPresence<
     }
 
     @MainActor
-    private func updateResultHeight(_ height: CGFloat, maximumHeight: CGFloat) {
+    private func updateResultHeight(_ height: CGFloat, maximumHeight: CGFloat?) {
         guard height > 0 else { return }
-        resultContentHeight = height
-        let cappedHeight = min(height, max(0, maximumHeight))
+        resultHeight = height
+        let cappedHeight = scrollable ? min(height, max(0, maximumHeight ?? 0)) : height
 
         switch presentation.phase {
         case .appearing where completionRequest == nil:
             startAppearance(generation: presentation.generation, height: cappedHeight)
         case .presented:
-            updatePresentedHeight(cappedHeight)
+            if scrollable {
+                updatePresentedHeight(cappedHeight)
+            } else {
+                setVisibleHeightImmediately(cappedHeight)
+            }
         case .empty, .appearing, .exiting:
             break
         }
@@ -509,7 +324,8 @@ struct IndexScrollableResultPresence<
 
     @MainActor
     private func updateMaximumHeight(_ maximumHeight: CGFloat) {
-        guard presentation.phase == .presented,
+        guard scrollable,
+              presentation.phase == .presented,
               let height = cappedResultHeight(maximumHeight: maximumHeight) else { return }
         setVisibleHeightImmediately(height)
     }
@@ -535,20 +351,20 @@ struct IndexScrollableResultPresence<
     }
 
     @MainActor
-    private func startExit(
-        generation: Int,
-        height: CGFloat,
-        resultHeight: CGFloat
-    ) {
+    private func startExit(generation: Int, height: CGFloat, resultHeight: CGFloat? = nil) {
         guard presentation.phase == .exiting,
               presentation.generation == generation,
               completionRequest == nil else { return }
 
         withToolAnimation(ToolMotion.Preset.resultPresenceExit, reduceMotion: reduceMotion) {
-            visibleHeight = collapsedPresenceHeight(
-                fullHeight: resultHeight,
-                emptyHeight: height
-            )
+            if scrollable, let resultHeight {
+                visibleHeight = collapsedPresenceHeight(
+                    fullHeight: resultHeight,
+                    emptyHeight: height
+                )
+            } else {
+                visibleHeight = height
+            }
             resultOpacity = 0
         }
         completionRequest = .exit(generation: generation)
@@ -563,10 +379,7 @@ struct IndexScrollableResultPresence<
     }
 
     @MainActor
-    private func finalize(
-        _ request: IndexResultPresenceCompletion,
-        maximumHeight: CGFloat
-    ) async {
+    private func finalize(_ request: IndexResultPresenceCompletion, maximumHeight: CGFloat?) async {
         do {
             try await Task.sleep(nanoseconds: UInt64(request.duration * 1_000_000_000))
         } catch {
@@ -580,28 +393,12 @@ struct IndexScrollableResultPresence<
         withTransaction(ToolMotion.disabledTransaction) {
             presentation = next
             completionRequest = nil
-            appearanceStartsCollapsed = false
+            if scrollable { appearanceStartsCollapsed = false }
             resultOpacity = next.phase == .empty ? 0 : 1
             visibleHeight = next.phase == .empty
                 ? emptyHeight
-                : cappedResultHeight(maximumHeight: maximumHeight)
+                : (scrollable ? cappedResultHeight(maximumHeight: maximumHeight ?? 0) : resultHeight)
         }
-    }
-}
-
-private struct IndexScrollableResultPresenceEmptyHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-private struct IndexScrollableResultPresenceContentHeightKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
     }
 }
 

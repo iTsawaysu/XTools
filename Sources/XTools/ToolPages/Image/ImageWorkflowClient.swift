@@ -197,46 +197,24 @@ struct ImageWorkflowClient {
         guard assessment.canSave else {
             throw ImageWorkflowFailure.blockedCompressionSave
         }
-        return try await writeProcessedImageAfterSavePanel(output, defaultBasename: defaultBasename)
+        return try await save(
+            data: output.data,
+            defaultFilename: "\(defaultBasename).\(output.format.fileExtension)",
+            allowedContentTypes: [Self.utType(for: output.format)]
+        )
     }
 
     func saveArtifact(_ artifact: FaviconArtifact) async throws -> Bool {
-        let contentType = Self.contentType(for: artifact)
-        guard let url = await dialog.selectSaveURL(
+        try await save(
+            data: artifact.data,
             defaultFilename: artifact.filename,
-            allowedContentTypes: [contentType]
-        ) else {
-            return false
-        }
-
-        do {
-            try writer.write(artifact.data, to: url)
-            return true
-        } catch {
-            throw ImageWorkflowFailure.saveFailed
-        }
+            allowedContentTypes: [Self.contentType(for: artifact)]
+        )
     }
 
     func saveArtifacts(_ artifacts: [FaviconArtifact]) async throws -> Bool {
-        guard let directory = await dialog.selectDirectory(prompt: "选择 Favicon 部署包保存目录") else {
-            return false
-        }
-
-        var savedCount = 0
-        do {
-            for artifact in artifacts {
-                try writer.write(artifact.data, to: directory.appendingPathComponent(artifact.filename))
-                savedCount += 1
-            }
-            return true
-        } catch {
-            if savedCount > 0 {
-                throw ImageWorkflowFailure.partialSaveFailed(
-                    savedCount: savedCount,
-                    totalCount: artifacts.count
-                )
-            }
-            throw ImageWorkflowFailure.saveFailed
+        try await saveAll(artifacts, prompt: "选择 Favicon 部署包保存目录") { artifact, _ in
+            (artifact.data, artifact.filename)
         }
     }
 
@@ -247,20 +225,11 @@ struct ImageWorkflowClient {
         format: ImageFileFormat,
         defaultBasename: String
     ) async throws -> Bool {
-        let defaultFilename = "\(defaultBasename).\(format.fileExtension)"
-        guard let url = await dialog.selectSaveURL(
-            defaultFilename: defaultFilename,
+        try await save(
+            data: data,
+            defaultFilename: "\(defaultBasename).\(format.fileExtension)",
             allowedContentTypes: [Self.utType(for: format)]
-        ) else {
-            return false
-        }
-
-        do {
-            try writer.write(data, to: url)
-            return true
-        } catch {
-            throw ImageWorkflowFailure.saveFailed
-        }
+        )
     }
 
     /// 批量保存转换结果：选目录后逐张读取落盘的临时文件并写入
@@ -269,37 +238,21 @@ struct ImageWorkflowClient {
     /// partialSaveFailed 语义。临时文件由批量会话写出，不走输入预算的
     /// reader 管线（输出可能合理地超过输入预算）。
     func saveConvertedImages(_ candidates: [BatchConversionSaveCandidate]) async throws -> Bool {
-        guard let directory = await dialog.selectDirectory(
+        var reservedFilenames: Set<String> = []
+        return try await saveAll(
+            candidates,
             prompt: "保存",
             message: "已转换的 \(candidates.count) 张图片将保存到所选文件夹"
-        ) else {
-            return false
-        }
-
-        var savedCount = 0
-        var reservedFilenames: Set<String> = []
-        do {
-            for candidate in candidates {
-                let data = try Data(contentsOf: candidate.tempURL)
-                let url = Self.uniqueConvertedImageURL(
-                    in: directory,
-                    basename: candidate.basename,
-                    format: candidate.format,
-                    reservedFilenames: reservedFilenames
-                )
-                reservedFilenames.insert(url.lastPathComponent)
-                try writer.write(data, to: url)
-                savedCount += 1
-            }
-            return true
-        } catch {
-            if savedCount > 0 {
-                throw ImageWorkflowFailure.partialSaveFailed(
-                    savedCount: savedCount,
-                    totalCount: candidates.count
-                )
-            }
-            throw ImageWorkflowFailure.saveFailed
+        ) { candidate, directory in
+            let data = try Data(contentsOf: candidate.tempURL)
+            let url = Self.uniqueConvertedImageURL(
+                in: directory,
+                basename: candidate.basename,
+                format: candidate.format,
+                reservedFilenames: reservedFilenames
+            )
+            reservedFilenames.insert(url.lastPathComponent)
+            return (data, url.lastPathComponent)
         }
     }
 
@@ -324,41 +277,12 @@ struct ImageWorkflowClient {
     }
 
     func saveIcon(_ icon: GeneratedIcon, defaultFilename: String) async throws -> Bool {
-        guard let url = await dialog.selectSaveURL(defaultFilename: defaultFilename, allowedContentTypes: [.png]) else {
-            return false
-        }
-
-        do {
-            try writer.write(icon.data, to: url)
-            return true
-        } catch {
-            throw ImageWorkflowFailure.saveFailed
-        }
+        try await save(data: icon.data, defaultFilename: defaultFilename, allowedContentTypes: [.png])
     }
 
-    func saveIcons(_ icons: [GeneratedIcon], filename: (GeneratedIcon) -> String) async throws -> Bool {
-        guard let directory = await dialog.selectDirectory(prompt: "选择保存目录") else {
-            return false
-        }
-
-        // Report partial progress: if the Nth write fails, N-1 files are already
-        // on disk. A bare "save failed" would hide those, so the message names
-        // how many succeeded before the failure.
-        var savedCount = 0
-        do {
-            for icon in icons {
-                try writer.write(icon.data, to: directory.appendingPathComponent(filename(icon)))
-                savedCount += 1
-            }
-            return true
-        } catch {
-            if savedCount > 0 {
-                throw ImageWorkflowFailure.partialSaveFailed(
-                    savedCount: savedCount,
-                    totalCount: icons.count
-                )
-            }
-            throw ImageWorkflowFailure.saveFailed
+    func saveIcons(_ icons: [GeneratedIcon], filename: @escaping (GeneratedIcon) -> String) async throws -> Bool {
+        try await saveAll(icons, prompt: "选择保存目录") { icon, _ in
+            (icon.data, filename(icon))
         }
     }
 
@@ -376,22 +300,56 @@ struct ImageWorkflowClient {
         formats.compactMap { UTType($0.utTypeIdentifier) }
     }
 
-    private func writeProcessedImageAfterSavePanel(
-        _ output: ProcessedImage,
-        defaultBasename: String
+    /// 单文件保存的共享骨架：保存面板取消返回 false（静默取消），写入失败
+    /// 统一抛 saveFailed。
+    private func save(
+        data: Data,
+        defaultFilename: String,
+        allowedContentTypes: [UTType]
     ) async throws -> Bool {
-        let defaultFilename = "\(defaultBasename).\(output.format.fileExtension)"
         guard let url = await dialog.selectSaveURL(
             defaultFilename: defaultFilename,
-            allowedContentTypes: [Self.utType(for: output.format)]
+            allowedContentTypes: allowedContentTypes
         ) else {
             return false
         }
 
         do {
-            try writer.write(output.data, to: url)
+            try writer.write(data, to: url)
             return true
         } catch {
+            throw ImageWorkflowFailure.saveFailed
+        }
+    }
+
+    /// 批量目录保存的共享骨架：选目录后逐项写入；任一项的读取/命名/写入
+    /// 失败按该张失败计——已写入 N-1 张时抛 partialSaveFailed（保留部分
+    /// 进度事实），否则抛 saveFailed。
+    private func saveAll<Item>(
+        _ items: [Item],
+        prompt: String,
+        message: String? = nil,
+        item: (Item, URL) throws -> (data: Data, filename: String)
+    ) async throws -> Bool {
+        guard let directory = await dialog.selectDirectory(prompt: prompt, message: message) else {
+            return false
+        }
+
+        var savedCount = 0
+        do {
+            for element in items {
+                let (data, filename) = try item(element, directory)
+                try writer.write(data, to: directory.appendingPathComponent(filename))
+                savedCount += 1
+            }
+            return true
+        } catch {
+            if savedCount > 0 {
+                throw ImageWorkflowFailure.partialSaveFailed(
+                    savedCount: savedCount,
+                    totalCount: items.count
+                )
+            }
             throw ImageWorkflowFailure.saveFailed
         }
     }

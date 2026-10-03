@@ -7,20 +7,7 @@ final class SQLPrettifyToolWorkspaceModel: ObservableObject {
         SQLPrettifyToolWorkspaceModel(preferences: preferences)
     }
 
-    enum FormatMode: String, CaseIterable, Sendable {
-        case two = "2"
-        case four = "4"
-        case compact = "compact"
-
-        var id: String { rawValue }
-        var label: String {
-            switch self {
-            case .two: return "2"
-            case .four: return "4"
-            case .compact: return "压缩"
-            }
-        }
-    }
+    typealias FormatMode = FormatterIndentMode
 
     @Published var input = "" {
         didSet {
@@ -98,7 +85,7 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
             outputSyntax: .sql,
             isRunning: execution.isRunning,
             isOutputFresh: execution.isOutputFresh,
-            clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
+            clearDisabled: workspace.input.isEmpty && !execution.hasClearableContent,
             onFormat: format,
             onClear: workspace.clear,
             leadingControl: {

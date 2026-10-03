@@ -49,18 +49,8 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                } else if session.isProcessing {
-                    IndexProgressLabel(message: "正在读取图片…")
-                        .foregroundStyle(ToolTheme.textSecondary)
-                        .accessibilityLabel("正在读取图片")
                 } else {
-                    IndexEmptyState(
-                        title: "选择图片开始生成 Favicon",
-                        systemImage: "photo.on.rectangle.angled",
-                        message: IndexEmptyStateCopy.autoGenerate("图片"),
-                        density: .list
-                    )
-                    .frame(maxWidth: .infinity, minHeight: 128)
+                    ImageUploadPendingState(isProcessing: session.isProcessing, title: "选择图片开始生成 Favicon")
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -90,34 +80,19 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
         return "尺寸 \(metadata.pixelWidth)×\(metadata.pixelHeight)，\(metadata.format?.displayName ?? "未知格式")，\(ByteSizeFormatter.format(bytes: metadata.byteCount))"
     }
 
-    @ViewBuilder
-    private var imageSelectionActions: some View {
-        HStack(spacing: 8) {
-            Button {
-                session.selectImage(
-                    filePanel: fileInputPanelClient,
-                    selectionPublisher: publishSelectedImage
-                )
-            } label: {
-                Label(session.sourceImage == nil ? "选择图片" : "更换图片", systemImage: "photo")
-                    .font(ToolTypography.buttonSmall)
-            }
-            .buttonStyle(IndexSmallButtonStyle())
-            .accessibilityLabel(session.sourceImage == nil ? "选择 Favicon 源图片" : "更换 Favicon 源图片")
-
-            if session.sourceImage != nil {
-                Button {
-                    withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
-                        session.reset()
-                    }
-                } label: {
-                    Label("清除图片", systemImage: IndexActionSymbol.removeResource)
-                        .font(ToolTypography.buttonSmall)
+    private var imageSelectionActions: ImageSelectionActionRow {
+        ImageSelectionActionRow(
+            hasSource: session.sourceImage != nil,
+            selectAccessibilityLabel: "选择 Favicon 源图片",
+            replaceAccessibilityLabel: "更换 Favicon 源图片",
+            clearAccessibilityLabel: "清除当前 Favicon 图片",
+            onSelect: selectImage,
+            onClear: {
+                withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
+                    session.reset()
                 }
-                .buttonStyle(IndexSmallButtonStyle())
-                .accessibilityLabel("清除当前 Favicon 图片")
             }
-        }
+        )
     }
 
     private var faviconOutputPanel: some View {
@@ -237,19 +212,24 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
         }
     }
 
+    private var uploadInteractions: ImageUploadInteractions {
+        ImageUploadInteractions(reduceMotion: reduceMotion)
+    }
+
+    private func selectImage() {
+        session.selectImage(
+            filePanel: fileInputPanelClient,
+            selectionPublisher: uploadInteractions.publishSelection
+        )
+    }
+
     private func receiveImageURL(_ url: URL) {
-        session.receiveImageURL(url, selectionPublisher: publishSelectedImage)
+        session.receiveImageURL(url, selectionPublisher: uploadInteractions.publishSelection)
     }
 
     private func rejectMultipleImageDrop() {
-        withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
+        uploadInteractions.rejectMultipleDrop {
             session.rejectImageInput(SingleFileDropResolver.multipleFilesDiagnostic)
-        }
-    }
-
-    private func publishSelectedImage(_ selection: ImageInputSelection, _ publish: () -> Void) {
-        withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
-            publish()
         }
     }
 }

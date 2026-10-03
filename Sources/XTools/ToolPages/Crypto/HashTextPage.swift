@@ -83,7 +83,7 @@ private struct IndexHashTextWorkspaceContent: View {
             .withoutDiagnosticStatusSlot()
             // 八行摘要属于短派生结果，自然展开并按可用宽度换行。
             IndexPanel("摘要结果") {
-                IndexDerivedResultCardList(items: resultItems, emptyText: emptyResultText)
+                IndexShortResultCardList(items: resultItems, emptyText: emptyResultText)
             } accessory: {
                 resultPanelAccessory
             }

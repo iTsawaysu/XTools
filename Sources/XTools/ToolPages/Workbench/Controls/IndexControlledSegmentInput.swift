@@ -41,7 +41,7 @@ struct IndexControlledDateInput<TrailingAccessory: View>: View {
 
     var body: some View {
         IndexControlledSegmentInput(
-            adapter: Self.adapter(input: $input),
+            adapter: IndexControlledSegmentInputAdapter(input: $input),
             placeholder: placeholder,
             timeZone: timeZone,
             autoFocus: autoFocus,
@@ -53,48 +53,6 @@ struct IndexControlledDateInput<TrailingAccessory: View>: View {
             onNonexistentLocalTime: {},
             onFocusChange: onFocusChange,
             trailingAccessory: trailingAccessory
-        )
-    }
-
-    @MainActor
-    private static func adapter(input: Binding<ControlledDateInput>) -> IndexControlledSegmentInputAdapter {
-        IndexControlledSegmentInputAdapter(
-            displayText: { input.wrappedValue.displayText },
-            displayRangeForActiveSegment: {
-                input.wrappedValue.displayRange(for: input.wrappedValue.activeSegment)
-            },
-            selectSegmentContainingOffset: { offset in
-                input.wrappedValue.select(input.wrappedValue.segment(containingDisplayOffset: offset))
-            },
-            inputCharacter: { character, timeZone in
-                input.wrappedValue.inputCharacter(character, timeZone: timeZone)
-            },
-            deleteBackward: {
-                input.wrappedValue.deleteBackward()
-            },
-            paste: { text, timeZone in
-                switch input.wrappedValue.paste(text, timeZone: timeZone) {
-                case .accepted(let date):
-                    return .accepted(date)
-                case .rejected:
-                    return .rejected
-                }
-            },
-            commitActiveSegment: { timeZone in
-                input.wrappedValue.commitActiveSegment(timeZone: timeZone)
-            },
-            canMovePrevious: {
-                !input.wrappedValue.isFirstSegment
-            },
-            canMoveNext: {
-                !input.wrappedValue.isLastSegment
-            },
-            movePrevious: {
-                input.wrappedValue.movePrevious()
-            },
-            moveNext: {
-                input.wrappedValue.moveNext()
-            }
         )
     }
 }
@@ -169,7 +127,7 @@ struct IndexControlledHumanTimeInput<TrailingAccessory: View>: View {
 
     var body: some View {
         IndexControlledSegmentInput(
-            adapter: Self.adapter(input: $input, onNonexistentLocalTime: onNonexistentLocalTime),
+            adapter: IndexControlledSegmentInputAdapter(input: $input, onNonexistentLocalTime: onNonexistentLocalTime),
             placeholder: placeholder,
             timeZone: timeZone,
             autoFocus: autoFocus,
@@ -180,57 +138,6 @@ struct IndexControlledHumanTimeInput<TrailingAccessory: View>: View {
             onNonexistentLocalTime: onNonexistentLocalTime,
             onFocusChange: onFocusChange,
             trailingAccessory: trailingAccessory
-        )
-    }
-
-    @MainActor
-    private static func adapter(
-        input: Binding<ControlledHumanTimeInput>,
-        onNonexistentLocalTime: @escaping () -> Void
-    ) -> IndexControlledSegmentInputAdapter {
-        IndexControlledSegmentInputAdapter(
-            displayText: { input.wrappedValue.displayText },
-            displayRangeForActiveSegment: {
-                input.wrappedValue.displayRange(for: input.wrappedValue.activeSegment)
-            },
-            selectSegmentContainingOffset: { offset in
-                input.wrappedValue.select(input.wrappedValue.segment(containingDisplayOffset: offset))
-            },
-            inputCharacter: { character, timeZone in
-                input.wrappedValue.inputCharacter(character, timeZone: timeZone)
-            },
-            deleteBackward: {
-                input.wrappedValue.deleteBackward()
-            },
-            paste: { text, timeZone in
-                switch input.wrappedValue.paste(text, timeZone: timeZone) {
-                case .accepted(let date):
-                    return .accepted(date)
-                case .rejected:
-                    return .rejected
-                case .rejectedNonexistentLocalTime:
-                    return .rejectedNonexistentLocalTime
-                }
-            },
-            commitActiveSegment: { timeZone in
-                let date = input.wrappedValue.commitActiveSegment(timeZone: timeZone)
-                if date == nil, input.wrappedValue.lastCommitFailure == .nonexistentLocalTime {
-                    onNonexistentLocalTime()
-                }
-                return date
-            },
-            canMovePrevious: {
-                !input.wrappedValue.isFirstSegment
-            },
-            canMoveNext: {
-                !input.wrappedValue.isLastSegment
-            },
-            movePrevious: {
-                input.wrappedValue.movePrevious()
-            },
-            moveNext: {
-                input.wrappedValue.moveNext()
-            }
         )
     }
 }
@@ -316,6 +223,81 @@ private enum IndexControlledSegmentPasteResult {
     case rejectedNonexistentLocalTime
 }
 
+/// The uniform surface both Core controlled-input state machines expose to
+/// the segmented field. They share the same segment-editing shape; only
+/// their paste/commit outcomes differ, so conformances map those into the
+/// field's unified paste result and one factory wires every adapter closure.
+private protocol IndexControlledSegmentInputSource<Segment> {
+    associatedtype Segment
+
+    var displayText: String { get }
+    var activeSegment: Segment { get }
+    var isFirstSegment: Bool { get }
+    var isLastSegment: Bool { get }
+    /// Whether the most recent commit failed because the local time does not
+    /// exist (a daylight-saving hole). Always false for date-only inputs.
+    var lastCommitFailedFromNonexistentLocalTime: Bool { get }
+
+    func displayRange(for segment: Segment) -> Range<Int>?
+    func segment(containingDisplayOffset offset: Int) -> Segment
+    mutating func pasteOutcome(_ text: String, timeZone: TimeZone) -> IndexControlledSegmentPasteResult
+    mutating func select(_ segment: Segment)
+    mutating func inputCharacter(_ character: Character, timeZone: TimeZone) -> Date?
+    mutating func deleteBackward()
+    mutating func commitActiveSegment(timeZone: TimeZone) -> Date?
+    mutating func movePrevious()
+    mutating func moveNext()
+}
+
+extension ControlledDateInput: IndexControlledSegmentInputSource {
+    var lastCommitFailedFromNonexistentLocalTime: Bool { false }
+
+    // Protocol witnesses: the Core entry points carry defaulted arguments
+    // (editingSeed/advance) that protocol witnesses cannot satisfy, so these
+    // bridge with the same defaults every call would evaluate anyway.
+    mutating func inputCharacter(_ character: Character, timeZone: TimeZone) -> Date? {
+        inputCharacter(character, timeZone: timeZone, editingSeed: Date())
+    }
+
+    mutating func commitActiveSegment(timeZone: TimeZone) -> Date? {
+        commitActiveSegment(timeZone: timeZone, advance: false)
+    }
+
+    fileprivate mutating func pasteOutcome(_ text: String, timeZone: TimeZone) -> IndexControlledSegmentPasteResult {
+        switch paste(text, timeZone: timeZone) {
+        case .accepted(let date):
+            return .accepted(date)
+        case .rejected:
+            return .rejected
+        }
+    }
+}
+
+extension ControlledHumanTimeInput: IndexControlledSegmentInputSource {
+    var lastCommitFailedFromNonexistentLocalTime: Bool {
+        lastCommitFailure == .nonexistentLocalTime
+    }
+
+    mutating func inputCharacter(_ character: Character, timeZone: TimeZone) -> Date? {
+        inputCharacter(character, timeZone: timeZone, editingSeed: Date())
+    }
+
+    mutating func commitActiveSegment(timeZone: TimeZone) -> Date? {
+        commitActiveSegment(timeZone: timeZone, advance: false)
+    }
+
+    fileprivate mutating func pasteOutcome(_ text: String, timeZone: TimeZone) -> IndexControlledSegmentPasteResult {
+        switch paste(text, timeZone: timeZone) {
+        case .accepted(let date):
+            return .accepted(date)
+        case .rejected:
+            return .rejected
+        case .rejectedNonexistentLocalTime:
+            return .rejectedNonexistentLocalTime
+        }
+    }
+}
+
 @MainActor
 private struct IndexControlledSegmentInputAdapter {
     let displayText: () -> String
@@ -329,6 +311,52 @@ private struct IndexControlledSegmentInputAdapter {
     let canMoveNext: () -> Bool
     let movePrevious: () -> Void
     let moveNext: () -> Void
+
+    /// Assembles the adapter from any conforming Core input state so both
+    /// field wrappers share one closure wiring instead of hand-building it.
+    @MainActor
+    init<Source: IndexControlledSegmentInputSource>(
+        input: Binding<Source>,
+        onNonexistentLocalTime: @escaping () -> Void = {}
+    ) {
+        displayText = {
+            input.wrappedValue.displayText
+        }
+        displayRangeForActiveSegment = {
+            input.wrappedValue.displayRange(for: input.wrappedValue.activeSegment)
+        }
+        selectSegmentContainingOffset = { offset in
+            input.wrappedValue.select(input.wrappedValue.segment(containingDisplayOffset: offset))
+        }
+        inputCharacter = { character, timeZone in
+            input.wrappedValue.inputCharacter(character, timeZone: timeZone)
+        }
+        deleteBackward = {
+            input.wrappedValue.deleteBackward()
+        }
+        paste = { text, timeZone in
+            input.wrappedValue.pasteOutcome(text, timeZone: timeZone)
+        }
+        commitActiveSegment = { timeZone in
+            let date = input.wrappedValue.commitActiveSegment(timeZone: timeZone)
+            if date == nil, input.wrappedValue.lastCommitFailedFromNonexistentLocalTime {
+                onNonexistentLocalTime()
+            }
+            return date
+        }
+        canMovePrevious = {
+            !input.wrappedValue.isFirstSegment
+        }
+        canMoveNext = {
+            !input.wrappedValue.isLastSegment
+        }
+        movePrevious = {
+            input.wrappedValue.movePrevious()
+        }
+        moveNext = {
+            input.wrappedValue.moveNext()
+        }
+    }
 }
 
 private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
@@ -705,9 +733,7 @@ final class IndexControlledSegmentTextFieldCell: IndexPaddedTextFieldCell {
     }
 }
 
-final class IndexControlledSegmentFieldEditor: NSTextView {
-    private let caretWidth: CGFloat = 2
-
+final class IndexControlledSegmentFieldEditor: IndexCaretWideningTextView {
     weak var textField: IndexControlledSegmentNSTextField?
     weak var segmentHandler: (any IndexControlledSegmentFieldHandling)?
 
@@ -716,18 +742,6 @@ final class IndexControlledSegmentFieldEditor: NSTextView {
     // whose target (a torn-down text object) has been freed. See ADR-0022.
     private let boundedUndoManager = UndoManager()
     override var undoManager: UndoManager? { boundedUndoManager }
-
-    override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
-        var widened = rect
-        widened.size.width = caretWidth
-        super.drawInsertionPoint(in: widened, color: color, turnedOn: flag)
-    }
-
-    override func setNeedsDisplay(_ invalidRect: NSRect, avoidAdditionalLayout flag: Bool) {
-        var widened = invalidRect
-        widened.size.width += caretWidth
-        super.setNeedsDisplay(widened, avoidAdditionalLayout: flag)
-    }
 
     override func keyDown(with event: NSEvent) {
         if let textField, segmentHandler?.handleKeyDown(event, in: textField) == true {

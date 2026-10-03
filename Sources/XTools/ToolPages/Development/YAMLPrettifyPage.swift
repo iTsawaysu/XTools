@@ -73,7 +73,7 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
             outputSyntax: .yaml,
             isRunning: execution.isRunning,
             isOutputFresh: execution.isOutputFresh,
-            clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
+            clearDisabled: workspace.input.isEmpty && !execution.hasClearableContent,
             onFormat: format,
             onClear: workspace.clear,
             leadingControl: {

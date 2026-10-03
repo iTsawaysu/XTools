@@ -1922,31 +1922,18 @@ private final class IndexDiffScrollDocumentView: NSView {
     override var isFlipped: Bool { true }
 }
 
-private final class IndexDiffEditorScrollView: NSScrollView {
+private final class IndexDiffEditorScrollView: IndexTextViewportScrollView {
     weak var forwardingScrollView: NSScrollView?
     var trailingReadingGuard = IndexDiffEditorMetrics.trailingReadingGuard
     var minimumDocumentHeight: CGFloat = 0
-    private var isSynchronizing = false
 
-    override func tile() {
-        super.tile()
-        synchronizeGeometryIfNeeded()
-    }
-
-    override func layout() {
-        super.layout()
+    /// Diff text geometry must run from the layout callback even while a
+    /// gated synchronization is already in flight.
+    override func layoutSynchronizeStep() {
         synchronizeTextGeometry()
     }
 
-    override func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(newSize)
-        synchronizeGeometryIfNeeded()
-    }
-
-    private func synchronizeGeometryIfNeeded() {
-        guard !isSynchronizing else { return }
-        isSynchronizing = true
-        defer { isSynchronizing = false }
+    override func synchronizeDocumentGeometry() {
         synchronizeTextGeometry()
     }
 
@@ -2069,7 +2056,7 @@ private final class IndexDiffEditorPaneView: NSView {
     }
 }
 
-final class IndexDiffTextView: NSTextView, IndexAsymmetricTextContainerSurface, IndexDiffIndexedTextSurface {
+final class IndexDiffTextView: IndexCaretWideningTextView, IndexAsymmetricTextContainerSurface, IndexDiffIndexedTextSurface {
     lazy var diffTextIndex = IndexDiffTextIndex(storage: textStorage)
     var lastDecorationRevision = -1
     var lastDecorationGeneration = -1
@@ -2085,8 +2072,6 @@ final class IndexDiffTextView: NSTextView, IndexAsymmetricTextContainerSurface, 
     var leadingTextContainerInset: CGFloat {
         IndexDiffEditorMetrics.textInset.width
     }
-
-    private let caretWidth: CGFloat = 2
 
     var lineDecorations: [Int: DiffLineDecoration] = [:] {
         didSet {
@@ -2155,18 +2140,6 @@ final class IndexDiffTextView: NSTextView, IndexAsymmetricTextContainerSurface, 
         super.unmarkText()
         onCompositionChange?(false)
     }
-
-    override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
-        var widened = rect
-        widened.size.width = caretWidth
-        super.drawInsertionPoint(in: widened, color: color, turnedOn: flag)
-    }
-
-    override func setNeedsDisplay(_ invalidRect: NSRect, avoidAdditionalLayout flag: Bool) {
-        var widened = invalidRect
-        widened.size.width += caretWidth
-        super.setNeedsDisplay(widened, avoidAdditionalLayout: flag)
-    }
 }
 
 private extension DiffLineStatus {
@@ -2182,7 +2155,7 @@ private extension DiffLineStatus {
     }
 }
 
-private final class IndexDiffLineNumberOverlayView: NSView {
+private final class IndexDiffLineNumberOverlayView: IndexLineNumberColumnView {
     weak var scrollView: NSScrollView?
     weak var textView: NSTextView?
     var lineStatuses: [Int: DiffLineStatus] = [:] {
@@ -2196,8 +2169,6 @@ private final class IndexDiffLineNumberOverlayView: NSView {
         }
     }
 
-    override var isFlipped: Bool { true }
-
     init(scrollView: NSScrollView, textView: NSTextView) {
         self.scrollView = scrollView
         self.textView = textView
@@ -2209,31 +2180,17 @@ private final class IndexDiffLineNumberOverlayView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        nil
-    }
-
-    /// The number column is chrome, not selectable content: keep the arrow
-    /// cursor over it even though the overlay stays hit-test transparent.
-    override func resetCursorRects() {
-        addCursorRect(bounds, cursor: .arrow)
-    }
-
     override func draw(_ dirtyRect: NSRect) {
         guard let textView,
               let scrollView = scrollView else {
             return
         }
 
-        let hairline = NSRect(x: bounds.width - 0.5, y: 0, width: 0.5, height: bounds.height)
-        NSColor(ToolTheme.border).setFill()
-        NSBezierPath(rect: hairline).fill()
+        drawTrailingHairline()
 
         let visibleRect = textView.visibleRect
         let lineRects = IndexDiffTextLayoutGeometry.lineBlockRects(for: textView, visibleRect: visibleRect)
 
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.alignment = .right
         let labelX = IndexDiffEditorMetrics.lineNumberLeadingPadding
         let labelWidth = max(
             1,
@@ -2242,11 +2199,7 @@ private final class IndexDiffLineNumberOverlayView: NSView {
         let labelHeight = IndexDiffTextLayoutGeometry.defaultLineHeight(for: textView)
 
         let nsText = textView.string as NSString
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
-            .foregroundColor: lineNumberColor(for: .unchanged),
-            .paragraphStyle: paragraphStyle
-        ]
+        let attributes = IndexLineNumberColumnView.labelAttributes(color: lineNumberColor(for: .unchanged))
 
         if nsText.length == 0 {
             let y = textView.textContainerOrigin.y - visibleRect.minY
@@ -2272,11 +2225,8 @@ private final class IndexDiffLineNumberOverlayView: NSView {
                     yRadius: 1
                 ).fill()
             }
-            let lineAttributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular),
-                .foregroundColor: lineNumberColor(for: status),
-                .paragraphStyle: paragraphStyle
-            ]
+            var lineAttributes = attributes
+            lineAttributes[.foregroundColor] = lineNumberColor(for: status)
             let lineText: NSString?
             if let custom = customLineNumbers[lineNumber] {
                 if let actual = custom {

@@ -63,12 +63,11 @@ final class FileTypeDetectorSession: ObservableObject {
             || error != nil
             || warning != nil
             || isInspecting
-            || panelTask != nil
+            || panelRequests.hasActiveRequest
     }
 
     private let reader: any FileTypeFileReading
-    private var panelTask: Task<Void, Never>?
-    private var activePanelRequestID: UUID?
+    private var panelRequests = PanelRequestBox()
     private let workGate = AsyncWorkGate()
 
     init(reader: any FileTypeFileReading = FoundationFileTypeFileReader()) {
@@ -76,45 +75,43 @@ final class FileTypeDetectorSession: ObservableObject {
     }
 
     deinit {
-        panelTask?.cancel()
+        panelRequests.cancel()
     }
 
     @discardableResult
     func selectFile(filePanel: FileInputPanelClient) -> Task<Void, Never> {
-        if let panelTask {
-            return panelTask
+        if let activeTask = panelRequests.task {
+            return activeTask
         }
 
-        let requestID = UUID()
-        activePanelRequestID = requestID
+        let requestID = panelRequests.begin()
         let task = Task { @MainActor [weak self] in
             do {
                 guard let url = try await filePanel.selectFile(
                     FileInputPanelRequest(allowedContentTypes: [.data])
                 ) else {
-                    _ = self?.finishPanelRequest(id: requestID)
+                    _ = self?.panelRequests.finish(id: requestID)
                     return
                 }
                 guard !Task.isCancelled,
                       let self,
-                      self.finishPanelRequest(id: requestID) else {
+                      self.panelRequests.finish(id: requestID) else {
                     return
                 }
                 self.inspect(url)
             } catch is CancellationError {
-                _ = self?.finishPanelRequest(id: requestID)
+                _ = self?.panelRequests.finish(id: requestID)
             } catch {
-                guard let self, self.finishPanelRequest(id: requestID) else { return }
+                guard let self, self.panelRequests.finish(id: requestID) else { return }
                 self.error = FileInputPanelFailure.diagnosticMessage(for: error)
             }
         }
-        panelTask = task
-        return task
+        return panelRequests.attach(task)
     }
 
     @discardableResult
     func inspect(_ url: URL) -> Task<Void, Never> {
-        cancelPanelRequest()
+        panelRequests.cancel()
         let generation = workGate.invalidate()
 
         selectedFileURL = url
@@ -208,7 +205,7 @@ final class FileTypeDetectorSession: ObservableObject {
     }
 
     func reset() {
-        cancelPanelRequest()
+        panelRequests.cancel()
         cancelInspection()
         selectedFileURL = nil
         fileName = ""
@@ -219,7 +216,7 @@ final class FileTypeDetectorSession: ObservableObject {
     }
 
     func rejectMultipleFileDrop() {
-        cancelPanelRequest()
+        panelRequests.cancel()
         cancelInspection()
         selectedFileURL = nil
         fileName = ""
@@ -229,18 +226,6 @@ final class FileTypeDetectorSession: ObservableObject {
         isInspecting = false
     }
 
-    private func finishPanelRequest(id: UUID) -> Bool {
-        guard activePanelRequestID == id else { return false }
-        activePanelRequestID = nil
-        panelTask = nil
-        return true
-    }
-
-    private func cancelPanelRequest() {
-        activePanelRequestID = nil
-        panelTask?.cancel()
-        panelTask = nil
-    }
 
     private func cancelInspection() {
         workGate.invalidate()

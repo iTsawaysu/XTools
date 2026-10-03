@@ -130,16 +130,19 @@ struct TextWorkbenchSourceContractTests {
     }
 
     @Test func diffHubShellCarriesSegmentedDiffWorkbenches() throws {
+        let hubSkeleton = try readSource("Sources/XTools/ToolPages/HubSegmentPage.swift")
         let diffHub = try readSource("Sources/XTools/ToolPages/Development/DiffHubPage.swift")
         let jsonDiff = try readSource("Sources/XTools/ToolPages/Development/JSONDiffPage.swift")
         let textDiff = try readSource("Sources/XTools/ToolPages/Development/TextDiffPage.swift")
 
         // JSON 与文本对比合并为单入口「对比」后，IndexPage 页面壳统一
-        // 上移到 Hub；两分段只保留各自的对比工作台。
-        appearsBefore(diffHub, "IndexPage(", "IndexSegmentedControl(", "Diff hub body must open with the shared page shell before the segment control")
+        // 上移到共享 HubSegmentPage 骨架；两分段只保留各自的对比工作台。
+        appearsBefore(hubSkeleton, "IndexPage(", "IndexSegmentedControl(", "Hub segment skeleton must open with the shared page shell before the segment control")
+        contains(diffHub, "HubSegmentPage(", "Diff hub must compose the shared hub segment skeleton")
         contains(diffHub, "IndexJSONDiffSegment()", "Diff hub must mount the JSON diff segment")
         contains(diffHub, "IndexTextDiffSegment()", "Diff hub must mount the text diff segment")
-        contains(diffHub, "IndexPage(\"对比\", subtitle: workspace.segment.subtitle, workspaceSemantic: .editableDiffWorkspace)", "Diff hub must let the semantic resolve the editable diff workspace page shell")
+        contains(diffHub, "title: \"对比\"", "Diff hub must keep its settled page title")
+        contains(diffHub, "workspaceSemantic: .editableDiffWorkspace", "Diff hub must let the semantic resolve the editable diff workspace page shell")
         for segment in [jsonDiff, textDiff] {
             contains(segment, "IndexEditableDiffWorkspace(", "Diff segments must keep delegating their panes to the shared diff workbench")
             doesNotContain(segment, "IndexPage(", "Diff segments must not nest a second page shell inside the hub")
@@ -147,18 +150,20 @@ struct TextWorkbenchSourceContractTests {
     }
 
     @Test func generatorHubShellCarriesSegmentedGeneratorWorkbenches() throws {
+        let hubSkeleton = try readSource("Sources/XTools/ToolPages/HubSegmentPage.swift")
         let hub = try readSource("Sources/XTools/ToolPages/Crypto/GeneratorHubPage.swift")
         let token = try readSource("Sources/XTools/ToolPages/Crypto/TokenGeneratorPage.swift")
         let uuid = try readSource("Sources/XTools/ToolPages/Crypto/UUIDGeneratorPage.swift")
         let password = try readSource("Sources/XTools/ToolPages/Crypto/PasswordGeneratorPage.swift")
 
         // Token/UUID/密码生成器合并为单入口「生成器」后，IndexPage 页面壳统一
-        // 上移到 Hub；三分段只保留各自的生成工作台。
-        appearsBefore(hub, "IndexPage(", "IndexSegmentedControl(", "Generator hub body must open with the shared page shell before the segment control")
+        // 上移到共享 HubSegmentPage 骨架；三分段只保留各自的生成工作台。
+        contains(hub, "HubSegmentPage(", "Generator hub must compose the shared hub segment skeleton")
         contains(hub, "IndexTokenGeneratorSegment()", "Generator hub must mount the token segment")
         contains(hub, "IndexUUIDGeneratorSegment()", "Generator hub must mount the UUID segment")
         contains(hub, "IndexPasswordGeneratorSegment()", "Generator hub must mount the password segment")
-        contains(hub, "IndexPage(\"生成器\", subtitle: workspace.segment.subtitle, workspaceSemantic: .queryListWorkspace)", "Generator hub must let the semantic resolve the query-list workspace page shell")
+        contains(hub, "title: \"生成器\"", "Generator hub must keep its settled page title")
+        contains(hub, "workspaceSemantic: .queryListWorkspace", "Generator hub must let the semantic resolve the query-list workspace page shell")
         for segment in [token, uuid, password] {
             contains(segment, "IndexGeneratedValueRowList(", "Generator segments must keep delegating their results to the shared value row list")
             doesNotContain(segment, "IndexPage(", "Generator segments must not nest a second page shell inside the hub")
@@ -173,13 +178,14 @@ struct TextWorkbenchSourceContractTests {
         let favicon = try readSource("Sources/XTools/ToolPages/Image/FaviconGeneratorPage.swift")
 
         // 格式转换/压缩/灰度/Favicon 合并为单入口「图片处理」后，IndexPage 页面壳统一
-        // 上移到 Hub；四分段只保留各自的图片工作台（会话仍按 slot 独立保活）。
-        appearsBefore(hub, "IndexPage(", "IndexSegmentedControl(", "Image hub body must open with the shared page shell before the segment control")
+        // 上移到共享 HubSegmentPage 骨架；四分段只保留各自的图片工作台（会话仍按 slot 独立保活）。
+        contains(hub, "HubSegmentPage(", "Image hub must compose the shared hub segment skeleton")
         contains(hub, "IndexImageConverterSegment()", "Image hub must mount the converter segment")
         contains(hub, "IndexImageCompressorSegment()", "Image hub must mount the compressor segment")
         contains(hub, "IndexImageGrayscaleSegment()", "Image hub must mount the grayscale segment")
         contains(hub, "IndexFaviconGeneratorSegment()", "Image hub must mount the favicon segment")
-        contains(hub, "IndexPage(\"图片处理\", subtitle: workspace.segment.subtitle, workspaceSemantic: .imagePreviewStage)", "Image hub must let the semantic resolve the image preview stage page shell")
+        contains(hub, "title: \"图片处理\"", "Image hub must keep its settled page title")
+        contains(hub, "workspaceSemantic: .imagePreviewStage", "Image hub must let the semantic resolve the image preview stage page shell")
         for segment in [converter, compressor, grayscale, favicon] {
             contains(segment, "ToolWorkspaceHost(key:", "Image segments must keep resolving their repository-retained workspace sessions")
             doesNotContain(segment, "IndexPage(", "Image segments must not nest a second page shell inside the hub")
@@ -194,14 +200,15 @@ struct TextWorkbenchSourceContractTests {
         let unicode = try readSource("Sources/XTools/ToolPages/Converter/UnicodePage.swift")
 
         // Base64/URL/ASCII/Unicode 合并为单入口「文本编码」后，IndexPage 页面壳
-        // 统一上移到 Hub；四分段经 IndexConverterPage(embedsPageShell: false)
+        // 统一上移到共享 HubSegmentPage 骨架；四分段经 IndexConverterPage(embedsPageShell: false)
         // 只保留各自的转换工作台（会话仍按合并前四页的 key 保活）。
-        appearsBefore(hub, "IndexPage(", "IndexSegmentedControl(", "Encoding hub body must open with the shared page shell before the segment control")
+        contains(hub, "HubSegmentPage(", "Encoding hub must compose the shared hub segment skeleton")
         contains(hub, "IndexBase64StringSegment()", "Encoding hub must mount the Base64 segment")
         contains(hub, "IndexURLCoderSegment()", "Encoding hub must mount the URL coder segment")
         contains(hub, "IndexASCIIBinarySegment()", "Encoding hub must mount the ASCII/binary segment")
         contains(hub, "IndexUnicodeSegment()", "Encoding hub must mount the Unicode segment")
-        contains(hub, "IndexPage(\"文本编码\", subtitle: workspace.segment.subtitle, workspaceSemantic: .copyTransformWorkspace)", "Encoding hub must let the semantic resolve the copy-transform workspace page shell")
+        contains(hub, "title: \"文本编码\"", "Encoding hub must keep its settled page title")
+        contains(hub, "workspaceSemantic: .copyTransformWorkspace", "Encoding hub must let the semantic resolve the copy-transform workspace page shell")
         for segment in [base64, url, asciiBinary, unicode] {
             contains(segment, "IndexConverterPage(", "Encoding segments must keep delegating their panes to the shared converter workbench")
             doesNotContain(segment, "IndexPage(", "Encoding segments must not nest a second page shell inside the hub")
@@ -528,14 +535,15 @@ struct TextWorkbenchSourceContractTests {
 
         // Prototype v3: JSON owns one toolbar inside the workbench — no page
         // action bar, no key-sort switch; the indent control rides the toolbar.
-        // 页面壳合并后由 Hub 承载：IndexPage 在分段控件之前，四个分段
-        // 挂在同一个 switch 下。
-        appearsBefore(formatterHub, "IndexPage(", "IndexSegmentedControl(", "Formatter hub body must open with the shared page shell before the segment control")
+        // 页面壳合并后由共享 HubSegmentPage 骨架承载：分段控件挂在页面壳
+        // 之内，四个分段挂在同一个 switch 下。
+        contains(formatterHub, "HubSegmentPage(", "Formatter hub must compose the shared hub segment skeleton")
         contains(formatterHub, "IndexJSONFormatterSegment()", "Formatter hub must mount the JSON formatter segment")
         contains(formatterHub, "IndexXMLFormatterSegment()", "Formatter hub must mount the XML formatter segment")
         contains(formatterHub, "IndexYAMLPrettifySegment()", "Formatter hub must mount the YAML formatter segment")
         contains(formatterHub, "IndexSQLPrettifySegment()", "Formatter hub must mount the SQL formatter segment")
-        contains(formatterHub, "IndexPage(\"格式化\", subtitle: workspace.segment.subtitle, workspaceSemantic: .structuredEditorTransform)", "Formatter hub must let the semantic resolve the compact fixed workbench page shell")
+        contains(formatterHub, "title: \"格式化\"", "Formatter hub must keep its settled page title")
+        contains(formatterHub, "workspaceSemantic: .structuredEditorTransform", "Formatter hub must let the semantic resolve the compact fixed workbench page shell")
         contains(json, "IndexSegmentedControl(", "JSON indent must stay in the workbench toolbar")
         doesNotContain(json, "IndexActionBar {", "JSON must not keep a page-level action bar")
         contains(json, "title: \"Key 排序\"", "JSON must provide the key-sort option in the workbench toolbar")

@@ -26,6 +26,12 @@ final class IndexFormatExecutionSession: ObservableObject {
         binding.diagnostic
     }
 
+    /// 格式化页共享的清除可用性判定：输出或错误/警告诊断任一非空即有可
+    /// 清除内容（行级 diagnostic 不构成可清除内容，与各页既有表达式一致）。
+    var hasClearableContent: Bool {
+        !binding.output.isEmpty || binding.error != nil || binding.warning != nil
+    }
+
     init(binding: FormatBinding = FormatBinding()) {
         self.binding = binding
         self.isOutputFresh = true

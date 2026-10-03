@@ -5,6 +5,7 @@ import Testing
 
 struct ImageWorkflowSourceContractTests {
     @Test func imageSaveActionsShowSuccessToastOnlyAfterConfirmedSave() throws {
+        let uploadSupport = try readSource("Sources/XTools/ToolPages/Image/ImageWorkflowSupport.swift")
         let converter = try readSource("Sources/XTools/ToolPages/Image/ImageConverterPage.swift")
         let compressor = try readSource("Sources/XTools/ToolPages/Image/ImageCompressorPage.swift")
         let grayscale = try readSource("Sources/XTools/ToolPages/Image/ImageGrayscalePage.swift")
@@ -18,10 +19,13 @@ struct ImageWorkflowSourceContractTests {
         // 成功提示只在 session 返回 .saved 时显示（取消返回 .cancelled、阻止返回 .blocked
         // 都不弹成功 toast）；写盘失败返回 .failed 时弹 error toast；部分成功由 Favicon 与
         // 批量转换页映射 warning，其余单输出页对不可能出现的部分结果保持静默。
+        // 单输出页的 outcome→toast switch 收敛进共享 ImageSaveOutcomeToasts 后，
+        // 映射断言改锚共享文件，页面断言改锚路由调用。
+        contains(uploadSupport, "case .saved:\n            toastCenter?.show(ToolFeedbackCopy.savedFile, tone: .success)", "The shared single-output toast mapper must show a success toast only on a confirmed .saved outcome")
+        contains(uploadSupport, "case let .failed(message):\n            toastCenter?.show(message, tone: .error)", "The shared single-output toast mapper must surface a real save failure as an error toast")
+        contains(uploadSupport, "case .cancelled, .blocked, .partiallySaved:\n            break", "The shared single-output toast mapper must stay silent for impossible partial outcomes as well as cancel/block")
         for (page, name) in [(compressor, "compressor"), (grayscale, "grayscale"), (watermark, "watermark")] {
-            contains(page, "case .saved:\n                toastCenter?.show(ToolFeedbackCopy.savedFile, tone: .success)", "Image \(name) must show a success toast only on a confirmed .saved outcome")
-            contains(page, "case let .failed(message):\n                toastCenter?.show(message, tone: .error)", "Image \(name) must surface a real save failure as an error toast")
-            contains(page, "case .cancelled, .blocked, .partiallySaved:\n                break", "Single-output image pages must stay silent for impossible partial outcomes as well as cancel/block")
+            contains(page, "ImageSaveOutcomeToasts.presentSingleOutput(outcome, toastCenter: toastCenter)", "Image \(name) save must route its outcome through the shared single-output toast mapper")
             // 保存面板已 sheet 化：会话保存必须同时接入输入面板与输出面板客户端。
             contains(page, "await session.save(workflow:", "Image \(name) save must await the session's sheet-based save pipeline")
             contains(page, "filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient", "Image \(name) save must route through the window-scoped sheet panel clients")
@@ -44,6 +48,7 @@ struct ImageWorkflowSourceContractTests {
     }
 
     @Test func imageSourceAndResetTransitionsUseSharedPanelRevealMotion() throws {
+        let uploadSupport = try readSource("Sources/XTools/ToolPages/Image/ImageWorkflowSupport.swift")
         let converter = try readSource("Sources/XTools/ToolPages/Image/ImageConverterPage.swift")
         let compressor = try readSource("Sources/XTools/ToolPages/Image/ImageCompressorPage.swift")
         let grayscale = try readSource("Sources/XTools/ToolPages/Image/ImageGrayscalePage.swift")
@@ -51,6 +56,10 @@ struct ImageWorkflowSourceContractTests {
         let favicon = try readSource("Sources/XTools/ToolPages/Image/FaviconGeneratorPage.swift")
         let faviconSession = try readSource("Sources/XTools/ToolPages/Image/FaviconOutputSetSession.swift")
 
+        // 源发布的 panelReveal 事务收敛进共享 ImageUploadInteractions 后，
+        // 事务断言改锚共享文件，页面断言改锚发布器装配。
+        contains(uploadSupport, "func publishSelection(_ selection: ImageInputSelection, _ publish: () -> Void)", "The shared upload interactions must keep source publication motion page-owned")
+        contains(uploadSupport, "withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {\n            publish()\n        }", "The shared upload interactions must execute the session source assignment inside the shared motion transaction")
         for (page, name) in [
             (compressor, "compressor"),
             (grayscale, "grayscale"),
@@ -59,10 +68,8 @@ struct ImageWorkflowSourceContractTests {
         ] {
             contains(page, "@Environment(\\.accessibilityReduceMotion) private var reduceMotion", "Image \(name) must honor Reduce Motion for source-workspace transitions")
             doesNotContain(page, "sourceRevealGeneration", "Image \(name) must not use a post-publication nonce that misses the source transition")
-            contains(page, "selectionPublisher: publishSelectedImage", "Image \(name) must publish accepted selections inside the page-owned motion transaction")
+            contains(page, "selectionPublisher: uploadInteractions.publishSelection", "Image \(name) must publish accepted selections inside the page-owned motion transaction")
             contains(page, "withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion)", "Image \(name) clear/reject transitions must enter an explicit shared motion transaction")
-            contains(page, "private func publishSelectedImage(_ selection: ImageInputSelection, _ publish: () -> Void)", "Image \(name) must keep source publication motion page-owned")
-            contains(page, "publish()", "Image \(name) must execute the session source assignment inside the shared motion transaction")
         }
 
         // 批量转换页的导入发布沿用同一 motion 所有权，只是发布单位从单张换成一批。
@@ -134,6 +141,7 @@ struct ImageWorkflowSourceContractTests {
 
     @Test func imageToolsUseNonScrollingPreviewStagesWithDisplayBounds() throws {
         let stage = try readSource("Sources/XTools/ToolPages/Image/ImagePreviewStage.swift")
+        let uploadSupport = try readSource("Sources/XTools/ToolPages/Image/ImageWorkflowSupport.swift")
         let imageHub = try readSource("Sources/XTools/ToolPages/Image/ImageHubPage.swift")
         let favicon = try readSource("Sources/XTools/ToolPages/Image/FaviconGeneratorPage.swift")
         let converter = try readSource("Sources/XTools/ToolPages/Image/ImageConverterPage.swift")
@@ -259,7 +267,12 @@ struct ImageWorkflowSourceContractTests {
         appearsBefore(favicon, "IndexPanel(\"上传图片\"", "IndexPanel(\"Favicon 部署包\")", "Favicon page must keep upload before its deployment package")
         contains(compressor, "if session.source == nil", "Image compressor must use a compact upload state before reserving result workspace height")
         contains(compressor, "private var emptyUploadPanel: some View", "Image compressor empty state must stay a natural-height upload panel")
-        contains(compressor, "IndexProgressLabel(message: \"正在读取图片…\")", "Image compressor must communicate source preparation without showing an empty result canvas")
+        // 空态面板收敛进共享 ImageUploadEmptyPanel/ImageUploadPendingState 后，
+        // 进度/空态断言改锚共享文件，页面断言改锚共享面板装配。
+        contains(uploadSupport, "IndexPanel(\"上传图片\")", "The shared empty upload panel must keep the settled upload panel title")
+        contains(uploadSupport, "IndexProgressLabel(message: \"正在读取图片…\")", "The shared upload pending state must communicate source preparation without showing an empty result canvas")
+        contains(compressor, "ImageUploadEmptyPanel(", "Image compressor empty state must mount the shared natural-height upload panel")
+        contains(grayscale, "ImageUploadEmptyPanel(", "Image grayscale empty state must mount the shared natural-height upload panel")
         contains(compressor, "IndexPanel(\"优化工作区\")", "Image compressor must keep one primary result workspace after source selection")
         doesNotContain(compressor, "选择图片后比较原图与优化结果", "Image compressor must not center a sentence inside a page-filling empty canvas")
         doesNotContain(compressor, "IndexPanel(\"优化结果\")", "Image compressor must not repeat output in a second panel")
@@ -271,11 +284,11 @@ struct ImageWorkflowSourceContractTests {
         doesNotContain(favicon, ".fill(ToolTheme.hoverFill)\n                                        .frame(width: size.previewLength", "Favicon must not render fake icon thumbnails before generation")
         contains(converter, "importPublisher: publishImportedImages", "Image converter import appearance must use the shared panel reveal cadence")
         contains(compressor, ".toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)", "Image compressor upload/workspace replacement must use the shared state transition")
-        contains(compressor, "selectionPublisher: publishSelectedImage", "Image compressor accepted-source reveal must use an explicit page presentation boundary")
+        contains(compressor, "selectionPublisher: uploadInteractions.publishSelection", "Image compressor accepted-source reveal must use an explicit page presentation boundary")
         contains(grayscale, ".toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)", "Image grayscale upload/workspace replacement must use the shared state transition")
-        contains(grayscale, "selectionPublisher: publishSelectedImage", "Image grayscale generation and clearing must use the shared panel reveal cadence")
-        contains(watermark, "selectionPublisher: publishSelectedImage", "Image watermark source and preview presence must use the shared panel reveal cadence")
-        contains(favicon, "selectionPublisher: publishSelectedImage", "Favicon source and output presence must use the shared panel reveal cadence")
+        contains(grayscale, "selectionPublisher: uploadInteractions.publishSelection", "Image grayscale generation and clearing must use the shared panel reveal cadence")
+        contains(watermark, "selectionPublisher: uploadInteractions.publishSelection", "Image watermark source and preview presence must use the shared panel reveal cadence")
+        contains(favicon, "selectionPublisher: uploadInteractions.publishSelection", "Favicon source and output presence must use the shared panel reveal cadence")
         contains(compressor, "isProcessing: session.isProcessing", "Image compressor processing completion must render through the shared comparison card")
         contains(grayscale, "isProcessing: session.isProcessing", "Image grayscale processing completion must render through the shared comparison card")
         let comparisonCard = try readSource("Sources/XTools/Shared/Components/IndexImageComparisonCard.swift")

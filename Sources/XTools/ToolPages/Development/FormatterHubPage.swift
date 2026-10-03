@@ -1,5 +1,22 @@
 import SwiftUI
 
+/// JSON/XML/SQL 格式化分段共用的缩进模式分段：2 空格 | 4 空格 | 压缩。
+/// rawValue 即偏好存储键值与 IndexSegmentedControl 的 item id。
+enum FormatterIndentMode: String, CaseIterable, Sendable {
+    case two = "2"
+    case four = "4"
+    case compact = "compact"
+
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .two: return "2"
+        case .four: return "4"
+        case .compact: return "压缩"
+        }
+    }
+}
+
 @MainActor
 final class FormatterHubWorkspaceModel: ObservableObject {
     static let key = ToolWorkspaceKey<FormatterHubWorkspaceModel>(toolID: "formatter") { preferences in
@@ -8,13 +25,12 @@ final class FormatterHubWorkspaceModel: ObservableObject {
 
     /// Hub 分段：rawValue 即 IndexSegmentedControl 的 item id，
     /// 顺序 JSON | XML | YAML | SQL（用户原始表述顺序）。
-    enum Segment: String, CaseIterable, Sendable {
+    enum Segment: String, CaseIterable, Sendable, HubSegmentIdentifier {
         case json
         case xml
         case yaml
         case sql
 
-        var id: String { rawValue }
         var label: String {
             switch self {
             case .json: return "JSON"
@@ -64,48 +80,20 @@ struct IndexFormatterHubPage: View {
 /// 合并前各工具 id），切换分段或离开再回来不丢输入与输出。
 private struct IndexFormatterHubContent: View {
     @ObservedObject var workspace: FormatterHubWorkspaceModel
-    @EnvironmentObject var entryHint: HubSegmentEntryHint
 
     var body: some View {
-        IndexPage("格式化", subtitle: workspace.segment.subtitle, workspaceSemantic: .structuredEditorTransform) {
-            IndexSegmentedControl(
-                items: FormatterHubWorkspaceModel.Segment.allCases.map { ($0.id, $0.label) },
-                selection: segmentSelection,
-                density: .regular
-            )
-            segmentContent
-        }
-        .onAppear { consumeEntryHintIfNeeded() }
-        .onChange(of: entryHint.request) { _ in consumeEntryHintIfNeeded() }
-    }
-
-    private var segmentSelection: Binding<String> {
-        Binding(
-            get: { workspace.segment.rawValue },
-            set: { value in
-                guard let newSegment = FormatterHubWorkspaceModel.Segment(rawValue: value) else { return }
-                workspace.segment = newSegment
+        HubSegmentPage(
+            title: "格式化",
+            toolID: "formatter",
+            workspaceSemantic: .structuredEditorTransform,
+            segment: $workspace.segment
+        ) { segment in
+            switch segment {
+            case .json: IndexJSONFormatterSegment()
+            case .xml: IndexXMLFormatterSegment()
+            case .yaml: IndexYAMLPrettifySegment()
+            case .sql: IndexSQLPrettifySegment()
             }
-        )
-    }
-
-    @ViewBuilder
-    private var segmentContent: some View {
-        switch workspace.segment {
-        case .json: IndexJSONFormatterSegment()
-        case .xml: IndexXMLFormatterSegment()
-        case .yaml: IndexYAMLPrettifySegment()
-        case .sql: IndexSQLPrettifySegment()
         }
-    }
-
-    /// SmartPaste 深链（剪贴板 JSON/XML 建议）：进入本工具或工具已打开时
-    /// 一次性消费分段提示（先清 request 再设分段，避免滞留覆盖后续手动
-    /// 切换；仅消费指向本工具的请求，其余 Hub 的请求原样保留）。
-    private func consumeEntryHintIfNeeded() {
-        guard let request = entryHint.request, request.toolID == "formatter" else { return }
-        entryHint.request = nil
-        guard let segment = FormatterHubWorkspaceModel.Segment(rawValue: request.segment) else { return }
-        workspace.segment = segment
     }
 }

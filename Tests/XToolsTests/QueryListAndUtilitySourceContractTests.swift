@@ -237,7 +237,7 @@ struct QueryListAndUtilitySourceContractTests {
         let switchSurface = sourceSlice(
             controls,
             from: "struct IndexSwitch: View",
-            to: "struct IndexSwitchToggleStyle: ToggleStyle"
+            to: "private struct IndexSwitchTrack: View"
         )
         let optionSwitchSurface = sourceSlice(
             controls,
@@ -245,9 +245,9 @@ struct QueryListAndUtilitySourceContractTests {
             to: "private struct IndexOptionSwitchToggleStyle: ToggleStyle"
         )
 
-        contains(switchSurface, "Toggle(isOn: $isOn)", "IndexSwitch must expose native toggle role and state semantics")
-        contains(optionSwitchSurface, "Toggle(isOn: $isOn)", "IndexOptionSwitch must expose native toggle role and state semantics")
-        contains(controls, "struct IndexSwitchToggleStyle: ToggleStyle", "IndexSwitch must preserve the app visual language through a custom ToggleStyle")
+        contains(controls, "Toggle(isOn: $isOn) {\n            Text(title)\n        }", "Shared switches must keep native toggle role and state semantics through one surface")
+        contains(optionSwitchSurface, "IndexOptionSwitchToggleStyle(style: style)", "IndexOptionSwitch must expose native toggle role and state semantics")
+        contains(controls, "private struct IndexOptionSwitchToggleStyle: ToggleStyle", "Both switch names must share one custom ToggleStyle family")
         contains(controls, ".accessibilityValue(isOn ? \"已开启\" : \"已关闭\")", "Shared switches must announce their current state")
         doesNotContain(switchSurface, "Button { isOn.toggle() }", "IndexSwitch must not impersonate toggle behavior with a plain button")
     }
@@ -384,8 +384,6 @@ struct QueryListAndUtilitySourceContractTests {
         contains(sharedComponents, "valueLineBreakMode: valueLineBreakMode", "Short-result KV must pass long-token wrapping into the underlying rows")
 
         contains(sharedComponents, "struct IndexShortResultCardList: View", "Shared UI must expose a natural-height result-card entry for bounded derived results")
-        contains(sharedComponents, "IndexDerivedResultCardList", "Derived results must keep their semantic public entry")
-        contains(sharedComponents, "IndexShortResultCardList(items: items, emptyText: emptyText)", "Derived results must route through the natural-height short result entry")
         contains(sharedComponents, "value: items.isEmpty ? nil : items", "Short result card presence must follow only the empty/result boundary")
         contains(sharedComponents, "IndexResultCardStack(items: snapshot, revealsItems: false)\n                    .padding(8)", "Short result card lists must preserve the existing card inset and use one structural motion owner")
 
@@ -469,7 +467,7 @@ struct QueryListAndUtilitySourceContractTests {
         contains(pipeline, "Array(Insecure.MD5.hash", "Core hash pipeline must use the platform MD5 implementation")
         doesNotContain(pipeline, "Digest.md5", "Core hash pipeline must not keep common digests on the slower CryptoSwift path")
         contains(hashText, "IndexCopyButton(text: allDigestsText, title: \"全部复制\")", "Hash digest copy behavior must stay in the result panel header")
-        contains(hashText, "IndexDerivedResultCardList(items: resultItems, emptyText: emptyResultText)", "Hash digest results must use the natural-height derived result card entry")
+        contains(hashText, "IndexShortResultCardList(items: resultItems, emptyText: emptyResultText)", "Hash digest results must use the natural-height derived result card entry")
         doesNotContain(hashText, ".verticallyFilling()", "Hash digest result panel must not fill the viewport like a query/list workspace")
 
         occurrenceCount(base64File, "Base64DecodedMetadataList(", 1, "Base64 file page must keep one decoded short-result surface")

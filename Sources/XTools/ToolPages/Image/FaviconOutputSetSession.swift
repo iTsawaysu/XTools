@@ -32,9 +32,8 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
 
     let outputSpecs: [FaviconOutputSpec]
 
-    private var panelTask: Task<Void, Never>?
+    private var panelRequests = PanelRequestBox()
     private var selectionTask: Task<Void, Never>?
-    private var activePanelRequestID: UUID?
     private let workGate = AsyncWorkGate()
 
     init(outputSpecs: [FaviconOutputSpec] = FaviconOutputSetSession.defaultOutputSpecs) {
@@ -42,7 +41,7 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
     }
 
     deinit {
-        panelTask?.cancel()
+        panelRequests.cancel()
         selectionTask?.cancel()
     }
 
@@ -98,20 +97,19 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
         selectionPublisher: @escaping ImageSelectionPublisher,
         generator: @escaping FaviconIconSetGenerator
     ) {
-        guard panelTask == nil else { return }
-        let requestID = UUID()
-        activePanelRequestID = requestID
-        panelTask = Task { @MainActor [weak self] in
+        guard !panelRequests.hasActiveRequest else { return }
+        let requestID = panelRequests.begin()
+        panelRequests.attach(Task { @MainActor [weak self] in
             do {
                 guard let url = try await filePanel.selectFile(
                     FileInputPanelRequest(
                         allowedContentTypes: ImageWorkflowClient.faviconInputContentTypes
                     )
                 ) else {
-                    self?.finishPanelRequest(id: requestID)
+                    self?.panelRequests.finish(id: requestID)
                     return
                 }
-                guard let self, self.finishPanelRequest(id: requestID) else { return }
+                guard let self, self.panelRequests.finish(id: requestID) else { return }
                 self.beginImageURL(
                     url,
                     client: client,
@@ -119,12 +117,12 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
                     generator: generator
                 )
             } catch is CancellationError {
-                self?.finishPanelRequest(id: requestID)
+                self?.panelRequests.finish(id: requestID)
             } catch {
-                guard let self, self.finishPanelRequest(id: requestID) else { return }
+                guard let self, self.panelRequests.finish(id: requestID) else { return }
                 self.error = FileInputPanelFailure.diagnosticMessage(for: error)
             }
-        }
+        })
     }
 
     func receiveImageURL(
@@ -173,7 +171,7 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
         selectionPublisher: @escaping ImageSelectionPublisher,
         generator: @escaping FaviconIconSetGenerator
     ) {
-        cancelPanelRequest()
+        panelRequests.cancel()
         cancelGeneration()
         source = nil
         icons = []
@@ -340,26 +338,13 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
     }
 
     func cancelGeneration() {
-        cancelPanelRequest()
+        panelRequests.cancel()
         selectionTask?.cancel()
         selectionTask = nil
         isProcessing = false
         workGate.invalidate()
     }
 
-    @discardableResult
-    private func finishPanelRequest(id: UUID) -> Bool {
-        guard activePanelRequestID == id else { return false }
-        activePanelRequestID = nil
-        panelTask = nil
-        return true
-    }
-
-    private func cancelPanelRequest() {
-        activePanelRequestID = nil
-        panelTask?.cancel()
-        panelTask = nil
-    }
 
     nonisolated static func generateIcons(data: Data, sizes: [Int]) throws -> [GeneratedIcon] {
         try ImageProcessor.generateIcons(data: data, sizes: sizes)

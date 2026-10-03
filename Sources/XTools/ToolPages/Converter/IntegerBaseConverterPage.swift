@@ -137,9 +137,10 @@ private struct IndexBaseConverterWorkspaceContent: View {
             IndexActionBar {
                 IndexOptionGroup {
                     IndexOptionLabel("输入进制")
-                    IndexOptionPicker(
+                    IndexSegmentedControl(
                         items: [("2", "二进制"), ("8", "八进制"), ("10", "十进制"), ("16", "十六进制")],
-                        selection: $workspace.base
+                        selection: $workspace.base,
+                        selectionStyle: .filled
                     )
                 }
             }

@@ -35,28 +35,8 @@ struct IndexReadOnlyTextSurface: View {
     }
 }
 
-private final class IndexReadOnlyTextScrollView: NSScrollView {
-    private var isSynchronizing = false
-
-    override func tile() {
-        super.tile()
-        synchronizeDocumentGeometry()
-    }
-
-    override func layout() {
-        super.layout()
-        synchronizeDocumentGeometry()
-    }
-
-    override func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(newSize)
-        synchronizeDocumentGeometry()
-    }
-
-    private func synchronizeDocumentGeometry() {
-        guard !isSynchronizing else { return }
-        isSynchronizing = true
-        defer { isSynchronizing = false }
+private final class IndexReadOnlyTextScrollView: IndexTextViewportScrollView {
+    override func synchronizeDocumentGeometry() {
         guard let textView = documentView as? NSTextView else { return }
         let viewportWidth = contentSize.width
         if viewportWidth > 0 && abs(textView.frame.width - viewportWidth) > 0.5 {

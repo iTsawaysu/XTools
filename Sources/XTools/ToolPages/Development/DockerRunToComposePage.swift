@@ -89,7 +89,7 @@ struct IndexDockerWorkspaceContent: View {
                 actionTitle: "转换",
                 isRunning: execution.isRunning,
                 isOutputFresh: execution.isOutputFresh,
-                clearDisabled: workspace.input.isEmpty && execution.binding.output.isEmpty && execution.binding.error == nil && execution.binding.warning == nil,
+                clearDisabled: workspace.input.isEmpty && !execution.hasClearableContent,
                 onFormat: convert,
                 onClear: workspace.clear,
                 leadingControl: {
