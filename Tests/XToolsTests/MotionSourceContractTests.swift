@@ -614,20 +614,19 @@ struct MotionSourceContractTests {
         doesNotContain(motion, "pillStretch", "Pill stretch must not return beside the prototype spring")
     }
 
-    @Test func wave2SidebarSearchArrivalIsFadeDominantAndRefinementCalm() throws {
+    @Test func sidebarSearchResultsPresentDirectlyWithoutPerRowChoreography() throws {
         let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
         let coordinator = try readSource("Sources/XTools/AppShell/SidebarNavigationListCoordinator.swift")
-        contains(motion, "enum SearchArrival", "Search arrival must own one terminal-value namespace")
-        contains(motion, "static let stagger: TimeInterval = 0.012", "First-filter stagger must be 12ms/row")
-        contains(motion, "static let rowCap = 7", "First-filter stagger must cap at 7 rows")
-        contains(motion, "static let rowIn: TimeInterval = 0.14", "Each arrival row must run 140ms")
-        contains(motion, "static let rowCrossfade: TimeInterval = 0.1", "Refinement rows must crossfade 100ms")
-        contains(motion, "static let rise: CGFloat = 4", "Arrival rise must be the 4pt fade-dominant value")
-        contains(coordinator, "searchArrivalEdge = !wasSearchActive", "Only the no-filter→filter edge may stagger")
-        contains(coordinator, "runSearchArrivalStagger(plan: plan)", "The first-filter edge must run the stagger entrance")
-        contains(coordinator, "crossfadeRefinementInserts()", "Refinement inserts must crossfade in")
-        contains(coordinator, "fadeOutRefine: searchRefinement && !searchArrivalEdge", "Filtered-out rows must fade out only mid-refinement")
-        contains(coordinator, "removeAllAnimations()", "A re-matched row must be reclaimed from an interrupted fade")
+        // 动效禁区 (CONTEXT.md): long-list per-item filtering must not carry
+        // displacement or stagger — search results present directly, on the
+        // same immediate path Reduce Motion always used.
+        doesNotContain(motion, "enum SearchArrival", "The removed search-arrival terminal-value namespace must not return")
+        doesNotContain(coordinator, "runSearchArrivalStagger", "Search arrival must not stagger rows in")
+        doesNotContain(coordinator, "crossfadeRefinementInserts", "Search refinement must not crossfade rows in")
+        doesNotContain(coordinator, "fadeOutRefine", "Filtered-out rows must leave the hierarchy at once, not fade")
+        doesNotContain(coordinator, "refinementInsertedTrackIDs", "No per-refinement track bookkeeping may back an entrance animation")
+        contains(coordinator, "configuration.isSearchActive || searchChanged", "Search state changes must keep routing through immediate (direct-presentation) mode")
+        contains(coordinator, "removeAllAnimations()", "A row an interrupted fade was leaving partial must still be reclaimed at full alpha")
     }
 
     // MARK: - Wave 2 command palette (candidate 6, sixth-round terminal values)

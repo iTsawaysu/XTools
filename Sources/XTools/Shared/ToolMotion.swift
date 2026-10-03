@@ -273,18 +273,6 @@ enum ToolMotion {
         static let tintOut = Curve.smoothOut(duration: Duration.errorTintOut)
     }
 
-    /// Wave 2 sidebar search-result arrival (prototype MOTION d/x.search*):
-    /// first filter → fade-dominant staggered rise (12ms/row capped at 7,
-    /// 4pt rise, 140ms per row); refinement while filtered → 100ms row
-    /// crossfade with persistent rows untouched; leaving search is instant.
-    enum SearchArrival {
-        static let stagger: TimeInterval = 0.012
-        static let rowCap = 7
-        static let rowIn: TimeInterval = 0.14
-        static let rowCrossfade: TimeInterval = 0.1
-        static let rise: CGFloat = 4
-    }
-
     /// Wave 2 empty-state arrival (prototype MOTION d/x.empty*): the icon
     /// rises on a slight-overshoot spring, then the caption and message
     /// follow one beat apart (fade-dominant). Reduce Motion shows directly.
