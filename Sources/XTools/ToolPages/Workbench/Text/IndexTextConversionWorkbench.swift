@@ -8,21 +8,6 @@ enum IndexTextConversionOutputPresentation: Equatable, Sendable {
     case markdownPreview
 }
 
-@MainActor
-final class IndexTextTransformWorkspaceModel: ObservableObject {
-    @Published var input = ""
-
-    let execution = IndexFormatExecutionSession()
-    var output: String { execution.binding.output }
-    var error: String? { execution.binding.error }
-    var warning: String? { execution.binding.warning }
-
-    func clear() {
-        execution.invalidate()
-        input = ""
-    }
-}
-
 enum IndexTextConversionSaveResult: Equatable, Sendable {
     case saved
     case cancelled
@@ -243,7 +228,7 @@ struct IndexTextConversionWorkbench: View {
             showsInputCount: showsInputCount,
             clearDisabled: isClearDisabled,
             onClear: onClear
-        ) { EmptyView() } compactControl: { EmptyView() }
+        )
     }
 
     private var outputHeaderActions: some View {

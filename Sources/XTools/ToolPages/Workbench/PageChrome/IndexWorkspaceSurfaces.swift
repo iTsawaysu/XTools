@@ -6,7 +6,6 @@ struct IndexWorkspaceTextArea: View {
     let placeholder: String
     @Binding var text: String
     var minHeight: CGFloat = 220
-    var maxHeightRatio: CGFloat? = nil
     var fillsHeight = false
     var autoFocus = false
     var caretPlacementRequestToken: Int? = nil
@@ -29,7 +28,6 @@ struct IndexWorkspaceTextArea: View {
         placeholder: String,
         text: Binding<String>,
         minHeight: CGFloat = 220,
-        maxHeightRatio: CGFloat? = nil,
         fillsHeight: Bool = false,
         autoFocus: Bool = false,
         caretPlacementRequestToken: Int? = nil,
@@ -47,7 +45,6 @@ struct IndexWorkspaceTextArea: View {
         self.placeholder = placeholder
         self._text = text
         self.minHeight = minHeight
-        self.maxHeightRatio = maxHeightRatio
         self.fillsHeight = fillsHeight
         self.autoFocus = autoFocus
         self.caretPlacementRequestToken = caretPlacementRequestToken
@@ -77,7 +74,6 @@ struct IndexWorkspaceTextArea: View {
             placeholder: placeholder,
             text: $text,
             minHeight: minHeight,
-            maxHeightRatio: maxHeightRatio,
             fillsHeight: fillsHeight,
             expandsWithContent: resolution.textArea.expandsWithContent,
             renderingMode: inputRenderingMode ?? resolution.textArea.renderingMode,
@@ -153,10 +149,6 @@ private extension IndexWorkspaceBehaviorContract {
     var semanticLineBreakMode: NSLineBreakMode {
         wrapsLongTokensToAvailableWidth ? .byCharWrapping : .byWordWrapping
     }
-
-    var usesNaturalHeightSurface: Bool {
-        fillBehavior == .naturalHeight && outputScrolling == .pageOuter
-    }
 }
 
 // MARK: - IndexInputHeaderAccessory
@@ -179,113 +171,47 @@ enum IndexInputCountPresentation: Equatable {
     }
 }
 
-struct IndexInputHeaderAccessory<PrimaryControl: View, CompactControl: View>: View {
+/// 输入面板头部附件：字符计数 + 清空按钮。宽度不足时清空按钮降级为
+/// 纯图标形态（ViewThatFits 两个候选），两者都固定尺寸不挤压面板标题。
+struct IndexInputHeaderAccessory: View {
     var showsInputCount = true
     var clearDisabled = false
     var onClear: (() -> Void)?
-    var usesCompactControl = false
-    var iconOnlyClearFallback = false
     private let countText: String
-    private let primaryControl: PrimaryControl
-    private let compactControl: CompactControl
-
-    init(
-        count: Int,
-        showsInputCount: Bool = true,
-        clearDisabled: Bool = false,
-        onClear: (() -> Void)? = nil,
-        usesCompactControl: Bool = false,
-        iconOnlyClearFallback: Bool = false,
-        @ViewBuilder primaryControl: () -> PrimaryControl,
-        @ViewBuilder compactControl: () -> CompactControl
-    ) {
-        self.init(
-            countText: "\(count) 字符",
-            showsInputCount: showsInputCount,
-            clearDisabled: clearDisabled,
-            onClear: onClear,
-            usesCompactControl: usesCompactControl,
-            iconOnlyClearFallback: iconOnlyClearFallback,
-            primaryControl: primaryControl,
-            compactControl: compactControl
-        )
-    }
 
     init(
         countText: String,
         showsInputCount: Bool = true,
         clearDisabled: Bool = false,
-        onClear: (() -> Void)? = nil,
-        usesCompactControl: Bool = false,
-        iconOnlyClearFallback: Bool = false,
-        @ViewBuilder primaryControl: () -> PrimaryControl,
-        @ViewBuilder compactControl: () -> CompactControl
+        onClear: (() -> Void)? = nil
     ) {
         self.countText = countText
         self.showsInputCount = showsInputCount
         self.clearDisabled = clearDisabled
         self.onClear = onClear
-        self.usesCompactControl = usesCompactControl
-        self.iconOnlyClearFallback = iconOnlyClearFallback
-        self.primaryControl = primaryControl()
-        self.compactControl = compactControl()
     }
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            row(clearIconOnly: false) { primaryControl }
+            row(clearIconOnly: false)
 
-            if onClear != nil {
-                row(clearIconOnly: true) { primaryControl }
-            }
-
-            if usesCompactControl {
-                row(clearIconOnly: true) { compactControl }
-            }
-
-            if iconOnlyClearFallback, let onClear {
-                IndexClearButton(isDisabled: clearDisabled, iconOnly: true, action: onClear)
+            if let onClear {
+                row(clearIconOnly: true)
             }
         }
     }
 
-    private func row<Control: View>(
-        clearIconOnly: Bool,
-        @ViewBuilder control: () -> Control
-    ) -> some View {
+    private func row(clearIconOnly: Bool) -> some View {
         HStack(spacing: 8) {
             if showsInputCount {
                 IndexInputCountLabel(text: countText)
             }
-
-            control()
 
             if let onClear {
                 IndexClearButton(isDisabled: clearDisabled, iconOnly: clearIconOnly, action: onClear)
             }
         }
         .fixedSize(horizontal: true, vertical: false)
-    }
-}
-
-extension IndexInputHeaderAccessory where PrimaryControl == EmptyView, CompactControl == EmptyView {
-    init(
-        count: Int,
-        showsInputCount: Bool = true,
-        clearDisabled: Bool = false,
-        onClear: (() -> Void)? = nil,
-        iconOnlyClearFallback: Bool = true
-    ) {
-        self.init(
-            count: count,
-            showsInputCount: showsInputCount,
-            clearDisabled: clearDisabled,
-            onClear: onClear,
-            usesCompactControl: false,
-            iconOnlyClearFallback: iconOnlyClearFallback,
-            primaryControl: { EmptyView() },
-            compactControl: { EmptyView() }
-        )
     }
 }
 

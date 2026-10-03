@@ -22,12 +22,6 @@ struct CommandActionEntry: Identifiable, Hashable {
     let systemImage: String
     var keywords: [String] = []
 
-    /// Preview-style rows render live output (e.g. a freshly generated UUID)
-    /// directly in the subtitle; activation copies it.
-    var isPreviewStyle: Bool {
-        id == .copyGeneratedUUID
-    }
-
     func matches(query: String) -> Bool {
         let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return true }
@@ -42,25 +36,5 @@ struct CommandActionEntry: Identifiable, Hashable {
     /// list change and zip with the actions when filtering.
     static func searchRecords(for actions: [CommandActionEntry]) -> [ToolSearchRecord] {
         actions.map(\.searchRecord)
-    }
-
-    /// Builds the session-complete command list from stable shell actions.
-    /// Preview rows are replaced rather than carried across sessions so a
-    /// consumed UUID cannot remove the command from the next presentation.
-    static func paletteActions(
-        baseActions: [CommandActionEntry],
-        previewValue: String?
-    ) -> [CommandActionEntry] {
-        let stableActions = baseActions.filter { $0.id != .copyGeneratedUUID }
-        guard let previewValue else { return stableActions }
-        return stableActions + [
-            CommandActionEntry(
-                id: .copyGeneratedUUID,
-                title: "生成并复制 UUID",
-                subtitle: previewValue,
-                systemImage: "barcode",
-                keywords: ["uuid", "复制", "生成"]
-            )
-        ]
     }
 }

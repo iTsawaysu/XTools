@@ -150,17 +150,17 @@ struct TextDevelopmentWorkspaceRetentionTests {
     @Test func sharedDraftTransformDiffAndUtilityFamiliesRespectRepositoryBoundary() {
         let defaults = Self.defaults()
         let repository = ToolWorkspaceRepository(defaults: defaults)
-        let draftKey = ToolWorkspaceKey<IndexTextDraftWorkspaceModel>(
+        let draftKey = ToolWorkspaceKey<RetentionDraftProbeModel>(
             toolID: "case-converter",
             slot: "retention-test"
         ) { _ in
-            IndexTextDraftWorkspaceModel()
+            RetentionDraftProbeModel()
         }
-        let transformKey = ToolWorkspaceKey<IndexTextTransformWorkspaceModel>(
+        let transformKey = ToolWorkspaceKey<RetentionTransformProbeModel>(
             toolID: "xml-formatter",
             slot: "retention-test"
         ) { _ in
-            IndexTextTransformWorkspaceModel()
+            RetentionTransformProbeModel()
         }
         let diffKey = ToolWorkspaceKey<DiffToolWorkspaceModel>(
             toolID: "json-diff",
@@ -328,4 +328,27 @@ struct TextDevelopmentWorkspaceRetentionTests {
         }
         #expect(condition())
     }
+}
+
+/// 测试专用占位模型：仅用于验证 ToolWorkspaceKey 的保留机制
+/// （会话内保留实例、重启后重建默认状态），生产代码不引用。
+@MainActor
+private final class RetentionDraftProbeModel: ObservableObject {
+    @Published var text: String
+
+    init(text: String = "") {
+        self.text = text
+    }
+}
+
+/// 测试专用转换工作区探针：复用共享执行会话以覆盖
+/// `execution.invalidate(resetTo:)` 的重置路径。
+@MainActor
+private final class RetentionTransformProbeModel: ObservableObject {
+    @Published var input = ""
+    let execution = IndexFormatExecutionSession()
+
+    var output: String { execution.binding.output }
+    var error: String? { execution.binding.error }
+    var warning: String? { execution.binding.warning }
 }

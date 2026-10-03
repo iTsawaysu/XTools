@@ -31,153 +31,23 @@ enum IndexWorkspaceSemantic: Equatable {
 
     var behavior: IndexWorkspaceBehaviorContract {
         switch self {
-        case .unmigratedPageDefault:
-            return .init(
-                scrollOwnership: .surfaceInternal,
-                inputGrowth: .fixed,
-                fillBehavior: .fillsAvailableSpace,
-                outputScrolling: .surfaceInternal,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .protectsUnmigratedPages
-            )
-        case .structuredOutputReading:
-            return .init(
-                scrollOwnership: .pageOuter,
-                inputGrowth: .natural,
-                fillBehavior: .fillsThenExpands,
-                outputScrolling: .pageOuter,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .explicitOptIn
-            )
-        case .structuredEditorTransform:
-            return .init(
-                scrollOwnership: .surfaceInternal,
-                inputGrowth: .fixed,
-                fillBehavior: .fillsAvailableSpace,
-                outputScrolling: .surfaceInternal,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .protectedException
-            )
-        case .copyTransformWorkspace:
-            return .init(
-                scrollOwnership: .surfaceInternal,
-                inputGrowth: .fixed,
-                fillBehavior: .fillsAvailableSpace,
-                outputScrolling: .surfaceInternal,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .protectedException
-            )
-        case .securityTransformWorkspace:
-            return .init(
-                scrollOwnership: .surfaceInternal,
-                inputGrowth: .fixed,
-                fillBehavior: .fillsAvailableSpace,
-                outputScrolling: .surfaceInternal,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .protectedException
-            )
-        case .fixedInputWorkspace:
-            return .init(
-                scrollOwnership: .surfaceInternal,
-                inputGrowth: .fixed,
-                fillBehavior: .fillsAvailableSpace,
-                outputScrolling: .pageOuter,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .protectedException
-            )
-        case .longTextNaturalInput:
-            return .init(
-                scrollOwnership: .pageOuter,
-                inputGrowth: .natural,
-                fillBehavior: .naturalHeight,
-                outputScrolling: .pageOuter,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .explicitOptIn
-            )
-        case .boundedLongTextInput:
-            return .init(
-                scrollOwnership: .pageOuterWithBoundedInput,
-                inputGrowth: .fixed,
-                fillBehavior: .naturalHeight,
-                outputScrolling: .pageOuter,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .explicitOptIn
-            )
-        case .longSingleLineWrapping:
-            return .init(
-                scrollOwnership: .surfaceInternal,
-                inputGrowth: .fixed,
-                fillBehavior: .fillsAvailableSpace,
-                outputScrolling: .surfaceInternal,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .explicitOptIn
-            )
-        case .naturalHeightShortResultPanel:
-            return .init(
-                scrollOwnership: .pageOuter,
-                inputGrowth: .fixed,
-                fillBehavior: .naturalHeight,
-                outputScrolling: .pageOuter,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .explicitOptIn
-            )
-        case .imagePreviewStage:
-            return .init(
-                scrollOwnership: .pageOuter,
-                inputGrowth: .fixed,
-                fillBehavior: .fillsAvailableSpace,
-                outputScrolling: .none,
-                longTokenWrapping: .preserveControlDefault,
-                defaultSafety: .protectedException
-            )
-        case .liveImagePreviewStage:
-            return .init(
-                scrollOwnership: .fixedViewport,
-                inputGrowth: .fixed,
-                fillBehavior: .fillsAvailableSpace,
-                outputScrolling: .none,
-                longTokenWrapping: .preserveControlDefault,
-                defaultSafety: .protectedException
-            )
-        case .queryListWorkspace:
-            return .init(
-                scrollOwnership: .surfaceInternal,
-                inputGrowth: .fixed,
-                fillBehavior: .fillsAvailableSpace,
-                outputScrolling: .surfaceInternal,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .protectedException
-            )
-        case .base64FileWorkspace:
-            return .init(
-                scrollOwnership: .mixedBySurface,
-                inputGrowth: .fixed,
-                // Wide mode fills residual IndexPage height (min 398pt); stacked mode
-                // keeps outer scroll. Matches other fill workbenches rather than a
-                // fixed short slab under tall windows.
-                fillBehavior: .fillsAvailableSpace,
-                outputScrolling: .mixedBySurface,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .protectedException
-            )
-        case .editableDiffWorkspace:
-            return .init(
-                scrollOwnership: .diffWorkspaceUnified,
-                inputGrowth: .natural,
-                fillBehavior: .fillsThenExpands,
-                outputScrolling: .diffWorkspaceUnified,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .protectedException
-            )
-        case .regexResultWorkspace:
-            return .init(
-                scrollOwnership: .pageOuter,
-                inputGrowth: .natural,
-                fillBehavior: .naturalHeight,
-                outputScrolling: .pageOuter,
-                longTokenWrapping: .wrapsToAvailableWidth,
-                defaultSafety: .explicitOptIn
-            )
+        case .unmigratedPageDefault,
+             .structuredEditorTransform,
+             .copyTransformWorkspace,
+             .securityTransformWorkspace,
+             .longSingleLineWrapping,
+             .queryListWorkspace:
+            return .fixedHeightInternalScroll
+        case .structuredOutputReading, .editableDiffWorkspace:
+            return .naturalInputPageScrolling
+        case .fixedInputWorkspace, .base64FileWorkspace:
+            return .fixedHeightPageScrolling
+        case .longTextNaturalInput, .regexResultWorkspace:
+            return .naturalHeightPageScrolling
+        case .boundedLongTextInput, .naturalHeightShortResultPanel:
+            return .naturalHeightFixedInput
+        case .imagePreviewStage, .liveImagePreviewStage:
+            return .imageStageControlDefaults
         }
     }
 
@@ -244,63 +114,67 @@ struct IndexWorkspaceTextAreaContract: Equatable {
     let renderingMode: IndexTextAreaRenderingMode
 }
 
+/// 工作区行为契约：只保留生产实际读取的布尔维度（滚动归属由
+/// pageShell 与 outputScrollsInternally 的组合表达，滚动/安全两维
+/// 枚举从未被消费，已随坍缩删除）。
 struct IndexWorkspaceBehaviorContract: Equatable {
-    let scrollOwnership: IndexWorkspaceScrollOwnership
-    let inputGrowth: IndexWorkspaceInputGrowth
-    let fillBehavior: IndexWorkspaceFillBehavior
-    let outputScrolling: IndexWorkspaceOutputScrolling
-    let longTokenWrapping: IndexWorkspaceLongTokenWrapping
-    let defaultSafety: IndexWorkspaceDefaultSafety
+    /// 输入随内容自然增高（否则固定高度）。
+    let inputExpandsWithContent: Bool
+    /// 输出面在自身内部滚动（否则交给页面级滚动）。
+    let outputScrollsInternally: Bool
+    /// 超长 token 按可用宽度逐字符换行（否则保留控件默认）。
+    let wrapsLongTokensToAvailableWidth: Bool
+    /// 结果面板按内容自然高度呈现（否则填充可用空间）。
+    let usesNaturalHeightSurface: Bool
 
-    var inputExpandsWithContent: Bool {
-        inputGrowth == .natural
-    }
+    /// 固定双栏工作台（结构化格式化 / 转换 / 查询族）：输入固定、
+    /// 输出内部滚动、逐字符换行、不追求自然高度。
+    static let fixedHeightInternalScroll = IndexWorkspaceBehaviorContract(
+        inputExpandsWithContent: false,
+        outputScrollsInternally: true,
+        wrapsLongTokensToAvailableWidth: true,
+        usesNaturalHeightSurface: false
+    )
 
-    var outputScrollsInternally: Bool {
-        outputScrolling == .surfaceInternal
-    }
+    /// 自然输入 + 页面级滚动的阅读型工作台（结构化阅读 / 可编辑对比）。
+    static let naturalInputPageScrolling = IndexWorkspaceBehaviorContract(
+        inputExpandsWithContent: true,
+        outputScrollsInternally: false,
+        wrapsLongTokensToAvailableWidth: true,
+        usesNaturalHeightSurface: false
+    )
 
-    var wrapsLongTokensToAvailableWidth: Bool {
-        longTokenWrapping == .wrapsToAvailableWidth
-    }
-}
+    /// 固定输入、输出交给页面滚动的工作区（固定输入 / Base64 文件）。
+    /// Wide mode fills residual IndexPage height (min 398pt); stacked mode
+    /// keeps outer scroll.
+    static let fixedHeightPageScrolling = IndexWorkspaceBehaviorContract(
+        inputExpandsWithContent: false,
+        outputScrollsInternally: false,
+        wrapsLongTokensToAvailableWidth: true,
+        usesNaturalHeightSurface: false
+    )
 
-enum IndexWorkspaceScrollOwnership: Equatable {
-    case pageOuter
-    case pageOuterWithBoundedInput
-    case surfaceInternal
-    case fixedViewport
-    case diffWorkspaceUnified
-    case mixedBySurface
-}
+    /// 自然高度 + 页面滚动的长文本输入工作区（长文本 / 正则结果）。
+    static let naturalHeightPageScrolling = IndexWorkspaceBehaviorContract(
+        inputExpandsWithContent: true,
+        outputScrollsInternally: false,
+        wrapsLongTokensToAvailableWidth: true,
+        usesNaturalHeightSurface: true
+    )
 
-enum IndexWorkspaceInputGrowth: Equatable {
-    case fixed
-    case natural
-}
+    /// 固定输入、结果面板自然高度的短结果工作区（有界长输入 / 短结果面板）。
+    static let naturalHeightFixedInput = IndexWorkspaceBehaviorContract(
+        inputExpandsWithContent: false,
+        outputScrollsInternally: false,
+        wrapsLongTokensToAvailableWidth: true,
+        usesNaturalHeightSurface: true
+    )
 
-enum IndexWorkspaceFillBehavior: Equatable {
-    case fillsAvailableSpace
-    case fillsThenExpands
-    case naturalHeight
-    case preserveCurrentLayout
-}
-
-enum IndexWorkspaceOutputScrolling: Equatable {
-    case pageOuter
-    case surfaceInternal
-    case diffWorkspaceUnified
-    case mixedBySurface
-    case none
-}
-
-enum IndexWorkspaceLongTokenWrapping: Equatable {
-    case preserveControlDefault
-    case wrapsToAvailableWidth
-}
-
-enum IndexWorkspaceDefaultSafety: Equatable {
-    case protectsUnmigratedPages
-    case protectedException
-    case explicitOptIn
+    /// 图片舞台：交给控件自身的默认行为（不内部滚动、不强制换行）。
+    static let imageStageControlDefaults = IndexWorkspaceBehaviorContract(
+        inputExpandsWithContent: false,
+        outputScrollsInternally: false,
+        wrapsLongTokensToAvailableWidth: false,
+        usesNaturalHeightSurface: false
+    )
 }

@@ -13,9 +13,8 @@ import SwiftUI
 /// mirroring the sidebar's mental model. A typed query keeps the ranked
 /// 动作 + 工具 structure with frecency refinement inside tiers.
 ///
-/// The landing sections are cached under `(stableActions, recentToolIDs)` —
-/// excluding the per-session preview row — so a warm ⌘K reopen reuses them
-/// and only re-appends the fresh preview row at assembly time (see
+/// The landing sections are cached under `(actions, recentToolIDs)` so a
+/// warm ⌘K reopen reuses them without a registry traversal (see
 /// `makeLandingSnapshot`).
 @MainActor
 final class CommandPaletteSessionModel: ObservableObject {
@@ -40,22 +39,17 @@ final class CommandPaletteSessionModel: ObservableObject {
         var actionRecords: [ToolSearchRecord]
     }
 
-    /// Landing-page cache. The cache KEY is `(stableActions, recentToolIDs)`
-    /// where `stableActions` excludes the per-session `.copyGeneratedUUID`
-    /// preview row, and the cached CONTENT is the preview-free composed
-    /// `[CommandPaletteSection]` (最近使用 + 动作(stable) + categories).
+    /// Landing-page cache. The cache KEY is `(actions, recentToolIDs)` and
+    /// the cached CONTENT is the composed `[CommandPaletteSection]`
+    /// (最近使用 + 动作 + categories).
     ///
-    /// A cache hit therefore requires only that the stable action list and
-    /// the frecency recents are unchanged — the fresh preview UUID per open
-    /// does not invalidate it. On a hit the current preview row (if
-    /// `paletteActions` produced one) is appended to the tail of the 动作
-    /// section (matching `CommandActionEntry.paletteActions` order) and the
-    /// final snapshot is assembled from value-type sections — cheap, with no
-    /// registry traversal. A real rebuild inside the visible open arc
-    /// quantizes the palette's fade-in into a brightness step, which is what
-    /// this cache removes.
+    /// A cache hit therefore requires only that the action list and the
+    /// frecency recents are unchanged; the final snapshot is assembled from
+    /// value-type sections — cheap, with no registry traversal. A real
+    /// rebuild inside the visible open arc quantizes the palette's fade-in
+    /// into a brightness step, which is what this cache removes.
     private struct LandingCacheKey: Equatable {
-        let stableActions: [CommandActionEntry]
+        let actions: [CommandActionEntry]
         let recentToolIDs: [ToolID]
     }
 
@@ -105,16 +99,15 @@ final class CommandPaletteSessionModel: ObservableObject {
         let actionRecords = CommandActionEntry.searchRecords(for: actions)
         // Cold landing composition: no cache exists before phase-one init
         // completes, so the sections are built here and seed the cache.
-        let stableActions = actions.filter { $0.id != .copyGeneratedUUID }
         let sections = Self.landingSections(
             registry: registry,
-            stableActions: stableActions,
+            actions: actions,
             usage: usage,
             now: now
         )
         self.landingCache = LandingCacheEntry(
             key: LandingCacheKey(
-                stableActions: stableActions,
+                actions: actions,
                 recentToolIDs: usage.recentToolIDs(
                     limit: LandingMetrics.recentsLimit,
                     now: now
@@ -123,12 +116,7 @@ final class CommandPaletteSessionModel: ObservableObject {
             sections: sections
         )
         CommandPaletteTrace.count(.rowSnapshot)
-        let snapshot = Self.assemblingLandingSnapshot(
-            sections: sections,
-            previewRows: actions
-                .filter { $0.id == .copyGeneratedUUID }
-                .map(CommandPaletteRowProjection.command)
-        )
+        let snapshot = CommandPaletteNavigationState.snapshot(sections: sections)
         self.state = State(
             session: session,
             query: "",
@@ -253,13 +241,11 @@ final class CommandPaletteSessionModel: ObservableObject {
         )
     }
 
-    /// The preview-free landing sections: usage-ranked recents first, then
-    /// the stable shell commands, then every category with its tools in
-    /// registry order. The per-session preview row is appended at snapshot
-    /// assembly time (see `makeLandingSnapshot`) so it never enters the cache.
+    /// The landing sections: usage-ranked recents first, then the shell
+    /// commands, then every category with its tools in registry order.
     private static func landingSections(
         registry: ToolRegistry,
-        stableActions: [CommandActionEntry],
+        actions: [CommandActionEntry],
         usage: any PaletteUsageScoring,
         now: Date
     ) -> [CommandPaletteSection] {
@@ -281,16 +267,16 @@ final class CommandPaletteSessionModel: ObservableObject {
             ))
         }
 
-        if !stableActions.isEmpty {
+        if !actions.isEmpty {
             sections.append(CommandPaletteSection(
                 title: "动作",
-                rows: stableActions.map(CommandPaletteRowProjection.command)
+                rows: actions.map(CommandPaletteRowProjection.command)
             ))
         }
 
         // Tools surfaced by the recents section must not repeat in their
         // category section: duplicate row ids would break ForEach identity and
-        // anchor hover/reveal/icon-flight at the wrong instance. Empty
+        // anchor hover/reveal at the wrong instance. Empty
         // categories are dropped by the snapshot builder.
         let recentToolIDs = Set(recentTools.map(\.id))
         for group in registry.categoryGroups() {
@@ -313,10 +299,9 @@ final class CommandPaletteSessionModel: ObservableObject {
     }
 
     /// Builds the row snapshot for `query`. A blank query composes the
-    /// landing page through the `(stableActions, recentToolIDs)` cache: a hit
-    /// reuses the preview-free sections and only re-appends the current
-    /// preview row before assembling the final snapshot; an actions or
-    /// recents change recomposes and refreshes the cache.
+    /// landing page through the `(actions, recentToolIDs)` cache: a hit
+    /// reuses the cached sections; an actions or recents change recomposes
+    /// and refreshes the cache.
     private func makeSnapshot(
         query: String,
         actions: [CommandActionEntry],
@@ -425,17 +410,11 @@ final class CommandPaletteSessionModel: ObservableObject {
     }
 
     /// The blank-query landing snapshot for `actions`: sections come from the
-    /// `(stableActions, recentToolIDs)` cache; the current preview row (if
-    /// any) is appended to the 动作 section tail at assembly time so a fresh
-    /// per-session preview UUID never misses the cache.
+    /// `(actions, recentToolIDs)` cache and are assembled into the final
+    /// snapshot directly.
     private func makeLandingSnapshot(actions: [CommandActionEntry]) -> CommandPaletteRowSnapshot {
-        let stableActions = actions.filter { $0.id != .copyGeneratedUUID }
-        let previewRows = actions
-            .filter { $0.id == .copyGeneratedUUID }
-            .map(CommandPaletteRowProjection.command)
-
         let key = LandingCacheKey(
-            stableActions: stableActions,
+            actions: actions,
             recentToolIDs: usage.recentToolIDs(
                 limit: LandingMetrics.recentsLimit,
                 now: Date()
@@ -451,38 +430,12 @@ final class CommandPaletteSessionModel: ObservableObject {
             CommandPaletteTrace.count(.rowSnapshot)
             sections = Self.landingSections(
                 registry: registry,
-                stableActions: stableActions,
+                actions: actions,
                 usage: usage,
                 now: Date()
             )
             landingCache = LandingCacheEntry(key: key, sections: sections)
         }
-        return Self.assemblingLandingSnapshot(sections: sections, previewRows: previewRows)
-    }
-
-    /// Assembles the final landing snapshot: cached preview-free sections
-    /// plus the current preview rows appended to the 动作 section tail
-    /// (matching `CommandActionEntry.paletteActions` order). Pure value-type
-    /// section splicing — no registry traversal.
-    private static func assemblingLandingSnapshot(
-        sections: [CommandPaletteSection],
-        previewRows: [CommandPaletteRowProjection]
-    ) -> CommandPaletteRowSnapshot {
-        guard !previewRows.isEmpty else {
-            return CommandPaletteNavigationState.snapshot(sections: sections)
-        }
-        var finalSections = sections
-        if let actionSectionIndex = finalSections.firstIndex(where: { $0.title == "动作" }) {
-            finalSections[actionSectionIndex] = CommandPaletteSection(
-                title: finalSections[actionSectionIndex].title,
-                rows: finalSections[actionSectionIndex].rows + previewRows
-            )
-        } else {
-            // Defensive: `paletteActions` always appends the preview after the
-            // stable actions, so the 动作 section exists whenever a preview
-            // row does; a bare preview list still gets its own section.
-            finalSections.append(CommandPaletteSection(title: "动作", rows: previewRows))
-        }
-        return CommandPaletteNavigationState.snapshot(sections: finalSections)
+        return CommandPaletteNavigationState.snapshot(sections: sections)
     }
 }

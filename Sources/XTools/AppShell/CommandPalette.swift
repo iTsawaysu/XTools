@@ -32,7 +32,7 @@ final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePres
         session: Int,
         actions: [CommandActionEntry]
     ) {
-        self.baseActions = actions.filter { $0.id != .copyGeneratedUUID }
+        self.baseActions = actions
         resume(session: session)
     }
 
@@ -41,16 +41,12 @@ final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePres
     }
 
     func updateActions(_ actions: [CommandActionEntry]) {
-        baseActions = actions.filter { $0.id != .copyGeneratedUUID }
+        baseActions = actions
     }
 
-    func commandPaletteDidOpen(session: Int, previewValue: String?) {
-        let actions = CommandActionEntry.paletteActions(
-            baseActions: baseActions,
-            previewValue: previewValue
-        )
+    func commandPaletteDidOpen(session: Int) {
         withTransaction(ToolMotion.disabledTransaction) {
-            sessionModel?.beginSession(session, actions: actions)
+            sessionModel?.beginSession(session, actions: baseActions)
             resume(session: session)
             // The persistent native field resets with the session while the
             // panel is still invisible: the text is cleared here (beginSession
@@ -77,12 +73,9 @@ final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePres
         }
     }
 
-    func prepareSessionIfNeeded(
-        session: Int,
-        previewValue: String?
-    ) {
+    func prepareSessionIfNeeded(session: Int) {
         guard sessionModel?.session != session else { return }
-        commandPaletteDidOpen(session: session, previewValue: previewValue)
+        commandPaletteDidOpen(session: session)
     }
 
     func makeRevealRequest(
@@ -408,10 +401,7 @@ struct CommandPaletteView: View {
     /// properties still hold pre-transition values.
     private func preparePresentationIfNeeded() {
         guard presentation.shows else { return }
-        contentLifecycle.prepareSessionIfNeeded(
-            session: presentation.session,
-            previewValue: presentation.previewValue
-        )
+        contentLifecycle.prepareSessionIfNeeded(session: presentation.session)
     }
 
     /// Live-source presentation readiness for transition-boundary callbacks
@@ -445,7 +435,6 @@ struct CommandPaletteView: View {
             CommandPaletteSectionTitle(text, count: sectionCount)
         case .tool(let entry):
             CommandPaletteRow(
-                id: entry.id,
                 title: entry.title,
                 highlightRanges: highlightRanges,
                 subtitle: subtitleAnnotation?.text ?? entry.categoryTitle,
@@ -472,7 +461,6 @@ struct CommandPaletteView: View {
             }
         case .command(let entry):
             CommandPaletteRow(
-                id: entry.id.rawValue,
                 title: entry.title,
                 highlightRanges: highlightRanges,
                 subtitle: entry.subtitle,

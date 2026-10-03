@@ -10,7 +10,6 @@ enum CommandPaletteTrace {
         case paletteBody, rowSnapshot
         case revealMake, revealUpdate, revealDismantle
         case hoverMake, hoverUpdate, hoverDismantle
-        case iconAnchorResolution
         case visibleAnimatedTransaction, visibleDisabledTransaction, hiddenTransaction
         case visibilityIntermediateSample, visibilityTerminalSample
         case visibilityClosingIntermediateSample, visibilityClosingTerminalSample

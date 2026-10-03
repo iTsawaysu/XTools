@@ -63,21 +63,7 @@ struct CommandPaletteHintsBar: View {
     }
 }
 
-/// v3 continuity flight: per-row launch icon anchors, keyed by row id so
-/// RootView can resolve the takeoff point when a row activates.
-struct PaletteRowIconAnchorsKey: PreferenceKey {
-    static let defaultValue: [String: Anchor<CGRect>] = [:]
-
-    static func reduce(
-        value: inout [String: Anchor<CGRect>],
-        nextValue: () -> [String: Anchor<CGRect>]
-    ) {
-        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
-    }
-}
-
 struct CommandPaletteRow: View {
-    let id: String
     let title: String
     var highlightRanges: [Range<String.Index>] = []
     let subtitle: String?
@@ -104,9 +90,6 @@ struct CommandPaletteRow: View {
                             style: .continuous
                         )
                     )
-                    .anchorPreference(key: PaletteRowIconAnchorsKey.self, value: .bounds) {
-                        [id: $0]
-                    }
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(Self.accentHighlighted(

@@ -2992,6 +2992,9 @@
     "随机" : {
       "extractionState" : "manual"
     },
+    "随机唯一标识符" : {
+      "extractionState" : "manual"
+    },
     "随机端口" : {
       "extractionState" : "manual"
     },

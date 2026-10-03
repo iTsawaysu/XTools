@@ -101,27 +101,23 @@ struct CommandPaletteSearchTests {
         }
 
         viewModel.openCommandPalette()
-        let preview = viewModel.commandPalettePreviewValue
         #expect(rootPublications == 0)
         #expect(presentationPublications == 1)
 
         viewModel.openCommandPalette()
         #expect(rootPublications == 0)
         #expect(presentationPublications == 2)
-        #expect(viewModel.commandPalettePreviewValue == preview)
 
         viewModel.closeCommandPalette()
         #expect(rootPublications == 0)
         #expect(presentationPublications == 3)
-        #expect(viewModel.commandPalettePreviewValue == preview)
 
         viewModel.closeCommandPalette()
         #expect(presentationPublications == 3)
 
-        viewModel.consumeCommandPalettePreviewValue()
+        viewModel.focusCommandPalette()
         #expect(rootPublications == 0)
         #expect(presentationPublications == 4)
-        #expect(viewModel.commandPalettePreviewValue == nil)
 
         withExtendedLifetime((rootCancellable, presentationCancellable)) {}
     }
@@ -659,51 +655,6 @@ struct CommandPaletteSearchTests {
         #expect(!action.matches(query: "jwt"))
     }
 
-    @Test func sessionCommandActionsRecreateConsumedUUIDPreview() throws {
-        let baseAction = CommandActionEntry(
-            id: .openPreferences,
-            title: "打开设置",
-            subtitle: nil,
-            systemImage: "gearshape"
-        )
-        let stalePreview = CommandActionEntry.paletteActions(
-            baseActions: [baseAction],
-            previewValue: "first"
-        )
-        let consumed = CommandActionEntry.paletteActions(
-            baseActions: stalePreview,
-            previewValue: nil
-        )
-        let reopened = CommandActionEntry.paletteActions(
-            baseActions: consumed,
-            previewValue: "second"
-        )
-
-        #expect(consumed == [baseAction])
-        #expect(reopened.filter { $0.id == .copyGeneratedUUID }.count == 1)
-        #expect(
-            try #require(reopened.first { $0.id == .copyGeneratedUUID }).subtitle
-                == "second"
-        )
-    }
-
-    @MainActor
-    @Test func commandPalettePresentationRefreshesPreviewPayloadOncePerSession() {
-        let viewModel = RootViewModel()
-
-        viewModel.openCommandPalette()
-        let first = viewModel.commandPalettePreviewValue
-        #expect(first != nil)
-
-        viewModel.focusCommandPalette()
-        #expect(viewModel.commandPalettePreviewValue == first)
-
-        viewModel.closeCommandPalette()
-        viewModel.openCommandPalette()
-        #expect(viewModel.commandPalettePreviewValue != nil)
-        #expect(viewModel.commandPalettePreviewValue != first)
-    }
-
     private static func entry(_ id: ToolID, title: String) -> ToolNavigationCommandEntry {
         ToolNavigationCommandEntry(
             toolID: id,
@@ -719,7 +670,7 @@ private final class RecordingPalettePresentationLifecycle: CommandPalettePresent
     private(set) var openedSessions: [Int] = []
     private(set) var closedSessions: [Int] = []
 
-    func commandPaletteDidOpen(session: Int, previewValue: String?) {
+    func commandPaletteDidOpen(session: Int) {
         openedSessions.append(session)
     }
 

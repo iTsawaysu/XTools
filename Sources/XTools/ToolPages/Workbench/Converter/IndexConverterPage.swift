@@ -43,15 +43,6 @@ typealias IndexConverterBackgroundExecutor = @Sendable (
 ) async -> IndexConverterExecutionResult
 
 @MainActor
-final class IndexTextDraftWorkspaceModel: ObservableObject {
-    @Published var text: String
-
-    init(text: String = "") {
-        self.text = text
-    }
-}
-
-@MainActor
 final class IndexConverterToolWorkspaceModel: ObservableObject {
     static let defaultSynchronousInputByteLimit = 4 * 1024
     static let defaultBackgroundDebounce: Duration = .milliseconds(120)

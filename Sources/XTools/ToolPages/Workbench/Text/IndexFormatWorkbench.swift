@@ -73,8 +73,9 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
     /// pane's accent border exactly once (see `toolOutputBreath`).
     @State private var outputBreathGeneration = 0
 
-    /// 完整槽位调用点（输入头行 + 输出控件同时在场，如 HTML → Markdown）：
-    /// 两个泛型都从 @ViewBuilder 闭包推断。
+    /// 全参 init：完整槽位调用点（输入头行 + 输出控件同时在场，如
+    /// HTML → Markdown）两个可选泛型槽从闭包推断；缺席槽位传 nil。
+    /// 结构化格式化工具族走下方 EmptyView 约束的便捷入口。
     init(
         inputTitle: String,
         outputTitle: String,
@@ -105,79 +106,9 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         showsOutputSave: Bool = false,
         outputFileName: String = "output.txt",
         @ViewBuilder leadingControl: @escaping () -> LeadingControl,
-        @ViewBuilder inputHeader: @escaping () -> InputHeader,
-        @ViewBuilder outputControl: @escaping () -> OutputControl,
+        inputHeader: (() -> InputHeader)? = nil,
+        outputControl: (() -> OutputControl)? = nil,
         workspaceSemantic: IndexWorkspaceSemantic = .structuredEditorTransform
-    ) {
-        self.init(
-            inputTitle: inputTitle,
-            outputTitle: outputTitle,
-            input: input,
-            output: output,
-            inputPlaceholder: inputPlaceholder,
-            diagnostic: diagnostic,
-            diagnosticTone: diagnosticTone,
-            diagnosticDetail: diagnosticDetail,
-            diagnosticMarker: diagnosticMarker,
-            formatAttempt: formatAttempt,
-            outputLineNumbers: outputLineNumbers,
-            inputLineNumbers: inputLineNumbers,
-            inputCaretPlacementRequestToken: inputCaretPlacementRequestToken,
-            inputCountPresentation: inputCountPresentation,
-            outputSyntax: outputSyntax,
-            outputPlaceholder: outputPlaceholder,
-            actionTitle: actionTitle,
-            actionHint: actionHint,
-            autoFocus: autoFocus,
-            isRunning: isRunning,
-            isOutputFresh: isOutputFresh,
-            clearDisabled: clearDisabled,
-            onFormat: onFormat,
-            onClear: onClear,
-            outputPresentation: outputPresentation,
-            outputProcessingText: outputProcessingText,
-            showsOutputSave: showsOutputSave,
-            outputFileName: outputFileName,
-            leadingControl: leadingControl,
-            inputHeader: inputHeader,
-            outputControlWrapper: outputControl,
-            workspaceSemantic: workspaceSemantic
-        )
-    }
-
-    private init(
-        inputTitle: String,
-        outputTitle: String,
-        input: Binding<String>,
-        output: String,
-        inputPlaceholder: String,
-        diagnostic: String?,
-        diagnosticTone: ToolFeedbackTone,
-        diagnosticDetail: FormatDiagnostic?,
-        diagnosticMarker: IndexTextAreaDiagnosticMarker?,
-        formatAttempt: Int,
-        outputLineNumbers: Bool,
-        inputLineNumbers: Bool = true,
-        inputCaretPlacementRequestToken: Int? = nil,
-        inputCountPresentation: IndexInputCountPresentation? = nil,
-        outputSyntax: IndexSyntaxKind?,
-        outputPlaceholder: String,
-        actionTitle: String,
-        actionHint: String,
-        autoFocus: Bool,
-        isRunning: Bool,
-        isOutputFresh: Bool,
-        clearDisabled: Bool,
-        onFormat: (() -> Void)?,
-        onClear: @escaping () -> Void,
-        outputPresentation: IndexTextConversionOutputPresentation,
-        outputProcessingText: String?,
-        showsOutputSave: Bool,
-        outputFileName: String,
-        @ViewBuilder leadingControl: @escaping () -> LeadingControl,
-        inputHeader: (() -> InputHeader)?,
-        outputControlWrapper: (() -> OutputControl)?,
-        workspaceSemantic: IndexWorkspaceSemantic
     ) {
         self.inputTitle = inputTitle
         self.outputTitle = outputTitle
@@ -210,7 +141,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         self.outputFileName = outputFileName
         self.leadingControl = leadingControl
         self.inputHeader = inputHeader
-        self.outputControl = outputControlWrapper
+        self.outputControl = outputControl
         self.workspaceSemantic = workspaceSemantic
     }
 
@@ -601,7 +532,7 @@ extension IndexFormatWorkbench where InputHeader == EmptyView, OutputControl == 
             outputFileName: outputFileName,
             leadingControl: leadingControl,
             inputHeader: nil,
-            outputControlWrapper: nil,
+            outputControl: nil,
             workspaceSemantic: workspaceSemantic
         )
     }
@@ -609,7 +540,6 @@ extension IndexFormatWorkbench where InputHeader == EmptyView, OutputControl == 
 
 /// 无 leading / 头行 / 输出控件槽的便捷入口：三个缺席槽位都落到 EmptyView。
 extension IndexFormatWorkbench where LeadingControl == EmptyView, InputHeader == EmptyView, OutputControl == EmptyView {
-    /// Convenience for workbenches without leading or output control slots.
     init(
         inputTitle: String,
         outputTitle: String,
@@ -666,71 +596,7 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView, InputHeader ==
             outputFileName: outputFileName,
             leadingControl: { EmptyView() },
             inputHeader: nil,
-            outputControlWrapper: nil,
-            workspaceSemantic: workspaceSemantic
-        )
-    }
-
-    /// Convenience for workbenches with an output control slot but without leading control slots.
-    /// 输出控件由结构体泛型承载，缺席的 InputHeader 约束为 EmptyView。
-    init(
-        inputTitle: String,
-        outputTitle: String,
-        input: Binding<String>,
-        output: String,
-        inputPlaceholder: String = "",
-        diagnostic: String? = nil,
-        diagnosticTone: ToolFeedbackTone = .error,
-        diagnosticDetail: FormatDiagnostic? = nil,
-        diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
-        formatAttempt: Int = 0,
-        outputLineNumbers: Bool = true,
-        outputSyntax: IndexSyntaxKind? = nil,
-        outputPlaceholder: String = IndexEmptyStateCopy.outputWillShowHere,
-        actionTitle: String = "格式化",
-        actionHint: String = "⌘↩",
-        autoFocus: Bool = true,
-        isRunning: Bool = false,
-        isOutputFresh: Bool = true,
-        clearDisabled: Bool = false,
-        onFormat: (() -> Void)? = nil,
-        onClear: @escaping () -> Void,
-        outputPresentation: IndexTextConversionOutputPresentation = .standard,
-        outputProcessingText: String? = nil,
-        showsOutputSave: Bool = false,
-        outputFileName: String = "output.txt",
-        @ViewBuilder outputControl: @escaping () -> OutputControl,
-        workspaceSemantic: IndexWorkspaceSemantic = .structuredEditorTransform
-    ) {
-        self.init(
-            inputTitle: inputTitle,
-            outputTitle: outputTitle,
-            input: input,
-            output: output,
-            inputPlaceholder: inputPlaceholder,
-            diagnostic: diagnostic,
-            diagnosticTone: diagnosticTone,
-            diagnosticDetail: diagnosticDetail,
-            diagnosticMarker: diagnosticMarker,
-            formatAttempt: formatAttempt,
-            outputLineNumbers: outputLineNumbers,
-            outputSyntax: outputSyntax,
-            outputPlaceholder: outputPlaceholder,
-            actionTitle: actionTitle,
-            actionHint: actionHint,
-            autoFocus: autoFocus,
-            isRunning: isRunning,
-            isOutputFresh: isOutputFresh,
-            clearDisabled: clearDisabled,
-            onFormat: onFormat,
-            onClear: onClear,
-            outputPresentation: outputPresentation,
-            outputProcessingText: outputProcessingText,
-            showsOutputSave: showsOutputSave,
-            outputFileName: outputFileName,
-            leadingControl: { EmptyView() },
-            inputHeader: nil,
-            outputControlWrapper: outputControl,
+            outputControl: nil,
             workspaceSemantic: workspaceSemantic
         )
     }

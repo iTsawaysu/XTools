@@ -201,41 +201,62 @@ struct CommandPalettePresentationTests {
     }
 
     @Test @MainActor
-    func reopeningAfterConsumingUUIDPreviewProvidesANewPreviewCommand() async throws {
+    func activatingUUIDCommandGeneratesAndCopiesAFreshUUID() async throws {
         let fixture = try Fixture()
         defer { fixture.dispose() }
 
-        withToolAnimation(ToolMotion.Preset.modal) {
-            fixture.viewModel.openCommandPalette()
+        // The command writes the real system pasteboard: snapshot its items
+        // first and restore them afterwards so the test leaves the user's
+        // clipboard untouched (best effort, by value).
+        let pasteboard = NSPasteboard.general
+        let savedItems: [[NSPasteboard.PasteboardType: Data]] = (pasteboard.pasteboardItems ?? [])
+            .map { item in
+                var entries: [NSPasteboard.PasteboardType: Data] = [:]
+                for type in item.types ?? [] {
+                    if let data = item.data(forType: type) {
+                        entries[type] = data
+                    }
+                }
+                return entries
+            }
+        defer {
+            pasteboard.clearContents()
+            let items = savedItems.map { saved -> NSPasteboardItem in
+                let item = NSPasteboardItem()
+                for (type, data) in saved {
+                    item.setData(data, forType: type)
+                }
+                return item
+            }
+            if !items.isEmpty {
+                pasteboard.writeObjects(items)
+            }
         }
-        let firstPreview = try #require(fixture.viewModel.commandPalettePreviewValue)
-        let firstField = try await Self.waitForReadyField(in: fixture)
-        withToolAnimation(ToolMotion.Preset.modal) {
-            fixture.viewModel.closeCommandPalette()
-        }
-        fixture.viewModel.consumeCommandPalettePreviewValue()
-        fixture.flush()
-        #expect(!fixture.viewModel.showsCommandPalette)
-        #expect(fixture.viewModel.commandPalettePreviewValue == nil)
 
-        fixture.activateWindow()
         withToolAnimation(ToolMotion.Preset.modal) {
             fixture.viewModel.openCommandPalette()
         }
-        let secondPreview = try #require(fixture.viewModel.commandPalettePreviewValue)
-        #expect(secondPreview != firstPreview)
-        // The persistent search field is reused for the new session instead
-        // of being rebuilt with a fresh identity.
-        let secondField = try await Self.waitForReadyField(in: fixture)
-        #expect(secondField === firstField)
-        #expect(secondField.stringValue.isEmpty)
-        let secondDelegate = try #require(secondField.delegate)
-        Self.replaceText("生成并复制", in: secondField, delegate: secondDelegate)
-        try await Self.waitForCondition(label: "reopened UUID preview row") {
+        let field = try await Self.waitForReadyField(in: fixture)
+        let delegate = try #require(field.delegate)
+        Self.replaceText("生成并复制", in: field, delegate: delegate)
+        try await Self.waitForCondition(label: "uuid command row") {
             fixture.flush()
             return Self.commandPaletteRevealViews(in: fixture.hostingView).count == 1
         }
-        #expect(fixture.viewModel.commandPalettePreviewValue == secondPreview)
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        #expect(Self.sendCommand(
+            #selector(NSResponder.insertNewline(_:)),
+            field: field,
+            editor: editor,
+            delegate: delegate
+        ))
+        #expect(!fixture.viewModel.showsCommandPalette)
+
+        // Activation generates a fresh lowercase UUID at runtime and copies
+        // it — no pre-previewed per-session value involved.
+        let copied = try #require(pasteboard.string(forType: .string))
+        #expect(UUID(uuidString: copied) != nil)
+        #expect(copied == copied.lowercased())
     }
 
     @Test @MainActor

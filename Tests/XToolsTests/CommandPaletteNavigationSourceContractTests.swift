@@ -5,13 +5,12 @@ import Testing
 
 struct CommandPaletteNavigationSourceContractTests {
     /// v3 contract (user decision 2026-09-13): the palette is a bounded
-    /// command system. Shell commands live beside tool navigation, and
-    /// preview-style rows render live output with return-to-copy. The command
+    /// command system. Shell commands live beside tool navigation, and the
+    /// UUID copy command generates a fresh value at activation. The command
     /// surface stays bounded by `CommandActionID` — no free-form script host,
     /// and sidebar-search keeps its ⌘F path instead of becoming a command.
     @Test func commandPaletteOwnsBoundedShellCommands() throws {
         let commandPalette = try readSource("Sources/XTools/AppShell/CommandPalette.swift")
-        let rows = try readSource("Sources/XTools/AppShell/CommandPaletteRows.swift")
         let actions = try readSource("Sources/XTools/AppShell/CommandActions.swift")
         let state = try readSource("Sources/XTools/AppShell/CommandPaletteNavigationState.swift")
         let root = try readSource("Sources/XTools/AppShell/RootView.swift")
@@ -20,7 +19,7 @@ struct CommandPaletteNavigationSourceContractTests {
         contains(actions, "case toggleAppearance", "Appearance cycling must be a named command")
         contains(actions, "case toggleSidebar", "Sidebar visibility must be a named command")
         contains(actions, "case openPreferences", "Preferences must be a named command")
-        contains(actions, "case copyGeneratedUUID", "Preview-style copy commands must be named")
+        contains(actions, "case copyGeneratedUUID", "UUID copy commands must be named")
         contains(actions, "func matches(query: String) -> Bool", "Command rows must filter through one shared matcher")
 
         contains(state, "case command(CommandActionEntry)", "Palette rows must carry commands as a first-class projection case")
@@ -30,16 +29,12 @@ struct CommandPaletteNavigationSourceContractTests {
         contains(commandPalette, "let actions: [CommandActionEntry]", "Palette must receive commands as injected values, never shell references")
         contains(commandPalette, "let onRunCommand: (CommandActionID) -> Void", "Command activation must report back through one injected closure")
         contains(commandPalette, "placeholder: \"搜索工具或命令…\"", "Palette placeholder must describe tools and commands")
-        contains(rows, "PaletteRowIconAnchorsKey", "v3: palette rows must expose launch-icon anchors for the title-rail continuity flight")
 
         contains(root, "onRunCommand: runPaletteCommand", "RootView must own command execution")
         contains(root, "baseActions: commandBaseActions", "Root must inject shell-derived base actions without observing presentation state")
-        contains(actions, "static func paletteActions(", "Session command construction must recreate preview rows from stable base actions")
-        contains(root, "CommandActionEntry.paletteActions(", "The overlay observer must append its session-scoped preview action through the shared constructor")
-        contains(commandPalette, "let actions = CommandActionEntry.paletteActions(", "Synchronous session preparation must recreate a consumed preview command")
-        contains(root, "next.previewValue = UUID().uuidString.lowercased()", "Preview payloads must refresh once per palette presentation")
-        contains(root, "viewModel.consumeCommandPalettePreviewValue()", "Consumed preview payloads must expire so stale values are never copied twice")
-        contains(root, "iconFlight.cancelPendingLaunch()\n        paletteRecents.recordLaunch(toolID)\n        if viewModel.selectedToolID != toolID,", "Selecting the current tool must record palette frecency and must not leave an unresolved palette icon flight pending")
+        contains(root, "id: .copyGeneratedUUID,", "The UUID copy command must be a stable base action row")
+        contains(root, "pasteboard.setString(UUID().uuidString.lowercased(), forType: .string)", "Activating the UUID command must generate a fresh value at runtime and copy it")
+        contains(root, "paletteRecents.recordLaunch(toolID)", "Every palette launch must record palette frecency before switching")
         contains(root, "private let paletteRecents: PaletteRecentsStore", "RootView must own the palette frecency store without observing it")
         contains(root, "usage: paletteRecents,", "The overlay observer must feed palette usage scoring into the command palette")
 
@@ -127,7 +122,7 @@ struct CommandPaletteNavigationSourceContractTests {
         contains(root, "var commandPaletteFocusToken: Int { commandPalettePresentation.focusToken }", "RootViewModel must preserve its command-palette focus-token facade")
         contains(root, "var commandPalettePresentationSession: Int { commandPalettePresentation.session }", "RootViewModel must preserve its presentation-session facade")
         contains(root, "next.session += 1", "Closing the palette must invalidate prior presentation sessions")
-        contains(root, "lifecycle?.commandPaletteDidOpen(\n            session: nextSession,", "A retained palette must prepare its new session synchronously before presentation")
+        contains(root, "lifecycle?.commandPaletteDidOpen(session: nextSession)", "A retained palette must prepare its new session synchronously before presentation")
         contains(root, "func focusCommandPalette()", "RootViewModel must expose a command-palette refocus action")
         contains(root, "if state.shows {\n            focus()", "Command-K while already open must refocus without resetting the query")
         contains(root, "focusToken: presentation.focusToken", "The overlay observer must pass its focus token into the command palette")

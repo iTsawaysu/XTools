@@ -107,16 +107,6 @@ enum IndexPageChrome: Equatable {
     var headerRailWidth: CGFloat { ToolMetrics.Spacing.xs / 2 }
 }
 
-/// v3 continuity flight: anchor of the page identity rail. RootView resolves
-/// it as the landing point when a tool is launched from the command palette.
-struct PageTitleRailAnchorKey: PreferenceKey {
-    static let defaultValue: Anchor<CGRect>? = nil
-
-    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
-        value = nextValue() ?? value
-    }
-}
-
 /// Shared identity rail used by tool pages and the personal dashboard.
 /// Keeping this header separate lets dashboard content own its single
 /// ScrollView without recreating a second page shell or toolbar.
@@ -160,7 +150,6 @@ struct IndexPageHeader<Accessory: View>: View {
         // 每次到页都完整重播(宿主的 .id(tool.id) 已重建整页,这里是兜底)。
         .id(title)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .anchorPreference(key: PageTitleRailAnchorKey.self, value: .bounds) { $0 }
     }
 
     var body: some View {

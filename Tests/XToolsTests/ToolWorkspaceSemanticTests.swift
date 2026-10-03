@@ -3,220 +3,166 @@ import SwiftUI
 import Testing
 
 struct ToolWorkspaceSemanticTests {
+    /// 语义目录 → 坍缩后的四布尔行为契约（生产实际读取的维度）。
     @Test func semanticCatalogMatchesGlossaryBehaviorContracts() {
         assertContract(
             .unmigratedPageDefault,
-            scrollOwnership: .surfaceInternal,
-            inputGrowth: .fixed,
-            fillBehavior: .fillsAvailableSpace,
-            outputScrolling: .surfaceInternal,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .protectsUnmigratedPages
+            inputExpandsWithContent: false,
+            outputScrollsInternally: true,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: false
         )
         assertContract(
             .structuredOutputReading,
-            scrollOwnership: .pageOuter,
-            inputGrowth: .natural,
-            fillBehavior: .fillsThenExpands,
-            outputScrolling: .pageOuter,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .explicitOptIn
+            inputExpandsWithContent: true,
+            outputScrollsInternally: false,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: false
         )
         assertContract(
             .structuredEditorTransform,
-            scrollOwnership: .surfaceInternal,
-            inputGrowth: .fixed,
-            fillBehavior: .fillsAvailableSpace,
-            outputScrolling: .surfaceInternal,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .protectedException
+            inputExpandsWithContent: false,
+            outputScrollsInternally: true,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: false
         )
         assertContract(
             .copyTransformWorkspace,
-            scrollOwnership: .surfaceInternal,
-            inputGrowth: .fixed,
-            fillBehavior: .fillsAvailableSpace,
-            outputScrolling: .surfaceInternal,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .protectedException
+            inputExpandsWithContent: false,
+            outputScrollsInternally: true,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: false
         )
         assertContract(
             .securityTransformWorkspace,
-            scrollOwnership: .surfaceInternal,
-            inputGrowth: .fixed,
-            fillBehavior: .fillsAvailableSpace,
-            outputScrolling: .surfaceInternal,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .protectedException
+            inputExpandsWithContent: false,
+            outputScrollsInternally: true,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: false
         )
         assertContract(
             .fixedInputWorkspace,
-            scrollOwnership: .surfaceInternal,
-            inputGrowth: .fixed,
-            fillBehavior: .fillsAvailableSpace,
-            outputScrolling: .pageOuter,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .protectedException
+            inputExpandsWithContent: false,
+            outputScrollsInternally: false,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: false
         )
         assertContract(
             .longTextNaturalInput,
-            scrollOwnership: .pageOuter,
-            inputGrowth: .natural,
-            fillBehavior: .naturalHeight,
-            outputScrolling: .pageOuter,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .explicitOptIn
+            inputExpandsWithContent: true,
+            outputScrollsInternally: false,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: true
         )
         assertContract(
             .boundedLongTextInput,
-            scrollOwnership: .pageOuterWithBoundedInput,
-            inputGrowth: .fixed,
-            fillBehavior: .naturalHeight,
-            outputScrolling: .pageOuter,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .explicitOptIn
+            inputExpandsWithContent: false,
+            outputScrollsInternally: false,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: true
         )
         assertContract(
             .longSingleLineWrapping,
-            scrollOwnership: .surfaceInternal,
-            inputGrowth: .fixed,
-            fillBehavior: .fillsAvailableSpace,
-            outputScrolling: .surfaceInternal,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .explicitOptIn
+            inputExpandsWithContent: false,
+            outputScrollsInternally: true,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: false
         )
         assertContract(
             .naturalHeightShortResultPanel,
-            scrollOwnership: .pageOuter,
-            inputGrowth: .fixed,
-            fillBehavior: .naturalHeight,
-            outputScrolling: .pageOuter,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .explicitOptIn
+            inputExpandsWithContent: false,
+            outputScrollsInternally: false,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: true
         )
         assertContract(
             .imagePreviewStage,
-            scrollOwnership: .pageOuter,
-            inputGrowth: .fixed,
-            fillBehavior: .fillsAvailableSpace,
-            outputScrolling: .none,
-            longTokenWrapping: .preserveControlDefault,
-            defaultSafety: .protectedException
+            inputExpandsWithContent: false,
+            outputScrollsInternally: false,
+            wrapsLongTokensToAvailableWidth: false,
+            usesNaturalHeightSurface: false
         )
         assertContract(
             .liveImagePreviewStage,
-            scrollOwnership: .fixedViewport,
-            inputGrowth: .fixed,
-            fillBehavior: .fillsAvailableSpace,
-            outputScrolling: .none,
-            longTokenWrapping: .preserveControlDefault,
-            defaultSafety: .protectedException
+            inputExpandsWithContent: false,
+            outputScrollsInternally: false,
+            wrapsLongTokensToAvailableWidth: false,
+            usesNaturalHeightSurface: false
         )
         assertContract(
             .queryListWorkspace,
-            scrollOwnership: .surfaceInternal,
-            inputGrowth: .fixed,
-            fillBehavior: .fillsAvailableSpace,
-            outputScrolling: .surfaceInternal,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .protectedException
+            inputExpandsWithContent: false,
+            outputScrollsInternally: true,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: false
         )
         assertContract(
             .base64FileWorkspace,
-            scrollOwnership: .mixedBySurface,
-            inputGrowth: .fixed,
-            fillBehavior: .fillsAvailableSpace,
-            outputScrolling: .mixedBySurface,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .protectedException
+            inputExpandsWithContent: false,
+            outputScrollsInternally: false,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: false
         )
         assertContract(
             .editableDiffWorkspace,
-            scrollOwnership: .diffWorkspaceUnified,
-            inputGrowth: .natural,
-            fillBehavior: .fillsThenExpands,
-            outputScrolling: .diffWorkspaceUnified,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .protectedException
+            inputExpandsWithContent: true,
+            outputScrollsInternally: false,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: false
         )
         assertContract(
             .regexResultWorkspace,
-            scrollOwnership: .pageOuter,
-            inputGrowth: .natural,
-            fillBehavior: .naturalHeight,
-            outputScrolling: .pageOuter,
-            longTokenWrapping: .wrapsToAvailableWidth,
-            defaultSafety: .explicitOptIn
+            inputExpandsWithContent: true,
+            outputScrollsInternally: false,
+            wrapsLongTokensToAvailableWidth: true,
+            usesNaturalHeightSurface: true
         )
     }
 
     @Test func defaultSemanticProtectsUnmigratedPages() {
         let behavior = IndexWorkspaceSemantic.unmigratedPageDefault.behavior
 
-        #expect(behavior.scrollOwnership == .surfaceInternal)
-        #expect(behavior.inputGrowth == .fixed)
-        #expect(behavior.fillBehavior == .fillsAvailableSpace)
-        #expect(behavior.outputScrolling == .surfaceInternal)
-        #expect(behavior.longTokenWrapping == .wrapsToAvailableWidth)
-        #expect(behavior.defaultSafety == .protectsUnmigratedPages)
         #expect(!behavior.inputExpandsWithContent)
         #expect(behavior.outputScrollsInternally)
         #expect(behavior.wrapsLongTokensToAvailableWidth)
+        #expect(!behavior.usesNaturalHeightSurface)
     }
 
-    @Test func defaultSafetyDoesNotAutoMigrateUnmigratedPagesToReadingBehavior() {
+    @Test func defaultSemanticDoesNotAutoMigrateUnmigratedPagesToReadingBehavior() {
         let defaultBehavior = IndexWorkspaceSemantic.unmigratedPageDefault.behavior
         let readingBehavior = IndexWorkspaceSemantic.structuredOutputReading.behavior
 
-        #expect(defaultBehavior.defaultSafety == .protectsUnmigratedPages)
-        #expect(defaultBehavior.scrollOwnership == .surfaceInternal)
-        #expect(defaultBehavior.outputScrolling == .surfaceInternal)
-        #expect(defaultBehavior.inputGrowth == .fixed)
-        #expect(defaultBehavior.scrollOwnership != readingBehavior.scrollOwnership)
-        #expect(defaultBehavior.outputScrolling != readingBehavior.outputScrolling)
-        #expect(defaultBehavior.inputGrowth != readingBehavior.inputGrowth)
+        #expect(!defaultBehavior.inputExpandsWithContent)
+        #expect(defaultBehavior.outputScrollsInternally)
+        #expect(defaultBehavior.inputExpandsWithContent != readingBehavior.inputExpandsWithContent)
+        #expect(defaultBehavior.outputScrollsInternally != readingBehavior.outputScrollsInternally)
     }
 
     @Test func structuredOutputReadingResolvesToPageLevelReadingContract() {
         let behavior = IndexWorkspaceSemantic.structuredOutputReading.behavior
 
-        #expect(behavior.scrollOwnership == .pageOuter)
-        #expect(behavior.inputGrowth == .natural)
-        #expect(behavior.fillBehavior == .fillsThenExpands)
-        #expect(behavior.outputScrolling == .pageOuter)
-        #expect(behavior.longTokenWrapping == .wrapsToAvailableWidth)
-        #expect(behavior.defaultSafety == .explicitOptIn)
         #expect(behavior.inputExpandsWithContent)
         #expect(!behavior.outputScrollsInternally)
         #expect(behavior.wrapsLongTokensToAvailableWidth)
+        #expect(!behavior.usesNaturalHeightSurface)
     }
 
     @Test func copyTransformWorkspaceKeepsFixedInternalScrollingButWrapsLongTokens() {
         let behavior = IndexWorkspaceSemantic.copyTransformWorkspace.behavior
 
-        #expect(behavior.scrollOwnership == .surfaceInternal)
-        #expect(behavior.inputGrowth == .fixed)
-        #expect(behavior.fillBehavior == .fillsAvailableSpace)
-        #expect(behavior.outputScrolling == .surfaceInternal)
-        #expect(behavior.longTokenWrapping == .wrapsToAvailableWidth)
-        #expect(behavior.defaultSafety == .protectedException)
         #expect(!behavior.inputExpandsWithContent)
         #expect(behavior.outputScrollsInternally)
         #expect(behavior.wrapsLongTokensToAvailableWidth)
+        #expect(!behavior.usesNaturalHeightSurface)
     }
 
     @Test func naturalHeightShortResultPanelUsesPageOuterNaturalHeightContract() {
         let behavior = IndexWorkspaceSemantic.naturalHeightShortResultPanel.behavior
 
-        #expect(behavior.scrollOwnership == .pageOuter)
-        #expect(behavior.inputGrowth == .fixed)
-        #expect(behavior.fillBehavior == .naturalHeight)
-        #expect(behavior.outputScrolling == .pageOuter)
-        #expect(behavior.longTokenWrapping == .wrapsToAvailableWidth)
-        #expect(behavior.defaultSafety == .explicitOptIn)
         #expect(!behavior.inputExpandsWithContent)
         #expect(!behavior.outputScrollsInternally)
         #expect(behavior.wrapsLongTokensToAvailableWidth)
+        #expect(behavior.usesNaturalHeightSurface)
     }
 
     @Test @MainActor func shortResultEntrypointsDefaultToNaturalHeightAndLongTokenWrapping() {
@@ -283,50 +229,41 @@ struct ToolWorkspaceSemanticTests {
         ]
 
         for semantic in fixedInputSemantics {
-            #expect(semantic.behavior.inputGrowth == .fixed)
             #expect(!semantic.behavior.inputExpandsWithContent)
         }
 
-        #expect(IndexWorkspaceSemantic.structuredOutputReading.behavior.inputGrowth == .natural)
-        #expect(IndexWorkspaceSemantic.structuredEditorTransform.behavior.inputGrowth == .fixed)
-        #expect(IndexWorkspaceSemantic.longTextNaturalInput.behavior.inputGrowth == .natural)
-        #expect(IndexWorkspaceSemantic.boundedLongTextInput.behavior.inputGrowth == .fixed)
-        #expect(IndexWorkspaceSemantic.editableDiffWorkspace.behavior.inputGrowth == .natural)
-        #expect(IndexWorkspaceSemantic.regexResultWorkspace.behavior.inputGrowth == .natural)
+        #expect(IndexWorkspaceSemantic.structuredOutputReading.behavior.inputExpandsWithContent)
+        #expect(!IndexWorkspaceSemantic.structuredEditorTransform.behavior.inputExpandsWithContent)
+        #expect(IndexWorkspaceSemantic.longTextNaturalInput.behavior.inputExpandsWithContent)
+        #expect(!IndexWorkspaceSemantic.boundedLongTextInput.behavior.inputExpandsWithContent)
+        #expect(IndexWorkspaceSemantic.editableDiffWorkspace.behavior.inputExpandsWithContent)
+        #expect(IndexWorkspaceSemantic.regexResultWorkspace.behavior.inputExpandsWithContent)
     }
 
-    @Test func exceptionSemanticsAreExplicitlyProtectedFromReadingDefaults() {
-        #expect(IndexWorkspaceSemantic.copyTransformWorkspace.behavior.defaultSafety == .protectedException)
-        #expect(IndexWorkspaceSemantic.securityTransformWorkspace.behavior.defaultSafety == .protectedException)
-        #expect(IndexWorkspaceSemantic.structuredEditorTransform.behavior.defaultSafety == .protectedException)
-        #expect(IndexWorkspaceSemantic.fixedInputWorkspace.behavior.defaultSafety == .protectedException)
-        #expect(IndexWorkspaceSemantic.base64FileWorkspace.behavior.defaultSafety == .protectedException)
-        #expect(IndexWorkspaceSemantic.queryListWorkspace.behavior.defaultSafety == .protectedException)
-        #expect(IndexWorkspaceSemantic.imagePreviewStage.behavior.defaultSafety == .protectedException)
-        #expect(IndexWorkspaceSemantic.imagePreviewStage.behavior.outputScrolling == .none)
-        #expect(IndexWorkspaceSemantic.liveImagePreviewStage.behavior.defaultSafety == .protectedException)
-        #expect(IndexWorkspaceSemantic.liveImagePreviewStage.behavior.outputScrolling == .none)
-        #expect(IndexWorkspaceSemantic.editableDiffWorkspace.behavior.defaultSafety == .protectedException)
+    @Test func exceptionSemanticsStayDistinctFromReadingDefaults() {
+        #expect(IndexWorkspaceSemantic.copyTransformWorkspace.behavior.outputScrollsInternally)
+        #expect(IndexWorkspaceSemantic.securityTransformWorkspace.behavior.outputScrollsInternally)
+        #expect(IndexWorkspaceSemantic.structuredEditorTransform.behavior.outputScrollsInternally)
+        #expect(!IndexWorkspaceSemantic.structuredOutputReading.behavior.outputScrollsInternally)
+        #expect(IndexWorkspaceSemantic.imagePreviewStage.behavior == .imageStageControlDefaults)
+        #expect(!IndexWorkspaceSemantic.imagePreviewStage.behavior.wrapsLongTokensToAvailableWidth)
+        #expect(IndexWorkspaceSemantic.liveImagePreviewStage.behavior == .imageStageControlDefaults)
+        #expect(!IndexWorkspaceSemantic.liveImagePreviewStage.behavior.wrapsLongTokensToAvailableWidth)
+        #expect(IndexWorkspaceSemantic.editableDiffWorkspace.behavior == IndexWorkspaceSemantic.structuredOutputReading.behavior)
     }
 
     @Test func exceptionSemanticsKeepTheirDistinctScrollAndFillOwners() {
-        #expect(IndexWorkspaceSemantic.copyTransformWorkspace.behavior.scrollOwnership == .surfaceInternal)
-        #expect(IndexWorkspaceSemantic.copyTransformWorkspace.behavior.outputScrolling == .surfaceInternal)
-        #expect(IndexWorkspaceSemantic.securityTransformWorkspace.behavior.scrollOwnership == .surfaceInternal)
-        #expect(IndexWorkspaceSemantic.securityTransformWorkspace.behavior.outputScrolling == .surfaceInternal)
-        #expect(IndexWorkspaceSemantic.structuredEditorTransform.behavior.scrollOwnership == .surfaceInternal)
-        #expect(IndexWorkspaceSemantic.structuredEditorTransform.behavior.outputScrolling == .surfaceInternal)
-        #expect(IndexWorkspaceSemantic.fixedInputWorkspace.behavior.scrollOwnership == .surfaceInternal)
-        #expect(IndexWorkspaceSemantic.fixedInputWorkspace.behavior.fillBehavior == .fillsAvailableSpace)
-        #expect(IndexWorkspaceSemantic.queryListWorkspace.behavior.outputScrolling == .surfaceInternal)
-        #expect(IndexWorkspaceSemantic.base64FileWorkspace.behavior.scrollOwnership == .mixedBySurface)
-        #expect(IndexWorkspaceSemantic.base64FileWorkspace.behavior.fillBehavior == .fillsAvailableSpace)
-        #expect(IndexWorkspaceSemantic.imagePreviewStage.behavior.scrollOwnership == .pageOuter)
-        #expect(IndexWorkspaceSemantic.imagePreviewStage.behavior.outputScrolling == .none)
-        #expect(IndexWorkspaceSemantic.liveImagePreviewStage.behavior.scrollOwnership == .fixedViewport)
-        #expect(IndexWorkspaceSemantic.liveImagePreviewStage.behavior.outputScrolling == .none)
-        #expect(IndexWorkspaceSemantic.editableDiffWorkspace.behavior.scrollOwnership == .diffWorkspaceUnified)
-        #expect(IndexWorkspaceSemantic.editableDiffWorkspace.behavior.outputScrolling == .diffWorkspaceUnified)
+        #expect(IndexWorkspaceSemantic.copyTransformWorkspace.behavior == .fixedHeightInternalScroll)
+        #expect(IndexWorkspaceSemantic.securityTransformWorkspace.behavior == .fixedHeightInternalScroll)
+        #expect(IndexWorkspaceSemantic.structuredEditorTransform.behavior == .fixedHeightInternalScroll)
+        #expect(IndexWorkspaceSemantic.fixedInputWorkspace.behavior.outputScrollsInternally == false)
+        #expect(IndexWorkspaceSemantic.fixedInputWorkspace.behavior.usesNaturalHeightSurface == false)
+        #expect(IndexWorkspaceSemantic.queryListWorkspace.behavior.outputScrollsInternally)
+        #expect(IndexWorkspaceSemantic.base64FileWorkspace.behavior == .fixedHeightPageScrolling)
+        #expect(IndexWorkspaceSemantic.boundedLongTextInput.behavior.usesNaturalHeightSurface)
+        #expect(IndexWorkspaceSemantic.naturalHeightShortResultPanel.behavior.usesNaturalHeightSurface)
+        #expect(IndexWorkspaceSemantic.longTextNaturalInput.behavior == .naturalHeightPageScrolling)
+        #expect(IndexWorkspaceSemantic.regexResultWorkspace.behavior == .naturalHeightPageScrolling)
     }
 
     @Test @MainActor func textConversionWorkbenchDefaultsToCopyTransformSemantic() {
@@ -370,7 +307,7 @@ struct ToolWorkspaceSemanticTests {
         #expect(tokenInput.workspaceSemantic.behavior.inputExpandsWithContent)
         #expect(!headerSurface.workspaceSemantic.behavior.outputScrollsInternally)
         #expect(!payloadSurface.workspaceSemantic.behavior.outputScrollsInternally)
-        #expect(verificationSurface.workspaceSemantic.behavior.fillBehavior == .naturalHeight)
+        #expect(verificationSurface.workspaceSemantic.behavior.usesNaturalHeightSurface)
     }
 
     @Test @MainActor func sharedTextConversionWorkbenchUsesStructuredEditorTransformSemantic() {
@@ -440,7 +377,6 @@ struct ToolWorkspaceSemanticTests {
 
     @Test @MainActor func lowLevelTextAreaDoesNotInferNaturalGrowthFromMissingBounds() {
         let defaultTextArea = IndexTextArea(placeholder: "输入", text: .constant(""))
-        let ratioBoundedTextArea = IndexTextArea(placeholder: "输入", text: .constant(""), maxHeightRatio: 0.4)
         let fillingTextArea = IndexTextArea(placeholder: "输入", text: .constant(""), fillsHeight: true)
         let explicitNaturalTextArea = IndexTextArea(
             placeholder: "输入",
@@ -449,29 +385,24 @@ struct ToolWorkspaceSemanticTests {
         )
 
         #expect(!defaultTextArea.growsWithContent)
-        #expect(!ratioBoundedTextArea.growsWithContent)
         #expect(!fillingTextArea.growsWithContent)
         #expect(explicitNaturalTextArea.growsWithContent)
     }
 
     private func assertContract(
         _ semantic: IndexWorkspaceSemantic,
-        scrollOwnership: IndexWorkspaceScrollOwnership,
-        inputGrowth: IndexWorkspaceInputGrowth,
-        fillBehavior: IndexWorkspaceFillBehavior,
-        outputScrolling: IndexWorkspaceOutputScrolling,
-        longTokenWrapping: IndexWorkspaceLongTokenWrapping,
-        defaultSafety: IndexWorkspaceDefaultSafety,
+        inputExpandsWithContent: Bool,
+        outputScrollsInternally: Bool,
+        wrapsLongTokensToAvailableWidth: Bool,
+        usesNaturalHeightSurface: Bool,
         sourceLocation: SourceLocation = #_sourceLocation
     ) {
         let behavior = semantic.behavior
 
-        #expect(behavior.scrollOwnership == scrollOwnership, sourceLocation: sourceLocation)
-        #expect(behavior.inputGrowth == inputGrowth, sourceLocation: sourceLocation)
-        #expect(behavior.fillBehavior == fillBehavior, sourceLocation: sourceLocation)
-        #expect(behavior.outputScrolling == outputScrolling, sourceLocation: sourceLocation)
-        #expect(behavior.longTokenWrapping == longTokenWrapping, sourceLocation: sourceLocation)
-        #expect(behavior.defaultSafety == defaultSafety, sourceLocation: sourceLocation)
+        #expect(behavior.inputExpandsWithContent == inputExpandsWithContent, sourceLocation: sourceLocation)
+        #expect(behavior.outputScrollsInternally == outputScrollsInternally, sourceLocation: sourceLocation)
+        #expect(behavior.wrapsLongTokensToAvailableWidth == wrapsLongTokensToAvailableWidth, sourceLocation: sourceLocation)
+        #expect(behavior.usesNaturalHeightSurface == usesNaturalHeightSurface, sourceLocation: sourceLocation)
     }
 
     private func assertResolvedPageShell(

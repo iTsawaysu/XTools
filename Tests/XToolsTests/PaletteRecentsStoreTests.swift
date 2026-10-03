@@ -185,55 +185,60 @@ struct PaletteRecentsStoreTests {
         #expect(ids.filter { $0 == "tool.jwt-parser" }.count == 1)
     }
 
-    /// Warm ⌘K sessions ship a fresh preview UUID per open. The landing
-    /// cache keys on the STABLE actions (preview excluded) plus recents, so
-    /// the sections must be served from cache while the preview row still
-    /// carries each session's own UUID — never a stale one.
-    @Test func landingCacheServesWarmSessionsWithFreshPreviewSubtitles() {
+    /// Warm ⌘K sessions present the same stable action list (including the
+    /// static UUID command row). The landing cache keys on the full action
+    /// list plus recents, so identical actions across sessions are served
+    /// from cache while an action change recomposes.
+    @Test func landingCacheServesWarmSessionsWithStableActions() {
         let usage = FixedUsage(recents: [.jwt, .json], scores: [:])
-        let baseActions: [CommandActionEntry] = [
+        let actions: [CommandActionEntry] = [
             CommandActionEntry(
                 id: .toggleAppearance,
                 title: "切换主题",
                 subtitle: nil,
                 systemImage: "circle.lefthalf.filled"
+            ),
+            CommandActionEntry(
+                id: .copyGeneratedUUID,
+                title: "生成并复制 UUID",
+                subtitle: "随机唯一标识符",
+                systemImage: "barcode"
             )
         ]
 
-        func previewActions(_ previewValue: String?) -> [CommandActionEntry] {
-            CommandActionEntry.paletteActions(
-                baseActions: baseActions,
-                previewValue: previewValue
-            )
-        }
-
         let model = CommandPaletteSessionModel(
             registry: .default,
-            actions: previewActions("uuid-first"),
+            actions: actions,
             session: 1,
             usage: usage
         )
         // The first composition is a cold build: no cache hit yet.
         #expect(model.landingCacheHitCount == 0)
-        #expect(Self.previewSubtitle(in: model.snapshot) == "uuid-first")
+        #expect(Self.uuidCommandSubtitle(in: model.snapshot) == "随机唯一标识符")
 
-        model.beginSession(2, actions: previewActions("uuid-second"))
+        model.beginSession(2, actions: actions)
         #expect(model.landingCacheHitCount == 1)
-        #expect(Self.previewSubtitle(in: model.snapshot) == "uuid-second")
+        #expect(Self.uuidCommandSubtitle(in: model.snapshot) == "随机唯一标识符")
 
-        model.beginSession(3, actions: previewActions("uuid-third"))
+        model.beginSession(3, actions: actions)
         #expect(model.landingCacheHitCount == 2)
-        #expect(Self.previewSubtitle(in: model.snapshot) == "uuid-third")
 
-        // The same rule applies through replaceActions: a preview-only
-        // change (stable actions unchanged) hits the cache — the exact
-        // warm-reopen scenario the cache exists for.
-        model.replaceActions(previewActions("uuid-fourth"))
+        // An action change invalidates the cache (miss); the refreshed key
+        // serves later sessions again (hit).
+        var changedActions = actions
+        changedActions[0] = CommandActionEntry(
+            id: .toggleAppearance,
+            title: "切换主题",
+            subtitle: "主题：跟随系统",
+            systemImage: "circle.lefthalf.filled"
+        )
+        model.beginSession(4, actions: changedActions)
+        #expect(model.landingCacheHitCount == 2)
+        model.beginSession(5, actions: changedActions)
         #expect(model.landingCacheHitCount == 3)
-        #expect(Self.previewSubtitle(in: model.snapshot) == "uuid-fourth")
     }
 
-    private static func previewSubtitle(
+    private static func uuidCommandSubtitle(
         in snapshot: CommandPaletteRowSnapshot
     ) -> String? {
         for row in snapshot.rows {

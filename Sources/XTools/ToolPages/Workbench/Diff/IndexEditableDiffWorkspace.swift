@@ -446,11 +446,8 @@ extension IndexEditableDiffWorkspace where LeadingControl == EmptyView {
 private enum IndexDiffEditorMetrics {
     static let rulerWidth: CGFloat = 44
     static let textInset = NSSize(width: rulerWidth + 13, height: 14)
+    /// 两块独立编辑器之间的固定负空间宽度（不是可拖动分隔线）。
     static let paneGap: CGFloat = 8
-    static let dividerThickness: CGFloat = paneGap
-    static let stageInset: CGFloat = 0
-    static let frameCornerRadius: CGFloat = 0
-    static let frameBorderWidth: CGFloat = 0
     static let paneCornerRadius: CGFloat = ToolMetrics.CornerRadius.field
     static let trailingReadingGuard: CGFloat = 16
     static let placeholderTrailing: CGFloat = trailingReadingGuard
@@ -488,10 +485,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         hostView.onNavigateDifference = { [weak coordinator = context.coordinator] forward in
             coordinator?.navigateDifference(forward: forward)
         }
-        let splitView = IndexEditableDiffSplitView()
-        splitView.isVertical = true
-        splitView.dividerStyle = .thin
-        splitView.delegate = context.coordinator
+        let splitView = IndexEditableDiffPanePairView()
         hostView.splitView = splitView
         context.coordinator.hostView = hostView
         context.coordinator.outerScrollView = hostView.outerScrollView
@@ -511,12 +505,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             accessibilityLabel: rightAccessibilityLabel
         )
 
-        splitView.addArrangedSubview(leftEditor)
-        splitView.addArrangedSubview(rightEditor)
-        splitView.setHoldingPriority(.defaultLow, forSubviewAt: 0)
-        splitView.setHoldingPriority(.defaultLow, forSubviewAt: 1)
-        leftEditor.widthAnchor.constraint(greaterThanOrEqualToConstant: 260).isActive = true
-        rightEditor.widthAnchor.constraint(greaterThanOrEqualToConstant: 260).isActive = true
+        splitView.installPanes(leftEditor, rightEditor)
 
         context.coordinator.update(
             left: leftDisplayText ?? left,
@@ -525,9 +514,6 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             syntax: syntax,
             foldUnchanged: foldUnchanged
         )
-        DispatchQueue.main.async {
-            context.coordinator.applyStoredDividerRatio(in: splitView)
-        }
         return hostView
     }
 
@@ -545,8 +531,6 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             left: leftAccessibilityLabel,
             right: rightAccessibilityLabel
         )
-        let splitView = hostView.splitView
-        context.coordinator.applyStoredDividerRatio(in: splitView)
         context.coordinator.update(
             left: leftDisplayText ?? left,
             right: rightDisplayText ?? right,
@@ -563,7 +547,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
     }
 
     @MainActor
-    final class Coordinator: NSObject, NSTextViewDelegate, NSSplitViewDelegate {
+    final class Coordinator: NSObject, NSTextViewDelegate {
         enum Side {
             case left
             case right
@@ -607,8 +591,6 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         private weak var leftLineNumberView: IndexDiffLineNumberOverlayView?
         private weak var rightLineNumberView: IndexDiffLineNumberOverlayView?
         private var isApplyingProgrammaticText = false
-        private var isApplyingDividerRatio = false
-        private let storedDividerRatio: CGFloat = 0.5
         private var currentRows: [DiffAlignedRow] = []
         /// 派生数据缓存的 rows 身份：仅在 rows 值真正变化时递增（值相等
         /// 的数组替换不递增——decoration 只由 row 值派生，无需失效）。
@@ -808,56 +790,6 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         func updateAccessibilityLabels(left: String, right: String) {
             leftTextView?.setAccessibilityLabel(left)
             rightTextView?.setAccessibilityLabel(right)
-        }
-
-        func splitViewDidResizeSubviews(_ notification: Notification) {
-            guard let splitView = notification.object as? NSSplitView else {
-                return
-            }
-
-            if isApplyingDividerRatio {
-                return
-            }
-
-            applyStoredDividerRatio(in: splitView)
-        }
-
-        func splitView(
-            _ splitView: NSSplitView,
-            constrainSplitPosition proposedPosition: CGFloat,
-            ofSubviewAt dividerIndex: Int
-        ) -> CGFloat {
-            fixedDividerPosition(in: splitView) ?? proposedPosition
-        }
-
-        func applyStoredDividerRatio(in splitView: NSSplitView) {
-            guard let desiredPosition = fixedDividerPosition(in: splitView) else { return }
-            let currentPosition = splitView.arrangedSubviews[0].frame.width
-            guard abs(currentPosition - desiredPosition) > 0.5 else {
-                return
-            }
-
-            isApplyingDividerRatio = true
-            splitView.setPosition(desiredPosition, ofDividerAt: 0)
-            isApplyingDividerRatio = false
-        }
-
-        private func fixedDividerPosition(in splitView: NSSplitView) -> CGFloat? {
-            guard splitView.arrangedSubviews.count == 2,
-                  splitView.bounds.width > 0 else {
-                return nil
-            }
-
-            let availableWidth = max(0, splitView.bounds.width - splitView.dividerThickness)
-            guard availableWidth > 0 else {
-                return nil
-            }
-
-            let minimumPaneWidth: CGFloat = 260
-            let effectiveMinimum = min(minimumPaneWidth, availableWidth / 2)
-            let minimumPosition = effectiveMinimum
-            let maximumPosition = max(minimumPosition, availableWidth - effectiveMinimum)
-            return min(max(availableWidth * storedDividerRatio, minimumPosition), maximumPosition)
         }
 
         func update(left: String, right: String, rows: [DiffAlignedRow], syntax: IndexDiffSyntax, foldUnchanged: Bool) {
@@ -1827,7 +1759,7 @@ private final class IndexEditableDiffScrollHostView: NSView {
         return super.performKeyEquivalent(with: event)
     }
 
-    var splitView = IndexEditableDiffSplitView() {
+    var splitView = IndexEditableDiffPanePairView() {
         didSet {
             oldValue.removeFromSuperview()
             installSplitView()
@@ -1860,22 +1792,15 @@ private final class IndexEditableDiffScrollHostView: NSView {
         super.layout()
         outerScrollView.frame = bounds
         let viewportSize = outerScrollView.contentSize
-        let stageInset = IndexDiffEditorMetrics.stageInset
-        let height = max(viewportSize.height, contentHeight + stageInset * 2)
+        let height = max(viewportSize.height, contentHeight)
         documentView.frame = NSRect(origin: .zero, size: NSSize(width: viewportSize.width, height: height))
-        splitView.frame = NSRect(
-            x: stageInset,
-            y: stageInset,
-            width: max(0, documentView.bounds.width - stageInset * 2),
-            height: max(0, documentView.bounds.height - stageInset * 2)
-        )
+        splitView.frame = documentView.bounds
         onLayout?()
     }
 
     private func configure() {
         wantsLayer = true
         layer?.masksToBounds = true
-        updateLayer()
 
         outerScrollView.translatesAutoresizingMaskIntoConstraints = false
         outerScrollView.borderType = .noBorder
@@ -1896,20 +1821,6 @@ private final class IndexEditableDiffScrollHostView: NSView {
             outerScrollView.topAnchor.constraint(equalTo: topAnchor),
             outerScrollView.bottomAnchor.constraint(equalTo: bottomAnchor)
         ])
-    }
-
-    override var wantsUpdateLayer: Bool { true }
-
-    override func updateLayer() {
-        layer?.cornerRadius = IndexDiffEditorMetrics.frameCornerRadius
-        layer?.backgroundColor = NSColor.clear.cgColor
-        layer?.borderColor = NSColor.clear.cgColor
-        layer?.borderWidth = IndexDiffEditorMetrics.frameBorderWidth
-    }
-
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        updateLayer()
     }
 
     private func installSplitView() {
@@ -1978,53 +1889,23 @@ private final class IndexDiffEditorScrollView: IndexTextViewportScrollView {
     }
 }
 
-private final class IndexEditableDiffSplitView: NSSplitView {
-    override var dividerThickness: CGFloat {
-        IndexDiffEditorMetrics.dividerThickness
-    }
-
-    override func drawDivider(in rect: NSRect) {
-        NSColor.clear.setFill()
-        NSBezierPath(rect: rect).fill()
-    }
-
-    override func resetCursorRects() {
-        addCursorRect(dividerHitRect, cursor: .arrow)
-    }
-
-    override func cursorUpdate(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        if dividerHitRect.contains(point) {
-            NSCursor.arrow.set()
-            return
-        }
-
-        super.cursorUpdate(with: event)
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        let point = convert(event.locationInWindow, from: nil)
-        let hitsDivider = dividerHitRect.contains(point)
-
-        if hitsDivider {
-            return
-        }
-
-        super.mouseDown(with: event)
-    }
-
-    private var dividerHitRect: NSRect {
-        guard arrangedSubviews.count > 1 else {
-            return .zero
-        }
-
-        let dividerX = arrangedSubviews[0].frame.maxX
-        return NSRect(
-            x: dividerX - 4,
-            y: bounds.minY,
-            width: dividerThickness + 8,
-            height: bounds.height
-        )
+/// 等比例双栏容器：左右编辑器宽度恒相等，中缝是 paneGap 宽的固定负空间。
+/// 参考布局是稳定对比分栏——没有可拖动分隔线，因此不吞点击、不注册
+/// 调整光标，也不需要夹持分栏位置。
+private final class IndexEditableDiffPanePairView: NSView {
+    func installPanes(_ left: NSView, _ right: NSView) {
+        addSubview(left)
+        addSubview(right)
+        NSLayoutConstraint.activate([
+            left.leadingAnchor.constraint(equalTo: leadingAnchor),
+            left.topAnchor.constraint(equalTo: topAnchor),
+            left.bottomAnchor.constraint(equalTo: bottomAnchor),
+            right.trailingAnchor.constraint(equalTo: trailingAnchor),
+            right.topAnchor.constraint(equalTo: topAnchor),
+            right.bottomAnchor.constraint(equalTo: bottomAnchor),
+            left.widthAnchor.constraint(equalTo: right.widthAnchor),
+            right.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: IndexDiffEditorMetrics.paneGap)
+        ])
     }
 }
 

@@ -773,7 +773,6 @@ struct IndexTextArea: View {
     let placeholder: String
     @Binding var text: String
     var minHeight: CGFloat = 220
-    var maxHeightRatio: CGFloat? = nil
     var fillsHeight = false
     var expandsWithContent = false
     var renderingMode: IndexTextAreaRenderingMode = .measuredContent
@@ -794,7 +793,6 @@ struct IndexTextArea: View {
     var onFileDrop: ((String) -> Void)? = nil
     var droppedFile: IndexDroppedTextFile? = nil
 
-    @Environment(\.pageAvailableHeight) private var pageAvailableHeight
     @State private var isComposing = false
     @State private var measuredTextHeight: CGFloat = 0
 
@@ -804,7 +802,6 @@ struct IndexTextArea: View {
         placeholder: String,
         text: Binding<String>,
         minHeight: CGFloat = 220,
-        maxHeightRatio: CGFloat? = nil,
         fillsHeight: Bool = false,
         expandsWithContent: Bool = false,
         renderingMode: IndexTextAreaRenderingMode = .measuredContent,
@@ -823,7 +820,6 @@ struct IndexTextArea: View {
         self.placeholder = placeholder
         self._text = text
         self.minHeight = minHeight
-        self.maxHeightRatio = maxHeightRatio
         self.fillsHeight = fillsHeight
         self.expandsWithContent = expandsWithContent
         self.renderingMode = renderingMode
@@ -907,7 +903,7 @@ struct IndexTextArea: View {
             maxWidth: .infinity,
             minHeight: fillsHeight ? 60 : minHeight,
             idealHeight: resolvedHeight,
-            maxHeight: fillsHeight ? .infinity : (resolvedHeight ?? maxHeightRatio.map { pageAvailableHeight * $0 } ?? minHeight),
+            maxHeight: fillsHeight ? .infinity : (resolvedHeight ?? minHeight),
             alignment: .topLeading
         )
         .background(

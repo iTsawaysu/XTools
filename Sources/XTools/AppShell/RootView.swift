@@ -69,7 +69,7 @@ enum SidebarVisibility: Equatable {
 
 @MainActor
 protocol CommandPalettePresentationLifecycle: AnyObject {
-    func commandPaletteDidOpen(session: Int, previewValue: String?)
+    func commandPaletteDidOpen(session: Int)
     func commandPaletteDidClose(session: Int)
 }
 
@@ -82,7 +82,6 @@ final class CommandPalettePresentationModel: ObservableObject {
         var shows = false
         var focusToken = 0
         var session = 0
-        var previewValue: String?
         var hasPresented = false
     }
 
@@ -92,7 +91,6 @@ final class CommandPalettePresentationModel: ObservableObject {
     var shows: Bool { state.shows }
     var focusToken: Int { state.focusToken }
     var session: Int { state.session }
-    var previewValue: String? { state.previewValue }
     var hasPresented: Bool { state.hasPresented }
 
     func installLifecycle(_ lifecycle: any CommandPalettePresentationLifecycle) {
@@ -102,13 +100,6 @@ final class CommandPalettePresentationModel: ObservableObject {
     func removeLifecycle(_ lifecycle: any CommandPalettePresentationLifecycle) {
         guard self.lifecycle === lifecycle else { return }
         self.lifecycle = nil
-    }
-
-    func consumePreviewValue() {
-        guard state.previewValue != nil else { return }
-        var next = state
-        next.previewValue = nil
-        state = next
     }
 
     func focus() {
@@ -129,13 +120,9 @@ final class CommandPalettePresentationModel: ObservableObject {
         next.shows = true
         next.focusToken += 1
         next.session = nextSession
-        next.previewValue = UUID().uuidString.lowercased()
         next.hasPresented = true
         CommandPaletteTrace.opened(session: nextSession)
-        lifecycle?.commandPaletteDidOpen(
-            session: nextSession,
-            previewValue: next.previewValue
-        )
+        lifecycle?.commandPaletteDidOpen(session: nextSession)
         state = next
     }
 
@@ -189,7 +176,6 @@ final class RootViewModel: ObservableObject {
     var showsCommandPalette: Bool { commandPalettePresentation.shows }
     var commandPaletteFocusToken: Int { commandPalettePresentation.focusToken }
     var commandPalettePresentationSession: Int { commandPalettePresentation.session }
-    var commandPalettePreviewValue: String? { commandPalettePresentation.previewValue }
 
     private let preferences: ToolPreferenceStore?
 
@@ -206,11 +192,6 @@ final class RootViewModel: ObservableObject {
 
     func focusSearch() {
         searchFocusToken += 1
-    }
-
-    /// Expires the palette's one-shot preview payload after it is consumed.
-    func consumeCommandPalettePreviewValue() {
-        commandPalettePresentation.consumePreviewValue()
     }
 
     func focusCommandPalette() {
@@ -257,8 +238,6 @@ struct RootView: View {
     @StateObject private var systemAppearanceSource: SystemAppearanceSource
     @State private var previousSelectedToolID: ToolID?
     @State private var showsPreferences = false
-    // v3 continuity flight: palette-row icon → page title rail.
-    @StateObject private var iconFlight = PaletteIconFlightCoordinator()
     // ⌘K frecency: palette launches feed the recents landing section and
     // within-tier ranking refinement. Deliberately NOT observed: recording
     // a launch must not invalidate the app shell (the palette reads it
@@ -352,20 +331,11 @@ struct RootView: View {
             )
             .zIndex(2)
 
-            if let flight = iconFlight.flight {
-                PaletteIconGhostView(flight: flight) {
-                    iconFlight.finish(flight: flight)
-                }
-                .id(flight.token)
-                .zIndex(4)
-            }
-
             keyboardShortcuts
 
             ToolToastHost(center: toastCenter)
                 .zIndex(3)
         }
-        .modifier(FlightGeometryResolver(coordinator: iconFlight))
         .focusedSceneObject(viewModel)
         .frame(minWidth: 960, minHeight: 640)
         .background(ToolTheme.windowBackground)
@@ -507,15 +477,12 @@ struct RootView: View {
         viewModel.selectedToolID.flatMap(registry.tool(for:))
     }
 
-    // MARK: - Palette icon flight (v3 continuity)
+    // MARK: - Palette launches
 
-    /// Launch a tool from the command palette, capturing the row icon's
-    /// takeoff point so the icon can fly to the arriving page's title rail.
-    /// Sidebar and keyboard launches skip the flight — the palette is the one
-    /// surface whose geometry this owns. A keyword-tier match carries the
-    /// matched alias's hub segment: write the one-shot segment hint BEFORE
-    /// switching (same channel as the SmartPaste banner) so the arriving hub
-    /// consumes it and overrides its remembered segment.
+    /// Launch a tool from the command palette. A keyword-tier match carries
+    /// the matched alias's hub segment: write the one-shot segment hint
+    /// BEFORE switching (same channel as the SmartPaste banner) so the
+    /// arriving hub consumes it and overrides its remembered segment.
     private func launchFromPalette(_ toolID: ToolID, segment: String?) {
         if let segment {
             hubSegmentEntryHint.request = HubSegmentEntryHint.Request(
@@ -523,20 +490,7 @@ struct RootView: View {
                 segment: segment
             )
         }
-        iconFlight.cancelPendingLaunch()
         paletteRecents.recordLaunch(toolID)
-        if viewModel.selectedToolID != toolID,
-           !reduceMotion,
-           let tool = registry.tool(for: toolID),
-           let fromRect = iconFlight.paletteIconRects["tool.\(toolID.rawValue)"] {
-            iconFlight.beginLaunch(
-                PendingPaletteFlight(
-                    toolID: toolID,
-                    systemImage: tool.systemImage,
-                    from: CGPoint(x: fromRect.midX, y: fromRect.midY)
-                )
-            )
-        }
         _ = navigationActions.selectTool(toolID)
         closeCommandPaletteAnimated()
     }
@@ -590,6 +544,13 @@ struct RootView: View {
                 systemImage: "gearshape",
                 keywords: ["偏好", "设置", "preferences"]
             ),
+            CommandActionEntry(
+                id: .copyGeneratedUUID,
+                title: "生成并复制 UUID",
+                subtitle: "随机唯一标识符",
+                systemImage: "barcode",
+                keywords: ["uuid", "复制", "生成"]
+            ),
         ]
     }
 
@@ -603,14 +564,12 @@ struct RootView: View {
         case .openPreferences:
             showPreferences()
         case .copyGeneratedUUID:
-            guard let value = viewModel.commandPalettePreviewValue else { return }
+            // The value is generated at activation: every run copies a fresh
+            // UUID with the shared copy toast feedback.
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
-            pasteboard.setString(value, forType: .string)
+            pasteboard.setString(UUID().uuidString.lowercased(), forType: .string)
             toastCenter.show(ToolFeedbackCopy.copied, tone: .success)
-            // One-shot preview: consuming the row expires the payload so a
-            // stale value is never copied twice from an old session.
-            viewModel.consumeCommandPalettePreviewValue()
         }
     }
 
@@ -781,13 +740,6 @@ private struct CommandPaletteOverlayHost: View {
     /// white flash under load) is structurally impossible.
     @State private var presentationProgress: CGFloat = 0
 
-    private var actions: [CommandActionEntry] {
-        CommandActionEntry.paletteActions(
-            baseActions: baseActions,
-            previewValue: presentation.previewValue
-        )
-    }
-
     var body: some View {
         Color.clear
             .allowsHitTesting(false)
@@ -806,7 +758,7 @@ private struct CommandPaletteOverlayHost: View {
                         CommandPaletteView(
                             presentation: presentation,
                             registry: registry,
-                            actions: actions,
+                            actions: baseActions,
                             isPresented: presentation.shows,
                             reduceMotion: reduceMotion,
                             focusToken: presentation.focusToken,
@@ -916,153 +868,5 @@ private struct CommandPaletteScrim: View {
             .ignoresSafeArea()
             .contentShape(Rectangle())
             .onTapGesture(perform: onDismiss)
-    }
-}
-
-/// Owns the palette→title continuity flight: anchor collection, coordinate
-/// resolution, and the pending→active handoff when the new page's title rail
-/// publishes its geometry.
-@MainActor
-final class PaletteIconFlightCoordinator: ObservableObject {
-    private(set) var paletteIconRects: [String: CGRect] = [:]
-    @Published private(set) var flight: PaletteIconFlight?
-    private var pending: PendingPaletteFlight?
-    private var nextFlightToken = 0
-
-    func beginLaunch(_ pending: PendingPaletteFlight) {
-        self.pending = pending
-    }
-
-    func cancelPendingLaunch() {
-        pending = nil
-    }
-
-    func finish(flight: PaletteIconFlight) {
-        guard self.flight?.token == flight.token else { return }
-        self.flight = nil
-    }
-
-    func resolve(proxy: GeometryProxy, iconAnchors: [String: Anchor<CGRect>], railAnchor: Anchor<CGRect>?) {
-        CommandPaletteTrace.count(.iconAnchorResolution)
-        paletteIconRects = iconAnchors.mapValues { proxy[$0] }
-        guard let railRect = railAnchor.map({ proxy[$0] }) else { return }
-        resolvePendingFlight(to: CGPoint(x: railRect.minX, y: railRect.minY))
-    }
-
-    func resolvePendingFlight(to destination: CGPoint) {
-        guard let pending else { return }
-        nextFlightToken += 1
-        flight = PaletteIconFlight(
-            systemImage: pending.systemImage,
-            from: pending.from,
-            to: destination,
-            id: pending.toolID.rawValue,
-            token: nextFlightToken
-        )
-        self.pending = nil
-    }
-}
-
-/// Resolves the continuity-flight anchors into the root ZStack coordinate
-/// space and keeps them current.
-private struct FlightGeometryResolver: ViewModifier {
-    let coordinator: PaletteIconFlightCoordinator
-    @State private var iconAnchors: [String: Anchor<CGRect>] = [:]
-    @State private var railAnchor: Anchor<CGRect>?
-
-    func body(content: Content) -> some View {
-        content
-            .overlay {
-                GeometryReader { proxy in
-                    Color.clear
-                        .onChange(of: iconAnchors) { anchors in
-                            coordinator.resolve(proxy: proxy, iconAnchors: anchors, railAnchor: railAnchor)
-                        }
-                        .onChange(of: railAnchor) { newRailAnchor in
-                            coordinator.resolve(proxy: proxy, iconAnchors: iconAnchors, railAnchor: newRailAnchor)
-                        }
-                }
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-            }
-            .onPreferenceChange(PaletteRowIconAnchorsKey.self) { iconAnchors = $0 }
-            .onPreferenceChange(PageTitleRailAnchorKey.self) { railAnchor = $0 }
-    }
-}
-
-/// Pending takeoff captured at palette-row activation, waiting for the new
-/// page's title rail geometry to arrive.
-struct PendingPaletteFlight: Equatable {
-    let toolID: ToolID
-    let systemImage: String
-    let from: CGPoint
-}
-
-struct PaletteIconFlight: Equatable {
-    let systemImage: String
-    let from: CGPoint
-    let to: CGPoint
-    let id: String
-    let token: Int
-}
-
-/// Transient accent ghost that carries the launched tool's icon from its
-/// palette row to the arriving page's title rail. Decorative only: no hit
-/// testing, no accessibility presence, removed right after landing.
-private struct PaletteIconGhostView: View {
-    let flight: PaletteIconFlight
-    let onFinished: () -> Void
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var appeared = false
-    @State private var arrived = false
-
-    var body: some View {
-        Image(systemName: flight.systemImage)
-            .font(.system(size: ToolMetrics.IconSize.large, weight: .medium))
-            .foregroundStyle(ToolTheme.accent)
-            .scaleEffect(arrived ? 0.7 : 1)
-            // The ghost fades in from 0 to its 0.95 flight opacity instead of
-            // popping in at full strength on its first frame.
-            .opacity(arrived ? 0 : (appeared ? 0.95 : 0))
-            .position(arrived ? flight.to : flight.from)
-            .animation(ToolMotion.animation(ToolMotion.Preset.settle, reduceMotion: reduceMotion), value: arrived)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-            .task(id: flight.token) {
-                // Every flight token restarts the appearance transition:
-                // without this reset a reused ghost would pop straight to
-                // flight opacity instead of fading in.
-                appeared = false
-                if !reduceMotion {
-                    do {
-                        try await Task.sleep(for: .milliseconds(16))
-                        try Task.checkCancellation()
-                    } catch {
-                        return
-                    }
-                    withToolAnimation(ToolMotion.Preset.settle) {
-                        appeared = true
-                    }
-                    do {
-                        try await Task.sleep(for: .milliseconds(140))
-                        try Task.checkCancellation()
-                    } catch {
-                        return
-                    }
-                    withToolAnimation(ToolMotion.Preset.settle) {
-                        arrived = true
-                    }
-                    do {
-                        try await Task.sleep(for: .milliseconds(380))
-                        try Task.checkCancellation()
-                    } catch {
-                        return
-                    }
-                } else {
-                    appeared = true
-                }
-                onFinished()
-            }
     }
 }
