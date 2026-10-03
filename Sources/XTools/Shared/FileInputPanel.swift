@@ -10,6 +10,7 @@ struct FileInputPanelRequest: Sendable {
     let message: String?
     let canChooseDirectories: Bool
     let canChooseFiles: Bool
+    let allowsMultipleSelection: Bool
 
     init(
         allowedContentTypes: [UTType] = [],
@@ -17,7 +18,8 @@ struct FileInputPanelRequest: Sendable {
         title: String? = nil,
         message: String? = nil,
         canChooseDirectories: Bool = false,
-        canChooseFiles: Bool = true
+        canChooseFiles: Bool = true,
+        allowsMultipleSelection: Bool = false
     ) {
         self.allowedContentTypes = allowedContentTypes
         self.prompt = prompt
@@ -25,6 +27,7 @@ struct FileInputPanelRequest: Sendable {
         self.message = message
         self.canChooseDirectories = canChooseDirectories
         self.canChooseFiles = canChooseFiles
+        self.allowsMultipleSelection = allowsMultipleSelection
     }
 }
 
@@ -55,16 +58,26 @@ enum FileInputPanelFailure: Error, Equatable, LocalizedError {
 
 struct FileInputPanelClient: Sendable {
     private let selectAction: @MainActor @Sendable (FileInputPanelRequest) async throws -> URL?
+    private let selectFilesAction: @MainActor @Sendable (FileInputPanelRequest) async throws -> [URL]?
 
     init(
-        select: @escaping @MainActor @Sendable (FileInputPanelRequest) async throws -> URL?
+        select: @escaping @MainActor @Sendable (FileInputPanelRequest) async throws -> URL?,
+        selectFiles: @escaping @MainActor @Sendable (FileInputPanelRequest) async throws -> [URL]? = { _ in
+            throw FileInputPanelFailure.windowUnavailable
+        }
     ) {
         selectAction = select
+        selectFilesAction = selectFiles
     }
 
     @MainActor
     func selectFile(_ request: FileInputPanelRequest) async throws -> URL? {
         try await selectAction(request)
+    }
+
+    @MainActor
+    func selectFiles(_ request: FileInputPanelRequest) async throws -> [URL]? {
+        try await selectFilesAction(request)
     }
 
     static let unavailable = FileInputPanelClient { _ in
@@ -73,7 +86,7 @@ struct FileInputPanelClient: Sendable {
 }
 
 enum FileInputPanelBackendResult {
-    case selected(URL?)
+    case selected([URL])
     case cancelled
 }
 
@@ -93,7 +106,7 @@ final class FileInputPanelCoordinator: ObservableObject {
 
     private struct ActiveRequest {
         let id: UUID
-        let continuation: CheckedContinuation<URL?, any Error>
+        let continuation: CheckedContinuation<[URL]?, any Error>
     }
 
     private let backendFactory: BackendFactory
@@ -108,12 +121,20 @@ final class FileInputPanelCoordinator: ObservableObject {
     }
 
     var client: FileInputPanelClient {
-        FileInputPanelClient { [weak self] request in
-            guard let self else {
-                throw FileInputPanelFailure.windowUnavailable
+        FileInputPanelClient(
+            select: { [weak self] request in
+                guard let self else {
+                    throw FileInputPanelFailure.windowUnavailable
+                }
+                return try await self.selectFile(request)
+            },
+            selectFiles: { [weak self] request in
+                guard let self else {
+                    throw FileInputPanelFailure.windowUnavailable
+                }
+                return try await self.selectFiles(request)
             }
-            return try await self.selectFile(request)
-        }
+        )
     }
 
     func attach(to window: NSWindow) {
@@ -129,6 +150,12 @@ final class FileInputPanelCoordinator: ObservableObject {
     }
 
     func selectFile(_ request: FileInputPanelRequest) async throws -> URL? {
+        try await selectFiles(request)?.first
+    }
+
+    /// 多选与单选共用同一 sheet 请求管线：同一时刻仅一个活动请求，
+    /// 后端结果统一上报 `panel.urls`，单选语义由本方法在数组上取 first。
+    func selectFiles(_ request: FileInputPanelRequest) async throws -> [URL]? {
         try Task.checkCancellation()
         guard activeRequest == nil else {
             throw FileInputPanelFailure.requestInProgress
@@ -173,12 +200,12 @@ final class FileInputPanelCoordinator: ObservableObject {
         guard let request = takeActiveRequest(id: id) else { return }
 
         switch result {
-        case .selected(let url):
-            guard let url else {
+        case .selected(let urls):
+            guard !urls.isEmpty else {
                 request.continuation.resume(throwing: FileInputPanelFailure.invalidSelection)
                 return
             }
-            request.continuation.resume(returning: url)
+            request.continuation.resume(returning: urls)
         case .cancelled:
             request.continuation.resume(returning: nil)
         }
@@ -213,7 +240,7 @@ private final class AppKitOpenFilePanelBackend: FileInputPanelBackend {
     func configure(for request: FileInputPanelRequest) {
         panel.canChooseFiles = request.canChooseFiles
         panel.canChooseDirectories = request.canChooseDirectories
-        panel.allowsMultipleSelection = false
+        panel.allowsMultipleSelection = request.allowsMultipleSelection
         panel.canCreateDirectories = false
         panel.allowedContentTypes = request.allowedContentTypes
         panel.allowsOtherFileTypes = false
@@ -236,7 +263,7 @@ private final class AppKitOpenFilePanelBackend: FileInputPanelBackend {
                 completion(.cancelled)
                 return
             }
-            completion(.selected(panel?.url))
+            completion(.selected(panel?.urls ?? []))
         }
     }
 

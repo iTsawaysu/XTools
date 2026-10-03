@@ -145,6 +145,16 @@ struct ImageWorkflowClient {
         )
     }
 
+    /// 批量导入用轻量变体：复用单张的校验/inspect/preview 管线，
+    /// 返回边界处即丢弃原图 data，只留元数据与预览字节。
+    func prepareImportOverview(
+        from url: URL,
+        allowedContentTypes: [UTType]
+    ) async throws -> ImageImportOverview {
+        let selection = try await prepareSelectionInBackground(from: url, allowedContentTypes: allowedContentTypes)
+        return ImageImportOverview(metadata: selection.metadata, previewData: selection.previewData)
+    }
+
     nonisolated private static func prepareSelectionData(
         from url: URL,
         allowedContentTypes: [UTType],
@@ -228,6 +238,89 @@ struct ImageWorkflowClient {
             }
             throw ImageWorkflowFailure.saveFailed
         }
+    }
+
+    /// 单张转换结果保存：conversion 没有"不得大于原图"的闸（canSave 恒真），
+    /// 直接走保存面板与写入，不做 assessment 拦截。
+    func saveConvertedImage(
+        data: Data,
+        format: ImageFileFormat,
+        defaultBasename: String
+    ) async throws -> Bool {
+        let defaultFilename = "\(defaultBasename).\(format.fileExtension)"
+        guard let url = await dialog.selectSaveURL(
+            defaultFilename: defaultFilename,
+            allowedContentTypes: [Self.utType(for: format)]
+        ) else {
+            return false
+        }
+
+        do {
+            try writer.write(data, to: url)
+            return true
+        } catch {
+            throw ImageWorkflowFailure.saveFailed
+        }
+    }
+
+    /// 批量保存转换结果：选目录后逐张读取落盘的临时文件并写入
+    /// `原名(去扩展).目标扩展`，目录内同名冲突自动追加 " 2"、" 3"…（含本批
+    /// 已写入的文件），不覆盖；读取与写入失败均按该张失败计，沿用
+    /// partialSaveFailed 语义。临时文件由批量会话写出，不走输入预算的
+    /// reader 管线（输出可能合理地超过输入预算）。
+    func saveConvertedImages(_ candidates: [BatchConversionSaveCandidate]) async throws -> Bool {
+        guard let directory = await dialog.selectDirectory(
+            prompt: "保存",
+            message: "已转换的 \(candidates.count) 张图片将保存到所选文件夹"
+        ) else {
+            return false
+        }
+
+        var savedCount = 0
+        var reservedFilenames: Set<String> = []
+        do {
+            for candidate in candidates {
+                let data = try Data(contentsOf: candidate.tempURL)
+                let url = Self.uniqueConvertedImageURL(
+                    in: directory,
+                    basename: candidate.basename,
+                    format: candidate.format,
+                    reservedFilenames: reservedFilenames
+                )
+                reservedFilenames.insert(url.lastPathComponent)
+                try writer.write(data, to: url)
+                savedCount += 1
+            }
+            return true
+        } catch {
+            if savedCount > 0 {
+                throw ImageWorkflowFailure.partialSaveFailed(
+                    savedCount: savedCount,
+                    totalCount: candidates.count
+                )
+            }
+            throw ImageWorkflowFailure.saveFailed
+        }
+    }
+
+    /// 查重含目录内既有文件与本批已占用的名字（写入可能经缓冲 seam，
+    /// 不能假设上一张已落盘），冲突时追加 " 2"、" 3"…，不覆盖。
+    private static func uniqueConvertedImageURL(
+        in directory: URL,
+        basename: String,
+        format: ImageFileFormat,
+        reservedFilenames: Set<String>
+    ) -> URL {
+        let stem = basename.isEmpty ? "converted" : basename
+        let filename = "\(stem).\(format.fileExtension)"
+        var url = directory.appendingPathComponent(filename)
+        var index = 2
+        while reservedFilenames.contains(url.lastPathComponent)
+            || FileManager.default.fileExists(atPath: url.path) {
+            url = directory.appendingPathComponent("\(stem) \(index).\(format.fileExtension)")
+            index += 1
+        }
+        return url
     }
 
     func saveIcon(_ icon: GeneratedIcon, defaultFilename: String) async throws -> Bool {

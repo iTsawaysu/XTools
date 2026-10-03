@@ -57,11 +57,10 @@ struct WorkspacePayloadEvictionTests {
     @Test func imageConverterWorkspaceEvictsNestedSessionPayloads() {
         let repository = ToolWorkspaceRepository(defaults: Self.defaults())
         let workspace = repository.model(for: ImageConverterToolWorkspaceModel.key)
-        #expect(workspace.session.source == nil)
+        #expect(workspace.session.items.isEmpty)
         workspace.evictHeavyPayloads()
-        #expect(workspace.session.source == nil)
-        #expect(workspace.session.output == nil)
-        #expect(workspace.session.outputImage == nil)
+        #expect(workspace.session.items.isEmpty)
+        #expect(workspace.session.error == nil)
     }
 
     @Test func watermarkWorkspaceEvictsNestedSessionsAndKeepsTextRecipe() {

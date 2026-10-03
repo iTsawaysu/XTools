@@ -29,6 +29,20 @@ struct PreparedImageInputSelection: Sendable {
     let previewData: Data
 }
 
+/// 批量导入的轻量概览：仅元数据与小图预览数据。不携带原图 data，
+/// 导入完成后内存中无原图字节驻留（转换时再逐张经 reader 管线重读）。
+struct ImageImportOverview: Sendable {
+    let metadata: ImageMetadata
+    let previewData: Data
+}
+
+/// 批量保存的候选条目：转换输出已落盘临时目录，保存时按需读取后写入。
+struct BatchConversionSaveCandidate {
+    let basename: String
+    let tempURL: URL
+    let format: ImageFileFormat
+}
+
 enum ImageWorkflowFailure: Error, Equatable {
     case unreadableImage
     case notRegularFile
@@ -117,7 +131,15 @@ extension ImageWorkflowFailure: LocalizedError {
 @MainActor
 protocol ImageWorkflowDialoging {
     func selectSaveURL(defaultFilename: String, allowedContentTypes: [UTType]) async -> URL?
-    func selectDirectory(prompt: String) async -> URL?
+    func selectDirectory(prompt: String, message: String?) async -> URL?
+}
+
+@MainActor
+extension ImageWorkflowDialoging {
+    /// 不带说明行的目录选择便捷重载：message 省略即面板不展示说明。
+    func selectDirectory(prompt: String) async -> URL? {
+        await selectDirectory(prompt: prompt, message: nil)
+    }
 }
 
 protocol ImageWorkflowFileReading: Sendable {
@@ -147,7 +169,7 @@ typealias ImageBackgroundOutputRendererProvider = @MainActor () -> ImageBackgrou
 
 struct NoOpImageWorkflowDialog: ImageWorkflowDialoging {
     func selectSaveURL(defaultFilename: String, allowedContentTypes: [UTType]) async -> URL? { nil }
-    func selectDirectory(prompt: String) async -> URL? { nil }
+    func selectDirectory(prompt: String, message: String?) async -> URL? { nil }
 }
 
 struct SheetImageWorkflowDialog: ImageWorkflowDialoging {
@@ -159,8 +181,13 @@ struct SheetImageWorkflowDialog: ImageWorkflowDialoging {
         return try? await outputPanel.selectFile(request)
     }
 
-    func selectDirectory(prompt: String) async -> URL? {
-        let request = FileInputPanelRequest(prompt: prompt, canChooseDirectories: true, canChooseFiles: false)
+    func selectDirectory(prompt: String, message: String?) async -> URL? {
+        let request = FileInputPanelRequest(
+            prompt: prompt,
+            message: message,
+            canChooseDirectories: true,
+            canChooseFiles: false
+        )
         return try? await filePanel.selectFile(request)
     }
 }

@@ -549,6 +549,176 @@ struct ImageWorkflowClientTests {
         }
     }
 
+    @Test func prepareImportOverviewReturnsMetadataAndPreviewWithoutRetainingSourceData() async throws {
+        let imageData = try Self.makeImageData(width: 1800, height: 1200, format: .png)
+        let url = URL(fileURLWithPath: "/tmp/overview-source.png")
+        let reader = FakeImageWorkflowReader(dataByURL: [url: imageData])
+        let client = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(),
+            reader: reader,
+            writer: FakeImageWorkflowWriter()
+        )
+
+        let overview = try await client.prepareImportOverview(from: url, allowedContentTypes: [.png])
+
+        #expect(overview.metadata.format == .png)
+        #expect(overview.metadata.pixelWidth == 1800)
+        #expect(overview.metadata.pixelHeight == 1200)
+        #expect(!overview.previewData.isEmpty)
+        #expect(overview.previewData.count < imageData.count)
+        #expect(reader.readURLs == [url])
+    }
+
+    @Test func prepareImportOverviewRejectsInvalidImportsThroughTheSharedPipeline() async throws {
+        let url = URL(fileURLWithPath: "/tmp/not-image-overview.png")
+        let client = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(),
+            reader: FakeImageWorkflowReader(dataByURL: [url: Data("not an image".utf8)]),
+            writer: FakeImageWorkflowWriter()
+        )
+
+        do {
+            _ = try await client.prepareImportOverview(from: url, allowedContentTypes: [.png])
+            Issue.record("Expected the shared preparation pipeline to reject a non-image import")
+        } catch let processorError as ImageProcessorError {
+            #expect(processorError == .missingImageProperties)
+        } catch {
+            Issue.record("Unexpected failure: \(error)")
+        }
+    }
+
+    @Test func saveConvertedImagesWritesOriginalBasenamesWithTargetExtensions() async throws {
+        let directory = URL(fileURLWithPath: "/tmp/converted-batch", isDirectory: true)
+        let spool = try Self.makeSpoolFiles(counts: [4, 6])
+        defer { try? FileManager.default.removeItem(at: spool.directory) }
+        let dialog = FakeImageWorkflowDialog(directoryURL: directory)
+        let writer = FakeImageWorkflowWriter()
+        let client = ImageWorkflowClient(dialog: dialog, reader: FakeImageWorkflowReader(), writer: writer)
+        let candidates = [
+            BatchConversionSaveCandidate(basename: "beach", tempURL: spool.files[0].url, format: .jpeg),
+            BatchConversionSaveCandidate(basename: "city night", tempURL: spool.files[1].url, format: .png)
+        ]
+
+        #expect(try await client.saveConvertedImages(candidates))
+        #expect(writer.writes.map { $0.url.lastPathComponent } == ["beach.jpg", "city night.png"])
+        #expect(writer.writes.map(\.data) == spool.files.map(\.data))
+        // 目录面板确认按钮为「保存」，message 说明即将写入的张数。
+        #expect(dialog.requestedDirectoryMessages.count == 1)
+        #expect(dialog.requestedDirectoryMessages.first?.prompt == "保存")
+        #expect(dialog.requestedDirectoryMessages.first?.message == "已转换的 2 张图片将保存到所选文件夹")
+    }
+
+    @Test func saveConvertedImagesAppendsSequenceNumbersOnFilenameCollisions() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("xtools-batch-collision-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        // 预置同名文件模拟目录冲突；另一处冲突来自本批同名条目。
+        try Data([1]).write(to: directory.appendingPathComponent("beach.jpg"))
+        try Data([2]).write(to: directory.appendingPathComponent("beach 2.jpg"))
+        let spool = try Self.makeSpoolFiles(counts: [4, 5])
+        defer { try? FileManager.default.removeItem(at: spool.directory) }
+        let dialog = FakeImageWorkflowDialog(directoryURL: directory)
+        let writer = FakeImageWorkflowWriter()
+        let client = ImageWorkflowClient(dialog: dialog, reader: FakeImageWorkflowReader(), writer: writer)
+        let candidates = [
+            BatchConversionSaveCandidate(basename: "beach", tempURL: spool.files[0].url, format: .jpeg),
+            BatchConversionSaveCandidate(basename: "beach", tempURL: spool.files[1].url, format: .jpeg)
+        ]
+
+        #expect(try await client.saveConvertedImages(candidates))
+        #expect(writer.writes.map { $0.url.lastPathComponent } == ["beach 3.jpg", "beach 4.jpg"])
+    }
+
+    @Test func saveConvertedImagesDistinguishesCancelFirstFailureAndPartialFailure() async throws {
+        let spool = try Self.makeSpoolFiles(counts: [4, 5])
+        defer { try? FileManager.default.removeItem(at: spool.directory) }
+        let candidates = [
+            BatchConversionSaveCandidate(basename: "one", tempURL: spool.files[0].url, format: .png),
+            BatchConversionSaveCandidate(basename: "two", tempURL: spool.files[1].url, format: .png)
+        ]
+        let cancelledWriter = FakeImageWorkflowWriter()
+        let cancelledClient = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(),
+            reader: FakeImageWorkflowReader(),
+            writer: cancelledWriter
+        )
+        #expect(try await cancelledClient.saveConvertedImages(candidates) == false)
+        #expect(cancelledWriter.writes.isEmpty)
+
+        let directory = URL(fileURLWithPath: "/tmp/converted-batch-failure", isDirectory: true)
+        let firstFailureClient = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(directoryURL: directory),
+            reader: FakeImageWorkflowReader(),
+            writer: FakeImageWorkflowWriter(error: ImageSessionTestError.writeFailed, failAfter: 0)
+        )
+        await #expect(throws: ImageWorkflowFailure.saveFailed) {
+            try await firstFailureClient.saveConvertedImages(candidates)
+        }
+
+        let partialClient = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(directoryURL: directory),
+            reader: FakeImageWorkflowReader(),
+            writer: FakeImageWorkflowWriter(error: ImageSessionTestError.writeFailed, failAfter: 1)
+        )
+        await #expect {
+            try await partialClient.saveConvertedImages(candidates)
+        } throws: { error in
+            guard case ImageWorkflowFailure.partialSaveFailed(savedCount: 1, totalCount: 2) = error else {
+                return false
+            }
+            return true
+        }
+    }
+
+    @Test func saveConvertedImagesTreatsUnreadableSpoolFilesAsFailedWrites() async throws {
+        let missingURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("xtools-missing-spool-\(UUID().uuidString).png")
+        let directory = URL(fileURLWithPath: "/tmp/converted-batch-read-failure", isDirectory: true)
+        let client = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(directoryURL: directory),
+            reader: FakeImageWorkflowReader(),
+            writer: FakeImageWorkflowWriter()
+        )
+        let candidates = [BatchConversionSaveCandidate(basename: "one", tempURL: missingURL, format: .png)]
+
+        await #expect(throws: ImageWorkflowFailure.saveFailed) {
+            try await client.saveConvertedImages(candidates)
+        }
+    }
+
+    @Test func saveConvertedImageUsesFormatExtensionAndWritesProvidedData() async throws {
+        let saveURL = URL(fileURLWithPath: "/tmp/converted-single.png")
+        let dialog = FakeImageWorkflowDialog(saveURL: saveURL)
+        let writer = FakeImageWorkflowWriter()
+        let client = ImageWorkflowClient(dialog: dialog, reader: FakeImageWorkflowReader(), writer: writer)
+        let data = Data(repeating: 9, count: 7)
+
+        #expect(try await client.saveConvertedImage(data: data, format: .png, defaultBasename: "converted"))
+        #expect(dialog.requestedSaveNames == ["converted.png"])
+        #expect(writer.writes.map(\.url) == [saveURL])
+        #expect(writer.writes.map(\.data) == [data])
+    }
+
+    @Test func saveConvertedImageDistinguishesCancelAndWriteFailure() async throws {
+        let data = Data([1, 2, 3])
+        let cancelledClient = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(),
+            reader: FakeImageWorkflowReader(),
+            writer: FakeImageWorkflowWriter()
+        )
+        #expect(try await cancelledClient.saveConvertedImage(data: data, format: .png, defaultBasename: "converted") == false)
+
+        let failingClient = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(saveURL: URL(fileURLWithPath: "/tmp/converted-single.png")),
+            reader: FakeImageWorkflowReader(),
+            writer: FakeImageWorkflowWriter(error: ImageSessionTestError.writeFailed)
+        )
+        await #expect(throws: ImageWorkflowFailure.saveFailed) {
+            try await failingClient.saveConvertedImage(data: data, format: .png, defaultBasename: "converted")
+        }
+    }
+
     @Test func saveIconsWritesFaviconIconSetIntoSelectedDirectory() async throws {
         let directory = URL(fileURLWithPath: "/tmp/favicons", isDirectory: true)
         let dialog = FakeImageWorkflowDialog(directoryURL: directory)
@@ -1949,6 +2119,21 @@ struct ImageWorkflowClientTests {
         )
     }
 
+    /// 批量保存的落盘替身：真实临时目录中的 spool 文件（保存按需读取）。
+    private static func makeSpoolFiles(counts: [Int]) throws -> (directory: URL, files: [(url: URL, data: Data)]) {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("xtools-spool-fixture-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var files: [(url: URL, data: Data)] = []
+        for (index, count) in counts.enumerated() {
+            let data = Data(repeating: UInt8(index + 3), count: count)
+            let url = directory.appendingPathComponent("spool-\(index).bin")
+            try data.write(to: url)
+            files.append((url, data))
+        }
+        return (directory, files)
+    }
+
     private enum TestImageError: Error {
         case renderingFailed
         case destinationUnavailable
@@ -1979,6 +2164,7 @@ private final class FakeImageWorkflowDialog: ImageWorkflowDialoging {
     var saveURL: URL?
     var directoryURL: URL?
     var requestedSaveNames: [String] = []
+    private(set) var requestedDirectoryMessages: [(prompt: String, message: String?)] = []
 
     init(
         saveURL: URL? = nil,
@@ -1993,8 +2179,9 @@ private final class FakeImageWorkflowDialog: ImageWorkflowDialoging {
         return saveURL
     }
 
-    func selectDirectory(prompt: String) async -> URL? {
-        directoryURL
+    func selectDirectory(prompt: String, message: String?) async -> URL? {
+        requestedDirectoryMessages.append((prompt, message))
+        return directoryURL
     }
 }
 

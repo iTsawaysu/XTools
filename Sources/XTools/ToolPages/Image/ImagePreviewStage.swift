@@ -203,4 +203,71 @@ extension View {
             )
         )
     }
+
+    /// 批量工具（格式转换）的多文件拖放入口：1..N 个文件全部回调，
+    /// 0 个文件交还系统（返回 false）。命中区可大于视觉高亮区：
+    /// 整页命中时传 showsHighlight: false，高亮由输入区经
+    /// imageDropHighlight 用同一份 isTargeted 呈现。
+    func multiImageInputDropDestination(
+        isTargeted: Binding<Bool>,
+        onFiles: @escaping ([URL]) -> Void,
+        showsHighlight: Bool = true
+    ) -> some View {
+        modifier(
+            MultiImageInputDropDestinationModifier(
+                isTargeted: isTargeted,
+                onFiles: onFiles,
+                showsHighlight: showsHighlight
+            )
+        )
+    }
+
+    /// 拖放命中高亮（填充 + 描边）：画在使用方内容层的背景上，因此使用方
+    /// 自身表面必须透明。整页命中、输入区高亮的组合中，它挂在输入区内容上，
+    /// 命中态由整页拖放目标共享下发。
+    func imageDropHighlight(isActive: Bool) -> some View {
+        modifier(ImageDropHighlightModifier(isActive: isActive))
+    }
+}
+
+private struct ImageDropHighlightModifier: ViewModifier {
+    let isActive: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                isActive ? ToolTheme.selectionFill : Color.clear,
+                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
+                    .strokeBorder(
+                        isActive ? ToolTheme.accentBorder : Color.clear,
+                        lineWidth: 1
+                    )
+            }
+            .toolAnimation(ToolMotion.Preset.controlFeedback, value: isActive)
+    }
+}
+
+private struct MultiImageInputDropDestinationModifier: ViewModifier {
+    @Binding var isTargeted: Bool
+    let onFiles: ([URL]) -> Void
+    var showsHighlight: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .contentShape(Rectangle())
+            .imageDropHighlight(isActive: showsHighlight && isTargeted)
+            .dropDestination(for: URL.self) { urls, _ in
+                guard !urls.isEmpty else {
+                    return false
+                }
+                onFiles(urls)
+                return true
+            } isTargeted: { targeted in
+                isTargeted = targeted
+            }
+            .toolAnimation(ToolMotion.Preset.controlFeedback, value: isTargeted)
+    }
 }

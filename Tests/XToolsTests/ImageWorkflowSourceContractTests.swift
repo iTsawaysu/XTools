@@ -16,15 +16,26 @@ struct ImageWorkflowSourceContractTests {
         }
 
         // 成功提示只在 session 返回 .saved 时显示（取消返回 .cancelled、阻止返回 .blocked
-        // 都不弹成功 toast）；写盘失败返回 .failed 时弹 error toast，部分成功只由 Favicon 映射 warning。
-        for (page, name) in [(converter, "converter"), (compressor, "compressor"), (grayscale, "grayscale"), (watermark, "watermark")] {
+        // 都不弹成功 toast）；写盘失败返回 .failed 时弹 error toast；部分成功由 Favicon 与
+        // 批量转换页映射 warning，其余单输出页对不可能出现的部分结果保持静默。
+        for (page, name) in [(compressor, "compressor"), (grayscale, "grayscale"), (watermark, "watermark")] {
             contains(page, "case .saved:\n                toastCenter?.show(ToolFeedbackCopy.savedFile, tone: .success)", "Image \(name) must show a success toast only on a confirmed .saved outcome")
             contains(page, "case let .failed(message):\n                toastCenter?.show(message, tone: .error)", "Image \(name) must surface a real save failure as an error toast")
-            contains(page, "case .cancelled, .blocked, .partiallySaved:\n                break", "Non-Favicon image pages must stay silent for impossible partial outcomes as well as cancel/block")
+            contains(page, "case .cancelled, .blocked, .partiallySaved:\n                break", "Single-output image pages must stay silent for impossible partial outcomes as well as cancel/block")
             // 保存面板已 sheet 化：会话保存必须同时接入输入面板与输出面板客户端。
             contains(page, "await session.save(workflow:", "Image \(name) save must await the session's sheet-based save pipeline")
             contains(page, "filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient", "Image \(name) save must route through the window-scoped sheet panel clients")
         }
+
+        // 批量转换页：单张成功沿用 savedFile，批量成功用计数词表；部分保存映射 warning（对齐 Favicon 词表）。
+        contains(converter, "toastCenter?.show(ToolFeedbackCopy.savedFile, tone: .success)", "Image converter must show a single-file success toast only on a confirmed .saved outcome")
+        contains(converter, "toastCenter?.show(ToolFeedbackCopy.saved(count: session.completedCount), tone: .success)", "Image converter batch success must use the shared counted save copy")
+        contains(converter, "case let .failed(message):\n                toastCenter?.show(message, tone: .error)", "Image converter must surface a real save failure as an error toast")
+        contains(converter, "已保存 \\(savedCount)/\\(totalCount) 张图片。", "Image converter partial-save feedback must keep the safe count concise")
+        contains(converter, "tone: .warning", "Image converter partial saves must use warning feedback")
+        contains(converter, "case .cancelled, .blocked:\n                break", "Image converter must stay silent for cancel/block save outcomes")
+        contains(converter, "await session.saveAll(defaultBasename: \"converted\", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)", "Image converter batch save must await the batch session's sheet-based save pipeline")
+        contains(converter, "filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient", "Image converter save must route through the window-scoped sheet panel clients")
 
         contains(favicon, "handleSave(await session.saveArtifact(artifact.id, filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)", "Favicon single-artifact save must route its confirmed outcome through one toast mapper over the sheet panel clients")
         contains(favicon, "case .saved:\n            toastCenter?.show(ToolFeedbackCopy.saved(fileName: filename)", "Favicon single-artifact save must show success only on a confirmed .saved outcome")
@@ -41,7 +52,6 @@ struct ImageWorkflowSourceContractTests {
         let faviconSession = try readSource("Sources/XTools/ToolPages/Image/FaviconOutputSetSession.swift")
 
         for (page, name) in [
-            (converter, "converter"),
             (compressor, "compressor"),
             (grayscale, "grayscale"),
             (watermark, "watermark"),
@@ -55,19 +65,30 @@ struct ImageWorkflowSourceContractTests {
             contains(page, "publish()", "Image \(name) must execute the session source assignment inside the shared motion transaction")
         }
 
-        contains(converter, "onSelection: { _ in ensureSupportedTargetFormat() }", "Image converter must preserve its source-aware target update after publishing the accepted image")
+        // 批量转换页的导入发布沿用同一 motion 所有权，只是发布单位从单张换成一批。
+        contains(converter, "@Environment(\\.accessibilityReduceMotion) private var reduceMotion", "Image converter must honor Reduce Motion for source-workspace transitions")
+        doesNotContain(converter, "sourceRevealGeneration", "Image converter must not use a post-publication nonce that misses the source transition")
+        contains(converter, "importPublisher: publishImportedImages", "Image converter must publish accepted imports inside the page-owned motion transaction")
+        contains(converter, "withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion)", "Image converter clear/remove transitions must enter an explicit shared motion transaction")
+        contains(converter, "private func publishImportedImages(_ imported: [BatchConversionItem], _ publish: () -> Void)", "Image converter must keep import publication motion page-owned")
+        contains(converter, "publish()", "Image converter must execute the session item assignment inside the shared motion transaction")
+        contains(converter, "publish()\n            ensureSupportedTargetFormat()", "Image converter must preserve its source-aware target update after publishing accepted imports")
         contains(faviconSession, "selectionPublisher: @escaping ImageSelectionPublisher", "Favicon selection must expose the same page-owned source publication seam as processed image sessions")
         contains(faviconSession, "selectionPublisher(selection) {", "Favicon selection must publish only a valid prepared source through that seam")
     }
 
     @Test func imageConverterUsesActualOutputInsteadOfFormatPredictions() throws {
         let converter = try readSource("Sources/XTools/ToolPages/Image/ImageConverterPage.swift")
+        let session = try readSource("Sources/XTools/ToolPages/Image/ImageBatchConversionSession.swift")
 
         doesNotContain(converter, "PNG 是无损兼容格式。JPEG 已丢失的细节不会恢复", "Image converter must not show tutorial-like PNG growth predictions")
         doesNotContain(converter, "TIFF 是归档/兼容用无损格式。它不会让 JPEG 变清晰", "Image converter must not show tutorial-like TIFF growth predictions")
         doesNotContain(converter, "conversionNotice", "Image converter must not keep a second predictive notice path")
-        contains(converter, "ImageOutputPresentation.processingOutputSummary(convertedAssessment)", "Image converter must show the actual rendered output format and size change")
-        contains(converter, "convertedAssessment.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textSecondary", "Image converter must emphasize an actual larger output")
+        contains(session, "ImageOutputPolicy.assess(output, for: .conversion)", "Image converter must evaluate output facts from the actual rendered output")
+        contains(session, "ImageOutputPresentation.processingOutputSummary(assessment)", "Image converter must precompute the actual output format and size change at conversion time")
+        contains(converter, "output.summaryText", "Image converter must show the precomputed actual output facts instead of re-assessing in views")
+        doesNotContain(converter, "ImageOutputPolicy.assess", "Image converter views must not re-assess outputs; conversion records carry precomputed facts")
+        contains(converter, "output.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textSecondary", "Image converter must emphasize an actual larger output")
         contains(converter, "仍然保存更大的文件", "Image converter must keep the explicit larger-file save action")
     }
 
@@ -124,6 +145,7 @@ struct ImageWorkflowSourceContractTests {
             try readSource("Sources/XTools/ToolPages/Image/ImageWorkflowClient.swift"),
             try readSource("Sources/XTools/ToolPages/Image/ImageWorkflowModels.swift"),
             try readSource("Sources/XTools/ToolPages/Image/ImageProcessedOutputSession.swift"),
+            try readSource("Sources/XTools/ToolPages/Image/ImageBatchConversionSession.swift"),
         ].joined(separator: "\n")
         let faviconSession = try readSource("Sources/XTools/ToolPages/Image/FaviconOutputSetSession.swift")
         let filePanel = try readSource("Sources/XTools/Shared/FileInputPanel.swift")
@@ -157,11 +179,23 @@ struct ImageWorkflowSourceContractTests {
         contains(workflow, "case partiallySaved(savedCount: Int, totalCount: Int)", "Image save outcomes must preserve partial Favicon progress structurally")
         contains(faviconSession, "case let .partialSaveFailed(savedCount, totalCount)", "Favicon session must map only structured partial-save failures to a partial outcome")
         contains(faviconSession, ".partiallySaved(savedCount: savedCount, totalCount: totalCount)", "Favicon session must return safe saved/total counts")
+        // 批量转换：轻量导入（不驻留原图 data）+ 世代取消串行转换 + 批量保存委托。
+        contains(workflow, "final class ImageBatchConversionSession", "Batch conversion state must live behind its own retained session")
+        contains(workflow, "func prepareImportOverview(", "Batch import must reuse the shared preparation pipeline through a lightweight overview")
+        contains(workflow, "client.prepareImportOverview", "Batch conversion session must import through the platform client seam")
+        contains(workflow, "func saveConvertedImages(", "Batch conversion saves must flow through the platform client seam")
+        contains(workflow, "client.saveConvertedImages", "Batch conversion session must delegate directory saves to the platform client seam")
+        contains(workflow, "func saveConvertedImage(", "Single converted-output saves must flow through the platform client seam")
+        contains(workflow, "client.prepareSelectionInBackground", "Batch conversion re-reads each item through the shared URL preparation pipeline")
+        contains(workflow, "renderGate.invalidate()", "Batch conversion re-runs must supersede the previous generation through AsyncWorkGate")
+        contains(workflow, "renderGate.isCurrent(generation)", "Batch conversion must protect against stale background results")
+        contains(workflow, "static let defaultMaximumItemCount = 100", "Batch conversion must bound the list and save loop scale while outputs stay spooled on disk")
+        contains(workflow, "func evictHeavyPayloads()", "Batch conversion session must keep workspace eviction semantics")
         contains(favicon, "case let .partiallySaved(savedCount, totalCount)", "Favicon page must handle partial saves separately from complete failures")
         contains(favicon, "已保存 \\(savedCount)/\\(totalCount) 个部署文件。", "Favicon partial-save feedback must keep the safe count concise")
         doesNotContain(favicon, "其余图标保存失败", "Favicon partial-save feedback must not restate what the warning tone and count already show")
         contains(favicon, "tone: .warning", "Favicon partial saves must use warning feedback")
-        contains(converter, "IndexImagePreviewStage(\n                        image: session.sourceImage", "Image converter source preview must use the non-scrolling image preview stage")
+        contains(converter, "IndexImagePreviewStage(\n            image: session.sourceImage", "Image converter single-image preview must use the non-scrolling image preview stage")
         contains(converter, ".indexWorkspaceDiagnostic(session.error)", "Image converter errors must remain visible through the non-displacing diagnostic anchor")
         doesNotContain(converter, "IndexPanel(\"转换预览\")", "Image converter must not keep the separate lower conversion preview panel")
         doesNotContain(converter, "IndexImagePreviewStage(image: session.outputImage", "Image converter must not replace the removed preview panel with another output preview")
@@ -235,7 +269,7 @@ struct ImageWorkflowSourceContractTests {
         contains(watermark, "if session.source != nil", "Image watermark must not reserve its preview panel before a source exists")
         contains(favicon, "if session.sourceImage != nil", "Favicon must not render output rows before a source exists")
         doesNotContain(favicon, ".fill(ToolTheme.hoverFill)\n                                        .frame(width: size.previewLength", "Favicon must not render fake icon thumbnails before generation")
-        contains(converter, "selectionPublisher: publishSelectedImage", "Image converter source appearance and clearing must use the shared panel reveal cadence")
+        contains(converter, "importPublisher: publishImportedImages", "Image converter import appearance must use the shared panel reveal cadence")
         contains(compressor, ".toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)", "Image compressor upload/workspace replacement must use the shared state transition")
         contains(compressor, "selectionPublisher: publishSelectedImage", "Image compressor accepted-source reveal must use an explicit page presentation boundary")
         contains(grayscale, ".toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)", "Image grayscale upload/workspace replacement must use the shared state transition")
@@ -257,19 +291,31 @@ struct ImageWorkflowSourceContractTests {
             doesNotContain(page, "NSSavePanel()", "Image pages must not construct save panels directly")
             doesNotContain(page, "Data(contentsOf:", "Image pages must not read selected files directly")
             doesNotContain(page, "UniformTypeIdentifiers", "Image pages must not map platform content types directly")
-            contains(page, "@Environment(\\.fileInputPanelClient) private var fileInputPanelClient", "Every image page must receive the shared window-scoped input panel client")
-            contains(page, "@State private var isImageDropTargeted = false", "Every image page must expose targeted state for its local upload surface")
-            contains(page, ".indexDropZone(", "Every image page upload surface must use the shared single-file drop modifier")
-            contains(page, "session.receiveImageURL(", "Image drops must enter the same URL-based session pipeline as panel selections")
-            contains(page, "session.rejectImageInput(SingleFileDropResolver.multipleFilesDiagnostic)", "Image pages must reject an entire multi-file batch with the shared diagnostic")
         }
-        for page in [favicon, converter, compressor, grayscale] {
+        for page in [favicon, compressor, grayscale, watermark] {
+            contains(page, "@Environment(\\.fileInputPanelClient) private var fileInputPanelClient", "Every single-image page must receive the shared window-scoped input panel client")
+            contains(page, "@State private var isImageDropTargeted = false", "Every single-image page must expose targeted state for its local upload surface")
+            contains(page, ".indexDropZone(", "Single-image upload surfaces must use the shared single-file drop modifier")
+            contains(page, "session.receiveImageURL(", "Image drops must enter the same URL-based session pipeline as panel selections")
+            contains(page, "session.rejectImageInput(SingleFileDropResolver.multipleFilesDiagnostic)", "Single-image pages must reject an entire multi-file batch with the shared diagnostic")
+        }
+        // 批量转换页换成多文件拖放入口：1..N 张全部进入导入管线，不再整批拒绝。
+        contains(converter, "@Environment(\\.fileInputPanelClient) private var fileInputPanelClient", "Image converter must receive the shared window-scoped input panel client")
+        contains(converter, "@State private var isImageDropTargeted = false", "Image converter must expose targeted state for its local upload surface")
+        contains(converter, ".multiImageInputDropDestination(", "Image converter must attach the shared multi-file drop modifier to its whole-page root container")
+        contains(converter, "showsHighlight: false", "The whole-page drop target must stay silent; the visible highlight belongs to the input zone only")
+        contains(converter, ".imageDropHighlight(isActive: isImageDropTargeted)", "The upload panel content must carry the drop highlight shared from the whole-page target state")
+        contains(converter, "session.receiveImageURLs(", "Image converter drops must enter the same URL-based session pipeline as panel selections")
+        contains(converter, "session.selectImages(", "Image converter panel selection must request multi-file selection through the batch session")
+        doesNotContain(converter, "SingleFileDropResolver.multipleFilesDiagnostic", "Image converter must accept whole multi-file batches instead of rejecting them")
+        for page in [favicon, compressor, grayscale] {
             doesNotContain(page, "IndexImagePreviewImage(", "Image pages must use the full preview stage instead of bypassing its non-scrolling semantics")
         }
         contains(watermark, "IndexImagePreviewImage(", "Image watermark may use the shared low-level image surface only for its compact source identity thumbnail")
         doesNotContain(watermark, "IndexImagePreviewStage(\n                                image: source.image", "Image watermark must not reserve a second source preview stage")
+        contains(converter, "IndexImagePreviewImage(", "Image converter may use the shared low-level image surface only for its compact batch row thumbnails")
 
-        for page in [converter, compressor, grayscale, watermark] {
+        for page in [compressor, grayscale, watermark] {
             contains(page, "@ObservedObject var session: ImageProcessedOutputSession", "Single-output image content must observe its repository-retained shared session")
             contains(page, "session.selectImage", "Single-output image pages must delegate image selection to the shared session")
             contains(page, "session.save(workflow:", "Single-output image pages must delegate save and output-size protection to the shared session")
@@ -279,6 +325,14 @@ struct ImageWorkflowSourceContractTests {
             doesNotContain(page, "@State private var error", "Single-output image pages must not duplicate workflow error state")
             doesNotContain(page, ".saveProcessedImage(", "Single-output image pages must not call platform save workflow directly")
         }
+        // 批量转换页改锚批量会话：状态与保存都委托 ImageBatchConversionSession。
+        contains(converter, "@ObservedObject var session: ImageBatchConversionSession", "Image converter content must observe its repository-retained batch session")
+        contains(converter, "session.saveAll(defaultBasename:", "Image converter must delegate batch save and output-size protection to the batch session")
+        doesNotContain(converter, "@State private var selectedImage", "Image converter must not duplicate selected image state")
+        doesNotContain(converter, "@State private var sourceData", "Image converter must not duplicate source data state")
+        doesNotContain(converter, "@State private var sourceMetadata", "Image converter must not duplicate source metadata state")
+        doesNotContain(converter, "@State private var error", "Image converter must not duplicate workflow error state")
+        doesNotContain(converter, ".saveProcessedImage(", "Image converter must not call platform save workflow directly")
 
         contains(favicon, "ToolWorkspaceHost(key: FaviconOutputSetSession.workspaceKey)", "Favicon icon-set workflow must resolve its retained output-set session")
         contains(favicon, "@ObservedObject var session: FaviconOutputSetSession", "Favicon content must observe the retained output-set session")
@@ -327,7 +381,8 @@ struct ImageWorkflowSourceContractTests {
         contains(converter, ".accessibilityLabel(\"目标格式\")", "Image converter target picker must expose a stable accessibility label")
         contains(converter, ".accessibilityValue(targetFormat.displayName)", "Image converter target picker must expose the selected format")
         contains(converter, "选择图片后显示", "Image converter must wait for source format before presenting target choices")
-        contains(converter, "metadata.transparency != .opaque && !targetFormat.preservesAlpha", "Image converter must require fill only for actual or unknown transparency going to opaque targets")
+        contains(converter, "$0.metadata.transparency != .opaque", "Image converter must require fill only for items with actual or unknown transparency")
+        contains(converter, "guard !targetFormat.preservesAlpha else { return false }", "Image converter must require fill only when the target drops alpha")
         contains(converter, "ImageTransparencyFillMode.white", "Image converter must offer an explicit white fill choice")
         contains(converter, "(.black, \"黑色\")", "Image converter must offer an explicit black fill choice")
         contains(converter, "(.custom, \"自定义\")", "Image converter must offer a custom fill choice without silently defaulting it")

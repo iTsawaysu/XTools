@@ -32,7 +32,7 @@ struct FileInputPanelTests {
             return
         }
         let sourceURL = URL(fileURLWithPath: "/tmp/source.bin")
-        backend.completeLatest(with: .selected(sourceURL))
+        backend.completeLatest(with: .selected([sourceURL]))
 
         #expect(try await sourceTask.value == sourceURL)
         #expect(constructionCount == 1)
@@ -140,7 +140,7 @@ struct FileInputPanelTests {
         }
 
         #expect(backend.cancelCount == 1)
-        backend.completeLatest(with: .selected(URL(fileURLWithPath: "/tmp/late.bin")))
+        backend.completeLatest(with: .selected([URL(fileURLWithPath: "/tmp/late.bin")]))
 
         let nextTask = Task { @MainActor in
             try await coordinator.selectFile(FileInputPanelRequest(allowedContentTypes: [.plainText]))
@@ -166,7 +166,7 @@ struct FileInputPanelTests {
             task.cancel()
             return
         }
-        backend.completeLatest(with: .selected(nil))
+        backend.completeLatest(with: .selected([]))
 
         do {
             _ = try await task.value
@@ -218,6 +218,61 @@ struct FileInputPanelTests {
         #expect((try? await secondTask.value) == nil)
     }
 
+    @Test func selectFilesReturnsWholeConfirmedBatchAndSharesTheRequestPipeline() async throws {
+        let backend = FakeFileInputPanelBackend()
+        let coordinator = FileInputPanelCoordinator { backend }
+        let window = makeWindow()
+        coordinator.attach(to: window)
+
+        let first = URL(fileURLWithPath: "/tmp/first.png")
+        let second = URL(fileURLWithPath: "/tmp/second.png")
+        let task = Task { @MainActor in
+            try await coordinator.selectFiles(
+                FileInputPanelRequest(allowedContentTypes: [.png], allowsMultipleSelection: true)
+            )
+        }
+        guard await backend.waitForPresentation(count: 1) else {
+            task.cancel()
+            return
+        }
+        #expect(backend.requests.last?.allowsMultipleSelection == true)
+        backend.completeLatest(with: .selected([first, second]))
+
+        #expect(try await task.value == [first, second])
+
+        // 单选请求在多选结果数组上取 first，语义与既有 selectFile 一致。
+        let singleTask = Task { @MainActor in
+            try await coordinator.selectFile(
+                FileInputPanelRequest(allowedContentTypes: [.png], allowsMultipleSelection: true)
+            )
+        }
+        guard await backend.waitForPresentation(count: 2) else {
+            singleTask.cancel()
+            return
+        }
+        backend.completeLatest(with: .selected([second, first]))
+        #expect(try await singleTask.value == second)
+
+        // 多选请求与单选共用互斥管线：活动请求未完成时立即拒绝。
+        let pendingTask = Task { @MainActor in
+            try await coordinator.selectFiles(FileInputPanelRequest(allowedContentTypes: [.png]))
+        }
+        guard await backend.waitForPresentation(count: 3) else {
+            pendingTask.cancel()
+            return
+        }
+        do {
+            _ = try await coordinator.selectFiles(FileInputPanelRequest(allowedContentTypes: [.png]))
+            Issue.record("Expected a concurrent multi-select request to be rejected")
+        } catch let failure as FileInputPanelFailure {
+            #expect(failure == .requestInProgress)
+        } catch {
+            Issue.record("Unexpected failure: \(error)")
+        }
+        backend.completeLatest(with: .cancelled)
+        #expect(try await pendingTask.value == nil)
+    }
+
     @Test func singleFileDropResolverRejectsWholeMultiFileBatch() {
         let first = URL(fileURLWithPath: "/tmp/first.bin")
         let second = URL(fileURLWithPath: "/tmp/second.bin")
@@ -250,7 +305,7 @@ struct FileInputPanelTests {
         occurrenceCount(panelSource, "NSOpenPanel()", 1, "The shared file input infrastructure must have one lazy production construction site")
         contains(panelSource, "panel.canChooseFiles = request.canChooseFiles", "Every request must drive file selection from its request")
         contains(panelSource, "panel.canChooseDirectories = request.canChooseDirectories", "Every request must drive directory selection from its request")
-        contains(panelSource, "panel.allowsMultipleSelection = false", "Every request must restore single selection")
+        contains(panelSource, "panel.allowsMultipleSelection = request.allowsMultipleSelection", "Every request must restore its own selection multiplicity")
         contains(panelSource, "panel.allowedContentTypes = request.allowedContentTypes", "Every request must replace content-type filtering")
         contains(panelSource, "panel.allowsOtherFileTypes = false", "Every request must reject types outside the request")
         contains(panelSource, "panel.prompt = request.prompt", "Every request must reset prompt text")

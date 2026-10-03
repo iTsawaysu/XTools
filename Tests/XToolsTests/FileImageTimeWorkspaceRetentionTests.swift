@@ -65,14 +65,23 @@ struct Base64FileWorkspaceRetentionTests {
 
 struct ImageWorkspaceRetentionTests {
     @MainActor
-    @Test func singleOutputImageSessionsAndApprovedRecipesSurviveNavigation() {
+    @Test func singleOutputImageSessionsAndApprovedRecipesSurviveNavigation() async throws {
         let defaults = Self.defaults()
         let repository = ToolWorkspaceRepository(defaults: defaults)
 
         let converter = repository.model(for: ImageConverterToolWorkspaceModel.key)
         converter.targetFormat = .jpeg
         converter.quality = 0.64
-        converter.session.rejectImageInput("converter-session-error")
+        converter.session.receiveImageURLs(
+            [URL(fileURLWithPath: "/tmp/converter-invalid.png")],
+            allowedContentTypes: [.png],
+            client: ImageWorkflowClient(
+                dialog: RetentionImageDialog(),
+                reader: RetentionImageReader(data: Data("not an image".utf8)),
+                writer: RetentionImageWriter()
+            )
+        )
+        try await Self.waitUntil { converter.session.error != nil }
 
         let compressor = repository.model(for: ImageCompressorToolWorkspaceModel.key)
         compressor.compressionPreference = .smallerFile
@@ -91,7 +100,8 @@ struct ImageWorkspaceRetentionTests {
         grayscale.rejectImageInput("grayscale-session-error")
 
         #expect(repository.model(for: ImageConverterToolWorkspaceModel.key) === converter)
-        #expect(converter.session.error == "converter-session-error")
+        #expect(converter.session.items.isEmpty)
+        #expect(converter.session.error != nil)
         #expect(repository.model(for: ImageCompressorToolWorkspaceModel.key) === compressor)
         #expect(compressor.session.error == "compressor-session-error")
         #expect(repository.model(for: ImageWatermarkToolWorkspaceModel.key) === watermark)
@@ -102,14 +112,23 @@ struct ImageWorkspaceRetentionTests {
     }
 
     @MainActor
-    @Test func imageSessionResetPreservesApprovedRecipesAndWatermarkDraft() {
+    @Test func imageSessionResetPreservesApprovedRecipesAndWatermarkDraft() async throws {
         let defaults = Self.defaults()
         let repository = ToolWorkspaceRepository(defaults: defaults)
 
         let converter = repository.model(for: ImageConverterToolWorkspaceModel.key)
         converter.targetFormat = .jpeg
         converter.quality = 0.64
-        converter.session.rejectImageInput("converter-session-error")
+        converter.session.receiveImageURLs(
+            [URL(fileURLWithPath: "/tmp/converter-invalid.png")],
+            allowedContentTypes: [.png],
+            client: ImageWorkflowClient(
+                dialog: RetentionImageDialog(),
+                reader: RetentionImageReader(data: Data("not an image".utf8)),
+                writer: RetentionImageWriter()
+            )
+        )
+        try await Self.waitUntil { converter.session.error != nil }
 
         let compressor = repository.model(for: ImageCompressorToolWorkspaceModel.key)
         compressor.compressionPreference = .smallerFile
@@ -157,36 +176,47 @@ struct ImageWorkspaceRetentionTests {
         do {
             let workspace = repository.model(for: ImageConverterToolWorkspaceModel.key)
             originalIdentifier = ObjectIdentifier(workspace)
-            workspace.session.receiveImageURL(
-                url,
+            workspace.session.receiveImageURLs(
+                [url],
                 allowedContentTypes: [.png],
                 client: client,
-                operation: .conversion
-            ) { input in
-                Thread.sleep(forTimeInterval: 0.15)
-                return ProcessedImage(
-                    data: input.data,
-                    format: .png,
-                    pixelWidth: input.metadata.pixelWidth,
-                    pixelHeight: input.metadata.pixelHeight,
-                    originalByteCount: input.data.count,
-                    quality: nil,
-                    wasResized: false
-                )
-            }
+                onImport: {
+                    workspace.session.convertAll(rendererProvider: {
+                        { input in
+                            Thread.sleep(forTimeInterval: 0.15)
+                            return ProcessedImage(
+                                data: input.data,
+                                format: .png,
+                                pixelWidth: input.metadata.pixelWidth,
+                                pixelHeight: input.metadata.pixelHeight,
+                                originalByteCount: input.data.count,
+                                quality: nil,
+                                wasResized: false
+                            )
+                        }
+                    })
+                }
+            )
         }
 
         let restoredWhileRunning = repository.model(for: ImageConverterToolWorkspaceModel.key)
         #expect(ObjectIdentifier(restoredWhileRunning) == originalIdentifier)
-        try await Self.waitUntil { restoredWhileRunning.session.output != nil }
-        #expect(restoredWhileRunning.session.sourceURL == url)
-        #expect(restoredWhileRunning.session.output?.data == imageData)
+        try await Self.waitUntil {
+            if case .done = restoredWhileRunning.session.items.first?.state { return true }
+            return false
+        }
+        #expect(restoredWhileRunning.session.items.first?.url == url)
+        if case let .done(output) = restoredWhileRunning.session.items[0].state {
+            #expect(try Data(contentsOf: output.tempURL) == imageData)
+        } else {
+            Issue.record("Expected the retained batch conversion to finish with a done item")
+        }
         #expect(!restoredWhileRunning.session.isProcessing)
         #expect(restoredWhileRunning.session.error == nil)
     }
 
     @MainActor
-    @Test func newRepositoryRestoresOnlyApprovedImageRecipes() {
+    @Test func newRepositoryRestoresOnlyApprovedImageRecipes() async throws {
         let defaults = Self.defaults()
         let first = ToolWorkspaceRepository(defaults: defaults)
         let converter = first.model(for: ImageConverterToolWorkspaceModel.key)
@@ -194,7 +224,16 @@ struct ImageWorkspaceRetentionTests {
         converter.quality = 0.64
         converter.transparencyFillMode = .custom
         converter.customTransparencyFillHex = "#336699"
-        converter.session.rejectImageInput("must-not-persist")
+        converter.session.receiveImageURLs(
+            [URL(fileURLWithPath: "/tmp/converter-must-not-persist.png")],
+            allowedContentTypes: [.png],
+            client: ImageWorkflowClient(
+                dialog: RetentionImageDialog(),
+                reader: RetentionImageReader(data: Data("not an image".utf8)),
+                writer: RetentionImageWriter()
+            )
+        )
+        try await Self.waitUntil { converter.session.error != nil }
 
         let compressor = first.model(for: ImageCompressorToolWorkspaceModel.key)
         compressor.compressionPreference = .smallerFile
@@ -221,8 +260,7 @@ struct ImageWorkspaceRetentionTests {
         #expect(relaunchedConverter.transparencyFillMode == .custom)
         #expect(relaunchedConverter.customTransparencyFillHex == "#336699")
         #expect(relaunchedConverter.transparencyFill == ImageRGBColor(red: 0x33, green: 0x66, blue: 0x99))
-        #expect(relaunchedConverter.session.source == nil)
-        #expect(relaunchedConverter.session.output == nil)
+        #expect(relaunchedConverter.session.items.isEmpty)
         #expect(relaunchedConverter.session.error == nil)
 
         #expect(relaunchedCompressor.compressionPreference == .smallerFile)
@@ -532,7 +570,7 @@ struct FileAndFaviconWorkspaceRetentionTests {
 @MainActor
 private struct RetentionImageDialog: ImageWorkflowDialoging {
     func selectSaveURL(defaultFilename: String, allowedContentTypes: [UTType]) -> URL? { nil }
-    func selectDirectory(prompt: String) -> URL? { nil }
+    func selectDirectory(prompt: String, message: String?) -> URL? { nil }
 }
 
 private struct RetentionImageReader: ImageWorkflowFileReading {

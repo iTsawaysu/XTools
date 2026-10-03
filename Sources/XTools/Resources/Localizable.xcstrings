@@ -2668,6 +2668,9 @@
     "转换结果" : {
       "extractionState" : "manual"
     },
+    "转换结果写入临时文件失败。" : {
+      "extractionState" : "manual"
+    },
     "转换质量" : {
       "extractionState" : "manual"
     },
@@ -3467,6 +3470,27 @@
       "extractionState" : "manual"
     },
     "#RGB 或 #RRGGBB" : {
+      "extractionState" : "manual"
+    },
+    "添加图片" : {
+      "extractionState" : "manual"
+    },
+    "添加要转换的图片" : {
+      "extractionState" : "manual"
+    },
+    "清空图片" : {
+      "extractionState" : "manual"
+    },
+    "清除全部转换图片" : {
+      "extractionState" : "manual"
+    },
+    "待转换" : {
+      "extractionState" : "manual"
+    },
+    "图片读取失败" : {
+      "extractionState" : "manual"
+    },
+    "等" : {
       "extractionState" : "manual"
     }
   },

@@ -393,7 +393,7 @@ public enum JWTVerifier {
 
     /// DateFormatter 构造昂贵（~ms 级），缓存复用。NSDateFormatter 在
     /// macOS 10.9+ 并发调用 string(from:) 线程安全，只读共享无状态突变。
-    nonisolated(unsafe) private static let claimDateFormatter: DateFormatter = {
+    private static let claimDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
         formatter.timeZone = TimeZone.current
