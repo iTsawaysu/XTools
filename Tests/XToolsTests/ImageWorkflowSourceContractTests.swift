@@ -17,11 +17,13 @@ struct ImageWorkflowSourceContractTests {
         }
 
         // 成功提示只在 session 返回 .saved 时显示（取消返回 .cancelled、阻止返回 .blocked
-        // 都不弹成功 toast）；写盘失败返回 .failed 时弹 error toast；部分成功由 Favicon 与
-        // 批量转换页映射 warning，其余单输出页对不可能出现的部分结果保持静默。
-        // 单输出页的 outcome→toast switch 收敛进共享 ImageSaveOutcomeToasts 后，
+        // 都不弹成功 toast）；写盘失败返回 .failed 时弹 error toast；部分成功由计数
+        // 映射降级为 warning，其余单输出页对不可能出现的部分结果保持静默。
+        // 各页 outcome→toast switch 全部收敛进共享 ImageSaveOutcomeToasts 后，
         // 映射断言改锚共享文件，页面断言改锚路由调用。
-        contains(uploadSupport, "case .saved:\n            toastCenter?.show(ToolFeedbackCopy.savedFile, tone: .success)", "The shared single-output toast mapper must show a success toast only on a confirmed .saved outcome")
+        contains(uploadSupport, "case .saved:\n            if let fileName {", "The shared single-output toast mapper must branch on a caller-known file name")
+        contains(uploadSupport, "toastCenter?.show(ToolFeedbackCopy.saved(fileName: fileName), tone: .success)", "The shared single-output toast mapper must name the saved file when the caller knows it")
+        contains(uploadSupport, "toastCenter?.show(ToolFeedbackCopy.savedFile, tone: .success)", "The shared save mappers must fall back to the generic single-file success copy")
         contains(uploadSupport, "case let .failed(message):\n            toastCenter?.show(message, tone: .error)", "The shared single-output toast mapper must surface a real save failure as an error toast")
         contains(uploadSupport, "case .cancelled, .blocked, .partiallySaved:\n            break", "The shared single-output toast mapper must stay silent for impossible partial outcomes as well as cancel/block")
         for (page, name) in [(compressor, "compressor"), (grayscale, "grayscale"), (watermark, "watermark")] {
@@ -31,20 +33,26 @@ struct ImageWorkflowSourceContractTests {
             contains(page, "filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient", "Image \(name) save must route through the window-scoped sheet panel clients")
         }
 
-        // 批量转换页：单张成功沿用 savedFile，批量成功用计数词表；部分保存映射 warning（对齐 Favicon 词表）。
-        contains(converter, "toastCenter?.show(ToolFeedbackCopy.savedFile, tone: .success)", "Image converter must show a single-file success toast only on a confirmed .saved outcome")
-        contains(converter, "toastCenter?.show(ToolFeedbackCopy.saved(count: session.completedCount), tone: .success)", "Image converter batch success must use the shared counted save copy")
-        contains(converter, "case let .failed(message):\n                toastCenter?.show(message, tone: .error)", "Image converter must surface a real save failure as an error toast")
-        contains(converter, "已保存 \\(savedCount)/\\(totalCount) 张图片。", "Image converter partial-save feedback must keep the safe count concise")
-        contains(converter, "tone: .warning", "Image converter partial saves must use warning feedback")
-        contains(converter, "case .cancelled, .blocked:\n                break", "Image converter must stay silent for cancel/block save outcomes")
-        contains(converter, "await session.saveAll(defaultBasename: \"converted\", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)", "Image converter batch save must await the batch session's sheet-based save pipeline")
+        // 计数保存映射（批量转换 + Favicon 整包）：多件成功走计数词表、单件
+        // 成功与单输出页同词表、部分成功降级 warning 并保留安全计数、写盘
+        // 失败报 error、取消/阻止静默。页面只锚路由调用与各自的计数词表。
+        occurrenceCount(uploadSupport, "case let .failed(message):\n            toastCenter?.show(message, tone: .error)", 2, "Every shared save-outcome mapper must surface real save failures as error toasts")
+        contains(uploadSupport, "toastCenter?.show(ToolFeedbackCopy.saved(count: savedCount, noun: successNoun), tone: .success)", "The shared counted-save mapper must use the counted save copy for multi-file successes")
+        occurrenceCount(uploadSupport, "toastCenter?.show(ToolFeedbackCopy.savedFile, tone: .success)", 2, "Both shared save mappers must fall back to the single-file copy for one saved file")
+        contains(uploadSupport, "case let .partiallySaved(partiallySavedCount, totalCount):", "The shared counted-save mapper must handle partial saves structurally")
+        contains(uploadSupport, "已保存 \\(partiallySavedCount)/\\(totalCount) \\(partialNoun)。", "The shared counted-save mapper must keep the safe saved/total count concise")
+        contains(uploadSupport, "\"已保存 \\(partiallySavedCount)/\\(totalCount) \\(partialNoun)。\", tone: .warning", "The shared counted-save mapper must present partial saves as warning feedback")
+        contains(uploadSupport, "case .cancelled, .blocked:\n            break", "The shared counted-save mapper must stay silent for cancel/block save outcomes")
+        contains(converter, "ImageSaveOutcomeToasts.presentCountedOutput(", "Image converter must route its batch save outcome through the shared counted-save mapper")
+        contains(converter, "savedCount: session.completedCount", "Image converter must report its actual completed count to the shared mapper")
+        contains(converter, "partialNoun: \"张图片\"", "Image converter partial-save feedback must keep its image-specific count noun")
         contains(converter, "filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient", "Image converter save must route through the window-scoped sheet panel clients")
-
+        contains(favicon, "ImageSaveOutcomeToasts.presentCountedOutput(", "Favicon package save must route its outcome through the shared counted-save mapper")
+        contains(favicon, "savedCount: package.saveableArtifacts.count", "Favicon package save must derive its count from the actual saveable artifacts")
+        contains(favicon, "successNoun: \"部署文件\"", "Favicon package save success must keep the deployment-file noun")
+        contains(favicon, "partialNoun: \"个部署文件\"", "Favicon partial-save feedback must keep the deployment-file count noun")
         contains(favicon, "handleSave(await session.saveArtifact(artifact.id, filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)", "Favicon single-artifact save must route its confirmed outcome through one toast mapper over the sheet panel clients")
-        contains(favicon, "case .saved:\n            toastCenter?.show(ToolFeedbackCopy.saved(fileName: filename)", "Favicon single-artifact save must show success only on a confirmed .saved outcome")
-        contains(favicon, "case .saved:\n                            toastCenter?.show(ToolFeedbackCopy.saved(count: 5, noun: \"部署文件\")", "Favicon package save must show success only on a confirmed .saved outcome")
-        occurrenceCount(favicon, "case let .failed(message):\n", 2, "Favicon save actions must surface real save failures as error toasts")
+        contains(favicon, "ImageSaveOutcomeToasts.presentSingleOutput(outcome, fileName: filename, toastCenter: toastCenter)", "Favicon single-artifact save must route its confirmed outcome through the shared named-file mapper")
     }
 
     @Test func imageSourceAndResetTransitionsUseSharedPanelRevealMotion() throws {
@@ -87,6 +95,7 @@ struct ImageWorkflowSourceContractTests {
     @Test func imageConverterUsesActualOutputInsteadOfFormatPredictions() throws {
         let converter = try readSource("Sources/XTools/ToolPages/Image/ImageConverterPage.swift")
         let session = try readSource("Sources/XTools/ToolPages/Image/ImageBatchConversionSession.swift")
+        let outputPresentation = try readSource("Sources/XTools/ToolPages/Image/ImageOutputPresentation.swift")
 
         doesNotContain(converter, "PNG 是无损兼容格式。JPEG 已丢失的细节不会恢复", "Image converter must not show tutorial-like PNG growth predictions")
         doesNotContain(converter, "TIFF 是归档/兼容用无损格式。它不会让 JPEG 变清晰", "Image converter must not show tutorial-like TIFF growth predictions")
@@ -96,7 +105,10 @@ struct ImageWorkflowSourceContractTests {
         contains(converter, "output.summaryText", "Image converter must show the precomputed actual output facts instead of re-assessing in views")
         doesNotContain(converter, "ImageOutputPolicy.assess", "Image converter views must not re-assess outputs; conversion records carry precomputed facts")
         contains(converter, "output.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textSecondary", "Image converter must emphasize an actual larger output")
-        contains(converter, "仍然保存更大的文件", "Image converter must keep the explicit larger-file save action")
+        // 「仍然保存更大的文件」词表收敛进 ImageOutputPresentation.saveTitle 后，
+        // 字面量断言改锚共享词表，页面断言改锚词表路由。
+        contains(converter, "ImageOutputPresentation.saveTitle(", "Image converter must derive its conditional save title from the shared larger-file save vocabulary")
+        contains(outputPresentation, "仍然保存更大的文件", "The shared save-title vocabulary must keep the explicit larger-file save wording")
     }
 
     @Test func watermarkUsesSourceMatchedLossyQualityWithoutCompressionSearch() throws {
@@ -179,7 +191,8 @@ struct ImageWorkflowSourceContractTests {
 
         // 四个图片工具合并为单入口「图片处理」后，workspaceSemantic 页面壳断言统一改锚 Hub。
         contains(imageHub, "workspaceSemantic: .imagePreviewStage", "The image hub must declare the image preview stage workspace semantic at the page shell")
-        contains(watermark, "workspaceSemantic: .liveImagePreviewStage", "Image watermark must declare the fixed live preview workspace semantic")
+        // 水印并入 Hub 第五段：断言改锚分段装配，页面壳语义随 Hub 外层滚动。
+        contains(imageHub, "case .watermark: IndexImageWatermarkSegment()", "The image hub must mount the watermark workflow as a first-class segment")
 
         contains(favicon, "IndexImagePreviewStage(\n                            image: image", "Favicon upload preview must use the non-scrolling image preview stage")
         contains(favicon, "maxDisplayWidth: 120", "Favicon source preview must stay compact so generated assets remain primary")
@@ -199,10 +212,10 @@ struct ImageWorkflowSourceContractTests {
         contains(workflow, "renderGate.isCurrent(generation)", "Batch conversion must protect against stale background results")
         contains(workflow, "static let defaultMaximumItemCount = 100", "Batch conversion must bound the list and save loop scale while outputs stay spooled on disk")
         contains(workflow, "func evictHeavyPayloads()", "Batch conversion session must keep workspace eviction semantics")
-        contains(favicon, "case let .partiallySaved(savedCount, totalCount)", "Favicon page must handle partial saves separately from complete failures")
-        contains(favicon, "已保存 \\(savedCount)/\\(totalCount) 个部署文件。", "Favicon partial-save feedback must keep the safe count concise")
+        // Favicon 部分保存的呈现语义已收敛进共享计数映射（见保存 toast 测试），
+        // 页面断言改锚路由调用；禁词保留在页面层防止文案回潮。
+        contains(favicon, "ImageSaveOutcomeToasts.presentCountedOutput(", "Favicon page must handle partial saves through the shared counted-save mapper")
         doesNotContain(favicon, "其余图标保存失败", "Favicon partial-save feedback must not restate what the warning tone and count already show")
-        contains(favicon, "tone: .warning", "Favicon partial saves must use warning feedback")
         contains(converter, "IndexImagePreviewStage(\n            image: session.sourceImage", "Image converter single-image preview must use the non-scrolling image preview stage")
         contains(converter, ".indexWorkspaceDiagnostic(session.error)", "Image converter errors must remain visible through the non-displacing diagnostic anchor")
         doesNotContain(converter, "IndexPanel(\"转换预览\")", "Image converter must not keep the separate lower conversion preview panel")
@@ -230,7 +243,7 @@ struct ImageWorkflowSourceContractTests {
         doesNotContain(grayscale, "accessibilityLabel: \"灰阶转换对比预览\"", "Image grayscale must not duplicate the output in a second preview path")
         contains(watermark, "accessibilityLabel: \"水印源图片缩略图\"", "Image watermark source must be a compact identity thumbnail rather than a second large canvas")
         contains(watermark, "maxDisplayWidth: 64", "Image watermark source thumbnail must stay compact enough to preserve the live result viewport")
-        contains(watermark, "workspaceSemantic: .liveImagePreviewStage", "Image watermark controls and complete result preview must share one fixed viewport")
+        contains(watermark, "fillsHeight: true,\n                            replacementMotion: .immediate", "Image watermark result canvas must fill the segment workspace and replace previews immediately")
         contains(watermark, "ViewThatFits(in: .horizontal)", "Image watermark source identity must compactly reflow instead of reserving a tall upload summary")
         contains(watermark, "HStack(alignment: .center, spacing: 24)", "Wide watermark upload content must keep text and source identity in one compact leading group")
         doesNotContain(watermark, "Spacer(minLength: 0)", "Wide watermark upload content must not create a large empty gap between text and source identity")
@@ -238,7 +251,7 @@ struct ImageWorkflowSourceContractTests {
         doesNotContain(watermark, "uploadPanelMaximumWidth", "The upload panel must continue participating in the page's full-width responsive layout")
         contains(watermark, ".popover(isPresented: $isPickerPresented", "Image watermark must keep the nine-anchor picker available without permanently increasing the toolbar height")
         contains(watermark, "Image(systemName: \"square.grid.3x3\")", "Image watermark must expose the compact spatial-position trigger")
-        contains(watermark, "image: resultPreviewImage,\n                                accessibilityLabel: \"水印成品预览\"", "Image watermark result must be the only primary preview canvas")
+        contains(watermark, "image: resultPreviewImage,\n                            accessibilityLabel: \"水印成品预览\"", "Image watermark result must be the only primary preview canvas")
         contains(watermark, "onSubmit: applyFinalImmediately", "Image watermark text submit must immediately generate the latest full-resolution result")
         contains(watermark, ".onChange(of: watermarkText) { _ in recipeDidChange(previewCadence: .debounced) }", "Image watermark text changes must enter bounded preview and debounced final pipelines")
         contains(watermark, "previewDebouncer.schedule(Self.previewDebounceDelay)", "Image watermark rapid changes must coalesce bounded preview work")
@@ -258,7 +271,7 @@ struct ImageWorkflowSourceContractTests {
         doesNotContain(converter, "ScrollView {", "Image converter previews must rely on the tool page outer scroll owner")
         doesNotContain(compressor, "ScrollView {", "Image compressor previews must rely on the tool page outer scroll owner")
         doesNotContain(grayscale, "ScrollView {", "Image grayscale previews must rely on the tool page outer scroll owner")
-        doesNotContain(watermark, "ScrollView {", "Image watermark previews must stay in the fixed live workspace without a page-local scroll owner")
+        doesNotContain(watermark, "ScrollView {", "Image watermark previews must rely on the tool page outer scroll owner")
 
         for page in [converter, compressor, grayscale, watermark] {
             doesNotContain(page, "Image(nsImage:", "Single-image workflows must not bypass the preview stage with direct Image(nsImage:) rendering")
@@ -270,9 +283,17 @@ struct ImageWorkflowSourceContractTests {
         // 空态面板收敛进共享 ImageUploadEmptyPanel/ImageUploadPendingState 后，
         // 进度/空态断言改锚共享文件，页面断言改锚共享面板装配。
         contains(uploadSupport, "IndexPanel(\"上传图片\")", "The shared empty upload panel must keep the settled upload panel title")
-        contains(uploadSupport, "IndexProgressLabel(message: \"正在读取图片…\")", "The shared upload pending state must communicate source preparation without showing an empty result canvas")
+        contains(uploadSupport, "IndexProgressLabel(message: \"正在读取图片…\", alignment: .center)", "The shared upload pending state must keep source preparation centered like the empty state it replaces")
+        // 空态范式统一：占位以 .list 密度按 fillsHeight 垂直居中于输入面板，
+        // 主操作是空态自带的 32pt 标准按钮（quiet-until-hover，不用实心
+        // accent，避免空面板里出现孤立的强色块）。
+        contains(uploadSupport, "buttonStyle(IndexButtonStyle())", "The shared upload empty state must offer its select action through the standard 32-point quiet button")
+        contains(uploadSupport, "density: .list", "The shared upload empty state must keep the compact list density that centers cleanly in the filling panel")
+        contains(uploadSupport, "func uploadPendingFrame(fillsHeight: Bool)", "The shared upload pending state must own one centering frame for both the empty state and the preparation progress")
         contains(compressor, "ImageUploadEmptyPanel(", "Image compressor empty state must mount the shared natural-height upload panel")
         contains(grayscale, "ImageUploadEmptyPanel(", "Image grayscale empty state must mount the shared natural-height upload panel")
+        contains(compressor, "onSelect: selectImage", "Image compressor empty state must wire its centered select action to the shared session pipeline")
+        contains(grayscale, "onSelect: selectImage", "Image grayscale empty state must wire its centered select action to the shared session pipeline")
         contains(compressor, "IndexPanel(\"优化工作区\")", "Image compressor must keep one primary result workspace after source selection")
         doesNotContain(compressor, "选择图片后比较原图与优化结果", "Image compressor must not center a sentence inside a page-filling empty canvas")
         doesNotContain(compressor, "IndexPanel(\"优化结果\")", "Image compressor must not repeat output in a second panel")
@@ -280,7 +301,9 @@ struct ImageWorkflowSourceContractTests {
         contains(grayscale, "IndexPanel(\"灰阶工作区\")", "Image grayscale must keep one primary comparison workspace after source selection")
         doesNotContain(grayscale, "IndexPanel(\"灰度图\")", "Image grayscale must not repeat the result in a second panel")
         contains(watermark, "if session.source != nil", "Image watermark must not reserve its preview panel before a source exists")
+        contains(watermark, "onSelect: selectImage", "Image watermark empty state must wire its centered select action to the shared session pipeline")
         contains(favicon, "if session.sourceImage != nil", "Favicon must not render output rows before a source exists")
+        contains(favicon, "onSelect: selectImage", "Favicon empty state must wire its centered select action to the output-set session pipeline")
         doesNotContain(favicon, ".fill(ToolTheme.hoverFill)\n                                        .frame(width: size.previewLength", "Favicon must not render fake icon thumbnails before generation")
         contains(converter, "importPublisher: publishImportedImages", "Image converter import appearance must use the shared panel reveal cadence")
         contains(compressor, ".toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)", "Image compressor upload/workspace replacement must use the shared state transition")
@@ -294,6 +317,10 @@ struct ImageWorkflowSourceContractTests {
         let comparisonCard = try readSource("Sources/XTools/Shared/Components/IndexImageComparisonCard.swift")
         contains(comparisonCard, "IndexProgressLabel(message: \"处理中…\")", "The shared comparison card must own the shared processing surface")
         contains(favicon, ".toolAnimation(ToolMotion.Preset.diagnostic, value: session.isProcessing)", "Favicon generation completion must use the shared local state-swap cadence")
+        contains(favicon, "IndexProgressLabel(message: \"正在生成部署包…\", layout: .centered)", "Favicon generation must use the sanctioned centered progress layout instead of a hand-built pending row")
+        // 空态诊断锚只在无源时生效：源就位后成品面板已持有同一诊断，
+        // 双活跃锚会让同一错误出两条 toast/两个 banner。
+        contains(favicon, ".indexWorkspaceDiagnostic(session.sourceImage == nil ? session.error : nil)", "Favicon upload empty state must surface import errors without duplicating the output panel's diagnostic while a source exists")
 
         for page in [favicon, converter, compressor, grayscale, watermark] {
             contains(page, "session.reset()", "Every retained image workflow must expose explicit current-image clearing")
@@ -319,6 +346,7 @@ struct ImageWorkflowSourceContractTests {
         contains(converter, "showsHighlight: false", "The whole-page drop target must stay silent; the visible highlight belongs to the input zone only")
         contains(converter, ".imageDropHighlight(isActive: isImageDropTargeted)", "The upload panel content must carry the drop highlight shared from the whole-page target state")
         contains(converter, "session.receiveImageURLs(", "Image converter drops must enter the same URL-based session pipeline as panel selections")
+        contains(converter, "onSelect: addImages", "Image converter empty state must wire its centered select action to the batch import pipeline")
         contains(converter, "session.selectImages(", "Image converter panel selection must request multi-file selection through the batch session")
         doesNotContain(converter, "SingleFileDropResolver.multipleFilesDiagnostic", "Image converter must accept whole multi-file batches instead of rejecting them")
         for page in [favicon, compressor, grayscale] {
@@ -432,7 +460,7 @@ struct ImageWorkflowSourceContractTests {
         contains(preferences, "static let imageWatermarkSizeRatio = ToolPreferenceKey<Double>.double(\n        \"tools.imageWatermark.sizeRatio.v2\",\n        default: ImageWatermarkSizing.defaultRatio,\n        range: ImageWatermarkSizing.ratioRange", "Watermark size persistence must use the approved v2 relative ratio key")
         contains(grayscale, "ImageProcessor.highFidelityEncodingQuality", "Image grayscale must retain its existing independent maximum-quality encoding policy")
         contains(grayscale, "processingOutputSummary", "Image grayscale must use non-compression output summary without actual-quality labeling")
-        contains(grayscale, "仍然保存更大的文件", "Image grayscale must use the shared larger-file save confirmation label")
+        contains(grayscale, "ImageOutputPresentation.saveTitle(", "Image grayscale must derive its conditional save title from the shared larger-file save vocabulary")
 
         contains(compressor, "IndexOptionLabel(\"优化偏好\")", "Image compressor must use user-level optimization preference instead of exposing raw quality first")
         contains(compressor, "IndexOptionSwitch(title: \"限制尺寸\"", "Image compressor must use user-facing dimension-limit wording")

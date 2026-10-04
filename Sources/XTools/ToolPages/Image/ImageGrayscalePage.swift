@@ -40,7 +40,7 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
             isProcessing: session.isProcessing,
             diagnostic: session.error,
             emptyStateTitle: "选择图片开始生成灰度图",
-            actions: imageSelectionActions,
+            onSelect: selectImage,
             onDropFile: receiveImageURL,
             onDropMultipleFiles: rejectMultipleImageDrop
         )
@@ -48,7 +48,7 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
 
     private var comparisonWorkspacePanel: some View {
         IndexPanel("灰阶工作区") {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
                 imageSelectionActions
 
                 IndexPairLayout(collapseWidth: 0) {
@@ -146,10 +146,10 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
     }
 
     private var saveButtonTitle: String {
-        if grayscaleAssessment?.requiresExplicitLargerSave == true {
-            return "仍然保存更大的文件"
-        }
-        return "保存"
+        ImageOutputPresentation.saveTitle(
+            requiresExplicitLargerSave: grayscaleAssessment?.requiresExplicitLargerSave == true,
+            fallback: "保存"
+        )
     }
 
     private var uploadInteractions: ImageUploadInteractions {

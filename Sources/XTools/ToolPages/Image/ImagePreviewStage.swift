@@ -152,58 +152,7 @@ struct IndexImagePreviewImage: View {
     }
 }
 
-private struct ImageInputDropDestinationModifier: ViewModifier {
-    @Binding var isTargeted: Bool
-    let onFile: (URL) -> Void
-    let onMultipleFiles: () -> Void
-
-    func body(content: Content) -> some View {
-        content
-            .contentShape(Rectangle())
-            .background(
-                isTargeted ? ToolTheme.selectionFill : Color.clear,
-                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
-                    .strokeBorder(
-                        isTargeted ? ToolTheme.accentBorder : Color.clear,
-                        lineWidth: 1
-                    )
-            }
-            .dropDestination(for: URL.self) { urls, _ in
-                switch SingleFileDropResolver.resolve(urls) {
-                case .unhandled:
-                    return false
-                case .accepted(let url):
-                    onFile(url)
-                    return true
-                case .rejectedMultipleFiles:
-                    onMultipleFiles()
-                    return false
-                }
-            } isTargeted: { targeted in
-                isTargeted = targeted
-            }
-            .toolAnimation(ToolMotion.Preset.controlFeedback, value: isTargeted)
-    }
-}
-
 extension View {
-    func imageInputDropDestination(
-        isTargeted: Binding<Bool>,
-        onFile: @escaping (URL) -> Void,
-        onMultipleFiles: @escaping () -> Void
-    ) -> some View {
-        modifier(
-            ImageInputDropDestinationModifier(
-                isTargeted: isTargeted,
-                onFile: onFile,
-                onMultipleFiles: onMultipleFiles
-            )
-        )
-    }
-
     /// 批量工具（格式转换）的多文件拖放入口：1..N 个文件全部回调，
     /// 0 个文件交还系统（返回 false）。命中区可大于视觉高亮区：
     /// 整页命中时传 showsHighlight: false，高亮由输入区经

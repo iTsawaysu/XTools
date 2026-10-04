@@ -479,12 +479,12 @@ struct FileAndFaviconWorkspaceRetentionTests {
             writer: RetentionImageWriter()
         )
 
-        session.receiveImageURL(url, client: client) { _, sizes in
+        session.receiveImageURL(url, client: client, generator: { _, sizes in
             Thread.sleep(forTimeInterval: 0.15)
             return sizes.map {
                 GeneratedIcon(size: $0, data: Data([UInt8($0)]), pixelWidth: $0, pixelHeight: $0, format: .png)
             }
-        }
+        })
 
         let restoredWhileRunning = repository.model(for: key)
         #expect(restoredWhileRunning === session)

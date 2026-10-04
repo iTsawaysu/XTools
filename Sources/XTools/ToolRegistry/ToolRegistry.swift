@@ -431,24 +431,19 @@ extension ToolRegistry {
                 title: "图片处理",
                 categoryID: .image,
                 systemImage: "photo.on.rectangle.angled",
-                keywords: ["image", "图片", "generate", "生成"],
+                keywords: [
+                    "image", "photo", "picture", "watermark", "图片",
+                    "generate", "生成", "水印"
+                ],
                 aliases: [
                     ToolAlias("格式转换", matching: ["convert", "format", "转换", "png", "jpg", "webp"], segment: "convert"),
                     ToolAlias("压缩", matching: ["compress", "optimize", "压缩"], segment: "compress"),
                     ToolAlias("灰度", matching: ["grayscale", "filter", "灰度"], segment: "grayscale"),
+                    ToolAlias("水印", matching: ["watermark", "水印"], segment: "watermark"),
                     ToolAlias("Favicon", matching: ["favicon", "icon", "图标"], segment: "favicon")
                 ]
             ) {
                 IndexImageHubPage()
-            },
-            RegisteredTool(
-                id: "image-watermark",
-                title: "图片水印",
-                categoryID: .image,
-                systemImage: "text.below.photo",
-                keywords: ["watermark", "image", "photo", "水印", "图片"]
-            ) {
-                IndexImageWatermarkPage()
             },
             RegisteredTool(
                 id: "color-picker",

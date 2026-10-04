@@ -1671,9 +1671,9 @@ struct ImageWorkflowClientTests {
             return nil
         }
 
-        session.selectImage(filePanel: cancelledPanel, client: client) { _, _ in
+        session.selectImage(filePanel: cancelledPanel, client: client, generator: { _, _ in
             throw ImageSessionTestError.renderFailed
-        }
+        })
 
         try await Self.waitUntil { panelWasRequested }
         await Task.yield()
@@ -1695,7 +1695,7 @@ struct ImageWorkflowClientTests {
             GeneratedIcon(size: 16, data: Data([1, 6]), pixelWidth: 16, pixelHeight: 16, format: .png)
         ]
         let session = FaviconOutputSetSession(outputSpecs: [FaviconOutputSpec(size: 16)])
-        session.receiveImageURL(sourceURL, client: client) { _, _ in icons }
+        session.receiveImageURL(sourceURL, client: client, generator: { _, _ in icons })
         try await Self.waitForIcons(in: session, matching: icons)
 
         var panelWasRequested = false
@@ -1704,7 +1704,7 @@ struct ImageWorkflowClientTests {
             #expect(request.allowedContentTypes == ImageWorkflowClient.faviconInputContentTypes)
             return nil
         }
-        session.selectImage(filePanel: cancelledPanel, client: client) { _, _ in icons }
+        session.selectImage(filePanel: cancelledPanel, client: client, generator: { _, _ in icons })
         try await Self.waitUntil { panelWasRequested }
         await Task.yield()
 
@@ -1726,13 +1726,13 @@ struct ImageWorkflowClientTests {
             GeneratedIcon(size: 16, data: Data([1, 6]), pixelWidth: 16, pixelHeight: 16, format: .png)
         ]
         let session = FaviconOutputSetSession(outputSpecs: [FaviconOutputSpec(size: 16)])
-        session.receiveImageURL(sourceURL, client: client) { _, _ in icons }
+        session.receiveImageURL(sourceURL, client: client, generator: { _, _ in icons })
         try await Self.waitForIcons(in: session, matching: icons)
 
         let unavailablePanel = FileInputPanelClient { _ in
             throw FileInputPanelFailure.windowUnavailable
         }
-        session.selectImage(filePanel: unavailablePanel, client: client) { _, _ in icons }
+        session.selectImage(filePanel: unavailablePanel, client: client, generator: { _, _ in icons })
         try await Self.waitUntil { session.error != nil }
 
         #expect(session.sourceURL == sourceURL)
@@ -1753,7 +1753,7 @@ struct ImageWorkflowClientTests {
             GeneratedIcon(size: 16, data: Data([1, 6]), pixelWidth: 16, pixelHeight: 16, format: .png)
         ]
         let session = FaviconOutputSetSession(outputSpecs: [FaviconOutputSpec(size: 16)])
-        session.receiveImageURL(sourceURL, client: client) { _, _ in icons }
+        session.receiveImageURL(sourceURL, client: client, generator: { _, _ in icons })
         try await Self.waitForIcons(in: session, matching: icons)
 
         session.rejectImageInput(SingleFileDropResolver.multipleFilesDiagnostic)
@@ -1780,10 +1780,10 @@ struct ImageWorkflowClientTests {
             GeneratedIcon(size: 16, data: Data([1, 6]), pixelWidth: 16, pixelHeight: 16, format: .png)
         ]
         let session = FaviconOutputSetSession(outputSpecs: [FaviconOutputSpec(size: 16)])
-        session.receiveImageURL(validURL, client: client) { _, _ in icons }
+        session.receiveImageURL(validURL, client: client, generator: { _, _ in icons })
         try await Self.waitForIcons(in: session, matching: icons)
 
-        session.receiveImageURL(invalidURL, client: client) { _, _ in icons }
+        session.receiveImageURL(invalidURL, client: client, generator: { _, _ in icons })
         try await Self.waitUntil { session.error != nil }
 
         #expect(session.source == nil)
@@ -1924,15 +1924,15 @@ struct ImageWorkflowClientTests {
         ]
         let session = FaviconOutputSetSession(outputSpecs: [FaviconOutputSpec(size: 16)])
 
-        session.receiveImageURL(firstURL, client: client) { _, _ in
+        session.receiveImageURL(firstURL, client: client, generator: { _, _ in
             Thread.sleep(forTimeInterval: 0.08)
             return firstIcons
-        }
+        })
         try await Self.waitUntil { session.sourceURL == firstURL }
 
-        session.receiveImageURL(secondURL, client: client) { _, _ in
+        session.receiveImageURL(secondURL, client: client, generator: { _, _ in
             secondIcons
-        }
+        })
 
         try await Self.waitForIcons(in: session, matching: secondIcons)
         try await Task.sleep(nanoseconds: 120_000_000)
@@ -1958,7 +1958,7 @@ struct ImageWorkflowClientTests {
         ]
         let session = FaviconOutputSetSession(outputSpecs: [FaviconOutputSpec(size: 16)])
 
-        session.receiveImageURL(sourceURL, client: client) { _, _ in icons }
+        session.receiveImageURL(sourceURL, client: client, generator: { _, _ in icons })
         try await Self.waitForIcons(in: session, matching: icons)
 
         session.reset()
@@ -1982,10 +1982,10 @@ struct ImageWorkflowClientTests {
         ]
         let session = FaviconOutputSetSession(outputSpecs: [FaviconOutputSpec(size: 16)])
 
-        session.receiveImageURL(sourceURL, client: client) { _, _ in
+        session.receiveImageURL(sourceURL, client: client, generator: { _, _ in
             Thread.sleep(forTimeInterval: 0.08)
             return lateIcons
-        }
+        })
         try await Self.waitUntil { session.sourceURL == sourceURL && session.isProcessing }
         session.reset()
         try await Task.sleep(nanoseconds: 120_000_000)

@@ -176,7 +176,6 @@ struct IconSemanticContractTests {
         "useragent-parser": "rectangle.and.text.magnifyingglass",
         "keycode-info": "keyboard",
         "image-tools": "photo.on.rectangle.angled",
-        "image-watermark": "text.below.photo",
         "color-picker": "paintpalette",
         "date-time-converter": "calendar",
         "timezone-viewer": "globe.americas",

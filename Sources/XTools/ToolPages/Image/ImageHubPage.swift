@@ -7,11 +7,13 @@ final class ImageHubWorkspaceModel: ObservableObject {
     }
 
     /// Hub 分段：rawValue 即 IndexSegmentedControl 的 item id，
-    /// 顺序 格式转换 | 压缩 | 灰度 | Favicon（用户确认顺序，亦为合并前注册表顺序）。
+    /// 顺序 格式转换 | 压缩 | 灰度 | 水印 | Favicon（前三段为重编码工作流，
+    /// 水印为图层合成工作流，Favicon 为部署产物生成器）。
     enum Segment: String, CaseIterable, Sendable, HubSegmentIdentifier {
         case convert
         case compress
         case grayscale
+        case watermark
         case favicon
 
         var label: String {
@@ -19,16 +21,18 @@ final class ImageHubWorkspaceModel: ObservableObject {
             case .convert: return "格式转换"
             case .compress: return "压缩"
             case .grayscale: return "灰度"
+            case .watermark: return "水印"
             case .favicon: return "Favicon"
             }
         }
 
-        /// 页面副标题沿用合并前四工具的文案，随分段切换。
+        /// 页面副标题沿用合并前各工具的文案，随分段切换。
         var subtitle: String {
             switch self {
             case .convert: return "把图片另存为不同格式；不用于压缩体积。"
             case .compress: return "自动优化图片体积，可按偏好和尺寸限制调整输出。"
             case .grayscale: return "将彩色图片转为灰度图。"
+            case .watermark: return "为图片添加黑色或白色文字水印，并保持原格式与尺寸。"
             case .favicon: return "上传图片，生成可直接放入站点根目录的五文件 Favicon 部署包。"
             }
         }
@@ -58,10 +62,11 @@ struct IndexImageHubPage: View {
     }
 }
 
-/// 「图片处理」Hub：单一 IndexPage 外壳 + 顶部 格式转换|压缩|灰度|Favicon 四段切换。
-/// 四段的源图与结果由 ToolWorkspaceRepository 按 (toolID, slot) 保活（key 已重挂
-/// toolID "image-tools" + 各自 slot），切换分段或离开再回来不丢输入与结果；离开
-/// Hub 时四个会话的重载荷按 toolID 一并驱逐（ToolWorkspacePayloadEvicting）。
+/// 「图片处理」Hub：单一 IndexPage 外壳 + 顶部
+/// 格式转换|压缩|灰度|水印|Favicon 五段切换。五段的源图与结果由
+/// ToolWorkspaceRepository 按 (toolID, slot) 保活（key 已重挂
+/// toolID "image-tools" + 各自 slot），切换分段或离开再回来不丢输入与结果；
+/// 离开 Hub 时五个会话的重载荷按 toolID 一并驱逐（ToolWorkspacePayloadEvicting）。
 private struct IndexImageHubContent: View {
     @ObservedObject var workspace: ImageHubWorkspaceModel
 
@@ -76,7 +81,8 @@ private struct IndexImageHubContent: View {
             case .convert: IndexImageConverterSegment()
             case .compress: IndexImageCompressorSegment()
             case .grayscale: IndexImageGrayscaleSegment()
-            case .favicon: IndexFaviconGeneratorSegment()
+            case .watermark: IndexImageWatermarkSegment()
+            case .favicon: IndexImageFaviconSegment()
             }
         }
     }

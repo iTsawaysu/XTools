@@ -36,7 +36,7 @@ struct ImagePageUXSourceContractTests {
         let watermark = try readSource("Sources/XTools/ToolPages/Image/ImageWatermarkPage.swift")
 
         contains(imageHub, "workspaceSemantic: .imagePreviewStage", "Image hub must keep the image preview workspace semantic")
-        contains(watermark, "workspaceSemantic: .liveImagePreviewStage", "Image watermark must keep the live preview workspace semantic")
+        contains(imageHub, "case .watermark: IndexImageWatermarkSegment()", "Image watermark must live in the image hub as a segment")
 
         contains(uploadSupport, "IndexEmptyStateCopy.autoGenerate(\"图片\")", "The shared upload pending state must use canonical generated-content copy")
         for source in [converter, watermark] {

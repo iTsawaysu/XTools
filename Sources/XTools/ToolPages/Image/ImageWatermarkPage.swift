@@ -98,7 +98,9 @@ final class ImageWatermarkPreviewSession: ObservableObject, ToolWorkspacePayload
 
 @MainActor
 final class ImageWatermarkToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicting {
-    static let key = ToolWorkspaceKey<ImageWatermarkToolWorkspaceModel>(toolID: "image-watermark") { preferences in
+    /// 并入「图片处理」Hub 后与四段共用 toolID，slot 隔离各自的源图与结果；
+    /// 偏好键沿用合并前的 imageWatermark.* 命名。
+    static let key = ToolWorkspaceKey<ImageWatermarkToolWorkspaceModel>(toolID: "image-tools", slot: "watermark") { preferences in
         ImageWatermarkToolWorkspaceModel(preferences: preferences)
     }
 
@@ -139,7 +141,7 @@ final class ImageWatermarkToolWorkspaceModel: ObservableObject, ToolWorkspacePay
     }
 }
 
-struct IndexImageWatermarkPage: View {
+struct IndexImageWatermarkSegment: View {
     var body: some View {
         ToolWorkspaceHost(key: ImageWatermarkToolWorkspaceModel.key) { workspace, bindings in
             IndexImageWatermarkWorkspaceContent(
@@ -216,132 +218,143 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         previewSession.image ?? session.outputImage
     }
 
+    /// Hub 分段内容：控制行 + 上传面板 + 成品面板，随 Hub 页外层滚动。
+    /// 实时预览契约不变——预览替换即时生效、状态行保持 18pt 稳定高度、
+    /// 连续控件走双轨防抖，画布在有界预览区（720×480 上限）内等比呈现。
     var body: some View {
-        IndexPage("图片水印", subtitle: "为图片添加黑色或白色文字水印，并保持原格式与尺寸。", workspaceSemantic: .liveImagePreviewStage) {
-            IndexActionBar {
-                IndexOptionGroup {
-                    IndexOptionLabel("透明度")
-                    IndexSlider(value: $opacity, range: 0.1...1.0, step: 0)
-                        .frame(width: 120)
-                        .accessibilityLabel("水印透明度")
-                        .accessibilityValue("\(Int(opacity * 100))%")
-                        .onChange(of: opacity) { _ in recipeDidChange(previewCadence: .debounced) }
+        IndexActionBar {
+            IndexOptionGroup {
+                IndexOptionLabel("透明度")
+                IndexSlider(value: $opacity, range: 0.1...1.0, step: 0)
+                    .frame(width: 120)
+                    .accessibilityLabel("水印透明度")
+                    .accessibilityValue("\(Int(opacity * 100))%")
+                    .onChange(of: opacity) { _ in recipeDidChange(previewCadence: .debounced) }
 
-                    IndexOptionDivider()
-                    IndexOptionLabel("大小")
-                    IndexSlider(value: $sizeRatio, range: ImageWatermarkSizing.ratioRange, step: 0.01)
-                        .frame(width: 100)
-                        .accessibilityLabel("水印大小")
-                        .accessibilityValue("\(sizePercent)%")
-                        .help("按图片宽度比例设置水印大小")
-                        .onChange(of: sizeRatio) { _ in recipeDidChange(previewCadence: .debounced) }
-                    Text("\(sizePercent)%")
-                        .font(ToolTypography.monoCaption)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                        .frame(width: 32, alignment: .trailing)
-                        .accessibilityHidden(true)
-                }
-
-                IndexOptionGroup {
-                    IndexOptionLabel("颜色")
-                    IndexSegmentedControl(
-                        items: [
-                            (ImageWatermarkTextColor.white, "白色"),
-                            (.black, "黑色")
-                        ],
-                        selection: $textColor,
-                        selectionStyle: .filled
-                    )
-                    .onChange(of: textColor) { _ in recipeDidChange(previewCadence: .immediate) }
-
-                    IndexOptionDivider()
-
-                    WatermarkAnchorOption(position: $position) {
-                        recipeDidChange(previewCadence: .immediate)
-                    }
-                }
+                IndexOptionDivider()
+                IndexOptionLabel("大小")
+                IndexSlider(value: $sizeRatio, range: ImageWatermarkSizing.ratioRange, step: 0.01)
+                    .frame(width: 100)
+                    .accessibilityLabel("水印大小")
+                    .accessibilityValue("\(sizePercent)%")
+                    .help("按图片宽度比例设置水印大小")
+                    .onChange(of: sizeRatio) { _ in recipeDidChange(previewCadence: .debounced) }
+                Text("\(sizePercent)%")
+                    .font(ToolTypography.monoCaption)
+                    .foregroundStyle(ToolTheme.textSecondary)
+                    .frame(width: 32, alignment: .trailing)
+                    .accessibilityHidden(true)
             }
 
-            IndexPanel("上传图片", fillsHeight: session.source == nil) {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+            IndexOptionGroup {
+                IndexOptionLabel("颜色")
+                IndexSegmentedControl(
+                    items: [
+                        (ImageWatermarkTextColor.white, "白色"),
+                        (.black, "黑色")
+                    ],
+                    selection: $textColor,
+                    selectionStyle: .filled
+                )
+                .onChange(of: textColor) { _ in recipeDidChange(previewCadence: .immediate) }
+
+                IndexOptionDivider()
+
+                WatermarkAnchorOption(position: $position) {
+                    recipeDidChange(previewCadence: .immediate)
+                }
+            }
+        }
+
+        IndexPanel("上传图片", fillsHeight: session.source == nil) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+                if session.source == nil {
+                    // 空态：文字输入与共享空态占位编组后整体居中，主操作
+                    // 由占位自带的 32pt 按钮承担，不再重复小动作行。
+                    VStack(alignment: .center, spacing: ToolMetrics.Spacing.lg) {
+                        watermarkTextField
+                            .frame(maxWidth: 360)
+
+                        ImageUploadPendingState(
+                            isProcessing: session.isProcessing,
+                            title: "选择图片开始添加水印",
+                            onSelect: selectImage
+                        )
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                } else {
                     imageSelectionActions
 
-                    if session.source == nil {
-                        watermarkTextField
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .center, spacing: 24) {
+                            watermarkTextField
+                            sourceIdentity
+                        }
 
-                        ImageUploadPendingState(isProcessing: session.isProcessing, title: "选择图片开始添加水印")
-                    } else {
-                        ViewThatFits(in: .horizontal) {
-                            HStack(alignment: .center, spacing: 24) {
-                                watermarkTextField
-                                sourceIdentity
-                            }
-
-                            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
-                                watermarkTextField
-                                sourceIdentity
-                            }
+                        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+                            watermarkTextField
+                            sourceIdentity
                         }
                     }
                 }
-                .indexWorkspaceDiagnostic(session.error)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, ToolMetrics.Spacing.sm)
-                .indexDropZone(
-                    isTargeted: $isImageDropTargeted,
-                    onFile: receiveImageURL,
-                    onMultipleFiles: rejectMultipleImageDrop
-                )
             }
+            .indexWorkspaceDiagnostic(session.error)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.vertical, ToolMetrics.Spacing.sm)
+            .indexDropZone(
+                isTargeted: $isImageDropTargeted,
+                onFile: receiveImageURL,
+                onMultipleFiles: rejectMultipleImageDrop
+            )
+        }
 
-            Group {
-                if session.source != nil {
-                    IndexPanel("水印成品") {
-                        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                            IndexImagePreviewStage(
-                                image: resultPreviewImage,
-                                accessibilityLabel: "水印成品预览",
-                                placeholder: previewPlaceholder,
-                                fillsHeight: true,
-                                replacementMotion: .immediate
-                            ) {
-                                HStack(spacing: ToolMetrics.Spacing.sm) {
-                                    if previewSession.isRendering {
-                                        IndexProgressSpinner()
-                                            .accessibilityLabel("正在更新水印预览")
-                                    }
-
-                                    if session.isProcessing {
-                                        Text("正在生成可保存原图…")
-                                            .font(ToolTypography.caption)
-                                            .foregroundStyle(ToolTheme.textSecondary)
-                                    } else if let resultAssessment {
-                                        Text(ImageOutputPresentation.processingOutputSummary(resultAssessment))
-                                            .font(ToolTypography.caption)
-                                            .foregroundStyle(resultAssessment.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textSecondary)
-                                    }
+        Group {
+            if session.source != nil {
+                IndexPanel("水印成品") {
+                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+                        IndexImagePreviewStage(
+                            image: resultPreviewImage,
+                            accessibilityLabel: "水印成品预览",
+                            placeholder: previewPlaceholder,
+                            fillsHeight: true,
+                            replacementMotion: .immediate
+                        ) {
+                            HStack(spacing: ToolMetrics.Spacing.sm) {
+                                if previewSession.isRendering {
+                                    IndexProgressSpinner()
+                                        .accessibilityLabel("正在更新水印预览")
                                 }
-                                .frame(height: Self.previewStatusHeight)
+
+                                if session.isProcessing {
+                                    Text("正在生成可保存原图…")
+                                        .font(ToolTypography.caption)
+                                        .foregroundStyle(ToolTheme.textSecondary)
+                                } else if let resultAssessment {
+                                    Text(ImageOutputPresentation.processingOutputSummary(resultAssessment))
+                                        .font(ToolTypography.caption)
+                                        .foregroundStyle(resultAssessment.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textSecondary)
+                                }
                             }
-                            .indexWorkspaceDiagnostic(session.error ?? previewSession.error)
+                            .frame(height: Self.previewStatusHeight)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    } accessory: {
-                        if session.output != nil, !session.isProcessing {
-                            Button {
-                                saveImage()
-                            } label: {
-                                Label("保存", systemImage: IndexActionSymbol.save)
-                                    .font(ToolTypography.buttonSmall)
-                            }
-                            .buttonStyle(IndexSmallButtonStyle())
-                            .accessibilityLabel("保存水印图片")
-                            .help("保存与当前水印设置一致的原尺寸图片")
-                        }
+                        .indexWorkspaceDiagnostic(session.error ?? previewSession.error)
                     }
-                    .verticallyFilling()
-                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                } accessory: {
+                    if session.output != nil, !session.isProcessing {
+                        Button {
+                            saveImage()
+                        } label: {
+                            Label("保存", systemImage: IndexActionSymbol.save)
+                                .font(ToolTypography.buttonSmall)
+                        }
+                        .buttonStyle(IndexSmallButtonStyle())
+                        .accessibilityLabel("保存水印图片")
+                        .help("保存与当前水印设置一致的原尺寸图片")
+                    }
                 }
+                .verticallyFilling()
+                .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
             }
         }
     }
@@ -370,7 +383,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
     @ViewBuilder
     private var sourceIdentity: some View {
         if let source = session.source {
-            HStack(alignment: .center, spacing: 12) {
+            HStack(alignment: .center, spacing: ToolMetrics.Spacing.md) {
                 IndexImagePreviewImage(
                     image: source.image,
                     accessibilityLabel: "水印源图片缩略图",
@@ -379,7 +392,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                 )
                 .frame(width: 64, height: 48)
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
                     Text(source.url.lastPathComponent)
                         .font(ToolTypography.bodyPlain)
                         .foregroundStyle(ToolTheme.textPrimary)
@@ -388,7 +401,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                         .help(source.url.lastPathComponent)
 
                     Text(sourceMetadataSummary)
-                        .font(ToolTypography.monoCaption)
+                        .font(ToolTypography.caption)
                         .foregroundStyle(ToolTheme.textSecondary)
                         .lineLimit(1)
                 }

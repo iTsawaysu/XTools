@@ -18,6 +18,9 @@ struct IndexProgressLabel: View {
 
     var message: String
     var layout: Layout = .inline
+    /// inline 行的水平对齐；缺省左对齐（工作台行内场景），
+    /// 空面板占位等居中场景显式传 .center。
+    var alignment: HorizontalAlignment = .leading
 
     var body: some View {
         switch layout {
@@ -29,7 +32,7 @@ struct IndexProgressLabel: View {
                     .foregroundStyle(ToolTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: Alignment(horizontal: alignment, vertical: .center))
         case .centered:
             VStack(spacing: 10) {
                 spinner

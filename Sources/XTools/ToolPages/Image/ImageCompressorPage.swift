@@ -123,7 +123,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
             isProcessing: session.isProcessing,
             diagnostic: session.error,
             emptyStateTitle: "选择图片开始优化",
-            actions: imageSelectionActions,
+            onSelect: selectImage,
             onDropFile: receiveImageURL,
             onDropMultipleFiles: rejectMultipleImageDrop
         )
@@ -197,7 +197,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
     }
 
     private var sourceCardFacts: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: ToolMetrics.Spacing.md) {
             Text("原始大小")
                 .font(ToolTypography.caption)
                 .foregroundStyle(ToolTheme.textSecondary)
@@ -213,7 +213,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
     private var resultCardFacts: some View {
         if let compressedAssessment, compressedAssessment.canSave {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 12) {
+                HStack(spacing: ToolMetrics.Spacing.md) {
                     Text("输出大小")
                         .font(ToolTypography.caption)
                         .foregroundStyle(ToolTheme.textSecondary)

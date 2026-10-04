@@ -1,7 +1,7 @@
 import XToolsCore
 import SwiftUI
 
-struct IndexFaviconGeneratorSegment: View {
+struct IndexImageFaviconSegment: View {
     var body: some View {
         ToolWorkspaceHost(key: FaviconOutputSetSession.workspaceKey) { session, _ in
             IndexFaviconGeneratorWorkspaceContent(session: session)
@@ -21,10 +21,10 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     var body: some View {
         IndexPanel("上传图片", fillsHeight: session.sourceImage == nil) {
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                imageSelectionActions
-
                 if let image = session.sourceImage {
-                    HStack(alignment: .center, spacing: 14) {
+                    imageSelectionActions
+
+                    HStack(alignment: .center, spacing: ToolMetrics.Spacing.base) {
                         IndexImagePreviewStage(
                             image: image,
                             accessibilityLabel: "Favicon 源图片预览",
@@ -37,7 +37,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
 
                         VStack(alignment: .leading, spacing: 5) {
                             Text(session.sourceURL?.lastPathComponent ?? "源图片")
-                                .font(ToolTypography.bodyMedium)
+                                .font(ToolTypography.bodyPlain)
                                 .foregroundStyle(ToolTheme.textPrimary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
@@ -50,11 +50,21 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
-                    ImageUploadPendingState(isProcessing: session.isProcessing, title: "选择图片开始生成 Favicon")
+                    // 空态在铺满的输入区内垂直居中，主操作由占位自带的
+                    // 32pt 按钮承担，不再重复小动作行。
+                    ImageUploadPendingState(
+                        isProcessing: session.isProcessing,
+                        title: "选择图片开始生成 Favicon",
+                        fillsHeight: true,
+                        onSelect: selectImage
+                    )
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, ToolMetrics.Spacing.sm)
+            // 源就位后成品面板已持有同一诊断锚；这里只在空态生效，
+            // 避免同一错误被两个面板各提示一次（双 toast/双 banner）。
+            .indexWorkspaceDiagnostic(session.sourceImage == nil ? session.error : nil)
             .indexDropZone(
                 isTargeted: $isImageDropTargeted,
                 onFile: receiveImageURL,
@@ -97,15 +107,13 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
 
     private var faviconOutputPanel: some View {
         IndexPanel("Favicon 部署包") {
-            VStack(spacing: 12) {
+            VStack(spacing: ToolMetrics.Spacing.md) {
                 if session.isProcessing {
-                    IndexProgressLabel(message: "正在生成部署包…")
-                        .foregroundStyle(ToolTheme.textSecondary)
+                    IndexProgressLabel(message: "正在生成部署包…", layout: .centered)
                         .accessibilityLabel("正在生成 Favicon 部署包")
-                        .frame(maxWidth: .infinity, minHeight: 120)
                         .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
                 } else if let package = session.package {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
                         if let warning = session.sourceWarning {
                             faviconReviewWarning(warning)
                         }
@@ -128,19 +136,15 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
             if session.package != nil {
                 Button {
                     Task { @MainActor in
-                        switch await session.savePackage(filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient) {
-                        case .saved:
-                            toastCenter?.show(ToolFeedbackCopy.saved(count: 5, noun: "部署文件"), tone: .success)
-                        case let .partiallySaved(savedCount, totalCount):
-                            toastCenter?.show(
-                                "已保存 \(savedCount)/\(totalCount) 个部署文件。",
-                                tone: .warning
-                            )
-                        case let .failed(message):
-                            toastCenter?.show(message, tone: .error)
-                        case .cancelled, .blocked:
-                            break
-                        }
+                        guard let package = session.package else { return }
+                        let outcome = await session.savePackage(filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
+                        ImageSaveOutcomeToasts.presentCountedOutput(
+                            outcome,
+                            savedCount: package.saveableArtifacts.count,
+                            successNoun: "部署文件",
+                            partialNoun: "个部署文件",
+                            toastCenter: toastCenter
+                        )
                     }
                 } label: {
                     Label("全部保存", systemImage: IndexActionSymbol.save)
@@ -155,7 +159,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
 
     private func faviconReviewWarning(_ warning: String) -> some View {
         IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 8) {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: ToolMetrics.Spacing.sm) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(ToolTheme.warning)
                 Text(warning)
@@ -202,14 +206,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     }
 
     private func handleSave(_ outcome: ImageSaveOutcome, filename: String) {
-        switch outcome {
-        case .saved:
-            toastCenter?.show(ToolFeedbackCopy.saved(fileName: filename), tone: .success)
-        case let .failed(message):
-            toastCenter?.show(message, tone: .error)
-        case .cancelled, .blocked, .partiallySaved:
-            break
-        }
+        ImageSaveOutcomeToasts.presentSingleOutput(outcome, fileName: filename, toastCenter: toastCenter)
     }
 
     private var uploadInteractions: ImageUploadInteractions {
@@ -241,7 +238,7 @@ private struct FaviconArtifactRow: View {
 
     var body: some View {
         IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 8) {
-            HStack(spacing: 12) {
+            HStack(spacing: ToolMetrics.Spacing.md) {
                 if !artifact.previewSizes.isEmpty {
                     FaviconPreviewStrip(artifact: artifact, package: package)
                 }

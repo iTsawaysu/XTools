@@ -175,18 +175,20 @@ struct TextWorkbenchSourceContractTests {
         let converter = try readSource("Sources/XTools/ToolPages/Image/ImageConverterPage.swift")
         let compressor = try readSource("Sources/XTools/ToolPages/Image/ImageCompressorPage.swift")
         let grayscale = try readSource("Sources/XTools/ToolPages/Image/ImageGrayscalePage.swift")
+        let watermark = try readSource("Sources/XTools/ToolPages/Image/ImageWatermarkPage.swift")
         let favicon = try readSource("Sources/XTools/ToolPages/Image/FaviconGeneratorPage.swift")
 
-        // 格式转换/压缩/灰度/Favicon 合并为单入口「图片处理」后，IndexPage 页面壳统一
-        // 上移到共享 HubSegmentPage 骨架；四分段只保留各自的图片工作台（会话仍按 slot 独立保活）。
+        // 格式转换/压缩/灰度/水印/Favicon 合并为单入口「图片处理」后，IndexPage 页面壳统一
+        // 上移到共享 HubSegmentPage 骨架；五分段只保留各自的图片工作台（会话仍按 slot 独立保活）。
         contains(hub, "HubSegmentPage(", "Image hub must compose the shared hub segment skeleton")
         contains(hub, "IndexImageConverterSegment()", "Image hub must mount the converter segment")
         contains(hub, "IndexImageCompressorSegment()", "Image hub must mount the compressor segment")
         contains(hub, "IndexImageGrayscaleSegment()", "Image hub must mount the grayscale segment")
-        contains(hub, "IndexFaviconGeneratorSegment()", "Image hub must mount the favicon segment")
+        contains(hub, "IndexImageWatermarkSegment()", "Image hub must mount the watermark segment")
+        contains(hub, "IndexImageFaviconSegment()", "Image hub must mount the favicon segment")
         contains(hub, "title: \"图片处理\"", "Image hub must keep its settled page title")
         contains(hub, "workspaceSemantic: .imagePreviewStage", "Image hub must let the semantic resolve the image preview stage page shell")
-        for segment in [converter, compressor, grayscale, favicon] {
+        for segment in [converter, compressor, grayscale, watermark, favicon] {
             contains(segment, "ToolWorkspaceHost(key:", "Image segments must keep resolving their repository-retained workspace sessions")
             doesNotContain(segment, "IndexPage(", "Image segments must not nest a second page shell inside the hub")
         }

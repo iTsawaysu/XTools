@@ -65,29 +65,20 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
         source.map(\.metadata).flatMap(FaviconPackageBuilder.sourceWarning(metadata:))
     }
 
+    /// 选择 Favicon 源图片并生成部署包。`selectionPublisher`/`generator`
+    /// 缺省时与 `ImageProcessedOutputSession` 同风格：发布事务直接放行、
+    /// 使用默认图标生成器（测试可用自定义 generator 收窄生成面）。
     func selectImage(
         filePanel: FileInputPanelClient,
         client: ImageWorkflowClient = ImageWorkflowClient(),
+        selectionPublisher: @escaping ImageSelectionPublisher = { _, publish in publish() },
         generator: @escaping FaviconIconSetGenerator = FaviconOutputSetSession.generateIcons
     ) {
         beginSelection(
             filePanel: filePanel,
             client: client,
-            selectionPublisher: { _, publish in publish() },
-            generator: generator
-        )
-    }
-
-    func selectImage(
-        filePanel: FileInputPanelClient,
-        client: ImageWorkflowClient = ImageWorkflowClient(),
-        selectionPublisher: @escaping ImageSelectionPublisher
-    ) {
-        beginSelection(
-            filePanel: filePanel,
-            client: client,
             selectionPublisher: selectionPublisher,
-            generator: FaviconOutputSetSession.generateIcons
+            generator: generator
         )
     }
 
@@ -125,37 +116,12 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
         })
     }
 
+    /// 接收拖放/面板路径的图片 URL 并生成部署包；参数缺省语义同 selectImage。
     func receiveImageURL(
         _ url: URL,
         client: ImageWorkflowClient = ImageWorkflowClient(),
+        selectionPublisher: @escaping ImageSelectionPublisher = { _, publish in publish() },
         generator: @escaping FaviconIconSetGenerator = FaviconOutputSetSession.generateIcons
-    ) {
-        beginImageURL(
-            url,
-            client: client,
-            selectionPublisher: { _, publish in publish() },
-            generator: generator
-        )
-    }
-
-    func receiveImageURL(
-        _ url: URL,
-        client: ImageWorkflowClient = ImageWorkflowClient(),
-        selectionPublisher: @escaping ImageSelectionPublisher
-    ) {
-        beginImageURL(
-            url,
-            client: client,
-            selectionPublisher: selectionPublisher,
-            generator: FaviconOutputSetSession.generateIcons
-        )
-    }
-
-    func receiveImageURL(
-        _ url: URL,
-        client: ImageWorkflowClient,
-        selectionPublisher: @escaping ImageSelectionPublisher,
-        generator: @escaping FaviconIconSetGenerator
     ) {
         beginImageURL(
             url,

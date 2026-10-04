@@ -33,8 +33,8 @@ struct AllToolsDiagnosticInventoryTests {
         let actual = registeredGroups.mapValues { $0[0].categoryID.rawValue }
         let expected = inventoryGroups.mapValues { $0[0].category }
 
-        #expect(actual.count == 35)
-        #expect(Self.inventory.count == 35)
+        #expect(actual.count == 34)
+        #expect(Self.inventory.count == 34)
         #expect(actual == expected)
     }
 
@@ -95,7 +95,6 @@ struct AllToolsDiagnosticInventoryTests {
         entry("keycode-info", "web", .none, "Web/KeycodeInfoPage.swift", "键盘事件持续产生可显示结果，没有可解析文本输入。"),
 
         entry("image-tools", "image", .errorAndWarning, "Image/ImageHubPage.swift"),
-        entry("image-watermark", "image", .externalIO, "Image/ImageWatermarkPage.swift"),
         entry("color-picker", "image", .inputValidation, "Image/ColorPickerPage.swift"),
 
         entry("date-time-converter", "time", .inputValidation, "Time/DateTimeConverterPage.swift"),

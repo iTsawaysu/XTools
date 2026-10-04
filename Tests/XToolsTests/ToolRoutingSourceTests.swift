@@ -70,7 +70,6 @@ struct ToolRoutingSourceTests {
         ])
         #expect(try #require(groups.first { $0.category.id == .image }?.tools).map(\.title) == [
             "图片处理",
-            "图片水印",
             "颜色转换"
         ])
         #expect(try #require(groups.first { $0.category.id == .time }?.tools).map(\.title) == [

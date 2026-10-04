@@ -119,11 +119,12 @@ private struct IndexImageConverterWorkspaceContent: View {
     }
 
     var body: some View {
-        // 间距对齐 IndexPage 标准页面壳的 sectionSpacing（10），与两段平铺时视觉一致。
-        // 拖放命中区挂整个内容根容器（参数区、列表、空白处均可接收），但保持静默：
-        // 视觉高亮由输入区内容层经共享 isImageDropTargeted 呈现——命中范围大、
-        // 指示只标输入框，与常规 App 的拖放语义一致。
-        VStack(alignment: .leading, spacing: 10) {
+        // 间距对齐 IndexPage 标准页面壳的 sectionSpacing（panelSection = 10），
+        // 与两段平铺时视觉一致。拖放命中区挂整个内容根容器（参数区、列表、
+        // 空白处均可接收），但保持静默：视觉高亮由输入区内容层经共享
+        // isImageDropTargeted 呈现——命中范围大、指示只标输入框，与常规
+        // App 的拖放语义一致。
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.panelSection) {
             IndexActionBar {
                 IndexOptionGroup {
                     IndexOptionLabel("目标格式")
@@ -214,15 +215,23 @@ private struct IndexImageConverterWorkspaceContent: View {
 
             IndexPanel("上传图片") {
                 VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                    imageSelectionActions
-
                     if session.items.isEmpty {
-                        // 空态在铺满的输入区内垂直居中，构成完整的拖放区观感。
-                        ImageUploadPendingState(isProcessing: session.isImporting, title: "选择图片开始转换", fillsHeight: true)
-                    } else if let singleItem = session.singleItem {
-                        singleImageStage(singleItem)
+                        // 空态在铺满的输入区内垂直居中，构成完整的拖放区观感；
+                        // 主操作由空态自带的 32pt 按钮承担，不再重复小动作行。
+                        ImageUploadPendingState(
+                            isProcessing: session.isImporting,
+                            title: "选择图片开始转换",
+                            fillsHeight: true,
+                            onSelect: addImages
+                        )
                     } else {
-                        batchList
+                        imageSelectionActions
+
+                        if let singleItem = session.singleItem {
+                            singleImageStage(singleItem)
+                        } else {
+                            batchList
+                        }
                     }
                 }
                 .indexWorkspaceDiagnostic(session.error)
@@ -304,11 +313,11 @@ private struct IndexImageConverterWorkspaceContent: View {
     /// N>1 紧凑行 + 顶部统计。
     private var batchList: some View {
         VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
-            HStack(spacing: 8) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 Text(batchStatisticsText)
                     .font(ToolTypography.caption)
                     .foregroundStyle(ToolTheme.textSecondary)
-                Spacer(minLength: 8)
+                Spacer(minLength: ToolMetrics.Spacing.sm)
                 Button {
                     saveConverted()
                 } label: {
@@ -342,12 +351,15 @@ private struct IndexImageConverterWorkspaceContent: View {
     }
 
     private var saveButtonTitle: String {
-        if let singleItem = session.singleItem,
-           case let .done(output) = singleItem.state,
-           output.requiresExplicitLargerSave {
-            return "仍然保存更大的文件"
-        }
-        return session.completedCount > 1 ? "全部保存" : "转换并保存"
+        let requiresExplicitLargerSave: Bool = {
+            guard let singleItem = session.singleItem,
+                  case let .done(output) = singleItem.state else { return false }
+            return output.requiresExplicitLargerSave
+        }()
+        return ImageOutputPresentation.saveTitle(
+            requiresExplicitLargerSave: requiresExplicitLargerSave,
+            fallback: session.completedCount > 1 ? "全部保存" : "转换并保存"
+        )
     }
 
     private var transparencyFillOutputSuffix: String {
@@ -471,20 +483,13 @@ private struct IndexImageConverterWorkspaceContent: View {
 
     private func saveConverted() {
         Task { @MainActor in
-            switch await session.saveAll(defaultBasename: "converted", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient) {
-            case .saved:
-                if session.completedCount > 1 {
-                    toastCenter?.show(ToolFeedbackCopy.saved(count: session.completedCount), tone: .success)
-                } else {
-                    toastCenter?.show(ToolFeedbackCopy.savedFile, tone: .success)
-                }
-            case let .partiallySaved(savedCount, totalCount):
-                toastCenter?.show("已保存 \(savedCount)/\(totalCount) 张图片。", tone: .warning)
-            case let .failed(message):
-                toastCenter?.show(message, tone: .error)
-            case .cancelled, .blocked:
-                break
-            }
+            let outcome = await session.saveAll(defaultBasename: "converted", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
+            ImageSaveOutcomeToasts.presentCountedOutput(
+                outcome,
+                savedCount: session.completedCount,
+                partialNoun: "张图片",
+                toastCenter: toastCenter
+            )
         }
     }
 }
@@ -517,16 +522,15 @@ private struct BatchConversionRow: View {
                         .lineLimit(1)
                 }
 
-                Spacer(minLength: 8)
+                Spacer(minLength: ToolMetrics.Spacing.sm)
 
                 statusView
 
-                Button(action: onRemove) {
-                    Image(systemName: IndexActionSymbol.removeResource)
-                        .font(ToolTypography.buttonSmall)
-                }
-                .buttonStyle(IndexSmallButtonStyle())
-                .accessibilityLabel("移除 \(item.filename)")
+                IndexIconButton(
+                    systemImage: IndexActionSymbol.removeResource,
+                    help: "移除 \(item.filename)",
+                    action: onRemove
+                )
             }
         }
     }
@@ -536,13 +540,13 @@ private struct BatchConversionRow: View {
         switch item.state {
         case .idle:
             Text("待转换")
-                .font(ToolTypography.monoCaption)
+                .font(ToolTypography.caption)
                 .foregroundStyle(ToolTheme.textSecondary)
         case .converting:
             IndexProgressSpinner()
         case let .done(output):
             Text(output.summaryText)
-                .font(ToolTypography.monoCaption)
+                .font(ToolTypography.caption)
                 .foregroundStyle(output.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textSecondary)
                 .lineLimit(1)
         case let .failed(message):

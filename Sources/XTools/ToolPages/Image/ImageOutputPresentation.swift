@@ -48,6 +48,13 @@ enum ImageOutputPresentation {
         "未生成更小文件"
     }
 
+    /// 输出大于原图时的保存按钮词表：图片工作流页共用同一确认措辞，
+    /// 避免「仍然保存更大的文件」在各页各写一份。水印页按契约固定用
+    /// 简短「保存」，不接此词表。
+    static func saveTitle(requiresExplicitLargerSave: Bool, fallback: String) -> String {
+        requiresExplicitLargerSave ? "仍然保存更大的文件" : fallback
+    }
+
     static func color(for assessment: ImageOutputAssessment) -> Color {
         switch assessment.severity {
         case .success:
