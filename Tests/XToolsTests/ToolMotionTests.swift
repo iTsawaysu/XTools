@@ -4,7 +4,6 @@ import Testing
 
 struct ToolMotionTests {
     @Test func motionDurationTokensStayInWorkingUiRange() {
-        #expect(ToolMotion.Duration.stagger == 0.04)
         #expect(ToolMotion.Duration.micro == 0.12)
         #expect(ToolMotion.Duration.quick == 0.15)
         #expect(ToolMotion.Duration.arrival == 0.24)

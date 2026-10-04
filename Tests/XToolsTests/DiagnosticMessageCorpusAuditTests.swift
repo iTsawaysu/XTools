@@ -558,26 +558,6 @@ struct DiagnosticMessageCorpusAuditTests {
             }
         }
 
-        for input in homeContentCorpus {
-            for action in HomeContentAction.allCases {
-                switch HomeContentProcessor.run(action, input: input) {
-                case .success(let result):
-                    if let warning = result.warning {
-                        collectMessage(ledger, tool: "quick-process", input: input, channel: "warning", message: warning)
-                    }
-                case .failure(let failure):
-                    collectMessage(
-                        ledger,
-                        tool: "quick-process",
-                        input: input,
-                        displayInput: "\(action.rawValue)｜\(Self.describe(input))",
-                        channel: "error",
-                        message: failure.message
-                    )
-                }
-            }
-        }
-
         for entry in fileTypeCorpus {
             let report = FileTypeDetector.inspect(fileName: entry.0, byteCount: entry.1, leadingData: entry.2)
             if let message = report.conflictDiagnostic {
@@ -851,14 +831,6 @@ struct DiagnosticMessageCorpusAuditTests {
         "transparent", "color(srgb 1 0 0)", "oklch(0.5 0.1 200)",
         "lab(50% 0 0)", "color-mix(in srgb, red, blue)", "rgb(",
         "device-cmyk(0 0 0 1)"
-    ]
-
-    static let homeContentCorpus: [String] = [
-        "", "   ", #"{"a":1}"#, #"{"a":1"#, "aGVsbG8=", "hello%20world",
-        "plain text", String(repeating: "a", count: 200_000),
-        "{" + String(repeating: "{\"a\":", count: 40) + "1" + String(repeating: "}", count: 40),
-        #"{"secret":"AKIAIOSFODNN7EXAMPLE"}"#,
-        "%ZZ%FF", "%E4%B8"
     ]
 
     static let fileTypeCorpus: [(String, Int64?, Data?)] = [

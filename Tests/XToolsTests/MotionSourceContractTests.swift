@@ -839,15 +839,4 @@ struct MotionSourceContractTests {
         doesNotContain(workspace, "gutterDeepeningFrame(", "No gutter-deepening remnant may stay in the jump path")
         contains(workspace, "guard !ToolMotion.systemReduceMotionEnabled else { return }", "Reduce Motion must keep jump positioning without the wash")
     }
-
-    @Test func wave2DashboardTrendBarsSpringGrowOneBeatApart() throws {
-        let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
-        let dashboard = try readSource("Sources/XTools/AppShell/DashboardView.swift")
-        contains(motion, "enum TrendBars", "Trend bars must own one terminal-value namespace")
-        contains(motion, "growth = Animation.spring(response: 0.3, dampingFraction: 0.85)", "Bars must grow on the shared 0.3/0.85 selection-slide spring family")
-        contains(dashboard, "struct DashboardTrendStrip", "The dashboard must own one trend strip")
-        contains(dashboard, "ToolMotion.TrendBars.growth.delay(Double(index) * ToolMotion.Duration.stagger)", "Bars must stagger on the shared 0.04s beat")
-        contains(dashboard, "store.sevenDayTrend", "The strip must read the persisted seven-day window")
-        contains(dashboard, "reduceMotion", "Reduce Motion must show final bar heights directly")
-    }
 }

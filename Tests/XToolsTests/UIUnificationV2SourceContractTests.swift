@@ -160,24 +160,15 @@ struct UIUnificationV2SourceContractTests {
         }
     }
 
-    @Test func workbenchUsesNamedControlsAndOwnsItsSession() throws {
+    @Test func dashboardUsesNamedControlsAndApprovedShortcuts() throws {
         let dashboard = try readSource("Sources/XTools/AppShell/DashboardView.swift")
-        let workbench = try readSource("Sources/XTools/AppShell/HomeContentWorkbench.swift")
-        let session = try readSource("Sources/XTools/AppShell/HomeContentSession.swift")
 
-        contains(dashboard, "ToolWorkspaceHost(key: HomeContentSession.key)", "Workbench input must stay in the window-scoped session repository")
         contains(dashboard, "ToolMetrics.Workbench.mainMaxWidth", "Workbench layout must use the approved named geometry tokens")
         contains(dashboard, "Shortcut(id: \"formatter\"", "Workbench must expose real registered shortcut identifiers")
-        contains(dashboard, "Shortcut(id: \"color-picker\"", "Workbench must keep all six approved default shortcuts")
+        contains(dashboard, "Shortcut(id: \"color-picker\"", "Workbench must keep the approved default shortcuts")
         doesNotContain(dashboard, "DashboardWaterfall", "Retired waterfall rendering must not remain in the V3 workbench")
         doesNotContain(dashboard, "showsLayoutEditor", "V3 workbench must not retain card-layout editing")
-        contains(workbench, "IndexTextArea(", "Workbench input must use the shared native text surface")
-        contains(workbench, "IndexCopyButton(", "Workbench result copy must use the shared feedback control")
-        contains(workbench, "HomeContentAction.allCases", "Workbench must derive its action menu from the approved Core action set")
-        contains(workbench, "WorkbenchSecondaryButton(title: \"粘贴\"", "Clipboard input must have one explicit paste control")
-        contains(workbench, "private func paste()", "Clipboard reading must stay owned by the explicit paste action")
-        contains(workbench, "hint: session.isProcessing ? nil : \"⌘↩\"", "Workbench primary action must show keyboard shortcut hint")
-        doesNotContain(session, "NSPasteboard", "Home session must not import or monitor clipboard content")
+        doesNotContain(dashboard, "ToolWorkspaceHost", "Dashboard is a static face: content sessions must not be revived here")
     }
 
     @Test func keycapLabelsUseDedicatedLegibleTypography() throws {

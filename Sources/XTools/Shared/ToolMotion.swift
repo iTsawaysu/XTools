@@ -9,7 +9,6 @@ import SwiftUI
 /// ownership, scroll behavior, or split/focus semantics.
 enum ToolMotion {
     enum Duration {
-        static let stagger: TimeInterval = 0.04
         static let micro: TimeInterval = 0.12
         static let quick: TimeInterval = 0.15
         static let arrival: TimeInterval = 0.24
@@ -284,13 +283,6 @@ enum ToolMotion {
         static let textRiseDistance: CGFloat = 4
         /// Single-element variant (editor placeholder swap): no beat delay.
         static let elementArrival = Curve.smoothOut(duration: 0.3)
-    }
-
-    /// Wave 2 dashboard trend bars (prototype MOTION d.trendBar /
-    /// d.trendStagger): bars spring-grow from the baseline one
-    /// `Duration.stagger` (0.04s) beat apart.
-    enum TrendBars {
-        static let growth = Animation.spring(response: 0.3, dampingFraction: 0.85)
     }
 
     /// Wave 2 command-palette choreography (prototype MOTION d/x/s.cmdk*):

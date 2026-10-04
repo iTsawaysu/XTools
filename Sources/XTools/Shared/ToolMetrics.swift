@@ -51,7 +51,6 @@ enum ToolMetrics {
         static let field: CGFloat = 8      // Input fields, large buttons, KV rows
         static let card: CGFloat = 12      // Resting dashboard/content cards
         static let modal: CGFloat = 12     // Floating surfaces: command palette, toasts, popovers, empty-state tiles
-        static let trendBar: CGFloat = 2.5  // Dashboard trend-strip bars (prototype .tbar)
         static let keycap: CGFloat = 4      // Keyboard hint keycaps (near-square, Raycast-style)
         // pill: use Capsule() directly for fully rounded
         // Nested rule: inner radius = outer radius - padding (e.g. 8 - 2 = 6 for segment items)
