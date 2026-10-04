@@ -29,7 +29,7 @@ do {
     }
     let annotationsXML = try String(contentsOf: annotationsURL, encoding: .utf8)
 
-    let data = try EmojiCatalog.compilePrecompiledCatalogData(
+    let data = try EmojiCatalogCompiler.compilePrecompiledCatalogData(
         sourceData: sourceData,
         chineseAnnotationsXML: annotationsXML
     )

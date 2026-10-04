@@ -1,5 +1,6 @@
 import Foundation
 import XToolsCore
+import EmojiCatalogCompiler
 import Testing
 
 struct EmojiCategorizationTests {
@@ -8,8 +9,9 @@ struct EmojiCategorizationTests {
         let decoded = try #require(EmojiCatalog.decodePrecompiledCatalog(data))
 
         // emoji-test.txt 已移出运行时 bundle：交叉校验从仓库编译工具目录读取
-        // 后注入，语义与原先（运行时解析 txt）保持一致。zh-annotations.xml
-        // （CLDR zh 注解）与 plist 编译管线同步注入，二者缺一不可。
+        // 后经编译器重建。若 plist 与 Unicode 源数据/编译管线漂移，此断言必须
+        // 变红（decoded == groups 是同源自比，无法发现漂移）。
+        // zh-annotations.xml（CLDR zh 注解）与 plist 编译管线同步注入，二者缺一不可。
         let sourceURL = try sourcePackageRoot()
             .appendingPathComponent("tools/EmojiCatalogCompiler/emoji-test.txt")
         let sourceData = try String(contentsOf: sourceURL, encoding: .utf8)
@@ -17,12 +19,13 @@ struct EmojiCategorizationTests {
             .appendingPathComponent("tools/EmojiCatalogCompiler/zh-annotations.xml")
         let annotationsXML = try String(contentsOf: annotationsURL, encoding: .utf8)
 
-        #expect(
-            decoded == EmojiCatalog.buildSourceCatalog(
-                sourceData: sourceData,
-                chineseAnnotationsXML: annotationsXML
-            )
+        let compiled = try EmojiCatalogCompiler.compilePrecompiledCatalogData(
+            sourceData: sourceData,
+            chineseAnnotationsXML: annotationsXML
         )
+        let compiledCatalog = try #require(EmojiCatalog.decodePrecompiledCatalog(compiled))
+
+        #expect(decoded == compiledCatalog)
         #expect(decoded == EmojiCatalog.groups)
     }
 
@@ -153,7 +156,7 @@ struct EmojiCategorizationTests {
     @Test func scalarFallbackCatalogStaysUsableWithoutPrecompiledData() {
         // 预编译 plist 缺失/损坏时的运行时降级路径：scalar 内建兜底 +
         // 特殊符号组仍产出可用目录（groups 的 guard-else 走同一组合）。
-        let fallback = EmojiCatalog.buildSourceCatalog(sourceData: nil)
+        let fallback = EmojiCatalog.fallbackCatalog()
 
         #expect(!fallback.isEmpty)
         #expect(fallback.contains { $0.name == EmojiCatalog.specialSymbolGroupName })

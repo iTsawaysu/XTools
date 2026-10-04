@@ -63,7 +63,7 @@ let package = Package(
         ),
         .testTarget(
             name: "XToolsTests",
-            dependencies: ["XToolsCore", "XTools"],
+            dependencies: ["XToolsCore", "XTools", "EmojiCatalogCompiler"],
             path: "Tests/XToolsTests",
             resources: [
                 .copy("Fixtures/test.md")

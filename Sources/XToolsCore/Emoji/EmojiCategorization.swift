@@ -2,7 +2,7 @@ import Foundation
 
 private let emojiSearchLocale = Locale(identifier: "zh_CN")
 
-private func normalizedEmojiSearchText(_ text: String) -> String {
+package func normalizedEmojiSearchText(_ text: String) -> String {
     text.trimmingCharacters(in: .whitespacesAndNewlines)
         .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: emojiSearchLocale)
         .lowercased()
@@ -23,12 +23,12 @@ private final class EmojiStringCache: @unchecked Sendable {
     }
 }
 
-public struct EmojiEntry: Identifiable, Equatable, Sendable {
+public struct EmojiEntry: Identifiable, Equatable, Sendable, Codable {
     public let base: String
     public let name: String
     public let aliases: [String]
     public let skinToneCapable: Bool
-    let searchText: String
+    package let searchText: String
 
     public var id: String { base }
 
@@ -79,7 +79,7 @@ public struct EmojiEntry: Identifiable, Equatable, Sendable {
             .joined(separator: " ")
     }
 
-    fileprivate init(
+    package init(
         base: String,
         name: String,
         aliases: [String],
@@ -110,7 +110,7 @@ public struct EmojiSearchResult: Equatable, Sendable {
     }
 }
 
-public struct EmojiSubsection: Identifiable, Equatable, Sendable {
+public struct EmojiSubsection: Identifiable, Equatable, Sendable, Codable {
     public let name: String
     public let entries: [EmojiEntry]
 
@@ -122,7 +122,7 @@ public struct EmojiSubsection: Identifiable, Equatable, Sendable {
     }
 }
 
-public struct EmojiSection: Identifiable, Equatable, Sendable {
+public struct EmojiSection: Identifiable, Equatable, Sendable, Codable {
     public let name: String
     public let subsections: [EmojiSubsection]
 
@@ -134,7 +134,7 @@ public struct EmojiSection: Identifiable, Equatable, Sendable {
     }
 }
 
-public struct EmojiGroup: Identifiable, Equatable, Sendable {
+public struct EmojiGroup: Identifiable, Equatable, Sendable, Codable {
     public let name: String
     public let entries: [EmojiEntry]
     public let sections: [EmojiSection]
@@ -159,7 +159,7 @@ public struct EmojiGroup: Identifiable, Equatable, Sendable {
         self.entries = uniqueEntries
     }
 
-    fileprivate init(name: String, entries: [EmojiEntry], sections: [EmojiSection]) {
+    package init(name: String, entries: [EmojiEntry], sections: [EmojiSection]) {
         self.name = name
         self.entries = entries
         self.sections = sections
@@ -191,87 +191,13 @@ public enum EmojiCatalog {
     private static let precompiledCatalogSchemaVersion = 1
     private static let precompiledCatalogResourceName = "emoji-catalog-v1"
 
-    private struct PrecompiledCatalog: Codable {
+    package struct PrecompiledCatalog: Codable {
         let schemaVersion: Int
-        let groups: [PrecompiledGroup]
+        let groups: [EmojiGroup]
 
-        init(groups: [EmojiGroup]) {
-            schemaVersion = EmojiCatalog.precompiledCatalogSchemaVersion
-            self.groups = groups.map(PrecompiledGroup.init)
-        }
-    }
-
-    private struct PrecompiledGroup: Codable {
-        let name: String
-        let entries: [PrecompiledEntry]
-        let sections: [PrecompiledSection]
-
-        init(_ group: EmojiGroup) {
-            name = group.name
-            entries = group.entries.map(PrecompiledEntry.init)
-            sections = group.sections.map(PrecompiledSection.init)
-        }
-
-        var domainValue: EmojiGroup {
-            EmojiGroup(
-                name: name,
-                entries: entries.map(\.domainValue),
-                sections: sections.map(\.domainValue)
-            )
-        }
-    }
-
-    private struct PrecompiledSection: Codable {
-        let name: String
-        let subsections: [PrecompiledSubsection]
-
-        init(_ section: EmojiSection) {
-            name = section.name
-            subsections = section.subsections.map(PrecompiledSubsection.init)
-        }
-
-        var domainValue: EmojiSection {
-            EmojiSection(name: name, subsections: subsections.map(\.domainValue))
-        }
-    }
-
-    private struct PrecompiledSubsection: Codable {
-        let name: String
-        let entries: [PrecompiledEntry]
-
-        init(_ subsection: EmojiSubsection) {
-            name = subsection.name
-            entries = subsection.entries.map(PrecompiledEntry.init)
-        }
-
-        var domainValue: EmojiSubsection {
-            EmojiSubsection(name: name, entries: entries.map(\.domainValue))
-        }
-    }
-
-    private struct PrecompiledEntry: Codable {
-        let base: String
-        let name: String
-        let aliases: [String]
-        let skinToneCapable: Bool
-        let searchText: String
-
-        init(_ entry: EmojiEntry) {
-            base = entry.base
-            name = entry.name
-            aliases = entry.aliases
-            skinToneCapable = entry.skinToneCapable
-            searchText = entry.searchText
-        }
-
-        var domainValue: EmojiEntry {
-            EmojiEntry(
-                base: base,
-                name: name,
-                aliases: aliases,
-                skinToneCapable: skinToneCapable,
-                searchText: searchText
-            )
+        package init(schemaVersion: Int = EmojiCatalog.precompiledCatalogSchemaVersion, groups: [EmojiGroup]) {
+            self.schemaVersion = schemaVersion
+            self.groups = groups
         }
     }
 
@@ -420,262 +346,14 @@ public enum EmojiCatalog {
               !catalog.groups.isEmpty else {
             return nil
         }
-        return catalog.groups.map(\.domainValue)
+        return catalog.groups
     }
 
-    /// 从 emoji-test.txt 文本构建完整目录；文本为空或解析不出分组时降级为
-    /// scalar 派生目录。sourceData 由编译工具（tools/EmojiCatalogCompiler）
-    /// 或测试注入——运行时不再携带 txt，因此没有无参版本。
-    /// chineseAnnotationsXML 为可选的 CLDR zh 注解（LDML annotations），
-    /// 其关键词会并入各条目的 searchText 使中文搜索命中。
-    package static func buildSourceCatalog(
-        sourceData: String?,
-        chineseAnnotationsXML: String? = nil
-    ) -> [EmojiGroup] {
-        var groups: [EmojiGroup]
-        if let sourceData, !sourceData.isEmpty {
-            let parsed = parseEmojiTestData(sourceData)
-            groups = parsed.isEmpty ? buildFallbackFromScalarProperties() : parsed
-        } else {
-            groups = buildFallbackFromScalarProperties()
-        }
-        groups.append(buildSpecialSymbolGroup())
-
-        if let chineseAnnotationsXML, !chineseAnnotationsXML.isEmpty {
-            groups = applyingChineseAnnotations(chineseAnnotationsXML, to: groups)
-        }
-        return groups
+    package static func fallbackCatalog() -> [EmojiGroup] {
+        buildFallbackFromScalarProperties() + [buildSpecialSymbolGroup()]
     }
 
-    /// 编译预编译目录：sourceData 必须由调用方注入（编译工具从自身 bundle 读
-    /// emoji-test.txt），保证 XToolsCore 的运行时资源不含该 txt。
-    package static func compilePrecompiledCatalogData(
-        sourceData: String,
-        chineseAnnotationsXML: String? = nil
-    ) throws -> Data {
-        let encoder = PropertyListEncoder()
-        encoder.outputFormat = .binary
-        return try encoder.encode(
-            PrecompiledCatalog(
-                groups: buildSourceCatalog(
-                    sourceData: sourceData,
-                    chineseAnnotationsXML: chineseAnnotationsXML
-                )
-            )
-        )
-    }
-
-    /// 把 CLDR zh 注解的关键词并入每条条目的 searchText（去重）。cp 对齐使用
-    /// 与搜索一致的规范形（去 FE0E/FE0F）：CLDR 注解的 cp 已移除 FE0F，而
-    /// emoji-test.txt 的完整限定序列通常携带 FE0F。解析失败时原样返回。
-    private static func applyingChineseAnnotations(_ xml: String, to groups: [EmojiGroup]) -> [EmojiGroup] {
-        let keywordsByGlyph = parseChineseAnnotations(xml)
-        guard !keywordsByGlyph.isEmpty else { return groups }
-
-        func entryWithAnnotations(_ entry: EmojiEntry) -> EmojiEntry {
-            guard let keywords = keywordsByGlyph[canonicalGlyphKey(entry.base)], !keywords.isEmpty else {
-                return entry
-            }
-            var seen = Set(entry.searchText.split(separator: " ").map(String.init))
-            var additions: [String] = []
-            for keyword in keywords {
-                let normalized = normalizedEmojiSearchText(keyword)
-                guard !normalized.isEmpty, seen.insert(normalized).inserted else { continue }
-                additions.append(normalized)
-            }
-            guard !additions.isEmpty else { return entry }
-
-            let searchText = ((entry.searchText.isEmpty ? [] : [entry.searchText]) + additions)
-                .joined(separator: " ")
-            return EmojiEntry(
-                base: entry.base,
-                name: entry.name,
-                aliases: entry.aliases,
-                skinToneCapable: entry.skinToneCapable,
-                searchText: searchText
-            )
-        }
-
-        return groups.map { group in
-            EmojiGroup(
-                name: group.name,
-                entries: group.entries.map(entryWithAnnotations),
-                sections: group.sections.map { section in
-                    EmojiSection(
-                        name: section.name,
-                        subsections: section.subsections.map { subsection in
-                            EmojiSubsection(
-                                name: subsection.name,
-                                entries: subsection.entries.map(entryWithAnnotations)
-                            )
-                        }
-                    )
-                }
-            )
-        }
-    }
-
-    private static func parseChineseAnnotations(_ xml: String) -> [String: [String]] {
-        guard let data = xml.data(using: .utf8) else { return [:] }
-        let collector = ChineseAnnotationCollector()
-        let parser = XMLParser(data: data)
-        parser.delegate = collector
-        guard parser.parse() else { return [:] }
-        return collector.keywordsByGlyph
-    }
-
-    /// LDML annotations 收集器：annotation 正文按 | 分隔为关键词，
-    /// type="tts" 条目的正文即短名，一并并入。按文档顺序去重，
-    /// 保证同一输入生成可复现的目录。
-    private final class ChineseAnnotationCollector: NSObject, XMLParserDelegate {
-        private var seenKeywords: [String: Set<String>] = [:]
-        private(set) var keywordsByGlyph: [String: [String]] = [:]
-        private var glyph: String?
-        private var text = ""
-
-        func parser(
-            _ parser: XMLParser,
-            didStartElement elementName: String,
-            namespaceURI: String?,
-            qualifiedName qName: String?,
-            attributes attributeDict: [String: String] = [:]
-        ) {
-            guard elementName == "annotation", let cp = attributeDict["cp"] else {
-                glyph = nil
-                return
-            }
-            glyph = cp
-            text = ""
-        }
-
-        func parser(_ parser: XMLParser, foundCharacters string: String) {
-            guard glyph != nil else { return }
-            text += string
-        }
-
-        func parser(
-            _ parser: XMLParser,
-            didEndElement elementName: String,
-            namespaceURI: String?,
-            qualifiedName qName: String?
-        ) {
-            defer { glyph = nil }
-            guard elementName == "annotation", let glyph else { return }
-
-            let keywords = text
-                .split(separator: "|", omittingEmptySubsequences: true)
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-
-            let key = canonicalGlyphKey(glyph)
-            for keyword in keywords where seenKeywords[key, default: []].insert(keyword).inserted {
-                keywordsByGlyph[key, default: []].append(keyword)
-            }
-        }
-    }
-
-    private static func parseEmojiTestData(_ data: String) -> [EmojiGroup] {
-        var currentGroup: String?
-        var orderedGroupNames: [String] = []
-        var buckets: [String: [EmojiEntry]] = [:]
-        var seen = Set<String>()
-
-        for rawLine in data.split(whereSeparator: \.isNewline) {
-            let line = String(rawLine)
-
-            if line.hasPrefix("# group:") {
-                currentGroup = localizedGroupName(
-                    String(line.dropFirst("# group:".count)).trimmingCharacters(in: .whitespaces)
-                )
-                if let currentGroup, !orderedGroupNames.contains(currentGroup) {
-                    orderedGroupNames.append(currentGroup)
-                }
-                continue
-            }
-
-            guard let currentGroup,
-                  let parsed = parseEmojiLine(line),
-                  !containsSkinToneModifier(parsed.codePoints),
-                  seen.insert(parsed.base).inserted else {
-                continue
-            }
-
-            buckets[currentGroup, default: []].append(
-                EmojiEntry(
-                    base: parsed.base,
-                    name: parsed.name,
-                    skinToneCapable: canApplySkinTone(to: parsed.base),
-                    aliases: aliases(forUnicodeName: parsed.name)
-                )
-            )
-        }
-
-        return orderedGroupNames.compactMap { groupName in
-            guard let entries = buckets[groupName], !entries.isEmpty else { return nil }
-            return EmojiGroup(name: groupName, entries: entries)
-        }
-    }
-
-    private static func localizedGroupName(_ name: String) -> String? {
-        switch name {
-        case "Smileys & Emotion": return "笑脸与情感"
-        case "People & Body": return "人物与身体"
-        case "Animals & Nature": return "动物与自然"
-        case "Food & Drink": return "食物与饮品"
-        case "Travel & Places": return "旅行与地点"
-        case "Activities": return "活动与运动"
-        case "Objects": return "物品与工具"
-        case "Symbols": return "符号与标志"
-        case "Flags": return "旗帜"
-        case "Component": return nil
-        default: return otherCategoryName
-        }
-    }
-
-    private static func parseEmojiLine(_ line: String) -> (base: String, name: String, codePoints: [UInt32])? {
-        let declarationAndComment = line.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
-        guard declarationAndComment.count == 2 else {
-            return nil
-        }
-
-        let declaration = declarationAndComment[0].split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)
-        guard declaration.count == 2 else {
-            return nil
-        }
-
-        let status = declaration[1].trimmingCharacters(in: .whitespaces)
-        guard status == "fully-qualified" else {
-            return nil
-        }
-
-        let codePointText = declaration[0].trimmingCharacters(in: .whitespaces)
-        let codePoints = codePointText.split(separator: " ").compactMap { UInt32($0, radix: 16) }
-        guard !codePoints.isEmpty,
-              codePoints.count == codePointText.split(separator: " ").count else {
-            return nil
-        }
-
-        let scalars = codePoints.compactMap(Unicode.Scalar.init)
-        guard scalars.count == codePoints.count else {
-            return nil
-        }
-
-        let comment = declarationAndComment[1].trimmingCharacters(in: .whitespaces)
-        let nameParts = comment.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
-        let name = nameParts.count == 3 ? String(nameParts[2]).lowercased() : comment.lowercased()
-
-        return (String(String.UnicodeScalarView(scalars)), name, codePoints)
-    }
-
-    private static func containsSkinToneModifier(_ codePoints: [UInt32]) -> Bool {
-        codePoints.contains { 0x1F3FB...0x1F3FF ~= $0 }
-    }
-
-    private static func canApplySkinTone(to emoji: String) -> Bool {
-        emoji.unicodeScalars.contains { $0.properties.isEmojiModifierBase }
-    }
-
-    private static func buildFallbackFromScalarProperties() -> [EmojiGroup] {
+    package static func buildFallbackFromScalarProperties() -> [EmojiGroup] {
         var buckets: [String: [EmojiEntry]] = [:]
         var seen = Set<UInt32>()
 
@@ -716,7 +394,7 @@ public enum EmojiCatalog {
         let aliases: [String]
     }
 
-    private static func buildSpecialSymbolGroup() -> EmojiGroup {
+    package static func buildSpecialSymbolGroup() -> EmojiGroup {
         EmojiGroup(
             name: specialSymbolGroupName,
             sections: specialSymbolSections.map { section in
@@ -852,7 +530,7 @@ public enum EmojiCatalog {
             .joined(separator: " ")
     }
 
-    private static func canonicalGlyphKey(_ glyph: String) -> String {
+    package static func canonicalGlyphKey(_ glyph: String) -> String {
         var scalars = String.UnicodeScalarView()
         for scalar in glyph.unicodeScalars where scalar.value != 0xFE0E && scalar.value != 0xFE0F {
             scalars.append(scalar)
@@ -860,7 +538,7 @@ public enum EmojiCatalog {
         return String(scalars)
     }
 
-    private static func aliases(forUnicodeName name: String) -> [String] {
+    package static func aliases(forUnicodeName name: String) -> [String] {
         let lowercased = name.lowercased()
         let tokens = Set(lowercased.split { !$0.isLetter && !$0.isNumber }.map(String.init))
         var aliases: [String] = []
