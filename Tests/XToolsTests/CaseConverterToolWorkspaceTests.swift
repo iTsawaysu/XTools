@@ -75,7 +75,7 @@ struct CaseConverterToolWorkspaceTests {
         #expect(model.styles.isEmpty)
         #expect(model.isProcessing)
 
-        await waitUntil {
+        await waitUntilAssert {
             model.styles.first?.value == "ééé"
         }
 
@@ -128,7 +128,7 @@ struct CaseConverterToolWorkspaceTests {
         #expect(model.isProcessing)
 
         await gate.resume("newer", with: CaseConversion.styles("newer"))
-        await waitUntil { model.styles.first?.value == "newer" }
+        await waitUntilAssert { model.styles.first?.value == "newer" }
 
         #expect(!model.isProcessing)
     }
@@ -177,18 +177,6 @@ struct CaseConverterToolWorkspaceTests {
             backgroundRenderer: backgroundRenderer
         )
     }
-
-    @MainActor
-    private func waitUntil(
-        timeout: Duration = .seconds(20),
-        condition: @escaping @MainActor () -> Bool
-    ) async {
-        let deadline = ContinuousClock.now + timeout
-        while !condition(), ContinuousClock.now < deadline {
-            await Task.yield()
-        }
-        #expect(condition())
-    }
 }
 
 private final class LockedStyleRendererRecorder: @unchecked Sendable {
@@ -212,31 +200,5 @@ private final class LockedStyleRendererRecorder: @unchecked Sendable {
     }
 }
 
-private actor CaseConversionExecutionGate {
-    private var continuations: [String: [CheckedContinuation<[CaseConversionStyleRow], Never>]] = [:]
-    private var requestCounts: [String: Int] = [:]
+private typealias CaseConversionExecutionGate = TestKeyedAsyncGate<String, [CaseConversionStyleRow]>
 
-    func execute(_ input: String) async -> [CaseConversionStyleRow] {
-        requestCounts[input, default: 0] += 1
-        return await withCheckedContinuation { continuation in
-            continuations[input, default: []].append(continuation)
-        }
-    }
-
-    func waitForRequest(_ input: String, timeout: Duration = .seconds(20)) async {
-        let deadline = ContinuousClock.now + timeout
-        while requestCounts[input, default: 0] < 1, ContinuousClock.now < deadline {
-            await Task.yield()
-        }
-        if requestCounts[input, default: 0] < 1 {
-            Issue.record("Timed out waiting for case conversion request: \(input)")
-        }
-    }
-
-    func resume(_ input: String, with rows: [CaseConversionStyleRow]) {
-        let pending = continuations.removeValue(forKey: input) ?? []
-        for continuation in pending {
-            continuation.resume(returning: rows)
-        }
-    }
-}

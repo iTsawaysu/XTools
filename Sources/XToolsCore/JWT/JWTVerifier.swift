@@ -134,7 +134,7 @@ public enum JWTVerifier {
 
         let headerData: Data
         do {
-            headerData = try JWTBase64URL.decode(parts[0])
+            headerData = try Base64Conversion.decodeBase64URLData(parts[0])
         } catch {
             throw VerificationError.parseError
         }
@@ -163,7 +163,7 @@ public enum JWTVerifier {
 
         let payloadData: Data
         do {
-            payloadData = try JWTBase64URL.decode(parts[1])
+            payloadData = try Base64Conversion.decodeBase64URLData(parts[1])
         } catch {
             throw VerificationError.parseError
         }
@@ -277,7 +277,7 @@ public enum JWTVerifier {
         let message = "\(parts[0]).\(parts[1])"
         let signature = parts[2]
         guard let computedDigest = try? JWTHMAC.digest(message: message, key: key, algorithm: algorithm),
-              let providedSignature = try? JWTBase64URL.decode(signature) else {
+              let providedSignature = try? Base64Conversion.decodeBase64URLData(signature) else {
             return false
         }
 

@@ -357,6 +357,9 @@ public enum JWTSigner {
         let pretty: String
         do {
             minifiedResult = try JSONFormatting.minifyResult(source)
+            // pretty 是签名页的展示字段：必须走自研 formatter。JSONSerialization
+            // 的 prettyPrinted 会改变 "： " 间距、数字（1.0→1）与空集合格式，
+            // 属于用户可见的输出回归。
             pretty = try JSONFormatting.format(source, sortKeys: true, indentWidth: 2)
         } catch {
             throw JSONObjectError.invalidJSON
@@ -366,13 +369,8 @@ public enum JWTSigner {
             throw JSONObjectError.duplicateKey
         }
 
-        guard let data = minifiedResult.text.data(using: .utf8) else {
-            throw JSONObjectError.invalidJSON
-        }
-        let value: Any
-        do {
-            value = try JSONSerialization.jsonObject(with: data)
-        } catch {
+        guard let data = minifiedResult.text.data(using: .utf8),
+              let value = try? JSONSerialization.jsonObject(with: data) else {
             throw JSONObjectError.invalidJSON
         }
         guard let object = value as? [String: Any] else {

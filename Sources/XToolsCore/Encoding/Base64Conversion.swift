@@ -409,6 +409,16 @@ public enum Base64Conversion {
     }
 
     public static func decodeBase64URLData(_ value: String) throws -> Data {
+        guard value.utf8.allSatisfy({ byte in
+            (0x41...0x5A).contains(byte)
+            || (0x61...0x7A).contains(byte)
+            || (0x30...0x39).contains(byte)
+            || byte == UInt8(ascii: "-")
+            || byte == UInt8(ascii: "_")
+        }) else {
+            throw ConversionError.invalidBase64
+        }
+
         var base64 = value
             .replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")
@@ -417,7 +427,10 @@ public enum Base64Conversion {
             base64.append("=")
         }
 
-        return try decodeData(base64)
+        guard let data = Data(base64Encoded: base64) else {
+            throw ConversionError.invalidBase64
+        }
+        return data
     }
 
     private static func normalizedMIMEType(_ mimeType: String) -> String {

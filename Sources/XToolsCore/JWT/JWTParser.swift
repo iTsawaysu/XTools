@@ -59,7 +59,7 @@ public enum JWTParser {
     private static func decodeJSONSegment(_ segment: String) throws -> String {
         let data: Data
         do {
-            data = try JWTBase64URL.decode(segment)
+            data = try Base64Conversion.decodeBase64URLData(segment)
         } catch {
             throw ParseError.invalidBase64
         }
@@ -85,34 +85,5 @@ public enum JWTParser {
         } catch {
             throw ParseError.invalidJSON
         }
-    }
-}
-
-enum JWTBase64URL {
-    static func decode(_ segment: String) throws -> Data {
-        guard segment.unicodeScalars.allSatisfy(isBase64URLScalar) else {
-            throw Base64Conversion.ConversionError.invalidBase64
-        }
-
-        var base64 = segment
-            .replacingOccurrences(of: "-", with: "+")
-            .replacingOccurrences(of: "_", with: "/")
-
-        while base64.count % 4 != 0 {
-            base64.append("=")
-        }
-
-        guard let data = Data(base64Encoded: base64) else {
-            throw Base64Conversion.ConversionError.invalidBase64
-        }
-        return data
-    }
-
-    private static func isBase64URLScalar(_ scalar: Unicode.Scalar) -> Bool {
-        (0x41...0x5A).contains(Int(scalar.value))
-            || (0x61...0x7A).contains(Int(scalar.value))
-            || (0x30...0x39).contains(Int(scalar.value))
-            || scalar == "-"
-            || scalar == "_"
     }
 }
