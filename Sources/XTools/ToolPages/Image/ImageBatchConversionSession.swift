@@ -90,7 +90,7 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
     init(
         maximumItemCount: Int = ImageBatchConversionSession.defaultMaximumItemCount,
         saveClientBuilder: @escaping ImageSaveClientBuilder = { filePanel, outputPanel in
-            ImageWorkflowClient(dialog: SheetImageWorkflowDialog(filePanel: filePanel, outputPanel: outputPanel))
+            ImageWorkflowClient.sheet(filePanel: filePanel, outputPanel: outputPanel)
         }
     ) {
         self.maximumItemCount = maximumItemCount
@@ -137,35 +137,29 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
         importPublisher: @escaping BatchConversionImportPublisher = { _, publish in publish() },
         onImport: @escaping () -> Void = {}
     ) {
-        guard !panelRequests.hasActiveRequest else { return }
-        let requestID = panelRequests.begin()
-        panelRequests.attach(Task { @MainActor [weak self] in
-            do {
+        panelRequests.request(
+            {
                 let urls = try await filePanel.selectFiles(
                     FileInputPanelRequest(
                         allowedContentTypes: allowedContentTypes,
                         allowsMultipleSelection: true
                     )
                 )
-                guard let urls, !urls.isEmpty else {
-                    self?.panelRequests.finish(id: requestID)
-                    return
-                }
-                guard let self, self.panelRequests.finish(id: requestID) else { return }
-                self.receiveImageURLs(
+                return (urls?.isEmpty == false) ? urls : nil
+            },
+            onSuccess: { [weak self] urls in
+                self?.receiveImageURLs(
                     urls,
                     allowedContentTypes: allowedContentTypes,
                     client: client,
                     importPublisher: importPublisher,
                     onImport: onImport
                 )
-            } catch is CancellationError {
-                self?.panelRequests.finish(id: requestID)
-            } catch {
-                guard let self, self.panelRequests.finish(id: requestID) else { return }
-                self.error = FileInputPanelFailure.diagnosticMessage(for: error)
+            },
+            onError: { [weak self] message in
+                self?.error = message
             }
-        })
+        )
     }
 
     func receiveImageURLs(

@@ -353,54 +353,44 @@ struct YAMLPrettifierTests {
         expectChineseOneSentence(diagnostic)
     }
 
-    @Test func invalidYAMLErrorsNeverExposeEnglishParserText() throws {
-        let samples: [(input: String, message: String)] = [
-            ("services:\n  web: [nginx", "流程列表缺少逗号或右方括号"),
-            ("root:\n\tchild: value", "缩进必须使用空格，不能使用制表符"),
-            (#"name: "abc"#, "引号字符串没有闭合"),
-            ("ref: *missing", "引用了未定义的锚点别名"),
-            ("first: 1\n---\nsecond: 2", "只允许包含一个 YAML 文档")
-        ]
-
-        for sample in samples {
-            let error = #expect(throws: (any Error).self) {
-                _ = try YAMLPrettifier.formatValidated(sample.input)
-            }
-
-            guard let error,
-                  case YAMLPrettifier.ValidationError.invalidSyntax(let diagnostic) = error else {
-                Issue.record("Expected YAML validation diagnostic")
-                continue
-            }
-
-            #expect(diagnostic.message == sample.message)
-            expectChineseOneSentence(diagnostic)
+    @Test(arguments: [
+        ("services:\n  web: [nginx", "流程列表缺少逗号或右方括号"),
+        ("root:\n\tchild: value", "缩进必须使用空格，不能使用制表符"),
+        (#"name: "abc"#, "引号字符串没有闭合"),
+        ("ref: *missing", "引用了未定义的锚点别名"),
+        ("first: 1\n---\nsecond: 2", "只允许包含一个 YAML 文档")
+    ])
+    func invalidYAMLErrorsNeverExposeEnglishParserText(input: String, message: String) throws {
+        let error = #expect(throws: (any Error).self) {
+            _ = try YAMLPrettifier.formatValidated(input)
         }
+        guard let error,
+              case YAMLPrettifier.ValidationError.invalidSyntax(let diagnostic) = error else {
+            Issue.record("Expected YAML validation diagnostic")
+            return
+        }
+        #expect(diagnostic.message == message)
+        expectChineseOneSentence(diagnostic)
     }
 
-    @Test func yamlSemanticDiagnosticsCoverIndentationColonAndDuplicateKeys() throws {
-        let samples: [(input: String, expectedFragments: [String])] = [
-            ("user:\n  id: 1\n name: Alice", ["缩进"]),
-            ("user\n  id: 1", ["冒号"]),
-            ("service:\n  image: nginx:1.25\n  image: nginx:1.26", ["重复", "键"])
-        ]
-
-        for sample in samples {
-            let error = #expect(throws: (any Error).self) {
-                _ = try YAMLPrettifier.formatValidated(sample.input)
-            }
-
-            guard let error,
-                  case YAMLPrettifier.ValidationError.invalidSyntax(let diagnostic) = error else {
-                Issue.record("Expected YAML validation diagnostic")
-                continue
-            }
-
-            for fragment in sample.expectedFragments {
-                #expect(diagnostic.message.contains(fragment))
-            }
-            expectChineseOneSentence(diagnostic)
+    @Test(arguments: [
+        ("user:\n  id: 1\n name: Alice", ["缩进"]),
+        ("user\n  id: 1", ["冒号"]),
+        ("service:\n  image: nginx:1.25\n  image: nginx:1.26", ["重复", "键"])
+    ])
+    func yamlSemanticDiagnosticsCoverIndentationColonAndDuplicateKeys(input: String, expectedFragments: [String]) throws {
+        let error = #expect(throws: (any Error).self) {
+            _ = try YAMLPrettifier.formatValidated(input)
         }
+        guard let error,
+              case YAMLPrettifier.ValidationError.invalidSyntax(let diagnostic) = error else {
+            Issue.record("Expected YAML validation diagnostic")
+            return
+        }
+        for fragment in expectedFragments {
+            #expect(diagnostic.message.contains(fragment))
+        }
+        expectChineseOneSentence(diagnostic)
     }
 
     @Test func preservesCommentsWhenFormattingWithoutSorting() throws {
@@ -545,18 +535,8 @@ struct YAMLPrettifierTests {
 
     /// 引号内的 `*x`、标量中段的 `&`、无名称的裸 `*` 都不是锚点/别名；
     /// 误判会让这些输入在开启排序时被错误拒绝。
-    @Test func anchorDetectionDoesNotFireOnLookalikes() throws {
-        #expect(throws: Never.self) {
-            _ = try YAMLPrettifier.format(#"key: "*x""#, options: .init(indent: 2, sortKeys: true))
-        }
-        #expect(throws: Never.self) {
-            _ = try YAMLPrettifier.format("key: a*b", options: .init(indent: 2, sortKeys: true))
-        }
-        #expect(throws: Never.self) {
-            _ = try YAMLPrettifier.format("cmd: echo *", options: .init(indent: 2, sortKeys: true))
-        }
-        #expect(throws: Never.self) {
-            _ = try YAMLPrettifier.format("key: a&b", options: .init(indent: 2, sortKeys: true))
-        }
+    @Test(arguments: [#"key: "*x""#, "key: a*b", "cmd: echo *", "key: a&b"])
+    func anchorDetectionDoesNotFireOnLookalikes(input: String) throws {
+        _ = try YAMLPrettifier.format(input, options: .init(indent: 2, sortKeys: true))
     }
 }

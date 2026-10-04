@@ -92,7 +92,7 @@ struct ImageWorkflowClientTests {
             return second
         }
 
-        try await Self.waitUntil { session.data == second }
+        try await waitUntil { session.data == second }
         try await Task.sleep(for: .milliseconds(400))
         #expect(session.data == second)
         #expect(!session.isRendering)
@@ -134,7 +134,7 @@ struct ImageWorkflowClientTests {
         ) { _, _, _, _ in
             first
         }
-        try await Self.waitUntil { session.data == first }
+        try await waitUntil { session.data == first }
 
         session.render(
             previewData: second,
@@ -149,7 +149,7 @@ struct ImageWorkflowClientTests {
         #expect(session.data == first)
         #expect(session.image != nil)
         #expect(session.isRendering)
-        try await Self.waitUntil { session.data == second }
+        try await waitUntil { session.data == second }
         #expect(!session.isRendering)
     }
 
@@ -257,7 +257,7 @@ struct ImageWorkflowClientTests {
             try await client.prepareSelectionInBackground(from: url, allowedContentTypes: [.png])
         }
 
-        try await Self.waitUntil { reader.readURLs.contains(url) }
+        try await waitUntil { reader.readURLs.contains(url) }
         task.cancel()
 
         do {
@@ -422,9 +422,18 @@ struct ImageWorkflowClientTests {
 
         let reportedByteCounts: [Int?] = [nil, 1]
         for reportedByteCount in reportedByteCounts {
-            let reader = FoundationImageWorkflowReaderWithMetadataOverride(
-                reportedByteCount: reportedByteCount,
-                maxBytes: maxBytes
+            let reader = ImageWorkflowFileReader(
+                byteCount: { _ in reportedByteCount },
+                readDataWithLimit: { url, _ in
+                    do {
+                        return try BoundedFileReader.read(from: url, maxBytes: maxBytes)
+                    } catch BoundedFileReader.ReadError.tooLarge {
+                        throw ImageProcessorError.inputFileTooLarge(
+                            actualBytes: maxBytes + 1,
+                            maxBytes: maxBytes
+                        )
+                    }
+                }
             )
             let client = ImageWorkflowClient(
                 dialog: FakeImageWorkflowDialog(),
@@ -883,7 +892,7 @@ struct ImageWorkflowClientTests {
         ) { _ in
             unexpectedOutput
         }
-        try await Self.waitUntil { panelWasRequested }
+        try await waitUntil { panelWasRequested }
         await Task.yield()
 
         #expect(didRunSelectionHook == false)
@@ -915,7 +924,7 @@ struct ImageWorkflowClientTests {
         )
         try await Self.waitForOutput(in: session, matching: first)
         session.renderInBackground(operation: .conversion) { _ in throw ImageSessionTestError.renderFailed }
-        try await Self.waitUntil { session.error != nil }
+        try await waitUntil { session.error != nil }
         #expect(session.output == nil)
         #expect(session.outputImage == nil)
         #expect(session.error == "图片格式转换失败。")
@@ -952,7 +961,7 @@ struct ImageWorkflowClientTests {
             return expected
         }
 
-        try await Self.waitUntil { session.isProcessing }
+        try await waitUntil { session.isProcessing }
         let outputBox = FakeOutputPanelBox()
         #expect(await session.save(
             workflow: .conversion,
@@ -1003,7 +1012,7 @@ struct ImageWorkflowClientTests {
             operation: .conversion,
             render: { _ in output }
         )
-        try await Self.waitUntil { panelWasRequested }
+        try await waitUntil { panelWasRequested }
         await Task.yield()
 
         #expect(session.sourceURL == sourceURL)
@@ -1041,7 +1050,7 @@ struct ImageWorkflowClientTests {
             operation: .conversion,
             render: { _ in output }
         )
-        try await Self.waitUntil { session.error != nil }
+        try await waitUntil { session.error != nil }
 
         #expect(session.sourceURL == sourceURL)
         #expect(session.output == output)
@@ -1067,7 +1076,7 @@ struct ImageWorkflowClientTests {
             Thread.sleep(forTimeInterval: 0.08)
             return output
         }
-        try await Self.waitUntil { session.sourceURL == sourceURL && session.isProcessing }
+        try await waitUntil { session.sourceURL == sourceURL && session.isProcessing }
 
         var panelContinuation: CheckedContinuation<URL?, Never>?
         let pendingPanel = FileInputPanelClient { _ in
@@ -1082,7 +1091,7 @@ struct ImageWorkflowClientTests {
             operation: .conversion,
             render: { _ in output }
         )
-        try await Self.waitUntil { panelContinuation != nil }
+        try await waitUntil { panelContinuation != nil }
 
         try await Self.waitForOutput(in: session, matching: output)
         #expect(session.sourceURL == sourceURL)
@@ -1126,7 +1135,7 @@ struct ImageWorkflowClientTests {
             operation: .conversion,
             render: { _ in firstOutput }
         )
-        try await Self.waitUntil { panelContinuation != nil }
+        try await waitUntil { panelContinuation != nil }
 
         session.receiveImageURL(
             secondURL,
@@ -1172,7 +1181,7 @@ struct ImageWorkflowClientTests {
             operation: .conversion,
             render: { _ in firstOutput }
         )
-        try await Self.waitUntil { reader.readURLs.contains(firstURL) }
+        try await waitUntil { reader.readURLs.contains(firstURL) }
 
         session.receiveImageURL(
             secondURL,
@@ -1249,7 +1258,7 @@ struct ImageWorkflowClientTests {
             operation: .conversion,
             render: { _ in output }
         )
-        try await Self.waitUntil { session.error != nil }
+        try await waitUntil { session.error != nil }
 
         #expect(session.source == nil)
         #expect(session.output == nil)
@@ -1279,7 +1288,7 @@ struct ImageWorkflowClientTests {
             fatalError("render must not run without a conversion target")
         }
 
-        try await Self.waitUntil { session.error != nil }
+        try await waitUntil { session.error != nil }
 
         #expect(session.sourceURL == sourceURL)
         #expect(session.output == nil)
@@ -1310,7 +1319,7 @@ struct ImageWorkflowClientTests {
             unusedOutput
         }
 
-        try await Self.waitUntil { observedProcessingDuringSelection != nil }
+        try await waitUntil { observedProcessingDuringSelection != nil }
 
         #expect(observedProcessingDuringSelection == false)
         #expect(session.isProcessing == false)
@@ -1432,7 +1441,7 @@ struct ImageWorkflowClientTests {
             Thread.sleep(forTimeInterval: 0.08)
             return late
         }
-        try await Self.waitUntil { session.isProcessing }
+        try await waitUntil { session.isProcessing }
         session.reset()
         try await Task.sleep(nanoseconds: 120_000_000)
 
@@ -1449,7 +1458,7 @@ struct ImageWorkflowClientTests {
             operation: .conversion,
             render: { _ in late }
         )
-        try await Self.waitUntil { reader.readURLs.contains(delayedURL) }
+        try await waitUntil { reader.readURLs.contains(delayedURL) }
         session.reset()
         try await Task.sleep(nanoseconds: 120_000_000)
 
@@ -1493,7 +1502,7 @@ struct ImageWorkflowClientTests {
                 )
             }
         )
-        try await Self.waitUntil { panelWasRequested }
+        try await waitUntil { panelWasRequested }
         session.reset()
         try await Task.sleep(nanoseconds: 120_000_000)
 
@@ -1675,7 +1684,7 @@ struct ImageWorkflowClientTests {
             throw ImageSessionTestError.renderFailed
         })
 
-        try await Self.waitUntil { panelWasRequested }
+        try await waitUntil { panelWasRequested }
         await Task.yield()
 
         #expect(session.source == nil)
@@ -1705,7 +1714,7 @@ struct ImageWorkflowClientTests {
             return nil
         }
         session.selectImage(filePanel: cancelledPanel, client: client, generator: { _, _ in icons })
-        try await Self.waitUntil { panelWasRequested }
+        try await waitUntil { panelWasRequested }
         await Task.yield()
 
         #expect(session.sourceURL == sourceURL)
@@ -1733,7 +1742,7 @@ struct ImageWorkflowClientTests {
             throw FileInputPanelFailure.windowUnavailable
         }
         session.selectImage(filePanel: unavailablePanel, client: client, generator: { _, _ in icons })
-        try await Self.waitUntil { session.error != nil }
+        try await waitUntil { session.error != nil }
 
         #expect(session.sourceURL == sourceURL)
         #expect(session.icons == icons)
@@ -1784,7 +1793,7 @@ struct ImageWorkflowClientTests {
         try await Self.waitForIcons(in: session, matching: icons)
 
         session.receiveImageURL(invalidURL, client: client, generator: { _, _ in icons })
-        try await Self.waitUntil { session.error != nil }
+        try await waitUntil { session.error != nil }
 
         #expect(session.source == nil)
         #expect(session.icons.isEmpty)
@@ -1807,7 +1816,7 @@ struct ImageWorkflowClientTests {
 
         session.selectImage(filePanel: panel, client: client)
 
-        try await Self.waitUntil { observedProcessingDuringSelection != nil }
+        try await waitUntil { observedProcessingDuringSelection != nil }
 
         #expect(observedProcessingDuringSelection == false)
         #expect(session.isProcessing == false)
@@ -1827,7 +1836,7 @@ struct ImageWorkflowClientTests {
 
         session.receiveImageURL(url, client: client)
 
-        try await Self.waitUntil { session.error != nil }
+        try await waitUntil { session.error != nil }
 
         #expect(session.source == nil)
         #expect(session.icons.isEmpty)
@@ -1889,7 +1898,7 @@ struct ImageWorkflowClientTests {
         let session = FaviconOutputSetSession()
 
         session.receiveImageURL(sourceURL, client: client)
-        try await Self.waitUntil { session.package != nil }
+        try await waitUntil { session.package != nil }
 
         #expect(session.package?.artifacts.map(\.id) == [
             .faviconICO,
@@ -1928,7 +1937,7 @@ struct ImageWorkflowClientTests {
             Thread.sleep(forTimeInterval: 0.08)
             return firstIcons
         })
-        try await Self.waitUntil { session.sourceURL == firstURL }
+        try await waitUntil { session.sourceURL == firstURL }
 
         session.receiveImageURL(secondURL, client: client, generator: { _, _ in
             secondIcons
@@ -1986,7 +1995,7 @@ struct ImageWorkflowClientTests {
             Thread.sleep(forTimeInterval: 0.08)
             return lateIcons
         })
-        try await Self.waitUntil { session.sourceURL == sourceURL && session.isProcessing }
+        try await waitUntil { session.sourceURL == sourceURL && session.isProcessing }
         session.reset()
         try await Task.sleep(nanoseconds: 120_000_000)
 
@@ -2064,18 +2073,6 @@ struct ImageWorkflowClientTests {
             }
             return !session.icons.isEmpty
         }
-    }
-
-    @MainActor
-    private static func waitUntil(_ predicate: @escaping @MainActor () -> Bool) async throws {
-        // ~20s budget under full-suite scheduling pressure.
-        for _ in 0..<2000 {
-            if predicate() {
-                return
-            }
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
-        Issue.record("Timed out waiting for image workflow state")
     }
 
     private static func processedImage(
@@ -2162,31 +2159,6 @@ private final class ImageRendererSelectionState {
     var usesLatest = false
 }
 
-private final class FakeImageWorkflowDialog: ImageWorkflowDialoging {
-    var saveURL: URL?
-    var directoryURL: URL?
-    var requestedSaveNames: [String] = []
-    private(set) var requestedDirectoryMessages: [(prompt: String, message: String?)] = []
-
-    init(
-        saveURL: URL? = nil,
-        directoryURL: URL? = nil
-    ) {
-        self.saveURL = saveURL
-        self.directoryURL = directoryURL
-    }
-
-    func selectSaveURL(defaultFilename: String, allowedContentTypes: [UTType]) async -> URL? {
-        requestedSaveNames.append(defaultFilename)
-        return saveURL
-    }
-
-    func selectDirectory(prompt: String, message: String?) async -> URL? {
-        requestedDirectoryMessages.append((prompt, message))
-        return directoryURL
-    }
-}
-
 /// Session saves now build their own sheet dialog from the two panel clients.
 /// These fakes capture the requested filename and hand back a canned URL, so
 /// session-level tests assert through the same seam the pages use.
@@ -2203,100 +2175,4 @@ private func makeOutputPanelClient(_ box: FakeOutputPanelBox) -> FileOutputPanel
     }
 }
 
-private final class FakeImageWorkflowReader: ImageWorkflowFileReading, @unchecked Sendable {
-    var dataByURL: [URL: Data]
-    var byteCountsByURL: [URL: Int]
-    var nonRegularURLs: Set<URL>
-    var readDelayByURL: [URL: TimeInterval]
-    var error: Error?
-    private let readURLsLock = NSLock()
-    private var storedReadURLs: [URL] = []
 
-    var readURLs: [URL] {
-        readURLsLock.lock()
-        defer { readURLsLock.unlock() }
-        return storedReadURLs
-    }
-
-    init(
-        dataByURL: [URL: Data] = [:],
-        byteCountsByURL: [URL: Int] = [:],
-        nonRegularURLs: Set<URL> = [],
-        readDelayByURL: [URL: TimeInterval] = [:],
-        error: Error? = nil
-    ) {
-        self.dataByURL = dataByURL
-        self.byteCountsByURL = byteCountsByURL
-        self.nonRegularURLs = nonRegularURLs
-        self.readDelayByURL = readDelayByURL
-        self.error = error
-    }
-
-    func isRegularFile(at url: URL) throws -> Bool {
-        if let error { throw error }
-        return !nonRegularURLs.contains(url)
-    }
-
-    func byteCount(for url: URL) throws -> Int? {
-        if let error { throw error }
-        return byteCountsByURL[url] ?? dataByURL[url]?.count
-    }
-
-    func readData(from url: URL) throws -> Data {
-        if let error { throw error }
-        readURLsLock.lock()
-        storedReadURLs.append(url)
-        readURLsLock.unlock()
-        if let delay = readDelayByURL[url] {
-            Thread.sleep(forTimeInterval: delay)
-        }
-        return dataByURL[url] ?? Data()
-    }
-}
-
-private struct FoundationImageWorkflowReaderWithMetadataOverride: ImageWorkflowFileReading {
-    let reportedByteCount: Int?
-    let maxBytes: Int
-    private let foundationReader = FoundationImageWorkflowFileReader()
-
-    func isRegularFile(at url: URL) throws -> Bool {
-        try foundationReader.isRegularFile(at: url)
-    }
-
-    func byteCount(for url: URL) throws -> Int? {
-        reportedByteCount
-    }
-
-    func readData(from url: URL) throws -> Data {
-        try foundationReader.readData(from: url, maxBytes: maxBytes)
-    }
-}
-
-private final class FakeImageWorkflowWriter: ImageWorkflowFileWriting {
-    var error: Error?
-    /// When set, the writer succeeds for the first `failAfter` writes and throws
-    /// on the next one, simulating a partial batch failure.
-    var failAfter: Int?
-    private(set) var writes: [(data: Data, url: URL)] = []
-
-    init(error: Error? = nil, failAfter: Int? = nil) {
-        self.error = error
-        self.failAfter = failAfter
-    }
-
-    func write(_ data: Data, to url: URL) throws {
-        // In failAfter mode the first `failAfter` writes succeed and the next
-        // one throws, so the general `error` branch must not pre-empt them.
-        if let failAfter {
-            if writes.count >= failAfter {
-                throw error ?? CocoaError(.fileWriteUnknown)
-            }
-            writes.append((data, url))
-            return
-        }
-        if let error {
-            throw error
-        }
-        writes.append((data, url))
-    }
-}

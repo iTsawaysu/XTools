@@ -123,18 +123,6 @@ struct TextEncryptionToolWorkspaceModelTests {
         #expect(model.output.isEmpty)
         #expect(model.error == nil)
     }
-
-    private func waitUntil(
-        timeout: Duration = .seconds(5),
-        _ condition: @escaping @MainActor () -> Bool
-    ) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !condition() && clock.now < deadline {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        try #require(condition())
-    }
 }
 
 private final class BlockingEncryptionProbe: @unchecked Sendable {

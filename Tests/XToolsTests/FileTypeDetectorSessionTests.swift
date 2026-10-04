@@ -120,7 +120,7 @@ struct FileTypeDetectorSessionTests {
         let session = FileTypeDetectorSession(reader: reader)
 
         let slowTask = session.inspect(slowURL)
-        try await Self.waitUntil { reader.metadataURLs.contains(slowURL) }
+        try await waitUntil { reader.metadataURLs.contains(slowURL) }
         let currentTask = session.inspect(currentURL)
         await currentTask.value
         await slowTask.value
@@ -145,7 +145,7 @@ struct FileTypeDetectorSessionTests {
         await session.inspect(oldURL).value
 
         let slowTask = session.inspect(slowURL)
-        try await Self.waitUntil { reader.metadataURLs.contains(slowURL) }
+        try await waitUntil { reader.metadataURLs.contains(slowURL) }
         session.rejectMultipleFileDrop()
         await slowTask.value
 
@@ -171,7 +171,7 @@ struct FileTypeDetectorSessionTests {
         }
 
         await session.selectFile(filePanel: panel).value
-        try await Self.waitUntil { session.report != nil }
+        try await waitUntil { session.report != nil }
 
         #expect(requestedTypes == [.data])
         #expect(session.selectedFileURL == url)
@@ -310,7 +310,7 @@ struct FileTypeDetectorSessionTests {
         }
 
         let panelTask = session.selectFile(filePanel: panel)
-        try await Self.waitUntil { continuation != nil }
+        try await waitUntil { continuation != nil }
         #expect(session.canReset)
         session.reset()
         #expect(!session.canReset)
@@ -351,16 +351,6 @@ struct FileTypeDetectorSessionTests {
         } catch {
             Issue.record("Unexpected failure: \(error)")
         }
-    }
-
-    private static func waitUntil(_ predicate: @escaping @MainActor () -> Bool) async throws {
-        for _ in 0..<50 {
-            if predicate() {
-                return
-            }
-            try await Task.sleep(nanoseconds: 10_000_000)
-        }
-        Issue.record("Timed out waiting for detector state")
     }
 }
 

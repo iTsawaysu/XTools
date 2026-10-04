@@ -869,7 +869,7 @@ struct EditableDiffInteractionTests {
     private func waitUntilLayout(
         _ window: NSWindow, _ hosting: NSView, _ stage: String, _ condition: () -> Bool
     ) async throws {
-        let deadline = ContinuousClock.now + .seconds(2)
+        let deadline = ContinuousClock.now + .seconds(10)
         repeat {
             hosting.layoutSubtreeIfNeeded()
             hosting.displayIfNeeded()

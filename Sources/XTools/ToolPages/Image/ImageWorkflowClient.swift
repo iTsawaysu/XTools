@@ -4,65 +4,6 @@ import XToolsCore
 import Foundation
 import UniformTypeIdentifiers
 
-private final class ImagePreparationCancellationGate: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<PreparedImageInputSelection, Error>?
-    private var cancelWork: (() -> Void)?
-    private var isFinished = false
-
-    func install(_ continuation: CheckedContinuation<PreparedImageInputSelection, Error>) {
-        lock.lock()
-        if isFinished {
-            lock.unlock()
-            continuation.resume(throwing: CancellationError())
-            return
-        }
-        self.continuation = continuation
-        lock.unlock()
-    }
-
-    func registerCancellation(_ cancel: @escaping () -> Void) {
-        lock.lock()
-        guard !isFinished else {
-            lock.unlock()
-            cancel()
-            return
-        }
-        cancelWork = cancel
-        lock.unlock()
-    }
-
-    func succeed(_ value: PreparedImageInputSelection) {
-        finish { $0.resume(returning: value) }
-    }
-
-    func fail(_ error: Error) {
-        finish { $0.resume(throwing: error) }
-    }
-
-    func cancel() {
-        finish { $0.resume(throwing: CancellationError()) }
-    }
-
-    private func finish(_ resume: (CheckedContinuation<PreparedImageInputSelection, Error>) -> Void) {
-        lock.lock()
-        guard !isFinished else {
-            lock.unlock()
-            return
-        }
-        isFinished = true
-        let continuation = self.continuation
-        self.continuation = nil
-        let cancelWork = self.cancelWork
-        self.cancelWork = nil
-        lock.unlock()
-        cancelWork?()
-        if let continuation {
-            resume(continuation)
-        }
-    }
-}
-
 @MainActor
 struct ImageWorkflowClient {
     static var standardImageContentTypes: [UTType] {
@@ -73,18 +14,22 @@ struct ImageWorkflowClient {
         contentTypes(for: ImageFileFormat.supportedInputFormats.filter { $0 != .tiff })
     }
 
-    private let dialog: any ImageWorkflowDialoging
-    private let reader: any ImageWorkflowFileReading
-    private let writer: any ImageWorkflowFileWriting
+    private let dialog: ImageWorkflowDialog
+    private let reader: ImageWorkflowFileReader
+    private let writer: ImageWorkflowFileWriter
 
     init(
-        dialog: any ImageWorkflowDialoging = NoOpImageWorkflowDialog(),
-        reader: any ImageWorkflowFileReading = FoundationImageWorkflowFileReader(),
-        writer: any ImageWorkflowFileWriting = FoundationImageWorkflowFileWriter()
+        dialog: ImageWorkflowDialog = ImageWorkflowDialog(),
+        reader: ImageWorkflowFileReader = ImageWorkflowFileReader(),
+        writer: ImageWorkflowFileWriter = ImageWorkflowFileWriter()
     ) {
         self.dialog = dialog
         self.reader = reader
         self.writer = writer
+    }
+
+    static func sheet(filePanel: FileInputPanelClient, outputPanel: FileOutputPanelClient) -> ImageWorkflowClient {
+        ImageWorkflowClient(dialog: .sheet(filePanel: filePanel, outputPanel: outputPanel))
     }
 
     func prepareSelectionInBackground(
@@ -92,32 +37,23 @@ struct ImageWorkflowClient {
         allowedContentTypes: [UTType]
     ) async throws -> ImageInputSelection {
         let reader = self.reader
-        let gate = ImagePreparationCancellationGate()
+        let work = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let prepared = try Self.prepareSelectionData(
+                from: url,
+                allowedContentTypes: allowedContentTypes,
+                reader: reader
+            )
+            try Task.checkCancellation()
+            return prepared
+        }
 
         do {
-            let prepared = try await withTaskCancellationHandler(operation: {
-                try await withCheckedThrowingContinuation {
-                    (continuation: CheckedContinuation<PreparedImageInputSelection, Error>) in
-                    gate.install(continuation)
-                    let work = Task.detached(priority: .userInitiated) {
-                        do {
-                            try Task.checkCancellation()
-                            let prepared = try Self.prepareSelectionData(
-                                from: url,
-                                allowedContentTypes: allowedContentTypes,
-                                reader: reader
-                            )
-                            try Task.checkCancellation()
-                            gate.succeed(prepared)
-                        } catch {
-                            gate.fail(error)
-                        }
-                    }
-                    gate.registerCancellation { work.cancel() }
-                }
-            }, onCancel: {
-                gate.cancel()
-            })
+            let prepared = try await withTaskCancellationHandler {
+                try await work.value
+            } onCancel: {
+                work.cancel()
+            }
             try Task.checkCancellation()
             return try makeSelection(from: url, prepared: prepared)
         } catch is CancellationError {
@@ -158,7 +94,7 @@ struct ImageWorkflowClient {
     nonisolated private static func prepareSelectionData(
         from url: URL,
         allowedContentTypes: [UTType],
-        reader: any ImageWorkflowFileReading
+        reader: ImageWorkflowFileReader
     ) throws -> PreparedImageInputSelection {
         let accessedSecurityScope = url.startAccessingSecurityScopedResource()
         defer {

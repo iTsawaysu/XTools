@@ -244,7 +244,7 @@ struct TextDevelopmentWorkspaceRetentionTests {
         }
 
         let restored = repository.model(for: key)
-        try await Self.waitUntil { restored.markdown == "retained:<p>work</p>" }
+        try await waitUntil { restored.markdown == "retained:<p>work</p>" }
         #expect(restored.error == nil)
     }
 
@@ -314,19 +314,6 @@ struct TextDevelopmentWorkspaceRetentionTests {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
-    }
-
-    @MainActor
-    private static func waitUntil(
-        timeout: Duration = .seconds(20),
-        condition: @escaping @MainActor () -> Bool
-    ) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !condition(), clock.now < deadline {
-            try await Task.sleep(for: .milliseconds(25))
-        }
-        #expect(condition())
     }
 }
 

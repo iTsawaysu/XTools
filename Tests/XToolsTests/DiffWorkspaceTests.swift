@@ -20,7 +20,7 @@ struct DiffWorkspaceTests {
             }
         )
         workspace.left = "private-left"
-        try await Self.waitUntil { probe.startedCount == 1 }
+        try await waitUntil { probe.startedCount == 1 }
 
         workspace.clear()
 
@@ -29,7 +29,7 @@ struct DiffWorkspaceTests {
         #expect(workspace.execution.binding == DiffExecutionBinding())
         #expect(!workspace.execution.isRunning)
         #expect(!workspace.hasAnyContent)
-        try await Self.waitUntil { probe.cancellationCount == 1 }
+        try await waitUntil { probe.cancellationCount == 1 }
         #expect(workspace.execution.binding == DiffExecutionBinding())
     }
 
@@ -46,10 +46,10 @@ struct DiffWorkspaceTests {
 
         workspace.left = "abc"
         workspace.right = "ABC"
-        try await Self.waitUntil { probe.startedCount >= 1 }
+        try await waitUntil { probe.startedCount >= 1 }
 
         workspace.ignoreCase = true
-        try await Self.waitUntil {
+        try await waitUntil {
             if case .text(let options) = probe.lastRequest?.kind {
                 return options.ignoreCase && !options.ignoreWhitespace
             }
@@ -57,7 +57,7 @@ struct DiffWorkspaceTests {
         }
 
         workspace.ignoreWhitespace = true
-        try await Self.waitUntil {
+        try await waitUntil {
             if case .text(let options) = probe.lastRequest?.kind {
                 return options.ignoreCase && options.ignoreWhitespace
             }
@@ -84,7 +84,7 @@ struct DiffWorkspaceTests {
 
         workspace.left = "{}"
         workspace.right = "{}"
-        try await Self.waitUntil { !workspace.execution.isRunning && probe.startedCount >= 1 }
+        try await waitUntil { !workspace.execution.isRunning && probe.startedCount >= 1 }
         let callCount = probe.startedCount
 
         workspace.foldUnchanged = true
@@ -95,21 +95,6 @@ struct DiffWorkspaceTests {
             #expect(options.foldUnchanged == false)
         } else {
             Issue.record("Expected JSON request")
-        }
-    }
-
-    private static func waitUntil(
-        timeout: Duration = .seconds(20),
-        _ condition: @escaping @MainActor () -> Bool
-    ) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !condition() {
-            if clock.now >= deadline {
-                Issue.record("Timed out waiting for diff workspace state")
-                return
-            }
-            try await Task.sleep(for: .milliseconds(10))
         }
     }
 }

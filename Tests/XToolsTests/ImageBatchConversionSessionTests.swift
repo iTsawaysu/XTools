@@ -34,7 +34,7 @@ struct ImageBatchConversionSessionTests {
             }
         )
 
-        try await Self.waitUntil { session.items.count == 2 && session.error != nil }
+        try await waitUntil { session.items.count == 2 && session.error != nil }
 
         #expect(publishedFilenames == ["batch-first.png", "batch-second.png"])
         #expect(session.items.map(\.url) == [firstURL, secondURL])
@@ -61,7 +61,7 @@ struct ImageBatchConversionSessionTests {
                 thirdURL: imageData
             ])
         )
-        try await Self.waitUntil { session.error != nil }
+        try await waitUntil { session.error != nil }
 
         #expect(session.items.map(\.url) == [firstURL, secondURL])
         #expect(session.error == "已跳过 1 张：cap-third.png（超出 2 张上限）。")
@@ -73,7 +73,7 @@ struct ImageBatchConversionSessionTests {
             allowedContentTypes: [.png],
             client: Self.makeClient(dataByURL: [fourthURL: imageData])
         )
-        try await Self.waitUntil { session.error == "已跳过 1 张：cap-fourth.png（超出 2 张上限）。" }
+        try await waitUntil { session.error == "已跳过 1 张：cap-fourth.png（超出 2 张上限）。" }
 
         #expect(session.items.map(\.url) == [firstURL, secondURL])
     }
@@ -112,7 +112,7 @@ struct ImageBatchConversionSessionTests {
             allowedContentTypes: ImageWorkflowClient.standardImageContentTypes,
             client: Self.makeClient(dataByURL: [firstURL: imageData, secondURL: imageData])
         )
-        try await Self.waitUntil { session.items.count == 2 }
+        try await waitUntil { session.items.count == 2 }
 
         #expect(capturedRequest?.allowsMultipleSelection == true)
         #expect(session.error == nil)
@@ -146,7 +146,7 @@ struct ImageBatchConversionSessionTests {
             allowedContentTypes: [.png],
             client: Self.makeClient(dataByURL: [firstURL: firstData, secondURL: secondData])
         )
-        try await Self.waitUntil { session.items.count == 2 }
+        try await waitUntil { session.items.count == 2 }
 
         let renderOrder = RenderOrderBox()
         let doneOutput = Self.processedImage(data: Data([9]), originalByteCount: firstData.count, format: .png)
@@ -159,7 +159,7 @@ struct ImageBatchConversionSessionTests {
                 return doneOutput
             }
         })
-        try await Self.waitUntil { session.completedCount == 1 && session.failedCount == 1 }
+        try await waitUntil { session.completedCount == 1 && session.failedCount == 1 }
 
         #expect(renderOrder.values == [12, 5])
         guard case let .done(record) = session.items[0].state else {
@@ -191,7 +191,7 @@ struct ImageBatchConversionSessionTests {
             allowedContentTypes: [.png],
             client: Self.makeClient(dataByURL: [url: imageData])
         )
-        try await Self.waitUntil { session.items.count == 1 }
+        try await waitUntil { session.items.count == 1 }
 
         let stale = Self.processedImage(data: Data([1]), originalByteCount: imageData.count, format: .png)
         let latest = Self.processedImage(data: Data([2]), originalByteCount: imageData.count, format: .png)
@@ -202,12 +202,12 @@ struct ImageBatchConversionSessionTests {
                 return stale
             }
         })
-        try await Self.waitUntil { session.isProcessing }
+        try await waitUntil { session.isProcessing }
         session.convertAll(rendererProvider: {
             { _ in latest }
         })
 
-        try await Self.waitUntil {
+        try await waitUntil {
             if case .done = session.items.first?.state { return true }
             return false
         }
@@ -238,7 +238,7 @@ struct ImageBatchConversionSessionTests {
                 firstURL: firstData, secondURL: secondData, thirdURL: thirdData
             ])
         )
-        try await Self.waitUntil { session.items.count == 3 }
+        try await waitUntil { session.items.count == 3 }
 
         let initialOutput = Self.processedImage(data: Data([1]), originalByteCount: firstData.count, format: .png)
         let resumedOutput = Self.processedImage(data: Data([2]), originalByteCount: firstData.count, format: .png)
@@ -251,13 +251,13 @@ struct ImageBatchConversionSessionTests {
             }
         })
         // 第一张完成、第二张仍在转换时移除它：在途轮被取消，第三张回到待转换。
-        try await Self.waitUntil { session.completedCount == 1 && session.isProcessing }
+        try await waitUntil { session.completedCount == 1 && session.isProcessing }
         session.removeItem(id: session.items[1].id)
         #expect(!session.isProcessing)
         #expect(session.items[1].state == .idle)
 
         session.convertPendingItems(rendererProvider: { { _ in resumedOutput } })
-        try await Self.waitUntil { session.completedCount == 2 && !session.isProcessing }
+        try await waitUntil { session.completedCount == 2 && !session.isProcessing }
 
         #expect(session.error == nil)
         guard case let .done(first) = session.items[0].state,
@@ -294,10 +294,10 @@ struct ImageBatchConversionSessionTests {
             allowedContentTypes: [.png],
             client: Self.makeClient(dataByURL: [url: imageData])
         )
-        try await Self.waitUntil { session.items.count == 1 }
+        try await waitUntil { session.items.count == 1 }
         let output = Self.processedImage(data: imageData, originalByteCount: imageData.count, format: .png)
         session.convertAll(rendererProvider: { { _ in output } })
-        try await Self.waitUntil { session.completedCount == 1 }
+        try await waitUntil { session.completedCount == 1 }
 
         guard case let .done(record) = session.items[0].state else {
             Issue.record("Expected the item to finish with a spooled record")
@@ -351,9 +351,9 @@ struct ImageBatchConversionSessionTests {
 
         let successWriter = FakeBatchWriter()
         let successSession = makeCompletedSession(writer: successWriter)
-        try await Self.waitUntil { successSession.items.count == 2 }
+        try await waitUntil { successSession.items.count == 2 }
         successSession.convertAll(rendererProvider: { { _ in output } })
-        try await Self.waitUntil { successSession.completedCount == 2 }
+        try await waitUntil { successSession.completedCount == 2 }
 
         #expect(await successSession.saveAll(
             defaultBasename: "converted",
@@ -370,9 +370,9 @@ struct ImageBatchConversionSessionTests {
 
         let partialWriter = FakeBatchWriter(error: BatchTestError.writeFailed, failAfter: 1)
         let partialSession = makeCompletedSession(writer: partialWriter)
-        try await Self.waitUntil { partialSession.items.count == 2 }
+        try await waitUntil { partialSession.items.count == 2 }
         partialSession.convertAll(rendererProvider: { { _ in output } })
-        try await Self.waitUntil { partialSession.completedCount == 2 }
+        try await waitUntil { partialSession.completedCount == 2 }
 
         #expect(await partialSession.saveAll(
             defaultBasename: "converted",
@@ -405,10 +405,10 @@ struct ImageBatchConversionSessionTests {
             allowedContentTypes: [.png],
             client: Self.makeClient(dataByURL: [firstURL: imageData, secondURL: imageData])
         )
-        try await Self.waitUntil { session.items.count == 2 }
+        try await waitUntil { session.items.count == 2 }
         let output = Self.processedImage(data: imageData, originalByteCount: imageData.count, format: .png)
         session.convertAll(rendererProvider: { { _ in output } })
-        try await Self.waitUntil { session.completedCount == 2 }
+        try await waitUntil { session.completedCount == 2 }
 
         // clearOutputs 释放全部完成项的临时文件并回到待转换。
         guard case let .done(cleared) = session.items[0].state else {
@@ -420,7 +420,7 @@ struct ImageBatchConversionSessionTests {
         #expect(!FileManager.default.fileExists(atPath: cleared.tempURL.path))
 
         session.convertAll(rendererProvider: { { _ in output } })
-        try await Self.waitUntil { session.completedCount == 2 }
+        try await waitUntil { session.completedCount == 2 }
         guard case let .done(removed) = session.items[0].state else {
             Issue.record("Expected a spooled record after re-conversion")
             return
@@ -447,7 +447,7 @@ struct ImageBatchConversionSessionTests {
             allowedContentTypes: [.png],
             client: Self.makeClient(dataByURL: [firstURL: imageData])
         )
-        try await Self.waitUntil { session.items.count == 1 }
+        try await waitUntil { session.items.count == 1 }
         session.reset()
         #expect(session.items.isEmpty)
         #expect(session.error == nil)
@@ -523,18 +523,6 @@ struct ImageBatchConversionSessionTests {
             wasResized: false
         )
     }
-
-    private static func waitUntil(
-        timeout: Duration = .seconds(20),
-        _ condition: @escaping @MainActor () -> Bool
-    ) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !condition(), clock.now < deadline {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        #expect(condition())
-    }
 }
 
 /// 渲染闭包在非主线程执行，用锁记录逐张调用顺序。
@@ -562,68 +550,6 @@ private enum BatchTestError: Error {
     case encodingFailed
 }
 
-@MainActor
-private final class FakeBatchDialog: ImageWorkflowDialoging {
-    var saveURL: URL?
-    var directoryURL: URL?
-    private(set) var requestedSaveNames: [String] = []
-    private(set) var requestedDirectoryMessages: [(prompt: String, message: String?)] = []
-
-    init(saveURL: URL? = nil, directoryURL: URL? = nil) {
-        self.saveURL = saveURL
-        self.directoryURL = directoryURL
-    }
-
-    func selectSaveURL(defaultFilename: String, allowedContentTypes: [UTType]) async -> URL? {
-        requestedSaveNames.append(defaultFilename)
-        return saveURL
-    }
-
-    func selectDirectory(prompt: String, message: String?) async -> URL? {
-        requestedDirectoryMessages.append((prompt, message))
-        return directoryURL
-    }
-}
-
-private final class FakeBatchReader: ImageWorkflowFileReading, @unchecked Sendable {
-    var dataByURL: [URL: Data]
-
-    init(dataByURL: [URL: Data] = [:]) {
-        self.dataByURL = dataByURL
-    }
-
-    func isRegularFile(at url: URL) throws -> Bool { true }
-
-    func byteCount(for url: URL) throws -> Int? {
-        dataByURL[url]?.count
-    }
-
-    func readData(from url: URL) throws -> Data {
-        dataByURL[url] ?? Data()
-    }
-}
-
-private final class FakeBatchWriter: ImageWorkflowFileWriting {
-    var error: Error?
-    var failAfter: Int?
-    private(set) var writes: [(data: Data, url: URL)] = []
-
-    init(error: Error? = nil, failAfter: Int? = nil) {
-        self.error = error
-        self.failAfter = failAfter
-    }
-
-    func write(_ data: Data, to url: URL) throws {
-        if let failAfter {
-            if writes.count >= failAfter {
-                throw error ?? CocoaError(.fileWriteUnknown)
-            }
-            writes.append((data, url))
-            return
-        }
-        if let error {
-            throw error
-        }
-        writes.append((data, url))
-    }
-}
+private typealias FakeBatchDialog = FakeImageWorkflowDialog
+private typealias FakeBatchReader = FakeImageWorkflowReader
+private typealias FakeBatchWriter = FakeImageWorkflowWriter

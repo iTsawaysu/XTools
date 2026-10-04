@@ -11,13 +11,13 @@ struct HomeContentSessionTests {
         #expect(session.selectedAction == nil)
 
         session.input = #"{"value":1}"#
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
         #expect(session.detection == .json)
         #expect(session.selectedAction == .jsonFormat)
         #expect(session.canRun)
 
         session.input = "ordinary text"
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
         #expect(session.detection == nil)
         #expect(session.selectedAction == nil)
         #expect(!session.canRun)
@@ -26,7 +26,7 @@ struct HomeContentSessionTests {
     @Test func unsupportedDetectionHasNoAutomaticDefault() async throws {
         let session = HomeContentSession(detect: { _ in .xml })
         session.input = "<value>text</value>"
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
 
         #expect(session.detection == .xml)
         #expect(session.selectedAction == nil)
@@ -44,13 +44,13 @@ struct HomeContentSessionTests {
 
         session.input = #"{"value":1}"#
         session.selectedAction = .base64Decode
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
         #expect(session.detection == .json)
         #expect(session.selectedAction == .base64Decode)
         #expect(!session.usesAutomaticActionSelection)
 
         session.input = "hello%20world%21"
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
         #expect(session.detection == .urlEncoded)
         #expect(session.selectedAction == .base64Decode)
 
@@ -73,7 +73,7 @@ struct HomeContentSessionTests {
         #expect(session.result == nil)
         #expect(!session.isProcessing)
 
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
         #expect(session.selectedAction == .jsonFormat)
         #expect(session.canRun)
     }
@@ -84,9 +84,9 @@ struct HomeContentSessionTests {
         })
         session.selectedAction = .urlDecode
         session.input = "one"
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
         session.run()
-        try await Self.waitUntil { session.result != nil }
+        try await waitUntil { session.result != nil }
 
         session.toggleOutputCollapsed()
         #expect(session.isOutputCollapsed)
@@ -98,7 +98,7 @@ struct HomeContentSessionTests {
         #expect(!session.isOutputCollapsed)
 
         session.run()
-        try await Self.waitUntil { session.result != nil }
+        try await waitUntil { session.result != nil }
         session.input = "two"
         #expect(session.result == nil)
         #expect(session.failure == nil)
@@ -116,14 +116,14 @@ struct HomeContentSessionTests {
 
         session.selectedAction = .urlDecode
         session.input = "slow"
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
         session.run()
         await slowOperation.waitUntilStarted()
 
         session.input = "latest"
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
         session.run()
-        try await Self.waitUntil { session.result?.text == "result:latest" }
+        try await waitUntil { session.result?.text == "result:latest" }
 
         await slowOperation.resume(with: HomeContentResult(text: "result:slow"))
         await Task.yield()
@@ -143,7 +143,7 @@ struct HomeContentSessionTests {
         session.input = "slow"
         await slowDetection.waitUntilStarted()
         session.input = "latest"
-        try await Self.waitUntil { session.detection == .urlEncoded && !session.isDetecting }
+        try await waitUntil { session.detection == .urlEncoded && !session.isDetecting }
 
         await slowDetection.resume(with: .json)
         await Task.yield()
@@ -158,7 +158,7 @@ struct HomeContentSessionTests {
         })
         session.selectedAction = .urlDecode
         session.input = "pending"
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
         session.run()
         await pendingOperation.waitUntilStarted()
 
@@ -181,22 +181,22 @@ struct HomeContentSessionTests {
     @Test func clearAfterJSONResultPreservesAutomaticSelectionForLaterBase64() async throws {
         let session = HomeContentSession()
         session.input = #"{"value":1}"#
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
         #expect(session.selectedAction == .jsonFormat)
 
         session.run()
-        try await Self.waitUntil { session.result != nil }
+        try await waitUntil { session.result != nil }
         session.clear()
         #expect(session.usesAutomaticActionSelection)
         #expect(session.selectedAction == nil)
 
         session.input = "ordinary text"
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
         #expect(session.usesAutomaticActionSelection)
         #expect(session.selectedAction == nil)
 
         session.input = "5L2g5aW9IFhUb29scw=="
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
         #expect(session.detection == .base64)
         #expect(session.usesAutomaticActionSelection)
         #expect(session.selectedAction == .base64Decode)
@@ -209,9 +209,9 @@ struct HomeContentSessionTests {
         })
         session.selectedAction = .urlDecode
         session.input = "current"
-        try await Self.waitUntil { !session.isDetecting }
+        try await waitUntil { !session.isDetecting }
         session.run()
-        try await Self.waitUntil { session.result != nil }
+        try await waitUntil { session.result != nil }
         let currentResult = session.result
 
         session.reportPasteboardUnavailable()
@@ -252,26 +252,6 @@ struct HomeContentSessionTests {
         #expect(fresh.selectedAction == nil)
         #expect(fresh.result == nil)
         #expect(fresh.usesAutomaticActionSelection)
-    }
-
-    private static func waitUntil(
-        timeout: Duration = .seconds(5),
-        _ condition: @escaping @MainActor () -> Bool
-    ) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !condition() {
-            if clock.now >= deadline {
-                throw HomeContentSessionTestTimeout()
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-    }
-}
-
-private struct HomeContentSessionTestTimeout: Error, CustomStringConvertible {
-    var description: String {
-        "Timed out waiting for HomeContentSession state"
     }
 }
 

@@ -3,46 +3,55 @@ import Yams
 @testable import XToolsCore
 
 struct DockerRunToDockerComposeServiceTests {
-    @Test func simpleContainerConversion() throws {
-        let result = try DockerRunToDockerComposeService.convert("docker run -d nginx")
+    @discardableResult
+    private static func assertRunConversion(
+        _ command: String,
+        contains: [String] = [],
+        notContains: [String] = [],
+        expectNoWarnings: Bool = false,
+        expectNoUnknownFlags: Bool = false
+    ) throws -> DockerRunToDockerComposeService.Result {
+        let result = try DockerRunToDockerComposeService.convert(command)
+        for expected in contains {
+            #expect(result.yaml.contains(expected), Comment(rawValue: "Expected '\(expected)' in yaml"))
+        }
+        for forbidden in notContains {
+            #expect(!result.yaml.contains(forbidden), Comment(rawValue: "Unexpected '\(forbidden)' in yaml"))
+        }
+        if expectNoWarnings {
+            #expect(result.warnings.isEmpty)
+        }
+        if expectNoUnknownFlags {
+            #expect(result.unknownFlags.isEmpty)
+        }
+        return result
+    }
 
-        #expect(result.yaml.contains("services:"))
-        #expect(result.yaml.contains("image: nginx"))
+    @Test func simpleContainerConversion() throws {
+        let result = try Self.assertRunConversion("docker run -d nginx", contains: ["services:", "image: nginx"], expectNoWarnings: true)
         #expect(result.notTranslatable.isEmpty)
         #expect(result.notImplemented == [])
-        #expect(result.warnings.isEmpty)
     }
 
     @Test func containerWithPortAndVolume() throws {
-        let result = try DockerRunToDockerComposeService.convert(
-            "docker run --name web -p 8080:80 -v $(pwd)/site:/usr/share/nginx/html:ro nginx"
+        try Self.assertRunConversion(
+            "docker run --name web -p 8080:80 -v $(pwd)/site:/usr/share/nginx/html:ro nginx",
+            contains: ["  web:", "container_name: web", "- \"8080:80\"", "- \"./site:/usr/share/nginx/html:ro\""]
         )
-
-        #expect(result.yaml.contains("  web:"))
-        #expect(result.yaml.contains("container_name: web"))
-        #expect(result.yaml.contains("- \"8080:80\""))
-        #expect(result.yaml.contains("- \"./site:/usr/share/nginx/html:ro\""))
     }
 
     @Test func containerWithEnvironmentAndCommand() throws {
-        let result = try DockerRunToDockerComposeService.convert(
-            "docker run --env APP_ENV=prod --entrypoint sh alpine -c \"echo hello\""
+        try Self.assertRunConversion(
+            "docker run --env APP_ENV=prod --entrypoint sh alpine -c \"echo hello\"",
+            contains: ["- APP_ENV=prod", "entrypoint:", "- sh", "command:", "- -c", "- \"echo hello\""]
         )
-
-        #expect(result.yaml.contains("- APP_ENV=prod"))
-        #expect(result.yaml.contains("entrypoint:"))
-        #expect(result.yaml.contains("- sh"))
-        #expect(result.yaml.contains("command:"))
-        #expect(result.yaml.contains("- -c"))
-        #expect(result.yaml.contains("- \"echo hello\""))
     }
 
     @Test func combinedInteractiveFlags() throws {
-        let result = try DockerRunToDockerComposeService.convert("docker run -it ubuntu bash")
-
-        #expect(result.yaml.contains("stdin_open: true"))
-        #expect(result.yaml.contains("tty: true"))
-        #expect(result.yaml.contains("- bash"))
+        try Self.assertRunConversion(
+            "docker run -it ubuntu bash",
+            contains: ["stdin_open: true", "tty: true", "- bash"]
+        )
     }
 
     @Test func explicitInteractiveAndTTYValuesFollowLastOccurrence() throws {
@@ -170,35 +179,23 @@ struct DockerRunToDockerComposeServiceTests {
     }
 
     @Test func inlineLongOptions() throws {
-        let result = try DockerRunToDockerComposeService.convert(
-            "docker run --name=web --restart=unless-stopped --network=host nginx"
+        try Self.assertRunConversion(
+            "docker run --name=web --restart=unless-stopped --network=host nginx",
+            contains: ["  web:", "container_name: web", "restart: unless-stopped", "network_mode: host"]
         )
-
-        #expect(result.yaml.contains("  web:"))
-        #expect(result.yaml.contains("container_name: web"))
-        #expect(result.yaml.contains("restart: unless-stopped"))
-        #expect(result.yaml.contains("network_mode: host"))
     }
 
     @Test func stickyShortOptions() throws {
-        let result = try DockerRunToDockerComposeService.convert(
-            "docker run -p8080:80 -eAPP_ENV=prod -v$(pwd)/data:/data:ro nginx"
+        try Self.assertRunConversion(
+            "docker run -p8080:80 -eAPP_ENV=prod -v$(pwd)/data:/data:ro nginx",
+            contains: ["- \"8080:80\"", "APP_ENV=prod", "- \"./data:/data:ro\"", "image: nginx"]
         )
-
-        #expect(result.yaml.contains("- \"8080:80\""))
-        #expect(result.yaml.contains("APP_ENV=prod"))
-        #expect(result.yaml.contains("- \"./data:/data:ro\""))
-        #expect(result.yaml.contains("image: nginx"))
     }
 
     @Test func userShortOptionIsConverted() throws {
-        let separated = try DockerRunToDockerComposeService.convert("docker run -u 1000:1000 alpine")
-        let sticky = try DockerRunToDockerComposeService.convert("docker run -u1000:1000 alpine")
-
-        #expect(separated.yaml.contains("user: \"1000:1000\""))
-        #expect(sticky.yaml.contains("user: \"1000:1000\""))
-        #expect(separated.unknownFlags.isEmpty)
-        #expect(sticky.unknownFlags.isEmpty)
+        let separated = try Self.assertRunConversion("docker run -u 1000:1000 alpine", contains: ["user: \"1000:1000\""], expectNoUnknownFlags: true)
+        let sticky = try Self.assertRunConversion("docker run -u1000:1000 alpine", contains: ["user: \"1000:1000\""], expectNoUnknownFlags: true)
+        #expect(separated.yaml == sticky.yaml)
     }
 
     @Test func valueShortOptionsKeepBooleanLookingStickyValues() throws {
@@ -231,46 +228,30 @@ struct DockerRunToDockerComposeServiceTests {
     }
 
     @Test func supportedPlatformAndDisabledHealthcheckAreRendered() throws {
-        let result = try DockerRunToDockerComposeService.convert("docker run --platform linux/amd64 --no-healthcheck nginx")
-
-        #expect(result.yaml.contains("image: nginx"))
-        #expect(result.yaml.contains("platform: linux/amd64"))
-        #expect(result.yaml.contains("healthcheck:"))
-        #expect(result.yaml.contains("disable: true"))
+        let result = try Self.assertRunConversion(
+            "docker run --platform linux/amd64 --no-healthcheck nginx",
+            contains: ["image: nginx", "platform: linux/amd64", "healthcheck:", "disable: true"],
+            expectNoWarnings: true
+        )
         #expect(result.notImplemented.isEmpty)
-        #expect(result.warnings.isEmpty)
     }
 
     @Test func runLifecycleOptionsAreIgnoredWithoutWarnings() throws {
-        let result = try DockerRunToDockerComposeService.convert(
-            #"docker run --rm -d -a stdout --sig-proxy=false -it --name job-runner --entrypoint /bin/sh -w /workspace -u 1000:1000 -v "$PWD":/workspace node:22-alpine -lc "npm ci && npm test""#
+        let result = try Self.assertRunConversion(
+            #"docker run --rm -d -a stdout --sig-proxy=false -it --name job-runner --entrypoint /bin/sh -w /workspace -u 1000:1000 -v "$PWD":/workspace node:22-alpine -lc "npm ci && npm test""#,
+            contains: ["container_name: job-runner", "stdin_open: true", "tty: true", "command:", #"- "npm ci && npm test""#],
+            expectNoWarnings: true
         )
-
-        #expect(result.yaml.contains("container_name: job-runner"))
-        #expect(result.yaml.contains("stdin_open: true"))
-        #expect(result.yaml.contains("tty: true"))
-        #expect(result.yaml.contains("command:"))
-        #expect(result.yaml.contains(#"- "npm ci && npm test""#))
         #expect(result.notTranslatable.isEmpty)
-        #expect(result.warnings.isEmpty)
     }
 
     @Test func resourceRuntimeSampleIgnoresDetachWithoutWarning() throws {
-        let result = try DockerRunToDockerComposeService.convert(
-            #"docker run -d --name gpu-worker --gpus all --privileged --cap-add NET_ADMIN --device /dev/fuse:/dev/fuse --memory 2g --cpus 1.5 --health-cmd "curl -f http://localhost:9000/health || exit 1" --health-interval 30s --label com.example.role=worker example/gpu-worker:latest"#
+        let result = try Self.assertRunConversion(
+            #"docker run -d --name gpu-worker --gpus all --privileged --cap-add NET_ADMIN --device /dev/fuse:/dev/fuse --memory 2g --cpus 1.5 --health-cmd "curl -f http://localhost:9000/health || exit 1" --health-interval 30s --label com.example.role=worker example/gpu-worker:latest"#,
+            contains: ["container_name: gpu-worker", "privileged: true", "cap_add:", "- NET_ADMIN", "devices:", #"- "/dev/fuse:/dev/fuse""#, "healthcheck:", "interval: 30s", "deploy:"],
+            expectNoWarnings: true
         )
-
-        #expect(result.yaml.contains("container_name: gpu-worker"))
-        #expect(result.yaml.contains("privileged: true"))
-        #expect(result.yaml.contains("cap_add:"))
-        #expect(result.yaml.contains("- NET_ADMIN"))
-        #expect(result.yaml.contains("devices:"))
-        #expect(result.yaml.contains("- \"/dev/fuse:/dev/fuse\""))
-        #expect(result.yaml.contains("healthcheck:"))
-        #expect(result.yaml.contains("interval: 30s"))
-        #expect(result.yaml.contains("deploy:"))
         #expect(result.notTranslatable.isEmpty)
-        #expect(result.warnings.isEmpty)
     }
 
     @Test func unknownFlagIsReportedSeparatelyFromKnownUnsupportedFlags() throws {

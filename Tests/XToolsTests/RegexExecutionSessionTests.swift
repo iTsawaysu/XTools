@@ -69,17 +69,4 @@ struct RegexExecutionSessionTests {
             sensitiveInputs: [String(text.prefix(256))]
         )
     }
-
-    private func waitUntil(
-        timeout: Duration = .seconds(20),
-        condition: @escaping @MainActor () -> Bool
-    ) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now + timeout
-        while clock.now < deadline {
-            if condition() { return }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        Issue.record("Timed out waiting for regex execution state")
-    }
 }

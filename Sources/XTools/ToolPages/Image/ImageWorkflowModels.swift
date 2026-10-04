@@ -129,84 +129,48 @@ extension ImageWorkflowFailure: LocalizedError {
 }
 
 @MainActor
-protocol ImageWorkflowDialoging {
-    func selectSaveURL(defaultFilename: String, allowedContentTypes: [UTType]) async -> URL?
-    func selectDirectory(prompt: String, message: String?) async -> URL?
-}
-
-@MainActor
-extension ImageWorkflowDialoging {
-    /// 不带说明行的目录选择便捷重载：message 省略即面板不展示说明。
-    func selectDirectory(prompt: String) async -> URL? {
-        await selectDirectory(prompt: prompt, message: nil)
-    }
-}
-
-protocol ImageWorkflowFileReading: Sendable {
-    func isRegularFile(at url: URL) throws -> Bool
-    func byteCount(for url: URL) throws -> Int?
-    func readData(from url: URL) throws -> Data
-}
-
-extension ImageWorkflowFileReading {
-    func isRegularFile(at url: URL) throws -> Bool {
-        true
-    }
-
-    func byteCount(for url: URL) throws -> Int? {
-        nil
-    }
-}
-
-protocol ImageWorkflowFileWriting {
-    func write(_ data: Data, to url: URL) throws
-}
-
-typealias ImageSelectionPublisher = (_ selection: ImageInputSelection, _ publish: () -> Void) -> Void
-typealias ImageProcessedOutputRenderer = (ImageInputSelection) throws -> ProcessedImage
-typealias ImageBackgroundOutputRenderer = @Sendable (ImageProcessingInput) throws -> ProcessedImage
-typealias ImageBackgroundOutputRendererProvider = @MainActor () -> ImageBackgroundOutputRenderer
-
-struct NoOpImageWorkflowDialog: ImageWorkflowDialoging {
-    func selectSaveURL(defaultFilename: String, allowedContentTypes: [UTType]) async -> URL? { nil }
-    func selectDirectory(prompt: String, message: String?) async -> URL? { nil }
-}
-
-struct SheetImageWorkflowDialog: ImageWorkflowDialoging {
-    let filePanel: FileInputPanelClient
-    let outputPanel: FileOutputPanelClient
+struct ImageWorkflowDialog: Sendable {
+    var selectSaveURL: @Sendable (String, [UTType]) async -> URL? = { _, _ in nil }
+    var selectDirectory: @Sendable (String, String?) async -> URL? = { _, _ in nil }
 
     func selectSaveURL(defaultFilename: String, allowedContentTypes: [UTType]) async -> URL? {
-        let request = FileOutputPanelRequest(defaultFilename: defaultFilename, allowedContentTypes: allowedContentTypes)
-        return try? await outputPanel.selectFile(request)
+        await selectSaveURL(defaultFilename, allowedContentTypes)
     }
 
-    func selectDirectory(prompt: String, message: String?) async -> URL? {
-        let request = FileInputPanelRequest(
-            prompt: prompt,
-            message: message,
-            canChooseDirectories: true,
-            canChooseFiles: false
+    func selectDirectory(prompt: String, message: String? = nil) async -> URL? {
+        await selectDirectory(prompt, message)
+    }
+
+    static func sheet(filePanel: FileInputPanelClient, outputPanel: FileOutputPanelClient) -> ImageWorkflowDialog {
+        ImageWorkflowDialog(
+            selectSaveURL: { defaultFilename, allowedContentTypes in
+                let request = FileOutputPanelRequest(defaultFilename: defaultFilename, allowedContentTypes: allowedContentTypes)
+                return try? await outputPanel.selectFile(request)
+            },
+            selectDirectory: { prompt, message in
+                let request = FileInputPanelRequest(
+                    prompt: prompt,
+                    message: message,
+                    canChooseDirectories: true,
+                    canChooseFiles: false
+                )
+                return try? await filePanel.selectFile(request)
+            }
         )
-        return try? await filePanel.selectFile(request)
     }
 }
 
-struct FoundationImageWorkflowFileReader: ImageWorkflowFileReading {
-    func isRegularFile(at url: URL) throws -> Bool {
+typealias SheetImageWorkflowDialog = ImageWorkflowDialog
+
+struct ImageWorkflowFileReader: Sendable {
+    var isRegularFile: @Sendable (URL) throws -> Bool = { url in
         let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isPackageKey])
         return values.isRegularFile == true && values.isPackage != true
     }
-
-    func byteCount(for url: URL) throws -> Int? {
+    var byteCount: @Sendable (URL) throws -> Int? = { url in
         try url.resourceValues(forKeys: [.fileSizeKey]).fileSize
     }
-
-    func readData(from url: URL) throws -> Data {
-        try readData(from: url, maxBytes: ImageProcessingBudget.maxInputBytes)
-    }
-
-    func readData(from url: URL, maxBytes: Int) throws -> Data {
+    var readDataWithLimit: @Sendable (URL, Int) throws -> Data = { url, maxBytes in
         do {
             return try BoundedFileReader.read(from: url, maxBytes: maxBytes)
         } catch BoundedFileReader.ReadError.tooLarge {
@@ -217,10 +181,47 @@ struct FoundationImageWorkflowFileReader: ImageWorkflowFileReading {
             )
         }
     }
-}
 
-struct FoundationImageWorkflowFileWriter: ImageWorkflowFileWriting {
-    func write(_ data: Data, to url: URL) throws {
-        try data.write(to: url)
+    func isRegularFile(at url: URL) throws -> Bool {
+        try isRegularFile(url)
+    }
+
+    func byteCount(for url: URL) throws -> Int? {
+        try byteCount(url)
+    }
+
+    func readData(from url: URL) throws -> Data {
+        try readData(from: url, maxBytes: ImageProcessingBudget.maxInputBytes)
+    }
+
+    func readData(from url: URL, maxBytes: Int) throws -> Data {
+        try readDataWithLimit(url, maxBytes)
+    }
+
+    static func constant(data: Data) -> ImageWorkflowFileReader {
+        ImageWorkflowFileReader(
+            isRegularFile: { _ in true },
+            byteCount: { _ in data.count },
+            readDataWithLimit: { _, _ in data }
+        )
     }
 }
+
+typealias FoundationImageWorkflowFileReader = ImageWorkflowFileReader
+
+struct ImageWorkflowFileWriter: Sendable {
+    var writeHandler: @Sendable (Data, URL) throws -> Void = { data, url in
+        try data.write(to: url)
+    }
+
+    func write(_ data: Data, to url: URL) throws {
+        try writeHandler(data, url)
+    }
+}
+
+typealias FoundationImageWorkflowFileWriter = ImageWorkflowFileWriter
+
+typealias ImageSelectionPublisher = (_ selection: ImageInputSelection, _ publish: () -> Void) -> Void
+typealias ImageProcessedOutputRenderer = (ImageInputSelection) throws -> ProcessedImage
+typealias ImageBackgroundOutputRenderer = @Sendable (ImageProcessingInput) throws -> ProcessedImage
+typealias ImageBackgroundOutputRendererProvider = @MainActor () -> ImageBackgroundOutputRenderer

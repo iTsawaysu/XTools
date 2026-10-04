@@ -3,6 +3,37 @@ import Testing
 @testable import XToolsCore
 
 struct DockerComposeToRunServiceTests {
+    @discardableResult
+    private static func assertComposeConversion(
+        _ yaml: String,
+        contains: [String] = [],
+        notContains: [String] = [],
+        prefix: String? = nil,
+        suffix: String? = nil,
+        expectedCommandCount: Int = 1,
+        expectNoWarnings: Bool = false
+    ) throws -> String {
+        let result = try DockerComposeToRunService.convert(yaml)
+        #expect(result.commands.count == expectedCommandCount)
+        if expectNoWarnings {
+            #expect(result.warnings.isEmpty)
+        }
+        let command = try #require(result.commands.first)
+        if let prefix {
+            #expect(command.hasPrefix(prefix))
+        }
+        if let suffix {
+            #expect(command.hasSuffix(suffix))
+        }
+        for expected in contains {
+            #expect(command.contains(expected), Comment(rawValue: "Expected '\(expected)' in command"))
+        }
+        for forbidden in notContains {
+            #expect(!command.contains(forbidden), Comment(rawValue: "Unexpected '\(forbidden)' in command"))
+        }
+        return command
+    }
+
     // MARK: - Basic conversion
 
     @Test func convertsCommonServiceFieldsIntoRunFlags() throws {
@@ -19,18 +50,13 @@ struct DockerComposeToRunServiceTests {
               - ./site:/usr/share/nginx/html:ro
             restart: always
         """
-        let result = try DockerComposeToRunService.convert(yaml)
-        #expect(result.commands.count == 1)
-        #expect(result.warnings.isEmpty)
-
-        let command = try #require(result.commands.first)
-        #expect(command.hasPrefix("docker run -d"))
-        #expect(command.contains("--name web"))
-        #expect(command.contains("-p 8080:80"))
-        #expect(command.contains("-e ENV=prod"))
-        #expect(command.contains("-v ./site:/usr/share/nginx/html:ro"))
-        #expect(command.contains("--restart always"))
-        #expect(command.hasSuffix("nginx:latest"))
+        try Self.assertComposeConversion(
+            yaml,
+            contains: ["--name web", "-p 8080:80", "-e ENV=prod", "-v ./site:/usr/share/nginx/html:ro", "--restart always"],
+            prefix: "docker run -d",
+            suffix: "nginx:latest",
+            expectNoWarnings: true
+        )
     }
 
     @Test func mapFormEnvironmentAndLabelsConvert() throws {
@@ -44,11 +70,10 @@ struct DockerComposeToRunServiceTests {
             labels:
               owner: team-a
         """
-        let result = try DockerComposeToRunService.convert(yaml)
-        let command = try #require(result.commands.first)
-        #expect(command.contains("-e DEBUG=false"))
-        #expect(command.contains("-e PORT=8080"))
-        #expect(command.contains("-l owner=team-a"))
+        try Self.assertComposeConversion(
+            yaml,
+            contains: ["-e DEBUG=false", "-e PORT=8080", "-l owner=team-a"]
+        )
     }
 
     @Test func longFormPortsAndVolumesConvert() throws {
@@ -66,10 +91,10 @@ struct DockerComposeToRunServiceTests {
                 target: /usr/share/nginx/html
                 read_only: true
         """
-        let result = try DockerComposeToRunService.convert(yaml)
-        let command = try #require(result.commands.first)
-        #expect(command.contains("-p 8080:80/udp"))
-        #expect(command.contains("--mount type=bind,source=./site,target=/usr/share/nginx/html,readonly"))
+        try Self.assertComposeConversion(
+            yaml,
+            contains: ["-p 8080:80/udp", "--mount type=bind,source=./site,target=/usr/share/nginx/html,readonly"]
+        )
     }
 
     @Test func multipleServicesProduceSortedCommands() throws {
@@ -98,11 +123,10 @@ struct DockerComposeToRunServiceTests {
                   memory: 512m
                   pids: 200
         """
-        let result = try DockerComposeToRunService.convert(yaml)
-        let command = try #require(result.commands.first)
-        #expect(command.contains("--cpus 1.5"))
-        #expect(command.contains("-m 512m"))
-        #expect(command.contains("--pids-limit 200"))
+        try Self.assertComposeConversion(
+            yaml,
+            contains: ["--cpus 1.5", "-m 512m", "--pids-limit 200"]
+        )
     }
 
     @Test func reservationMemoryMapsWithoutHidingUnsupportedResourcePaths() throws {

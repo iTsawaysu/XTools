@@ -80,33 +80,16 @@ final class FileTypeDetectorSession: ObservableObject {
 
     @discardableResult
     func selectFile(filePanel: FileInputPanelClient) -> Task<Void, Never> {
-        if let activeTask = panelRequests.task {
-            return activeTask
-        }
-
-        let requestID = panelRequests.begin()
-        let task = Task { @MainActor [weak self] in
-            do {
-                guard let url = try await filePanel.selectFile(
-                    FileInputPanelRequest(allowedContentTypes: [.data])
-                ) else {
-                    _ = self?.panelRequests.finish(id: requestID)
-                    return
-                }
-                guard !Task.isCancelled,
-                      let self,
-                      self.panelRequests.finish(id: requestID) else {
-                    return
-                }
+        panelRequests.request(
+            { try await filePanel.selectFile(FileInputPanelRequest(allowedContentTypes: [.data])) },
+            onSuccess: { [weak self] url in
+                guard let self else { return }
                 self.inspect(url)
-            } catch is CancellationError {
-                _ = self?.panelRequests.finish(id: requestID)
-            } catch {
-                guard let self, self.panelRequests.finish(id: requestID) else { return }
-                self.error = FileInputPanelFailure.diagnosticMessage(for: error)
+            },
+            onError: { [weak self] message in
+                self?.error = message
             }
-        }
-        return panelRequests.attach(task)
+        )
     }
 
     @discardableResult

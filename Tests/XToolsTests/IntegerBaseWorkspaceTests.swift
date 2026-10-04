@@ -52,7 +52,7 @@ struct IntegerBaseWorkspaceTests {
 
     @MainActor
     @Test func inputAboveSynchronousBoundaryUsesBackgroundExecution() async {
-        let counter = LockedCallCounter()
+        let counter = TestLockedCounter()
         let expected = IntegerBaseConverter.Conversions(
             binary: "background",
             octal: "background",
@@ -73,7 +73,7 @@ struct IntegerBaseWorkspaceTests {
 
         #expect(model.isProcessing)
         #expect(model.conversions == nil)
-        await waitUntil { model.conversions == expected }
+        await waitUntilAssert { model.conversions == expected }
 
         #expect(counter.value == 1)
         #expect(!model.isProcessing)
@@ -82,7 +82,7 @@ struct IntegerBaseWorkspaceTests {
 
     @MainActor
     @Test func maximumSupportedInputUsesBackgroundExecution() async {
-        let counter = LockedCallCounter()
+        let counter = TestLockedCounter()
         let expected = IntegerBaseConverter.Conversions(
             binary: "maximum",
             octal: "maximum",
@@ -102,7 +102,7 @@ struct IntegerBaseWorkspaceTests {
         model.input = String(repeating: "1", count: IntegerBaseConverter.maximumInputDigitCount)
 
         #expect(model.isProcessing)
-        await waitUntil { model.conversions == expected }
+        await waitUntilAssert { model.conversions == expected }
 
         #expect(counter.value == 1)
         #expect(!model.isProcessing)
@@ -126,7 +126,7 @@ struct IntegerBaseWorkspaceTests {
         #expect(model.conversions == nil)
         #expect(model.error == nil)
 
-        await waitUntil { model.conversions?.decimal == "255" }
+        await waitUntilAssert { model.conversions?.decimal == "255" }
 
         #expect(!model.isProcessing)
         #expect(model.conversions?.hex == "FF")
@@ -163,7 +163,7 @@ struct IntegerBaseWorkspaceTests {
             digitCount: 4,
             with: .init(binary: "1111", octal: "17", decimal: "15", hex: "F")
         )
-        await waitUntil { model.conversions?.decimal == "15" }
+        await waitUntilAssert { model.conversions?.decimal == "15" }
 
         #expect(!model.isProcessing)
         #expect(model.conversions?.hex == "F")
@@ -202,7 +202,7 @@ struct IntegerBaseWorkspaceTests {
 
     @MainActor
     @Test func inputAboveMaximumFailsWithoutStartingBackgroundWork() async {
-        let counter = LockedCallCounter()
+        let counter = TestLockedCounter()
         let model = makeModel(
             synchronousDigitLimit: 2,
             backgroundDebounce: .zero,
@@ -249,7 +249,7 @@ struct IntegerBaseWorkspaceTests {
             digitCount: 3,
             with: .init(binary: "111", octal: "7", decimal: "7", hex: "7")
         )
-        await waitUntil { model.conversions?.decimal == "7" }
+        await waitUntilAssert { model.conversions?.decimal == "7" }
 
         #expect(model.conversions?.binary == "111")
         #expect(model.error == nil)
@@ -273,71 +273,8 @@ struct IntegerBaseWorkspaceTests {
             backgroundRenderer: backgroundRenderer
         )
     }
-
-    @MainActor
-    private func waitUntil(
-        timeout: Duration = .seconds(20),
-        condition: @escaping @MainActor () -> Bool
-    ) async {
-        let deadline = ContinuousClock.now + timeout
-        while !condition(), ContinuousClock.now < deadline {
-            await Task.yield()
-        }
-        #expect(condition())
-    }
 }
 
-private final class LockedCallCounter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var count = 0
+private typealias IntegerBaseConversionGate = TestKeyedAsyncGate<Int, IntegerBaseConverter.Conversions>
+private typealias LockedCallCounter = TestLockedCounter
 
-    var value: Int {
-        lock.withLock { count }
-    }
-
-    func increment() {
-        lock.withLock { count += 1 }
-    }
-}
-
-private actor IntegerBaseConversionGate {
-    private var continuations: [Int: [CheckedContinuation<IntegerBaseConverter.Conversions, Never>]] = [:]
-    private var requestCounts: [Int: Int] = [:]
-
-    func wait(for digitCount: Int) async -> IntegerBaseConverter.Conversions {
-        requestCounts[digitCount, default: 0] += 1
-        return await withCheckedContinuation { continuation in
-            continuations[digitCount, default: []].append(continuation)
-        }
-    }
-
-    func waitForRequest(digitCount: Int) async {
-        await waitForRequestCount(1, digitCount: digitCount)
-    }
-
-    func waitForRequestCount(_ expected: Int, digitCount: Int) async {
-        while requestCounts[digitCount, default: 0] < expected {
-            await Task.yield()
-        }
-    }
-
-    func resume(
-        digitCount: Int,
-        with result: IntegerBaseConverter.Conversions
-    ) {
-        let pending = continuations.removeValue(forKey: digitCount) ?? []
-        for continuation in pending {
-            continuation.resume(returning: result)
-        }
-    }
-
-    func resumeFirst(
-        digitCount: Int,
-        with result: IntegerBaseConverter.Conversions
-    ) {
-        guard var pending = continuations[digitCount], !pending.isEmpty else { return }
-        let continuation = pending.removeFirst()
-        continuations[digitCount] = pending
-        continuation.resume(returning: result)
-    }
-}

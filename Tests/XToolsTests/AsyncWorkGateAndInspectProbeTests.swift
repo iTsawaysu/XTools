@@ -197,10 +197,10 @@ struct AsyncWorkGateTests {
     @MainActor
     @Test func invalidatingBeforeDetachedRequestStartsDoesNotCallOperation() async {
         let gate = AsyncWorkGate()
-        let calls = AsyncWorkCounter()
+        let calls = TestLockedCounter()
 
         gate.runDetached {
-            await calls.increment()
+            calls.increment()
             return 1
         } publish: { _ in
             Issue.record("Invalidated detached work must not publish")
@@ -212,71 +212,12 @@ struct AsyncWorkGateTests {
         for _ in 0..<4 {
             await Task.yield()
         }
-        #expect(await calls.value == 0)
-    }
-
-    @MainActor
-    private func waitUntil(
-        timeout: Duration = .seconds(20),
-        _ condition: @escaping @MainActor () -> Bool
-    ) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !condition() {
-            if clock.now >= deadline {
-                Issue.record("Timed out waiting for AsyncWorkGate state")
-                return
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        #expect(calls.value == 0)
     }
 }
 
-private actor AsyncWorkSignal {
-    private var isSignalled = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
+private typealias AsyncWorkSignal = TestAsyncSignal
 
-    func signal() {
-        guard !isSignalled else { return }
-        isSignalled = true
-        let pending = waiters
-        waiters.removeAll()
-        for waiter in pending {
-            waiter.resume()
-        }
-    }
-
-    func wait() async {
-        guard !isSignalled else { return }
-        await withCheckedContinuation { continuation in
-            waiters.append(continuation)
-        }
-    }
-
-    func wait(timeout: Duration) async -> Bool {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !isSignalled {
-            guard clock.now < deadline else {
-                return false
-            }
-            try? await Task.sleep(for: .milliseconds(5))
-        }
-        return true
-    }
-
-    func isSignalledSnapshot() -> Bool {
-        isSignalled
-    }
-}
-
-private actor AsyncWorkCounter {
-    private(set) var value = 0
-
-    func increment() {
-        value += 1
-    }
-}
 
 struct ImageInspectProbeContractTests {
     @Test func inspectTransparencyProbeMaxPixelLengthIsBounded() {

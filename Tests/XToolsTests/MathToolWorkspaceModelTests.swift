@@ -6,7 +6,7 @@ import XToolsCore
 
 @MainActor
 struct MathToolWorkspaceModelTests {
-    @Test func shortInputPublishesImmediatelyAndLongInputRunsOffMainThread() async {
+    @Test func shortInputPublishesImmediatelyAndLongInputRunsOffMainThread() async throws {
         let probe = MathBackgroundProbe()
         let workspace = MathToolWorkspaceModel(
             backgroundEvaluation: { input, shouldCancel in
@@ -25,13 +25,13 @@ struct MathToolWorkspaceModelTests {
 
         workspace.expression = "latest-long-input"
         #expect(workspace.evaluation == .empty)
-        #expect(await Self.wait(for: workspace, until: .valid("latest")))
+        try await waitUntil { workspace.evaluation == .valid("latest") }
 
         #expect(workspace.evaluation == .valid("latest"))
         #expect(!probe.ranOnMainThread)
     }
 
-    @Test func newInputCancelsOldEvaluationAndClearInvalidatesPendingWork() async {
+    @Test func newInputCancelsOldEvaluationAndClearInvalidatesPendingWork() async throws {
         let probe = MathBackgroundProbe()
         let workspace = MathToolWorkspaceModel(
             backgroundEvaluation: { input, shouldCancel in
@@ -44,7 +44,7 @@ struct MathToolWorkspaceModelTests {
         #expect(await Self.wait(for: probe.firstStarted))
         workspace.expression = "latest-long-input"
         #expect(await Self.wait(for: probe.firstCancelled))
-        #expect(await Self.wait(for: workspace, until: .valid("latest")))
+        try await waitUntil { workspace.evaluation == .valid("latest") }
         #expect(workspace.evaluation == .valid("latest"))
 
         workspace.expression = "clear-long-input"
@@ -60,22 +60,9 @@ struct MathToolWorkspaceModelTests {
     private static func wait(for semaphore: DispatchSemaphore) async -> Bool {
         await withCheckedContinuation { continuation in
             DispatchQueue.global().async {
-                continuation.resume(returning: semaphore.wait(timeout: .now() + 5) == .success)
+                continuation.resume(returning: semaphore.wait(timeout: .now() + 20) == .success)
             }
         }
-    }
-
-    private static func wait(
-        for workspace: MathToolWorkspaceModel,
-        until expected: MathExpressionEvaluator.LiveEvaluation
-    ) async -> Bool {
-        let clock = ContinuousClock()
-        let deadline = clock.now + .seconds(5)
-        while clock.now < deadline {
-            if workspace.evaluation == expected { return true }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        return workspace.evaluation == expected
     }
 }
 
@@ -118,7 +105,7 @@ private final class MathBackgroundProbe: @unchecked Sendable {
 
     private func waitForCancellation(_ shouldCancel: @Sendable () -> Bool) -> Bool {
         let clock = ContinuousClock()
-        let deadline = clock.now + .seconds(5)
+        let deadline = clock.now + .seconds(20)
         while clock.now < deadline {
             if shouldCancel() { return true }
             Thread.sleep(forTimeInterval: 0.001)

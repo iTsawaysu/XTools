@@ -71,7 +71,7 @@ struct IndexConverterWorkspaceExecutionTests {
         #expect(model.error == nil)
         #expect(model.isProcessing)
 
-        await waitUntil { model.output == "background:ééé" }
+        await waitUntilAssert { model.output == "background:ééé" }
 
         #expect(counter.callCount == 1)
         #expect(counter.ranOnMainThreadValues == [false])
@@ -125,7 +125,7 @@ struct IndexConverterWorkspaceExecutionTests {
         #expect(model.isProcessing)
 
         await gate.resume(newRequest, with: .success("current"))
-        await waitUntil { model.output == "current" }
+        await waitUntilAssert { model.output == "current" }
 
         #expect(model.error == nil)
         #expect(!model.isProcessing)
@@ -156,7 +156,7 @@ struct IndexConverterWorkspaceExecutionTests {
         #expect(model.error == nil)
 
         await gate.resume(newRequest, with: .success("current"))
-        await waitUntil { model.output == "current" }
+        await waitUntilAssert { model.output == "current" }
 
         #expect(model.error == nil)
         #expect(!model.isProcessing)
@@ -178,7 +178,7 @@ struct IndexConverterWorkspaceExecutionTests {
         )
 
         model.input = "invalid"
-        await waitUntil { model.error == "当前输入无效。" }
+        await waitUntilAssert { model.error == "当前输入无效。" }
 
         #expect(counter.callCount == 1)
         #expect(model.output.isEmpty)
@@ -333,7 +333,7 @@ struct IndexConverterWorkspaceExecutionTests {
         #expect(model.output.isEmpty)
 
         await gate.resume(decodingRequest, with: .success("decoded"))
-        await waitUntil { model.output == "decoded" }
+        await waitUntilAssert { model.output == "decoded" }
 
         #expect(model.mode == "dec")
         #expect(model.input == "large")
@@ -390,17 +390,6 @@ struct IndexConverterWorkspaceExecutionTests {
         )
     }
 
-    @MainActor
-    private func waitUntil(
-        timeout: Duration = .seconds(20),
-        condition: @escaping @MainActor () -> Bool
-    ) async {
-        let deadline = ContinuousClock.now + timeout
-        while !condition(), ContinuousClock.now < deadline {
-            await Task.yield()
-        }
-        #expect(condition())
-    }
 }
 
 private enum ConverterTestError: Error, Equatable, Sendable {
@@ -441,34 +430,5 @@ private final class LockedConverterCallRecorder: @unchecked Sendable {
     }
 }
 
-private actor IndexConverterExecutionGate {
-    private var continuations: [IndexConverterRequest: [CheckedContinuation<IndexConverterExecutionResult, Never>]] = [:]
-    private var requestCounts: [IndexConverterRequest: Int] = [:]
+private typealias IndexConverterExecutionGate = TestKeyedAsyncGate<IndexConverterRequest, IndexConverterExecutionResult>
 
-    func execute(_ request: IndexConverterRequest) async -> IndexConverterExecutionResult {
-        requestCounts[request, default: 0] += 1
-        return await withCheckedContinuation { continuation in
-            continuations[request, default: []].append(continuation)
-        }
-    }
-
-    func waitForRequest(_ request: IndexConverterRequest, timeout: Duration = .seconds(20)) async {
-        let deadline = ContinuousClock.now + timeout
-        while requestCounts[request, default: 0] < 1, ContinuousClock.now < deadline {
-            await Task.yield()
-        }
-        if requestCounts[request, default: 0] < 1 {
-            Issue.record("Timed out waiting for index converter request: \(request)")
-        }
-    }
-
-    func resume(
-        _ request: IndexConverterRequest,
-        with result: IndexConverterExecutionResult
-    ) {
-        let pending = continuations.removeValue(forKey: request) ?? []
-        for continuation in pending {
-            continuation.resume(returning: result)
-        }
-    }
-}

@@ -19,7 +19,7 @@ struct TextStatisticsWorkspaceModelTests {
         workspace.text = "Hi world\n你好！"
         #expect(workspace.isAnalyzing)
 
-        try await Self.waitUntil {
+        try await waitUntil {
             workspace.stats.characters == 12 && !workspace.isAnalyzing
         }
 
@@ -42,13 +42,13 @@ struct TextStatisticsWorkspaceModelTests {
         )
 
         workspace.text = "first"
-        try await Self.waitUntil { probe.startedInputs == ["first"] }
+        try await waitUntil { probe.startedInputs == ["first"] }
 
         workspace.text = "obsolete"
         workspace.text = "latest"
-        try await Self.waitUntil { probe.startedInputs == ["first", "latest"] }
+        try await waitUntil { probe.startedInputs == ["first", "latest"] }
 
-        try await Self.waitUntil {
+        try await waitUntil {
             workspace.stats.characters == "latest".count && !workspace.isAnalyzing
         }
 
@@ -68,12 +68,12 @@ struct TextStatisticsWorkspaceModelTests {
         )
 
         workspace.text = "seed"
-        try await Self.waitUntil {
+        try await waitUntil {
             workspace.stats.characters == "seed".count && !workspace.isAnalyzing
         }
 
         workspace.text = "slow"
-        try await Self.waitUntil { probe.startedInputs.contains("slow") }
+        try await waitUntil { probe.startedInputs.contains("slow") }
 
         workspace.text = ""
         #expect(workspace.stats == .zero)
@@ -102,9 +102,9 @@ struct TextStatisticsWorkspaceModelTests {
         )
 
         workspace.text = "first"
-        try await Self.waitUntil { probe.startedInputs == ["first"] }
+        try await waitUntil { probe.startedInputs == ["first"] }
         workspace.text = "latest"
-        try await Self.waitUntil {
+        try await waitUntil {
             probe.cancelledInputs == ["first"]
                 && workspace.stats.characters == "latest".count
                 && !workspace.isAnalyzing
@@ -128,9 +128,9 @@ struct TextStatisticsWorkspaceModelTests {
         )
 
         workspace?.text = "held"
-        try await Self.waitUntil { probe.startedInputs == ["held"] }
+        try await waitUntil { probe.startedInputs == ["held"] }
         workspace = nil
-        try await Self.waitUntil { probe.cancelledInputs == ["held"] }
+        try await waitUntil { probe.cancelledInputs == ["held"] }
         #expect(probe.maxConcurrent == 1)
     }
 
@@ -143,7 +143,7 @@ struct TextStatisticsWorkspaceModelTests {
         let workspace = repository.model(for: TextStatisticsWorkspaceModel.key)
         workspace.text = "retained text"
 
-        try await Self.waitUntil {
+        try await waitUntil {
             workspace.stats.characters == "retained text".count && !workspace.isAnalyzing
         }
 
@@ -171,21 +171,6 @@ struct TextStatisticsWorkspaceModelTests {
             sentences: input.isEmpty ? 0 : 1,
             bytes: input.utf8.count
         )
-    }
-
-    private static func waitUntil(
-        timeout: Duration = .seconds(20),
-        _ condition: @escaping @MainActor () -> Bool
-    ) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !condition() {
-            if clock.now >= deadline {
-                Issue.record("Timed out waiting for text statistics workspace state")
-                return
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
     }
 }
 

@@ -5,14 +5,6 @@ import SwiftUI
 import Testing
 
 struct SidebarNavigationListTests {
-    @Test @MainActor func sidebarCoordinatorPerformanceBenchmark() {
-        guard ProcessInfo.processInfo.environment["TOOLS_SIDEBAR_BENCHMARK"] == "1" else {
-            return
-        }
-
-        SidebarNavigationCoordinatorPerformanceBenchmark.run()
-    }
-
     @Test @MainActor func coordinatorOwnsOneFlippedDocumentAndReusesToolTrackAcrossFavoriteMigration() throws {
         let coordinator = SidebarNavigationListCoordinator()
         let scrollView = coordinator.makeScrollView()
@@ -176,7 +168,7 @@ struct SidebarNavigationListTests {
         #expect(coordinator.debugTrackState(for: "tool.list-alpha")?.isHovered == false)
 
         pointer.point = finalPoint
-        try await Self.waitUntil {
+        try await waitUntil {
             coordinator.debugTrackState(for: "tool.list-alpha")?.isHovered == true
         }
         #expect(coordinator.debugTrackState(for: "tool.list-beta")?.isHovered == false)
@@ -270,7 +262,7 @@ struct SidebarNavigationListTests {
                 reduceMotion: false
             )
         )
-        try await Self.waitUntil { !coordinator.debugSelectionIndicatorState.isVisible }
+        try await waitUntil { !coordinator.debugSelectionIndicatorState.isVisible }
 
         // Re-expanding returns the chrome to the selected row's final frame.
         coordinator.update(
@@ -282,7 +274,7 @@ struct SidebarNavigationListTests {
                 reduceMotion: false
             )
         )
-        try await Self.waitUntil { coordinator.debugSelectionIndicatorState.isVisible }
+        try await waitUntil { coordinator.debugSelectionIndicatorState.isVisible }
         #expect(
             coordinator.debugSelectionIndicatorState.frame
                 == Self.frame(of: "tool.list-alpha", in: expanded)
@@ -796,7 +788,7 @@ struct SidebarNavigationListTests {
             configuration: Self.configuration(entries: collapsed, reduceMotion: false)
         )
 
-        try await Self.waitUntil {
+        try await waitUntil {
             coordinator.debugTrackState(for: "tool.list-alpha")?.isHidden == true
         }
         let finalCollapsed = try #require(
@@ -996,16 +988,6 @@ struct SidebarNavigationListTests {
         )
     }
 
-    @MainActor
-    private static func waitUntil(_ condition: () -> Bool) async throws {
-        for _ in 0..<100 {
-            if condition() {
-                return
-            }
-            try await Task.sleep(for: .milliseconds(20))
-        }
-    }
-
     private static var alpha: ToolNavigationItem {
         item(.alpha, isFavorite: false, section: .category(.development))
     }
@@ -1051,130 +1033,6 @@ struct SidebarNavigationListTests {
             isFavorite: isFavorite,
             section: section
         )
-    }
-}
-
-@MainActor
-private enum SidebarNavigationCoordinatorPerformanceBenchmark {
-    private static let warmupIterations = 1
-    private static let sampleIterations = 3
-    private static let hoverIterations = 400
-    private static let updateIterations = 12
-    private static let resizeIterations = 80
-
-    static func run() {
-        let registry = ToolRegistry.default
-        let allGroups = ToolNavigationProjection(
-            registry: registry,
-            favoriteIDs: [],
-            selectedToolID: nil,
-            query: ""
-        ).sidebarGroups
-        let searchGroups = ToolNavigationProjection(
-            registry: registry,
-            favoriteIDs: [],
-            selectedToolID: nil,
-            query: "json"
-        ).sidebarGroups
-        let allEntries = SidebarNavigationEntryProjection.entries(
-            groups: allGroups,
-            isSearchActive: false,
-            isSectionExpanded: { _ in true }
-        )
-        let searchEntries = SidebarNavigationEntryProjection.entries(
-            groups: searchGroups,
-            isSearchActive: true,
-            isSectionExpanded: { _ in true }
-        )
-        let hoverPoints = SidebarNavigationLayout.plan(
-            entries: allEntries,
-            width: SidebarView.idealWidth
-        ).targets.compactMap { target -> CGPoint? in
-            guard case .tool = target.kind, !target.frame.isEmpty else { return nil }
-            return CGPoint(x: target.frame.midX, y: target.frame.midY)
-        }
-        guard !hoverPoints.isEmpty else {
-            FileHandle.standardError.write(Data("SIDEBAR_COORDINATOR_BENCHMARK_ERROR no-hover-targets\n".utf8))
-            return
-        }
-
-        let pointer = SidebarPointerLocationBox()
-        let coordinator = SidebarNavigationListCoordinator(
-            pointerLocationProvider: { _ in pointer.point }
-        )
-        let scrollView = coordinator.makeScrollView()
-        scrollView.setFrameSize(CGSize(width: SidebarView.idealWidth, height: 600))
-        coordinator.update(
-            scrollView: scrollView,
-            configuration: configuration(entries: allEntries, isSearchActive: false)
-        )
-
-        measure(label: "scroll-hover", iterations: hoverIterations) {
-            for index in 0..<hoverIterations {
-                pointer.point = hoverPoints[index % hoverPoints.count]
-                scrollView.reflectScrolledClipView(scrollView.contentView)
-            }
-        }
-        measure(label: "search-update", iterations: updateIterations) {
-            for _ in 0..<updateIterations {
-                coordinator.update(
-                    scrollView: scrollView,
-                    configuration: configuration(entries: searchEntries, isSearchActive: true)
-                )
-                coordinator.update(
-                    scrollView: scrollView,
-                    configuration: configuration(entries: allEntries, isSearchActive: false)
-                )
-            }
-        }
-        measure(label: "resize", iterations: resizeIterations) {
-            for index in 0..<resizeIterations {
-                let width: CGFloat = index.isMultiple(of: 2) ? 260 : 300
-                scrollView.setFrameSize(CGSize(width: width, height: 600))
-                scrollView.layoutSubtreeIfNeeded()
-            }
-        }
-    }
-
-    private static func configuration(
-        entries: [SidebarNavigationEntry],
-        isSearchActive: Bool
-    ) -> SidebarNavigationListConfiguration {
-        SidebarNavigationListConfiguration(
-            entries: entries,
-            selectedToolID: nil,
-            selectedSection: nil,
-            favoriteOrder: [],
-            isSearchActive: isSearchActive,
-            reduceMotion: true,
-            colorScheme: .dark,
-            onSelectTool: { _ in },
-            onToggleFavorite: { _ in },
-            onToggleSection: { _ in }
-        )
-    }
-
-    private static func measure(
-        label: String,
-        iterations: Int,
-        operation: () -> Void
-    ) {
-        for _ in 0..<warmupIterations {
-            operation()
-        }
-        for _ in 0..<sampleIterations {
-            let startedAt = ContinuousClock.now
-            operation()
-            let duration = startedAt.duration(to: .now).components
-            let milliseconds = Double(duration.seconds) * 1_000
-                + Double(duration.attoseconds) / 1_000_000_000_000_000
-            FileHandle.standardError.write(Data(String(
-                format: "SIDEBAR_COORDINATOR_BENCHMARK operation=%@ iterations=%d milliseconds=%.3f\n",
-                label,
-                iterations,
-                milliseconds
-            ).utf8))
-        }
     }
 }
 

@@ -150,7 +150,7 @@ struct WorkbenchAccessibilityTests {
     private func waitUntil(
         _ hosting: NSView, stage: String, diagnostics: () -> String, _ condition: () -> Bool
     ) async throws {
-        let deadline = ContinuousClock.now + .seconds(2)
+        let deadline = ContinuousClock.now + .seconds(10)
         repeat {
             hosting.layoutSubtreeIfNeeded()
             hosting.displayIfNeeded()

@@ -52,7 +52,7 @@ struct StringObfuscatorWorkspaceTests {
         #expect(model.output.isEmpty)
         #expect(model.isProcessing)
         #expect(model.usesNativeOutput)
-        await waitUntil { model.output == "background:12345" }
+        await waitUntilAssert { model.output == "background:12345" }
 
         #expect(counter.value == 1)
         #expect(!model.isProcessing)
@@ -70,7 +70,7 @@ struct StringObfuscatorWorkspaceTests {
         model.input = String(repeating: "a", count: 100_000)
 
         #expect(model.isProcessing)
-        await waitUntil { !model.isProcessing }
+        await waitUntilAssert { !model.isProcessing }
 
         #expect(model.output.count == 100_000)
         #expect(model.output.allSatisfy { $0 == "*" })
@@ -101,7 +101,7 @@ struct StringObfuscatorWorkspaceTests {
         #expect(model.isProcessing)
 
         await gate.resume("latest", with: "current")
-        await waitUntil { model.output == "current" }
+        await waitUntilAssert { model.output == "current" }
 
         #expect(!model.isProcessing)
     }
@@ -166,55 +166,9 @@ struct StringObfuscatorWorkspaceTests {
             shouldCancel: shouldCancel
         )
     }
-
-    @MainActor
-    private func waitUntil(
-        timeout: Duration = .seconds(20),
-        condition: @escaping @MainActor () -> Bool
-    ) async {
-        let deadline = ContinuousClock.now + timeout
-        while !condition(), ContinuousClock.now < deadline {
-            await Task.yield()
-        }
-        #expect(condition())
-    }
 }
 
-private final class StringMaskingCallCounter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var count = 0
+private typealias StringMaskingCallCounter = TestLockedCounter
 
-    var value: Int {
-        lock.withLock { count }
-    }
+private typealias StringMaskingRenderGate = TestKeyedAsyncGate<String, String?>
 
-    func increment() {
-        lock.withLock { count += 1 }
-    }
-}
-
-private actor StringMaskingRenderGate {
-    private var continuations: [String: CheckedContinuation<String?, Never>] = [:]
-    private var requests: Set<String> = []
-
-    func wait(for input: String) async -> String? {
-        requests.insert(input)
-        return await withCheckedContinuation { continuation in
-            continuations[input] = continuation
-        }
-    }
-
-    func waitForRequest(_ input: String, timeout: Duration = .seconds(20)) async {
-        let deadline = ContinuousClock.now + timeout
-        while !requests.contains(input), ContinuousClock.now < deadline {
-            await Task.yield()
-        }
-        if !requests.contains(input) {
-            Issue.record("Timed out waiting for string masking request: \(input)")
-        }
-    }
-
-    func resume(_ input: String, with result: String?) {
-        continuations.removeValue(forKey: input)?.resume(returning: result)
-    }
-}

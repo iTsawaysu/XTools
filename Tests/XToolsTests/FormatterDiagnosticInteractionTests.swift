@@ -207,14 +207,6 @@ struct FormatterDiagnosticInteractionTests {
         if let editor = view as? NSTextView, editor.isEditable { return editor }
         return view.subviews.lazy.compactMap { findEditor($0) }.first
     }
-
-    private func waitUntil(_ condition: () -> Bool) async throws {
-        for _ in 0..<200 {
-            if condition() { return }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        Issue.record("Timed out waiting for formatter completion")
-    }
 }
 
 @MainActor private final class DiagnosticTestTextView: NSTextView {

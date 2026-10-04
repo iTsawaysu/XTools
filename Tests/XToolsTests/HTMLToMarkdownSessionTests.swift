@@ -15,7 +15,7 @@ struct HTMLToMarkdownSessionTests {
             manualDebounce: .milliseconds(10)
         )
         session.userEditedHTML("<canvas>visible</canvas>")
-        try await Self.waitUntil { session.phase == .ready }
+        try await waitUntil { session.phase == .ready }
         #expect(session.diagnostic?.details.count == 2)
         #expect(session.diagnostic?.message == session.warning)
         session.userEditedHTML("<p>new</p>")
@@ -48,7 +48,7 @@ struct HTMLToMarkdownSessionTests {
         session.urlText = "https://example.com/article"
 
         session.fetchURL()
-        try await Self.waitUntil { session.phase == .ready }
+        try await waitUntil { session.phase == .ready }
 
         #expect(session.inputHTML == result.cleanedHTML)
         #expect(session.markdown == result.markdown)
@@ -77,7 +77,7 @@ struct HTMLToMarkdownSessionTests {
         session.urlText = "https://example.com/fast"
         session.fetchURL()
 
-        try await Self.waitUntil { session.markdown == "fast" }
+        try await waitUntil { session.markdown == "fast" }
         try await Task.sleep(for: .milliseconds(500))
 
         #expect(session.markdown == "fast")
@@ -97,7 +97,7 @@ struct HTMLToMarkdownSessionTests {
         )
 
         session.userEditedHTML("<p>Hello</p>")
-        try await Self.waitUntil { session.phase == .ready }
+        try await waitUntil { session.phase == .ready }
 
         #expect(session.markdown == "background:<p>Hello</p>")
     }
@@ -141,7 +141,7 @@ struct HTMLToMarkdownSessionTests {
         session.urlText = "https://example.com"
 
         session.fetchURL()
-        try await Self.waitUntil { session.phase == .ready }
+        try await waitUntil { session.phase == .ready }
         try await Task.sleep(for: .milliseconds(80))
 
         #expect(counter.value == 0)
@@ -163,12 +163,12 @@ struct HTMLToMarkdownSessionTests {
         session.urlText = "https://example.com"
 
         session.fetchURL()
-        try await Self.waitUntil { session.phase == .failed }
+        try await waitUntil { session.phase == .failed }
         #expect(session.error == "URL 返回的不是 HTML 页面。")
         #expect(session.markdown.isEmpty)
 
         session.fetchURL()
-        try await Self.waitUntil { session.phase == .ready }
+        try await waitUntil { session.phase == .ready }
         #expect(session.markdown == "recovered")
         #expect(session.error == nil)
     }
@@ -243,11 +243,11 @@ struct HTMLToMarkdownSessionTests {
         )
 
         session.userEditedHTML("<p>first</p>")
-        try await Self.waitUntil { started.value == 1 }
+        try await waitUntil { started.value == 1 }
         session.userEditedHTML("<p>second</p>")
         firstOperationGate.release()
-        try await Self.waitUntil { cancelled.value == 1 }
-        try await Self.waitUntil { session.markdown == "done:<p>second</p>" }
+        try await waitUntil { cancelled.value == 1 }
+        try await waitUntil { session.markdown == "done:<p>second</p>" }
 
         #expect(session.markdown == "done:<p>second</p>")
         #expect(session.phase == .ready)
@@ -259,7 +259,7 @@ struct HTMLToMarkdownSessionTests {
         let html = "<p>" + String(repeating: "x", count: 512_001) + "</p>"
 
         session.userEditedHTML(html)
-        try await Self.waitUntil { session.phase == .ready }
+        try await waitUntil { session.phase == .ready }
 
         #expect(!session.markdown.isEmpty)
         #expect(session.error == nil)
@@ -271,7 +271,7 @@ struct HTMLToMarkdownSessionTests {
         let html = "<p>" + String(repeating: "x", count: HTMLToMarkdownInputBudget.manual.preParseByteLimit + 1) + "</p>"
 
         session.userEditedHTML(html)
-        try await Self.waitUntil { session.phase == .failed }
+        try await waitUntil { session.phase == .failed }
 
         #expect(session.markdown.isEmpty)
         #expect(session.warning == nil)
@@ -288,7 +288,7 @@ struct HTMLToMarkdownSessionTests {
         )
 
         session.userEditedHTML("<p>input</p>")
-        try await Self.waitUntil { session.phase == .failed }
+        try await waitUntil { session.phase == .failed }
 
         #expect(session.markdown.isEmpty)
         #expect(session.warning == nil)
@@ -306,11 +306,11 @@ struct HTMLToMarkdownSessionTests {
         let initialGeneration = session.previewAuthorizationGeneration
 
         session.userEditedHTML("<p>first</p>")
-        try await Self.waitUntil { session.markdown == "same" }
+        try await waitUntil { session.markdown == "same" }
         let firstGeneration = session.previewAuthorizationGeneration
 
         session.userEditedHTML("<p>second</p>")
-        try await Self.waitUntil { session.phase == .ready && session.inputHTML.contains("second") }
+        try await waitUntil { session.phase == .ready && session.inputHTML.contains("second") }
 
         #expect(firstGeneration > initialGeneration)
         #expect(session.previewAuthorizationGeneration > firstGeneration)
@@ -326,21 +326,6 @@ struct HTMLToMarkdownSessionTests {
             warnings: []
         )
     }
-
-    private static func waitUntil(
-        timeout: Duration = .seconds(20),
-        _ predicate: @escaping @MainActor () -> Bool
-    ) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !predicate() {
-            if clock.now >= deadline {
-                Issue.record("Timed out waiting for HTMLToMarkdownSession state")
-                return
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-    }
 }
 
 private actor HTMLSessionStageRecorder {
@@ -351,25 +336,7 @@ private actor HTMLSessionStageRecorder {
     }
 }
 
-private final class HTMLSessionAtomicCounter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var storedValue = 0
-
-    var value: Int {
-        lock.withLock { storedValue }
-    }
-
-    func increment() {
-        lock.withLock { storedValue += 1 }
-    }
-
-    func incrementAndRead() -> Int {
-        lock.withLock {
-            storedValue += 1
-            return storedValue
-        }
-    }
-}
+private typealias HTMLSessionAtomicCounter = TestLockedCounter
 
 private final class HTMLSessionManualOperationGate: @unchecked Sendable {
     private let lock = NSLock()

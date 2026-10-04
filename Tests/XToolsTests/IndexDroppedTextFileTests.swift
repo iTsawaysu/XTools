@@ -117,33 +117,6 @@ struct IndexDroppedTextFileTests {
         return (window, view)
     }
 
-    private func waitUntil(_ condition: @escaping @MainActor () -> Bool) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: .seconds(2))
-        while !condition() {
-            guard clock.now < deadline else {
-                Issue.record("Timed out waiting for dropped file publication")
-                return
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
-    }
 }
 
-private actor DropReadSignal {
-    private var signalled = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
-
-    func signal() {
-        guard !signalled else { return }
-        signalled = true
-        let pending = waiters
-        waiters.removeAll()
-        for waiter in pending { waiter.resume() }
-    }
-
-    func wait() async {
-        guard !signalled else { return }
-        await withCheckedContinuation { waiters.append($0) }
-    }
-}
+private typealias DropReadSignal = TestAsyncSignal

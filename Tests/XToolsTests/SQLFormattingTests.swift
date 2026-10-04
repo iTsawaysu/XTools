@@ -105,38 +105,23 @@ struct SQLFormattingTests {
         }
     }
 
-    @Test func rejectsObviousIncompleteSelectStructures() throws {
-        let cases = [
-            (
-                sql: "select from where order by;",
-                expectedMessage: "SELECT 缺少要查询的列或表达式"
-            ),
-            (
-                sql: "select id from where id = 1;",
-                expectedMessage: "FROM 缺少表名或子查询"
-            ),
-            (
-                sql: "select id from users order by;",
-                expectedMessage: "ORDER BY 缺少排序表达式"
-            )
-        ]
-
-        for testCase in cases {
-            do {
-                _ = try SQLFormatting.format(testCase.sql)
-                Issue.record("Expected incomplete SQL structure error for \(testCase.sql)")
-            } catch let error as SQLFormatting.ValidationError {
-                guard case .incompleteStatement(let diagnostic) = error else {
-                    Issue.record("Expected incomplete SQL structure error, got \(error)")
-                    continue
-                }
-                #expect(diagnostic.message == testCase.expectedMessage)
-                #expect(diagnostic.line == 1)
-                #expect(diagnostic.displayMessage == diagnostic.message)
-            } catch {
-                Issue.record("Expected SQL validation error, got \(error)")
-            }
+    @Test(arguments: [
+        ("select from where order by;", "SELECT 缺少要查询的列或表达式"),
+        ("select id from where id = 1;", "FROM 缺少表名或子查询"),
+        ("select id from users order by;", "ORDER BY 缺少排序表达式")
+    ])
+    func rejectsObviousIncompleteSelectStructures(sql: String, expectedMessage: String) throws {
+        let error = #expect(throws: (any Error).self) {
+            _ = try SQLFormatting.format(sql)
         }
+        guard let error,
+              case SQLFormatting.ValidationError.incompleteStatement(let diagnostic) = error else {
+            Issue.record("Expected incomplete SQL structure error, got \(String(describing: error))")
+            return
+        }
+        #expect(diagnostic.message == expectedMessage)
+        #expect(diagnostic.line == 1)
+        #expect(diagnostic.displayMessage == diagnostic.message)
     }
 
     @Test func ignoresNestedFromAndReportsLaterStatementOffset() {

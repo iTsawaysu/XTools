@@ -279,31 +279,26 @@ struct XMLFormattingTests {
         #expect(!diagnostic.localizedDescription.contains("error 39"))
     }
 
-    @Test func xmlSemanticDiagnosticsMatchCommonMalformedSamples() throws {
-        let samples: [(input: String, expectedFragments: [String])] = [
-            ("<root><item>one</items></root>", ["标签", "不匹配"]),
-            (#"<user id="1" id="2"><name>Alice</name></user>"#, ["重复", "属性"]),
-            ("<root><title>Tom & Jerry</title></root>", ["&", "转义"]),
-            ("<one>1</one><two>2</two>", ["根节点"])
-        ]
-
-        for sample in samples {
-            let error = #expect(throws: (any Error).self) {
-                _ = try XMLFormatting.format(sample.input)
-            }
-
-            guard let error,
-                  case XMLFormatting.FormattingError.invalidXML(let diagnostic) = error else {
-                Issue.record("Expected XML formatting diagnostic")
-                continue
-            }
-
-            for fragment in sample.expectedFragments {
-                #expect(diagnostic.message.contains(fragment))
-            }
-            #expect(!diagnostic.localizedDescription.contains("NSXMLParserErrorDomain"))
-            #expect(!diagnostic.localizedDescription.contains("The operation"))
+    @Test(arguments: [
+        ("<root><item>one</items></root>", ["标签", "不匹配"]),
+        (#"<user id="1" id="2"><name>Alice</name></user>"#, ["重复", "属性"]),
+        ("<root><title>Tom & Jerry</title></root>", ["&", "转义"]),
+        ("<one>1</one><two>2</two>", ["根节点"])
+    ])
+    func xmlSemanticDiagnosticsMatchCommonMalformedSamples(input: String, expectedFragments: [String]) throws {
+        let error = #expect(throws: (any Error).self) {
+            _ = try XMLFormatting.format(input)
         }
+        guard let error,
+              case XMLFormatting.FormattingError.invalidXML(let diagnostic) = error else {
+            Issue.record("Expected XML formatting diagnostic")
+            return
+        }
+        for fragment in expectedFragments {
+            #expect(diagnostic.message.contains(fragment))
+        }
+        #expect(!diagnostic.localizedDescription.contains("NSXMLParserErrorDomain"))
+        #expect(!diagnostic.localizedDescription.contains("The operation"))
     }
 
     @Test func unterminatedCDATAReportsSpecificDiagnostic() throws {

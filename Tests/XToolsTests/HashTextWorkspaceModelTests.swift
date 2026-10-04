@@ -17,7 +17,7 @@ struct HashTextWorkspaceModelTests {
         #expect(workspace.isComputing)
         #expect(!workspace.usesExplicitComputation)
 
-        try await Self.waitUntil {
+        try await waitUntil {
             workspace.digests.first?.bytes == Array("abc".utf8) && !workspace.isComputing
         }
 
@@ -44,7 +44,7 @@ struct HashTextWorkspaceModelTests {
         workspace.computeExplicitly()
         #expect(workspace.isComputing)
 
-        try await Self.waitUntil {
+        try await waitUntil {
             workspace.digests.first?.bytes == Array("12345".utf8) && !workspace.isComputing
         }
         #expect(probe.startedInputs == ["12345"])
@@ -62,16 +62,16 @@ struct HashTextWorkspaceModelTests {
         )
 
         workspace.input = "first"
-        try await Self.waitUntil { probe.startedInputs == ["first"] }
+        try await waitUntil { probe.startedInputs == ["first"] }
 
         workspace.input = "obsolete"
         workspace.input = "latest"
-        try await Self.waitUntil { probe.startedInputs == ["first", "latest"] }
+        try await waitUntil { probe.startedInputs == ["first", "latest"] }
 
         #expect(workspace.digests.isEmpty)
         #expect(workspace.isComputing)
 
-        try await Self.waitUntil {
+        try await waitUntil {
             workspace.digests.first?.bytes == Array("latest".utf8) && !workspace.isComputing
         }
 
@@ -88,12 +88,12 @@ struct HashTextWorkspaceModelTests {
         )
 
         workspace.input = "seed"
-        try await Self.waitUntil {
+        try await waitUntil {
             workspace.digests.first?.bytes == Array("seed".utf8) && !workspace.isComputing
         }
 
         workspace.input = "slow"
-        try await Self.waitUntil { probe.startedInputs.contains("slow") }
+        try await waitUntil { probe.startedInputs.contains("slow") }
 
         workspace.input = ""
         #expect(workspace.digests.isEmpty)
@@ -115,7 +115,7 @@ struct HashTextWorkspaceModelTests {
         )
 
         workspace.input = "1234"
-        try await Self.waitUntil { !workspace.digests.isEmpty && !workspace.isComputing }
+        try await waitUntil { !workspace.digests.isEmpty && !workspace.isComputing }
         #expect(!workspace.usesExplicitComputation)
 
         workspace.input = "你好"
@@ -147,21 +147,6 @@ struct HashTextWorkspaceModelTests {
             debounce: debounce,
             realtimeUTF8ByteLimit: realtimeUTF8ByteLimit
         )
-    }
-
-    private static func waitUntil(
-        timeout: Duration = .seconds(20),
-        _ condition: @escaping @MainActor () -> Bool
-    ) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !condition() {
-            if clock.now >= deadline {
-                Issue.record("Timed out waiting for Hash workspace state")
-                return
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
     }
 }
 

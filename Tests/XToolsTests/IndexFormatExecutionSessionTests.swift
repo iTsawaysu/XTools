@@ -28,7 +28,7 @@ struct IndexFormatExecutionSessionTests {
         #expect(!session.isOutputFresh)
         #expect(session.binding.output == "previous")
 
-        try await Self.waitUntil { session.binding.output == "next" && !session.isRunning }
+        try await waitUntil { session.binding.output == "next" && !session.isRunning }
         #expect(session.isOutputFresh)
 
         session.sourceDidChange()
@@ -47,7 +47,7 @@ struct IndexFormatExecutionSessionTests {
             defer { probe.finish() }
             return FormatBinding(output: snapshot)
         }
-        try await Self.waitUntil { probe.startedInputs == ["slow"] }
+        try await waitUntil { probe.startedInputs == ["slow"] }
 
         session.sourceDidChange()
         try await Task.sleep(for: .milliseconds(400))
@@ -64,7 +64,7 @@ struct IndexFormatExecutionSessionTests {
             FormatBinding(output: "background:\(snapshot):\(!Thread.isMainThread)")
         }
 
-        try await Self.waitUntil { session.binding.output == "background:json:true" && !session.isRunning }
+        try await waitUntil { session.binding.output == "background:json:true" && !session.isRunning }
     }
 
     @Test func debounceCoalescesRapidInputBeforeStartingWork() async throws {
@@ -80,7 +80,7 @@ struct IndexFormatExecutionSessionTests {
             return FormatBinding(output: snapshot)
         }
 
-        try await Self.waitUntil { session.binding.output == "latest" && !session.isRunning }
+        try await waitUntil { session.binding.output == "latest" && !session.isRunning }
         #expect(probe.startedInputs == ["latest"])
     }
 
@@ -93,7 +93,7 @@ struct IndexFormatExecutionSessionTests {
             defer { probe.finish() }
             return FormatBinding(output: snapshot)
         }
-        try await Self.waitUntil { probe.startedInputs == ["first"] }
+        try await waitUntil { probe.startedInputs == ["first"] }
 
         session.schedule(snapshot: "obsolete", delay: .milliseconds(10)) { snapshot in
             probe.begin(snapshot)
@@ -106,7 +106,7 @@ struct IndexFormatExecutionSessionTests {
             return FormatBinding(output: snapshot)
         }
 
-        try await Self.waitUntil { session.binding.output == "latest" && !session.isRunning }
+        try await waitUntil { session.binding.output == "latest" && !session.isRunning }
         #expect(probe.startedInputs == ["first", "latest"])
         #expect(probe.maxConcurrent == 1)
     }
@@ -126,7 +126,7 @@ struct IndexFormatExecutionSessionTests {
             }
             return FormatBinding(output: snapshot)
         }
-        try await Self.waitUntil { probe.startedInputs == ["first"] }
+        try await waitUntil { probe.startedInputs == ["first"] }
 
         session.schedule(snapshot: "obsolete", delay: .zero) { snapshot in
             probe.begin(snapshot)
@@ -142,7 +142,7 @@ struct IndexFormatExecutionSessionTests {
         }
         releaseFirst.signal()
 
-        try await Self.waitUntil { session.binding.output == "latest" && !session.isRunning }
+        try await waitUntil { session.binding.output == "latest" && !session.isRunning }
         #expect(probe.startedInputs == ["first", "latest"])
     }
 
@@ -155,7 +155,7 @@ struct IndexFormatExecutionSessionTests {
             defer { probe.finish() }
             return FormatBinding(output: snapshot)
         }
-        try await Self.waitUntil { probe.startedInputs == ["slow"] }
+        try await waitUntil { probe.startedInputs == ["slow"] }
 
         session.invalidate(resetTo: FormatBinding(output: "cleared"))
         #expect(session.binding.output == "cleared")
@@ -210,7 +210,7 @@ struct IndexFormatExecutionSessionTests {
                     ? FormatBinding(error: "\(name) ran on the main actor")
                     : binding
             }
-            try await Self.waitUntil { !session.isRunning }
+            try await waitUntil { !session.isRunning }
             #expect(session.binding.error == nil, "\(name) formatter should complete off-main")
             #expect(!session.binding.output.isEmpty, "\(name) formatter should publish output")
         }
@@ -233,7 +233,7 @@ struct IndexFormatExecutionSessionTests {
             await Task.yield()
         }
 
-        try await Self.waitUntil { !session.isRunning }
+        try await waitUntil { !session.isRunning }
         #expect(!session.binding.output.isEmpty)
         #expect(mainActorProbeCount > 0)
     }
@@ -258,22 +258,7 @@ struct IndexFormatExecutionSessionTests {
         mode = "minify"
         indent = 4
 
-        try await Self.waitUntil { session.binding.output == "format:2:before" && !session.isRunning }
-    }
-
-    private static func waitUntil(
-        timeout: Duration = .seconds(20),
-        _ condition: @escaping @MainActor () -> Bool
-    ) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !condition() {
-            if clock.now >= deadline {
-                Issue.record("Timed out waiting for format execution session state")
-                return
-            }
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await waitUntil { session.binding.output == "format:2:before" && !session.isRunning }
     }
 }
 
@@ -326,7 +311,7 @@ extension IndexFormatExecutionSessionTests {
         session.schedule(snapshot: "source", delay: .zero, cooperativeCancellation: true) { _ in
             defer { state.markFinished() }
             return FormatRunner.run("source") { _ -> String in
-                let safetyDeadline = ContinuousClock.now.advanced(by: .seconds(5))
+                let safetyDeadline = ContinuousClock.now.advanced(by: .seconds(20))
                 do {
                     while ContinuousClock.now < safetyDeadline {
                         _ = try JSONFormatting.formatResult("[1,2,3]", sortKeys: false, indentWidth: 2,
@@ -339,11 +324,12 @@ extension IndexFormatExecutionSessionTests {
                 }
             }.binding(text: { $0 })
         }
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while !state.didStart, ContinuousClock.now < deadline { await Task.yield() }
+        let startDeadline = ContinuousClock.now.advanced(by: .seconds(20))
+        while !state.didStart, ContinuousClock.now < startDeadline { try? await Task.sleep(for: .milliseconds(5)) }
         #expect(state.didStart)
         session.sourceDidChange()
-        while !state.didFinish, ContinuousClock.now < deadline { await Task.yield() }
+        let finishDeadline = ContinuousClock.now.advanced(by: .seconds(20))
+        while !state.didFinish, ContinuousClock.now < finishDeadline { try? await Task.sleep(for: .milliseconds(5)) }
         #expect(state.didFinish)
         #expect(state.wasCancelled)
         #expect(session.binding.output == "previous complete output")

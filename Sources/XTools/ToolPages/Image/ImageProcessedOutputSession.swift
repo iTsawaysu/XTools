@@ -51,18 +51,10 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
         renderProvider: ImageBackgroundOutputRendererProvider? = nil,
         render: @escaping ImageBackgroundOutputRenderer
     ) {
-        guard !panelRequests.hasActiveRequest else { return }
-        let requestID = panelRequests.begin()
-        panelRequests.attach(Task { @MainActor [weak self] in
-            do {
-                guard let url = try await filePanel.selectFile(
-                    FileInputPanelRequest(allowedContentTypes: allowedContentTypes)
-                ) else {
-                    self?.panelRequests.finish(id: requestID)
-                    return
-                }
-                guard let self, self.panelRequests.finish(id: requestID) else { return }
-                self.receiveImageURL(
+        panelRequests.request(
+            { try await filePanel.selectFile(FileInputPanelRequest(allowedContentTypes: allowedContentTypes)) },
+            onSuccess: { [weak self] url in
+                self?.receiveImageURL(
                     url,
                     allowedContentTypes: allowedContentTypes,
                     client: client,
@@ -74,13 +66,11 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
                     renderProvider: renderProvider,
                     render: render
                 )
-            } catch is CancellationError {
-                self?.panelRequests.finish(id: requestID)
-            } catch {
-                guard let self, self.panelRequests.finish(id: requestID) else { return }
-                self.error = FileInputPanelFailure.diagnosticMessage(for: error)
+            },
+            onError: { [weak self] message in
+                self?.error = message
             }
-        })
+        )
     }
 
     func receiveImageURL(
@@ -240,7 +230,7 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
     ) async -> ImageSaveOutcome {
         guard !isProcessing, let output else { return .cancelled }
         let assessment = ImageOutputPolicy.assess(output, for: workflow)
-        let client = ImageWorkflowClient(dialog: SheetImageWorkflowDialog(filePanel: filePanel, outputPanel: outputPanel))
+        let client = ImageWorkflowClient.sheet(filePanel: filePanel, outputPanel: outputPanel)
 
         do {
             let didSave = try await client.saveProcessedImage(

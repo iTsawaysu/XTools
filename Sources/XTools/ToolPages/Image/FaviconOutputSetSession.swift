@@ -74,46 +74,26 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
         selectionPublisher: @escaping ImageSelectionPublisher = { _, publish in publish() },
         generator: @escaping FaviconIconSetGenerator = FaviconOutputSetSession.generateIcons
     ) {
-        beginSelection(
-            filePanel: filePanel,
-            client: client,
-            selectionPublisher: selectionPublisher,
-            generator: generator
-        )
-    }
-
-    private func beginSelection(
-        filePanel: FileInputPanelClient,
-        client: ImageWorkflowClient,
-        selectionPublisher: @escaping ImageSelectionPublisher,
-        generator: @escaping FaviconIconSetGenerator
-    ) {
-        guard !panelRequests.hasActiveRequest else { return }
-        let requestID = panelRequests.begin()
-        panelRequests.attach(Task { @MainActor [weak self] in
-            do {
-                guard let url = try await filePanel.selectFile(
+        panelRequests.request(
+            {
+                try await filePanel.selectFile(
                     FileInputPanelRequest(
                         allowedContentTypes: ImageWorkflowClient.faviconInputContentTypes
                     )
-                ) else {
-                    self?.panelRequests.finish(id: requestID)
-                    return
-                }
-                guard let self, self.panelRequests.finish(id: requestID) else { return }
-                self.beginImageURL(
+                )
+            },
+            onSuccess: { [weak self] url in
+                self?.receiveImageURL(
                     url,
                     client: client,
                     selectionPublisher: selectionPublisher,
                     generator: generator
                 )
-            } catch is CancellationError {
-                self?.panelRequests.finish(id: requestID)
-            } catch {
-                guard let self, self.panelRequests.finish(id: requestID) else { return }
-                self.error = FileInputPanelFailure.diagnosticMessage(for: error)
+            },
+            onError: { [weak self] message in
+                self?.error = message
             }
-        })
+        )
     }
 
     /// 接收拖放/面板路径的图片 URL 并生成部署包；参数缺省语义同 selectImage。
@@ -122,20 +102,6 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
         client: ImageWorkflowClient = ImageWorkflowClient(),
         selectionPublisher: @escaping ImageSelectionPublisher = { _, publish in publish() },
         generator: @escaping FaviconIconSetGenerator = FaviconOutputSetSession.generateIcons
-    ) {
-        beginImageURL(
-            url,
-            client: client,
-            selectionPublisher: selectionPublisher,
-            generator: generator
-        )
-    }
-
-    private func beginImageURL(
-        _ url: URL,
-        client: ImageWorkflowClient,
-        selectionPublisher: @escaping ImageSelectionPublisher,
-        generator: @escaping FaviconIconSetGenerator
     ) {
         panelRequests.cancel()
         cancelGeneration()
@@ -171,6 +137,7 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
             }
         }
     }
+
 
     func rejectImageInput(_ diagnostic: String) {
         cancelGeneration()
@@ -256,7 +223,7 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
         filePanel: FileInputPanelClient,
         outputPanel: FileOutputPanelClient
     ) async -> ImageSaveOutcome {
-        let client = ImageWorkflowClient(dialog: SheetImageWorkflowDialog(filePanel: filePanel, outputPanel: outputPanel))
+        let client = ImageWorkflowClient.sheet(filePanel: filePanel, outputPanel: outputPanel)
         guard let artifact = package?.artifact(id) else { return .blocked }
         do {
             guard try await client.saveArtifact(artifact) else { return .cancelled }
@@ -274,7 +241,7 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
         outputPanel: FileOutputPanelClient
     ) async -> ImageSaveOutcome {
         guard let package else { return .blocked }
-        let client = ImageWorkflowClient(dialog: SheetImageWorkflowDialog(filePanel: filePanel, outputPanel: outputPanel))
+        let client = ImageWorkflowClient.sheet(filePanel: filePanel, outputPanel: outputPanel)
         do {
             guard try await client.saveArtifacts(package.saveableArtifacts) else { return .cancelled }
             error = nil

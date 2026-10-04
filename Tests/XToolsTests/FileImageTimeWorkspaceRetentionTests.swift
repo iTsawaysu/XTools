@@ -75,13 +75,9 @@ struct ImageWorkspaceRetentionTests {
         converter.session.receiveImageURLs(
             [URL(fileURLWithPath: "/tmp/converter-invalid.png")],
             allowedContentTypes: [.png],
-            client: ImageWorkflowClient(
-                dialog: RetentionImageDialog(),
-                reader: RetentionImageReader(data: Data("not an image".utf8)),
-                writer: RetentionImageWriter()
-            )
+            client: ImageWorkflowClient(reader: .constant(data: Data("not an image".utf8)))
         )
-        try await Self.waitUntil { converter.session.error != nil }
+        try await waitUntil { converter.session.error != nil }
 
         let compressor = repository.model(for: ImageCompressorToolWorkspaceModel.key)
         compressor.compressionPreference = .smallerFile
@@ -122,13 +118,9 @@ struct ImageWorkspaceRetentionTests {
         converter.session.receiveImageURLs(
             [URL(fileURLWithPath: "/tmp/converter-invalid.png")],
             allowedContentTypes: [.png],
-            client: ImageWorkflowClient(
-                dialog: RetentionImageDialog(),
-                reader: RetentionImageReader(data: Data("not an image".utf8)),
-                writer: RetentionImageWriter()
-            )
+            client: ImageWorkflowClient(reader: .constant(data: Data("not an image".utf8)))
         )
-        try await Self.waitUntil { converter.session.error != nil }
+        try await waitUntil { converter.session.error != nil }
 
         let compressor = repository.model(for: ImageCompressorToolWorkspaceModel.key)
         compressor.compressionPreference = .smallerFile
@@ -166,11 +158,7 @@ struct ImageWorkspaceRetentionTests {
         let repository = ToolWorkspaceRepository(defaults: Self.defaults())
         let imageData = try Self.makePNGData()
         let url = URL(fileURLWithPath: "/tmp/retained-image.png")
-        let client = ImageWorkflowClient(
-            dialog: RetentionImageDialog(),
-            reader: RetentionImageReader(data: imageData),
-            writer: RetentionImageWriter()
-        )
+        let client = ImageWorkflowClient(reader: .constant(data: imageData))
         let originalIdentifier: ObjectIdentifier
 
         do {
@@ -201,7 +189,7 @@ struct ImageWorkspaceRetentionTests {
 
         let restoredWhileRunning = repository.model(for: ImageConverterToolWorkspaceModel.key)
         #expect(ObjectIdentifier(restoredWhileRunning) == originalIdentifier)
-        try await Self.waitUntil {
+        try await waitUntil {
             if case .done = restoredWhileRunning.session.items.first?.state { return true }
             return false
         }
@@ -227,13 +215,9 @@ struct ImageWorkspaceRetentionTests {
         converter.session.receiveImageURLs(
             [URL(fileURLWithPath: "/tmp/converter-must-not-persist.png")],
             allowedContentTypes: [.png],
-            client: ImageWorkflowClient(
-                dialog: RetentionImageDialog(),
-                reader: RetentionImageReader(data: Data("not an image".utf8)),
-                writer: RetentionImageWriter()
-            )
+            client: ImageWorkflowClient(reader: .constant(data: Data("not an image".utf8)))
         )
-        try await Self.waitUntil { converter.session.error != nil }
+        try await waitUntil { converter.session.error != nil }
 
         let compressor = first.model(for: ImageCompressorToolWorkspaceModel.key)
         compressor.compressionPreference = .smallerFile
@@ -401,19 +385,6 @@ struct ImageWorkspaceRetentionTests {
     }
 
     @MainActor
-    private static func waitUntil(
-        timeout: Duration = .seconds(20),
-        condition: @escaping @MainActor () -> Bool
-    ) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !condition(), clock.now < deadline {
-            try await Task.sleep(for: .milliseconds(25))
-        }
-        #expect(condition())
-    }
-
-    @MainActor
     private static func makePNGData() throws -> Data {
         guard let bitmap = NSBitmapImageRep(
             bitmapDataPlanes: nil,
@@ -473,11 +444,7 @@ struct FileAndFaviconWorkspaceRetentionTests {
         let session = repository.model(for: key)
         let url = URL(fileURLWithPath: "/tmp/retained-favicon.png")
         let imageData = try Self.makePNGData()
-        let client = ImageWorkflowClient(
-            dialog: RetentionImageDialog(),
-            reader: RetentionImageReader(data: imageData),
-            writer: RetentionImageWriter()
-        )
+        let client = ImageWorkflowClient(reader: .constant(data: imageData))
 
         session.receiveImageURL(url, client: client, generator: { _, sizes in
             Thread.sleep(forTimeInterval: 0.15)
@@ -488,7 +455,7 @@ struct FileAndFaviconWorkspaceRetentionTests {
 
         let restoredWhileRunning = repository.model(for: key)
         #expect(restoredWhileRunning === session)
-        try await Self.waitUntil { !restoredWhileRunning.icons.isEmpty }
+        try await waitUntil { !restoredWhileRunning.icons.isEmpty }
         #expect(restoredWhileRunning.icons.map(\.size) == [16])
         #expect(restoredWhileRunning.error == nil)
     }
@@ -507,7 +474,7 @@ struct FileAndFaviconWorkspaceRetentionTests {
 
         let restoredWhileRunning = repository.model(for: key)
         #expect(restoredWhileRunning === session)
-        try await Self.waitUntil { restoredWhileRunning.report != nil }
+        try await waitUntil { restoredWhileRunning.report != nil }
         #expect(restoredWhileRunning.report?.fileName == "retained.json")
         #expect(restoredWhileRunning.error == nil)
     }
@@ -535,19 +502,6 @@ struct FileAndFaviconWorkspaceRetentionTests {
     }
 
     @MainActor
-    private static func waitUntil(
-        timeout: Duration = .seconds(20),
-        condition: @escaping @MainActor () -> Bool
-    ) async throws {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while !condition(), clock.now < deadline {
-            try await Task.sleep(for: .milliseconds(25))
-        }
-        #expect(condition())
-    }
-
-    @MainActor
     private static func makePNGData() throws -> Data {
         guard let bitmap = NSBitmapImageRep(
             bitmapDataPlanes: nil,
@@ -565,24 +519,6 @@ struct FileAndFaviconWorkspaceRetentionTests {
         }
         return data
     }
-}
-
-@MainActor
-private struct RetentionImageDialog: ImageWorkflowDialoging {
-    func selectSaveURL(defaultFilename: String, allowedContentTypes: [UTType]) -> URL? { nil }
-    func selectDirectory(prompt: String, message: String?) -> URL? { nil }
-}
-
-private struct RetentionImageReader: ImageWorkflowFileReading {
-    let data: Data
-
-    func isRegularFile(at url: URL) throws -> Bool { true }
-    func byteCount(for url: URL) throws -> Int? { data.count }
-    func readData(from url: URL) throws -> Data { data }
-}
-
-private struct RetentionImageWriter: ImageWorkflowFileWriting {
-    func write(_ data: Data, to url: URL) throws {}
 }
 
 private struct SlowRetentionFileTypeReader: FileTypeFileReading {

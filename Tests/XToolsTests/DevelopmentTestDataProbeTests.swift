@@ -38,25 +38,25 @@ struct DevelopmentTestDataProbeTests {
 
     // MARK: - JSON-FMT
 
-    @Test func jsonFmtErrorSamplesThrowAndDuplicateKeyWarns() throws {
-        let invalid: [(input: String, expected: String)] = [
-            (#"{"id":1,"name":"Alice",}"#, "对象末尾多了逗号"), // JSON-FMT-04
-            (#"{id: 1, 'name': 'Alice'}"#, "对象键必须使用双引号"), // JSON-FMT-05
-            ("{\n  // comment\n  \"value\": NaN\n}", "JSON 不支持注释"), // JSON-FMT-06
-            (#"{"value": NaN}"#, "JSON 不支持 NaN"),
-            (#"{"value": Infinity}"#, "JSON 不支持 Infinity"),
-            (#"{"user":{"id":1,"name":"missing end"}"#, "对象没有完整闭合"), // JSON-FMT-07
-            (#"{"leadingZero": 01}"#, "数字不能有前导零"),
-            (#"{"badEscape":"\uZZZZ"}"#, "Unicode 转义"),
-            (#"{"loneLowSurrogate":"\uDE00"}"#, "低位代理项不能单独出现"),
-            (#"{"a":}"#, "对象键后缺少值")
-        ]
-        for sample in invalid {
-            let diagnostic = try jsonDiagnostic(for: sample.input)
-            #expect(diagnostic.message.contains(sample.expected))
-            #expect(!diagnostic.message.contains("The operation"))
-        }
+    @Test(arguments: [
+        (#"{"id":1,"name":"Alice",}"#, "对象末尾多了逗号"),
+        (#"{id: 1, 'name': 'Alice'}"#, "对象键必须使用双引号"),
+        ("{\n  // comment\n  \"value\": NaN\n}", "JSON 不支持注释"),
+        (#"{"value": NaN}"#, "JSON 不支持 NaN"),
+        (#"{"value": Infinity}"#, "JSON 不支持 Infinity"),
+        (#"{"user":{"id":1,"name":"missing end"}"#, "对象没有完整闭合"),
+        (#"{"leadingZero": 01}"#, "数字不能有前导零"),
+        (#"{"badEscape":"\uZZZZ"}"#, "Unicode 转义"),
+        (#"{"loneLowSurrogate":"\uDE00"}"#, "低位代理项不能单独出现"),
+        (#"{"a":}"#, "对象键后缺少值")
+    ])
+    func jsonFmtErrorSamplesThrow(input: String, expected: String) throws {
+        let diagnostic = try jsonDiagnostic(for: input)
+        #expect(diagnostic.message.contains(expected))
+        #expect(!diagnostic.message.contains("The operation"))
+    }
 
+    @Test func jsonFmtDuplicateKeyWarnsAndOptionsFormat() throws {
         let dup = try JSONFormatting.formatResult(#"{"id":1,"name":"first","name":"second"}"#, sortKeys: false, indentWidth: 2)
         #expect(dup.warning?.contains("重复 key") == true)
         #expect(dup.text.contains(#""name": "first""#))
@@ -99,7 +99,7 @@ struct DevelopmentTestDataProbeTests {
 
     // MARK: - SQL-FMT
 
-    @Test func sqlFmtValidAndInvalidSamples() throws {
+    @Test func sqlFmtValidSamples() throws {
         let ok = try SQLFormatting.format(
             "with active as (select id from users where active = 1) select * from active order by id;",
             options: .init(keywordCase: .upper)
@@ -114,25 +114,25 @@ struct DevelopmentTestDataProbeTests {
         let transaction = try SQLFormatting.format("begin; insert into logs(event) values ('start'); commit;")
         #expect(transaction.contains("BEGIN;"))
         #expect(transaction.contains("COMMIT;"))
+    }
 
-        let invalid: [(input: String, expected: String)] = [
-            ("select id, name from users where email = 'alice@example.com;", "字符串字面量没有闭合"),
-            ("select from where order by;", "SELECT 缺少要查询"),
-            ("select * from users where id in (1, 2, 3;", "左括号没有对应的右括号"),
-            ("select id, name from users order by;", "ORDER BY 缺少排序表达式"),
-            ("select $$hello; -- not comment$$ as body;", "PostgreSQL")
-        ]
-        for sample in invalid {
-            let diagnostic = try sqlDiagnostic(for: sample.input)
-            #expect(diagnostic.message.contains(sample.expected))
-            #expect(!diagnostic.localizedDescription.contains("NS"))
-            #expect(!diagnostic.localizedDescription.contains("The operation"))
-        }
+    @Test(arguments: [
+        ("select id, name from users where email = 'alice@example.com;", "字符串字面量没有闭合"),
+        ("select from where order by;", "SELECT 缺少要查询"),
+        ("select * from users where id in (1, 2, 3;", "左括号没有对应的右括号"),
+        ("select id, name from users order by;", "ORDER BY 缺少排序表达式"),
+        ("select $$hello; -- not comment$$ as body;", "PostgreSQL")
+    ])
+    func sqlFmtInvalidSamples(input: String, expected: String) throws {
+        let diagnostic = try sqlDiagnostic(for: input)
+        #expect(diagnostic.message.contains(expected))
+        #expect(!diagnostic.localizedDescription.contains("NS"))
+        #expect(!diagnostic.localizedDescription.contains("The operation"))
     }
 
     // MARK: - XML-FMT
 
-    @Test func xmlFmtValidInvalidAndMixedContent() throws {
+    @Test func xmlFmtValidAndMixedContent() throws {
         let ok = try XMLFormatting.format(#"<root><item id="1">a</item></root>"#)
         #expect(ok.contains("<root>"))
         #expect(ok.contains(#"id="1""#) || ok.contains("id=\"1\""))
@@ -142,44 +142,44 @@ struct DevelopmentTestDataProbeTests {
         )
         #expect(mixed.contains("Hello"))
         #expect(mixed.contains("<strong>world</strong>") || mixed.contains("world"))
+    }
 
-        let invalid: [(input: String, expectedFragments: [String])] = [
-            (#"<root><item>one</items></root>"#, ["标签", "不匹配"]),
-            (#"<user id="1" id="2"><name>Alice</name></user>"#, ["重复", "属性"]),
-            (#"<root><title>Tom & Jerry</title></root>"#, ["&", "转义"]),
-            (#"<one>1</one><two>2</two>"#, ["根节点"])
-        ]
-        for sample in invalid {
-            let diagnostic = try xmlDiagnostic(for: sample.input)
-            for fragment in sample.expectedFragments {
-                #expect(diagnostic.message.contains(fragment))
-            }
-            #expect(!diagnostic.localizedDescription.contains("NSXMLParserErrorDomain"))
-            #expect(!diagnostic.localizedDescription.contains("The operation"))
+    @Test(arguments: [
+        (#"<root><item>one</items></root>"#, ["标签", "不匹配"]),
+        (#"<user id="1" id="2"><name>Alice</name></user>"#, ["重复", "属性"]),
+        (#"<root><title>Tom & Jerry</title></root>"#, ["&", "转义"]),
+        (#"<one>1</one><two>2</two>"#, ["根节点"])
+    ])
+    func xmlFmtInvalidSamples(input: String, expectedFragments: [String]) throws {
+        let diagnostic = try xmlDiagnostic(for: input)
+        for fragment in expectedFragments {
+            #expect(diagnostic.message.contains(fragment))
         }
+        #expect(!diagnostic.localizedDescription.contains("NSXMLParserErrorDomain"))
+        #expect(!diagnostic.localizedDescription.contains("The operation"))
     }
 
     // MARK: - YAML-FMT
 
-    @Test func yamlFmtValidInvalidAndDuplicateKey() throws {
+    @Test func yamlFmtValidSample() throws {
         let ok = try YAMLPrettifier.formatValidated("name: Alice\nage: 30")
         #expect(ok.contains("name:"))
         #expect(ok.contains("Alice"))
+    }
 
-        let invalid: [(input: String, expected: String)] = [
-            ("user:\n  id: 1\n name: Alice", "缩进"),
-            ("user:\n\tid: 1", "缩进必须使用空格"),
-            ("user\n  id: 1", "冒号"),
-            ("service:\n  <<: *missing\n  image: nginx", "未定义"),
-            (#"name: "Alice"#, "引号"),
-            ("first: 1\n---\nsecond: 2", "一个 YAML 文档"),
-            ("service:\n  image: nginx:1.25\n  image: nginx:1.26", "重复")
-        ]
-        for sample in invalid {
-            let diagnostic = try yamlDiagnostic(for: sample.input)
-            #expect(diagnostic.message.contains(sample.expected))
-            #expect(!diagnostic.localizedDescription.contains("did not find"))
-        }
+    @Test(arguments: [
+        ("user:\n  id: 1\n name: Alice", "缩进"),
+        ("user:\n\tid: 1", "缩进必须使用空格"),
+        ("user\n  id: 1", "冒号"),
+        ("service:\n  <<: *missing\n  image: nginx", "未定义"),
+        (#"name: "Alice"#, "引号"),
+        ("first: 1\n---\nsecond: 2", "一个 YAML 文档"),
+        ("service:\n  image: nginx:1.25\n  image: nginx:1.26", "重复")
+    ])
+    func yamlFmtInvalidSamples(input: String, expected: String) throws {
+        let diagnostic = try yamlDiagnostic(for: input)
+        #expect(diagnostic.message.contains(expected))
+        #expect(!diagnostic.localizedDescription.contains("did not find"))
     }
 
     // MARK: - JSON-DIFF
