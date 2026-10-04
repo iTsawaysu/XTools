@@ -437,6 +437,76 @@ struct CronSchedulerTests {
         #expect(CronScheduler.explainField("JAN", index: 3) == "1 月")
     }
 
+    // MARK: - Structured explanation
+
+    @Test func explainsFieldsWithWildcardFlags() {
+        let rows = CronScheduler.fieldExplanations("*/5 * * * 1-5")
+        #expect(rows?.count == 5)
+        #expect(rows?[0].label == "分钟 (0-59)")
+        #expect(rows?[0].token == "*/5")
+        #expect(rows?[0].explanation == "每隔 5 分钟")
+        #expect(rows?[0].isWildcard == false)
+        #expect(rows?[1].token == "*")
+        #expect(rows?[1].isWildcard == true)
+        #expect(rows?[4].token == "1-5")
+        #expect(rows?[4].explanation == "周一 到 周五")
+        #expect(rows?[4].isWildcard == false)
+    }
+
+    @Test func fieldExplanationsRejectUnparseableExpressions() {
+        #expect(CronScheduler.fieldExplanations("") == nil)
+        #expect(CronScheduler.fieldExplanations("@reboot") == nil)
+        #expect(CronScheduler.fieldExplanations("* * * *") == nil)
+        #expect(CronScheduler.fieldExplanations("61 * * * *") == nil)
+    }
+
+    @Test func summarizesEveryPresetLikeCrontabGuru() {
+        #expect(CronScheduler.expressionSummary("* * * * *") == "每分钟运行")
+        #expect(CronScheduler.expressionSummary("*/10 * * * *") == "每隔 10 分钟运行")
+        #expect(CronScheduler.expressionSummary("*/30 * * * *") == "每隔 30 分钟运行")
+        #expect(CronScheduler.expressionSummary("0 * * * *") == "每小时整点运行")
+        #expect(CronScheduler.expressionSummary("0 */6 * * *") == "每隔 6 小时运行")
+        #expect(CronScheduler.expressionSummary("0 0 * * *") == "每天 00:00 运行")
+        #expect(CronScheduler.expressionSummary("0 0,12 * * *") == "每天 00:00、12:00 运行")
+        #expect(CronScheduler.expressionSummary("0 9 * * 1-5") == "每周一至周五 09:00 运行")
+        #expect(CronScheduler.expressionSummary("0 0 * * 6,0") == "每周六、日 00:00 运行")
+        #expect(CronScheduler.expressionSummary("0 0 * * 0") == "每周日 00:00 运行")
+        #expect(CronScheduler.expressionSummary("0 8 * * 1") == "每周一 08:00 运行")
+        #expect(CronScheduler.expressionSummary("0 0 1 * *") == "每月 1 号 00:00 运行")
+        #expect(CronScheduler.expressionSummary("0 0 1 1 *") == "每年 1 月 1 号 00:00 运行")
+    }
+
+    @Test func summarizesClockListsRangesAndDayMonthConstraints() {
+        #expect(CronScheduler.expressionSummary("30 9 * * *") == "每天 09:30 运行")
+        #expect(CronScheduler.expressionSummary("0,30 9 * * *") == "每天 09:00、09:30 运行")
+        #expect(CronScheduler.expressionSummary("5 9,18 * * *") == "每天 09:05、18:05 运行")
+        #expect(CronScheduler.expressionSummary("10 * * * *") == "每小时第 10 分运行")
+        #expect(CronScheduler.expressionSummary("0,15,30,45 * * * *") == "每小时第 0、15、30、45 分运行")
+        #expect(CronScheduler.expressionSummary("0 9-18 * * *") == "每天 09:00 至 18:00 每小时运行")
+        #expect(CronScheduler.expressionSummary("0 0 1,15 * *") == "每月 1、15 号 00:00 运行")
+        #expect(CronScheduler.expressionSummary("0 0 1-15 * *") == "每月 1 至 15 号 00:00 运行")
+        #expect(CronScheduler.expressionSummary("0 0 * * 1,3,5") == "每周一、三、五 00:00 运行")
+        #expect(CronScheduler.expressionSummary("0 9 * * 1-5 3") == nil) // 6 字段
+        #expect(CronScheduler.expressionSummary("0 9 * * MON-FRI") == "每周一至周五 09:00 运行")
+        #expect(CronScheduler.expressionSummary("0 0 1 3,6,9,12 *") == "3、6、9、12 月的 1 号 00:00 运行")
+        #expect(CronScheduler.expressionSummary("0 0 1 1-7 *") == "1 至 7 月的 1 号 00:00 运行")
+        #expect(CronScheduler.expressionSummary("0 0 1-12 * *") == "每月 1 至 12 号 00:00 运行")
+    }
+
+    @Test func summaryDeclinesPatternsItCannotPhraseConfidently() {
+        #expect(CronScheduler.expressionSummary("") == nil)
+        #expect(CronScheduler.expressionSummary("@reboot") == nil)
+        #expect(CronScheduler.expressionSummary("@daily") == "每天 00:00 运行")
+        // 步长月份展开为可枚举集合时如实列举；与 vixie 通配语义一致。
+        #expect(CronScheduler.expressionSummary("0 0 1 */3 *") == "1、4、7、10 月的 1 号 00:00 运行")
+        // */2 日字段按 vixie DOM_STAR 语义视为不受限。
+        #expect(CronScheduler.expressionSummary("0 0 */2 * *") == "每天 00:00 运行")
+        #expect(CronScheduler.expressionSummary("0 0 1 */2 *") == nil) // 步长月份展开超枚举上限
+        #expect(CronScheduler.expressionSummary("0 0 1 1,3,5,7,9,11 *") == nil) // 超长月份列表
+        #expect(CronScheduler.expressionSummary("* 9,10,11,12,13,14 * * *") == nil) // 超长小时列表
+        #expect(CronScheduler.expressionSummary("61 * * * *") == nil)
+    }
+
     // MARK: - Helpers
 
     private func gregorianUTC() -> Calendar {

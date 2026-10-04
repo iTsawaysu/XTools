@@ -42,8 +42,8 @@ struct WorkspaceClearAffordanceSourceContractTests {
 
         let regexPatternPanel = sourceSlice(
             regex,
-            from: "IndexPanel(\n                \"正则表达式\"",
-            to: "IndexPanel(\n                \"测试文本\""
+            from: "IndexPairLayout(collapseWidth: 720, fillsHeight: true, leading: {",
+            to: "}, trailing: {"
         )
         doesNotContain(regex, "headerAccessory:", "Regex clear must not remain detached in the page title")
         contains(regexPatternPanel, "\"正则表达式\"", "Regex clear must stay beside the primary pattern input")
@@ -167,7 +167,7 @@ struct WorkspaceClearAffordanceSourceContractTests {
     @Test func retainedFormClearMethodsRemoveDraftsAndDerivedState() {
         let crontab = CrontabToolWorkspaceModel()
         crontab.expression = "0 9 * * 1-5"
-        crontab.nextRuns = ["2026-07-17 09:00"]
+        crontab.nextRuns = [Date(timeIntervalSinceReferenceDate: 800_000_000)]
         crontab.error = "session-error"
         #expect(crontab.hasAnyContent)
         crontab.clear()

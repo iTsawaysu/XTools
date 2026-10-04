@@ -261,11 +261,12 @@ struct MotionSourceContractTests {
         doesNotContain(decodeInputHeader, "compactControl:", "Decode toolbar activity must not trigger responsive branch replacement")
 
         contains(crontab, "@Environment(\\.accessibilityReduceMotion) private var reduceMotion", "Crontab next-runs reveal must honor Reduce Motion")
-        contains(crontab, "private var nextRunsSection: some View", "Crontab next-runs reveal must be scoped to the optional panel section")
-        contains(crontab, "IndexPanel(\"下次运行时间\")", "Crontab must keep the next-runs result as one panel")
+        contains(crontab, "private var nextRunsSection: some View", "Crontab next-runs reveal must be scoped to one section inside the merged result panel")
+        doesNotContain(crontab, "IndexPanel(\"下次运行时间\")", "Crontab next-runs must live inside the merged 解析结果 panel instead of a standalone panel")
+        contains(crontab, "IndexPanel(\"解析结果\")", "Crontab must keep summary, field details, and next runs in one merged result panel")
         contains(crontab, ".toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)", "Crontab next-runs panel reveal must use the shared diagnostic transition")
         contains(crontab, ".toolAnimation(ToolMotion.Preset.panelReveal, value: !workspace.nextRuns.isEmpty)", "Crontab next-runs animation must key off panel presence, not row changes")
-        let nextRunsRows = sourceSlice(crontab, from: "ForEach(workspace.nextRuns, id: \\.self)", to: "                }\n                .toolTransition")
+        let nextRunsRows = sourceSlice(crontab, from: "ForEach(Array(workspace.nextRuns.enumerated()), id: \\.offset)", to: ".toolTransition(ToolMotion.Transition.diagnostic")
         doesNotContain(nextRunsRows, ".toolTransition", "Crontab must not animate individual next-run rows")
         doesNotContain(nextRunsRows, ".toolAnimation", "Crontab must not animate individual next-run rows")
     }
@@ -317,7 +318,7 @@ struct MotionSourceContractTests {
         let dateCalculator = try readSource("Sources/XTools/ToolPages/Time/DateCalculatorPage.swift")
 
         contains(caseConverter, "valueMotion: .immediate", "Case conversion rows update on every edit and must not crossfade")
-        contains(regex, "RegexMatchList(matches: report.matches, valueMotion: .immediate)", "Regex match rows must update immediately")
+        contains(regex, "RegexMatchList(matches: report.matches, valueMotion: .immediate,", "Regex match rows must update immediately")
         contains(regexComponents, "var valueMotion: IndexValueMotionPolicy = .immediate", "Regex grouped match values must default to immediate updates")
         let regexSummary = sourceSlice(
             regexComponents,
@@ -347,7 +348,6 @@ struct MotionSourceContractTests {
         let dateTime = try readSource("Sources/XTools/ToolPages/Time/DateTimeConverterPage.swift")
         let color = try readSource("Sources/XTools/ToolPages/Image/ColorPickerPage.swift")
         let keycode = try readSource("Sources/XTools/ToolPages/Web/KeycodeInfoPage.swift")
-        let crontab = try readSource("Sources/XTools/ToolPages/Development/CrontabGeneratorPage.swift")
 
         contains(integerBase, "IndexShortResultKV(rows: rows, emptyText: IndexEmptyStateCopy.autoCalculate(\"数值\"), valueMotion: .immediate)", "Integer-base results must use shared bounded presence without animating every valid edit")
         contains(dateTime, "IndexShortResultKV(rows: workspace.rows, emptyText: IndexEmptyStateCopy.autoCalculate(\"时间戳或时间\"), valueMotion: .immediate)", "Timestamp results must share presence while keeping live values immediate")
@@ -355,7 +355,6 @@ struct MotionSourceContractTests {
         contains(keycode, "IndexResultPresence(\n                value: workspace.snapshot", "Keycode must animate only the empty-to-first-snapshot boundary")
         contains(keycode, "IndexKVRow(", "Keycode must keep row-level values inside the stable result surface")
         contains(keycode, "valueMotion: .immediate", "Keycode row values must remain immediate after the surface is present")
-        contains(crontab, "IndexShortResultKV(rows: rows, emptyText: explanationEmptyText, copyable: false, valueMotion: .immediate)", "Crontab explanations must use shared bounded presence")
     }
 
     @Test func userAgentUsesSharedResultPresence() throws {
@@ -409,7 +408,7 @@ struct MotionSourceContractTests {
         contains(regex, "case preset(RegexWorkspaceInput)", "Regex preset results may opt into one whole-block appearance")
         contains(regex, "case clear", "Regex clear may opt into one whole-block exit")
         contains(regex, "case immediate", "Regex typing must retain an explicit immediate path")
-        contains(regex, "RegexMatchList(matches: report.matches, valueMotion: .immediate)", "Regex match rows must remain immediate inside any explicit whole-block transition")
+        contains(regex, "RegexMatchList(matches: report.matches, valueMotion: .immediate,", "Regex match rows must remain immediate inside any explicit whole-block transition")
         doesNotContain(regex, ".toolAnimation(ToolMotion.Preset.panelReveal, value: report", "Regex reports must not gain an unconditional animation on every publish")
         doesNotContain(deviceInfo, "IndexResultPresence(", "Query-list snapshots must remain outside bounded presence")
         doesNotContain(chronometer, "IndexResultPresence(", "Chronometer laps and timer values must remain outside bounded presence")

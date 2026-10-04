@@ -54,7 +54,7 @@ struct IndexTextAreaTemporaryHighlightRendererTests {
         IndexTextAreaTemporaryHighlightRenderer.apply(
             IndexTextAreaTemporaryHighlights(
                 sourceText: textView.string,
-                ranges: [NSRange(location: 1, length: 5)]
+                styledRanges: [IndexTextAreaStyledRange(range: NSRange(location: 1, length: 5), style: .match)]
             ),
             to: textView
         )
@@ -71,20 +71,20 @@ struct IndexTextAreaTemporaryHighlightRendererTests {
         textView.string = "abcdef"
 
         IndexTextAreaTemporaryHighlightRenderer.apply(
-            .init(sourceText: textView.string, ranges: [NSRange(location: 1, length: 2)]),
+            .init(sourceText: textView.string, styledRanges: [IndexTextAreaStyledRange(range: NSRange(location: 1, length: 2), style: .match)]),
             to: textView
         )
         #expect(hasTemporaryBackground(in: textView, range: NSRange(location: 1, length: 2)))
 
         IndexTextAreaTemporaryHighlightRenderer.apply(
-            .init(sourceText: "stale", ranges: [NSRange(location: 1, length: 2)]),
+            .init(sourceText: "stale", styledRanges: [IndexTextAreaStyledRange(range: NSRange(location: 1, length: 2), style: .match)]),
             to: textView
         )
         #expect(!hasAnyTemporaryBackground(in: textView))
 
         textView.reportsMarkedText = true
         IndexTextAreaTemporaryHighlightRenderer.apply(
-            .init(sourceText: textView.string, ranges: [NSRange(location: 1, length: 2)]),
+            .init(sourceText: textView.string, styledRanges: [IndexTextAreaStyledRange(range: NSRange(location: 1, length: 2), style: .match)]),
             to: textView
         )
         #expect(!hasAnyTemporaryBackground(in: textView))
@@ -93,16 +93,47 @@ struct IndexTextAreaTemporaryHighlightRendererTests {
         IndexTextAreaTemporaryHighlightRenderer.apply(
             .init(
                 sourceText: textView.string,
-                ranges: [
-                    NSRange(location: 0, length: 0),
-                    NSRange(location: 2, length: 2),
-                    NSRange(location: 99, length: 1)
+                styledRanges: [
+                    IndexTextAreaStyledRange(range: NSRange(location: 0, length: 0), style: .match),
+                    IndexTextAreaStyledRange(range: NSRange(location: 2, length: 2), style: .match),
+                    IndexTextAreaStyledRange(range: NSRange(location: 99, length: 1), style: .match)
                 ]
             ),
             to: textView
         )
         #expect(hasTemporaryBackground(in: textView, range: NSRange(location: 2, length: 2)))
         #expect(!hasTemporaryBackground(in: textView, range: NSRange(location: 0, length: 1)))
+    }
+
+    @Test func styledRangesPaintCapturePaletteAndActiveUnderline() throws {
+        let textView = HighlightTestTextView(frame: NSRect(x: 0, y: 0, width: 480, height: 160))
+        textView.string = "abcdef"
+
+        IndexTextAreaTemporaryHighlightRenderer.apply(
+            .init(
+                sourceText: textView.string,
+                styledRanges: [
+                    IndexTextAreaStyledRange(range: NSRange(location: 0, length: 2), style: .activeMatch),
+                    IndexTextAreaStyledRange(range: NSRange(location: 2, length: 2), style: .capture(0)),
+                    IndexTextAreaStyledRange(range: NSRange(location: 4, length: 2), style: .capture(1))
+                ]
+            ),
+            to: textView
+        )
+
+        let layoutManager = try #require(textView.layoutManager)
+        func background(at location: Int) -> NSColor? {
+            layoutManager.temporaryAttribute(.backgroundColor, atCharacterIndex: location, effectiveRange: nil) as? NSColor
+        }
+        // 捕获组按调色板循环取色，两个相邻组颜色不同。
+        #expect(background(at: 2) != background(at: 4))
+        // 活动匹配带下划线。
+        #expect(
+            layoutManager.temporaryAttribute(.underlineStyle, atCharacterIndex: 0, effectiveRange: nil) != nil
+        )
+        #expect(
+            layoutManager.temporaryAttribute(.underlineStyle, atCharacterIndex: 2, effectiveRange: nil) == nil
+        )
     }
 
     @Test func applyReportsWhetherTargetStateWasReached() {
@@ -114,20 +145,20 @@ struct IndexTextAreaTemporaryHighlightRendererTests {
 
         // 命中当前文本：着色完成。
         #expect(IndexTextAreaTemporaryHighlightRenderer.apply(
-            .init(sourceText: textView.string, ranges: [NSRange(location: 0, length: 2)]),
+            .init(sourceText: textView.string, styledRanges: [IndexTextAreaStyledRange(range: NSRange(location: 0, length: 2), style: .match)]),
             to: textView
         ))
 
         // sourceText 漂移：已清空但未着色，未达成。
         #expect(!IndexTextAreaTemporaryHighlightRenderer.apply(
-            .init(sourceText: "stale", ranges: [NSRange(location: 0, length: 2)]),
+            .init(sourceText: "stale", styledRanges: [IndexTextAreaStyledRange(range: NSRange(location: 0, length: 2), style: .match)]),
             to: textView
         ))
 
         // 输入法 marked-text 期间：未达成，调用方需要重试。
         textView.reportsMarkedText = true
         #expect(!IndexTextAreaTemporaryHighlightRenderer.apply(
-            .init(sourceText: textView.string, ranges: [NSRange(location: 0, length: 2)]),
+            .init(sourceText: textView.string, styledRanges: [IndexTextAreaStyledRange(range: NSRange(location: 0, length: 2), style: .match)]),
             to: textView
         ))
     }
@@ -144,7 +175,7 @@ struct IndexTextAreaTemporaryHighlightRendererTests {
         let textView = HighlightTestTextView(frame: NSRect(x: 0, y: 0, width: 480, height: 160))
         textView.string = "abcd"
         IndexTextAreaTemporaryHighlightRenderer.apply(
-            .init(sourceText: textView.string, ranges: [NSRange(location: 0, length: 2)]),
+            .init(sourceText: textView.string, styledRanges: [IndexTextAreaStyledRange(range: NSRange(location: 0, length: 2), style: .match)]),
             to: textView
         )
         #expect(hasAnyTemporaryBackground(in: textView))

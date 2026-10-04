@@ -1,6 +1,48 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "工作日9点" : {
+      "extractionState" : "manual"
+    },
+    "每10分钟" : {
+      "extractionState" : "manual"
+    },
+    "每30分钟" : {
+      "extractionState" : "manual"
+    },
+    "每6小时" : {
+      "extractionState" : "manual"
+    },
+    "每周一8点" : {
+      "extractionState" : "manual"
+    },
+    "每月1号" : {
+      "extractionState" : "manual"
+    },
+    "刷新下次运行时间" : {
+      "extractionState" : "manual"
+    },
+    "天后" : {
+      "extractionState" : "manual"
+    },
+    "小时后" : {
+      "extractionState" : "manual"
+    },
+    "分钟后" : {
+      "extractionState" : "manual"
+    },
+    "秒后" : {
+      "extractionState" : "manual"
+    },
+    "下次运行" : {
+      "extractionState" : "manual"
+    },
+    "修正表达式后显示解析与下次运行。" : {
+      "extractionState" : "manual"
+    },
+    "输入 cron 表达式后显示解析与下次运行。" : {
+      "extractionState" : "manual"
+    },
     "近 7 日趋势" : {
       "extractionState" : "manual"
     },

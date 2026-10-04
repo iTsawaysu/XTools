@@ -703,13 +703,61 @@ enum IndexTextAreaCharacterRangeProjection {
     }
 }
 
+/// 临时高亮的分层样式：匹配底色、选中匹配、捕获组分色。
+enum IndexTextAreaHighlightStyle: Equatable, Sendable {
+    case match
+    case activeMatch
+    /// 组序号（0 起），用于在调色板中循环取色。
+    case capture(Int)
+}
+
+struct IndexTextAreaStyledRange: Equatable, Sendable {
+    let range: NSRange
+    let style: IndexTextAreaHighlightStyle
+}
+
+/// 捕获组配色。文本高亮（底色）与匹配列表（前景）共用同一映射，
+/// 保证「列表里的第 N 组」和「正文里的第 N 组」颜色一致。
+enum IndexTextAreaHighlightPalette {
+    private static let backgrounds: [Color] = [
+        ToolTheme.successSoft,
+        ToolTheme.warningSoft,
+        ToolTheme.errorSoft
+    ]
+
+    private static let foregrounds: [Color] = [
+        ToolTheme.success,
+        ToolTheme.warning,
+        ToolTheme.error
+    ]
+
+    static func captureBackground(_ index: Int) -> Color {
+        backgrounds[abs(index) % backgrounds.count]
+    }
+
+    static func captureForeground(_ index: Int) -> Color {
+        foregrounds[abs(index) % foregrounds.count]
+    }
+}
+
 struct IndexTextAreaTemporaryHighlights: Equatable {
     let sourceText: String
-    let ranges: [NSRange]
+    var styledRanges: [IndexTextAreaStyledRange]
+
+    init(sourceText: String, styledRanges: [IndexTextAreaStyledRange]) {
+        self.sourceText = sourceText
+        self.styledRanges = styledRanges
+    }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.ranges == rhs.ranges && JSONExactTextIdentity.isExactlyEqual(lhs.sourceText, rhs.sourceText)
+        lhs.styledRanges == rhs.styledRanges && JSONExactTextIdentity.isExactlyEqual(lhs.sourceText, rhs.sourceText)
     }
+}
+
+/// 一次性滚动定位请求：token 变化时把目标 UTF-16 范围滚入可视区。
+struct IndexTextAreaScrollRequest: Equatable {
+    let token: Int
+    let utf16Range: NSRange
 }
 
 @MainActor
@@ -728,24 +776,46 @@ enum IndexTextAreaTemporaryHighlightRenderer {
         }
 
         let textLength = (textView.string as NSString).length
-        let backgroundColor = NSColor(ToolTheme.accentSoft)
-        for range in highlights.ranges where range.length > 0 {
-            guard range.location >= 0, range.upperBound <= textLength else { continue }
+        for styled in highlights.styledRanges where styled.range.length > 0 {
+            guard styled.range.location >= 0, styled.range.upperBound <= textLength else { continue }
             layoutManager.addTemporaryAttribute(
                 .backgroundColor,
-                value: backgroundColor,
-                forCharacterRange: range
+                value: backgroundColor(for: styled.style),
+                forCharacterRange: styled.range
             )
+            if styled.style == .activeMatch {
+                layoutManager.addTemporaryAttribute(
+                    .underlineColor,
+                    value: NSColor(ToolTheme.accent),
+                    forCharacterRange: styled.range
+                )
+                layoutManager.addTemporaryAttribute(
+                    .underlineStyle,
+                    value: NSUnderlineStyle.single.rawValue,
+                    forCharacterRange: styled.range
+                )
+            }
         }
         return true
     }
 
+    private static func backgroundColor(for style: IndexTextAreaHighlightStyle) -> NSColor {
+        switch style {
+        case .match:
+            return NSColor(ToolTheme.accentSoft)
+        case .activeMatch:
+            return NSColor(ToolTheme.accentHover).withAlphaComponent(0.30)
+        case .capture(let index):
+            return NSColor(IndexTextAreaHighlightPalette.captureBackground(index))
+        }
+    }
+
     static func clear(in textView: NSTextView) {
         guard let layoutManager = textView.layoutManager else { return }
-        layoutManager.removeTemporaryAttribute(
-            .backgroundColor,
-            forCharacterRange: NSRange(location: 0, length: (textView.string as NSString).length)
-        )
+        let fullRange = NSRange(location: 0, length: (textView.string as NSString).length)
+        layoutManager.removeTemporaryAttribute(.backgroundColor, forCharacterRange: fullRange)
+        layoutManager.removeTemporaryAttribute(.underlineColor, forCharacterRange: fullRange)
+        layoutManager.removeTemporaryAttribute(.underlineStyle, forCharacterRange: fullRange)
     }
 }
 
@@ -780,6 +850,7 @@ struct IndexTextArea: View {
     var autoFocus = false
     var caretPlacementRequestToken: Int? = nil
     var temporaryHighlights: IndexTextAreaTemporaryHighlights? = nil
+    var scrollRequest: IndexTextAreaScrollRequest? = nil
     var diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil
     var diagnosticNavigationToken = 0
     var inputPolicy: IndexTextAreaInputPolicy? = nil
@@ -809,6 +880,7 @@ struct IndexTextArea: View {
         autoFocus: Bool = false,
         caretPlacementRequestToken: Int? = nil,
         temporaryHighlights: IndexTextAreaTemporaryHighlights? = nil,
+        scrollRequest: IndexTextAreaScrollRequest? = nil,
         diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
         diagnosticNavigationToken: Int = 0,
         inputPolicy: IndexTextAreaInputPolicy? = nil,
@@ -885,6 +957,7 @@ struct IndexTextArea: View {
                         autoFocus: autoFocus,
                         caretPlacementRequestToken: caretPlacementRequestToken,
                         temporaryHighlights: temporaryHighlights,
+                        scrollRequest: scrollRequest,
                         diagnosticMarker: diagnosticMarker,
                         diagnosticNavigationToken: diagnosticNavigationToken,
                         inputPolicy: inputPolicy,
@@ -1180,6 +1253,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
     var autoFocus = false
     var caretPlacementRequestToken: Int? = nil
     var temporaryHighlights: IndexTextAreaTemporaryHighlights? = nil
+    var scrollRequest: IndexTextAreaScrollRequest? = nil
     var diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil
     var diagnosticNavigationToken = 0
     var inputPolicy: IndexTextAreaInputPolicy? = nil
@@ -1275,6 +1349,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
             IndexTextAreaScrollPositioning.revealInsertionPoint(in: textView, growsWithContent: growsWithContent)
         }
         context.coordinator.refreshTemporaryHighlights(temporaryHighlights, in: textView)
+        context.coordinator.scrollToVisibleIfRequested(scrollRequest, in: textView)
         context.coordinator.diagnosticController.update(diagnosticMarker, requestToken: diagnosticNavigationToken, in: textView, gutter: context.coordinator.lineNumberGutter)
         context.coordinator.measure(textView)
         keepContentGrowingScrollOriginStable(in: scrollView)
@@ -1350,6 +1425,20 @@ struct IndexUndoableTextView: NSViewRepresentable {
         private let privateUndo = IndexPrivateUndoStack()
         private var lastAppliedTemporaryHighlights: IndexTextAreaTemporaryHighlights?
         private var lastTemporaryHighlightApplyReachedTarget = false
+        private var processedScrollToken: Int?
+
+        /// token 变化时把目标范围滚入可视区；异步补一次，规避刚布局完
+        /// 时 scrollRangeToVisible 早退的情况（与 caret 揭示同一手法）。
+        func scrollToVisibleIfRequested(_ request: IndexTextAreaScrollRequest?, in textView: NSTextView) {
+            guard let request, request.token != processedScrollToken else { return }
+            processedScrollToken = request.token
+            let length = (textView.string as NSString).length
+            guard request.utf16Range.location >= 0, request.utf16Range.upperBound <= length else { return }
+            textView.scrollRangeToVisible(request.utf16Range)
+            DispatchQueue.main.async { [weak textView] in
+                textView?.scrollRangeToVisible(request.utf16Range)
+            }
+        }
 
         func refreshLineNumberGutter() {
             lineNumberGutter?.refresh()

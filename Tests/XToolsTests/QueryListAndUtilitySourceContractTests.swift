@@ -271,7 +271,7 @@ struct QueryListAndUtilitySourceContractTests {
         contains(page, "RegexResultStatus(", "Regex execution state must remain visible below the editable test text")
         contains(page, "RegexResultSummary(stats: stats(for: report))", "Regex statistics must stay below the editable test text")
         contains(page, "if !report.matches.isEmpty", "Regex result workspace must omit redundant empty match-detail cards")
-        contains(page, "RegexMatchList(matches: report.matches, valueMotion: .immediate)", "Regex match details must remain grouped and update without high-frequency animation")
+        contains(page, "RegexMatchList(matches: report.matches, valueMotion: .immediate,", "Regex match details must remain grouped and update without high-frequency animation")
         contains(page, "IndexCopyButton(text: resultText, title: \"复制匹配结果\")", "Regex must retain an explicitly named structured-result copy action")
         contains(page, "输入正则表达式后显示匹配。", "Regex must distinguish an empty pattern")
         contains(page, "正在更新匹配…", "Regex must distinguish pending and running work")
@@ -282,9 +282,12 @@ struct QueryListAndUtilitySourceContractTests {
         doesNotContain(page, "IndexStatGrid(", "Regex result workspace must not reserve the tall generic statistics grid")
         doesNotContain(page, ".animation(", "Regex high-frequency updates must not add page-local animation")
         doesNotContain(page, ".transition(", "Regex high-frequency updates must not add page-local transitions")
-        appearsBefore(page, "temporaryHighlights: temporaryHighlights", "RegexResultStatus(", "Editable match highlighting must stay before status and details")
+        // 分栏布局中正文高亮在右栏、状态行在左栏，先后断言改为钉住分栏与滚动联动。
+        contains(page, "IndexPairLayout(collapseWidth: 720, fillsHeight: true, leading: {", "Regex tester must present pattern details and test text as a side-by-side pair on wide windows")
+        contains(page, "scrollRequest: scrollRequest", "Regex match selection must scroll the located match into view inside the test text")
+        contains(page, "selectedIndex: selectedMatchIndex, onSelect: selectMatch", "Regex match rows must stay selectable and drive the in-text locator")
         appearsBefore(page, "RegexResultStatus(", "RegexResultSummary(stats: stats(for: report))", "Regex status must stay before compact statistics")
-        appearsBefore(page, "RegexResultSummary(stats: stats(for: report))", "RegexMatchList(matches: report.matches, valueMotion: .immediate)", "Regex summary must stay before grouped match details")
+        appearsBefore(page, "RegexResultSummary(stats: stats(for: report))", "RegexMatchList(matches: report.matches, valueMotion: .immediate,", "Regex summary must stay before grouped match details")
 
         contains(components, "struct RegexResultStatus: View", "Regex state messaging must live in a named compact component")
         contains(components, ".font(ToolTypography.compactBody)", "Regex state messaging must use the centralized compact readable token")
@@ -612,7 +615,7 @@ struct QueryListAndUtilitySourceContractTests {
         let cronCore = try readSource("Sources/XToolsCore/Utility/CronScheduler.swift")
 
         contains(regex, "使用 ICU 引擎实时测试正则并高亮匹配。", "Regex page must identify the ICU flavor without adding a new panel")
-        contains(cron, "每 30 分钟", "Crontab presets must replace the misleading every-five-days label with an unambiguous schedule")
+        contains(cron, "每30分钟", "Crontab presets must replace the misleading every-five-days label with an unambiguous schedule")
         doesNotContain(cron, "每 5 天", "Crontab must not describe day-of-month stepping as a continuous five-day interval")
         contains(cron, "CronScheduler.dayMatchingExplanation(workspace.expression)", "Crontab page must render Core's Unix day-field OR explanation")
         contains(cronCore, "日与星期字段同时受限时，任一字段匹配即运行", "Cron Core must own the user-facing Unix day-field OR semantics")
@@ -644,11 +647,20 @@ struct QueryListAndUtilitySourceContractTests {
 
     @Test func crontabUsesScrollablePageLayout() throws {
         let source = try readSource("Sources/XTools/ToolPages/Development/CrontabGeneratorPage.swift")
+        let cronCore = try readSource("Sources/XToolsCore/Utility/CronScheduler.swift")
 
         contains(source, "IndexPage(\"Crontab 生成\", subtitle: \"用预设拼出 cron 表达式并给出说明。\", workspaceSemantic: .naturalHeightShortResultPanel)", "Crontab page must use the natural-height short-result shell")
-        contains(source, "\"星期 (0-7)\"", "Crontab weekday label must match Core support for 0 and 7 as Sunday")
-        contains(source, "IndexShortResultKV(rows: rows, emptyText: explanationEmptyText, copyable: false, valueMotion: .immediate)", "Crontab explanation must route its cron-aware placeholder through shared bounded presence")
-        contains(source, "? \"@reboot 会在系统启动时执行，没有固定日历预览\"", "Crontab @reboot must be treated as valid but without calendar preview")
+        contains(cronCore, "\"星期 (0-7)\"", "Crontab weekday label must match Core support for 0 and 7 as Sunday")
+        occurrenceCount(source, "IndexPanel(", 2, "Crontab must keep exactly the expression panel and the merged result panel")
+        doesNotContain(source, "IndexPanel(\"常用预设\")", "Crontab presets must stay inside the expression panel instead of a standalone preset panel")
+        doesNotContain(source, "IndexPanel(\"说明\")", "Crontab field explanations must live inside the merged result panel")
+        doesNotContain(source, "IndexPanel(\"下次运行时间\")", "Crontab next runs must live inside the merged result panel")
+        contains(source, "CronScheduler.expressionSummary(workspace.expression)", "Crontab must lead the result panel with Core's plain-language schedule summary")
+        contains(source, "CronScheduler.fieldExplanations(workspace.expression)", "Crontab must render per-field explanations from Core's structured rows")
+        contains(source, "fieldSegmentBar(fields)", "Crontab must present fields as a five-segment bar beside the expression, not stacked table rows")
+        contains(source, "field.isWildcard ? ToolTheme.editorBackground : ToolTheme.accentSoft.opacity(0.45)", "Crontab segments must visually separate constrained fields from wildcards")
+        contains(source, "@reboot 会在系统启动时执行，没有固定日历预览", "Crontab @reboot must be treated as valid but without calendar preview")
+        contains(source, "输入 cron 表达式后显示解析与下次运行。", "Crontab empty state must describe the merged panel content")
     }
 }
 

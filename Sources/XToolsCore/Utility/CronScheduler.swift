@@ -2,6 +2,21 @@ import Foundation
 
 public enum CronScheduler {
 
+    /// 单个 cron 字段的结构化解释，供 UI 渲染逐字段说明。
+    public struct CronFieldExplanation: Equatable, Sendable {
+        public let label: String
+        public let token: String
+        public let explanation: String
+        public let isWildcard: Bool
+
+        public init(label: String, token: String, explanation: String, isWildcard: Bool) {
+            self.label = label
+            self.token = token
+            self.explanation = explanation
+            self.isWildcard = isWildcard
+        }
+    }
+
     public struct ScheduleFields {
         public let minutes: Set<Int>
         public let hours: Set<Int>
@@ -344,6 +359,219 @@ public enum CronScheduler {
             return (0...6).contains(normalized) ? names[normalized] : raw
         default: return raw
         }
+    }
+
+    // MARK: - Structured explanation
+
+    private static let fieldLabels = ["分钟 (0-59)", "小时 (0-23)", "日 (1-31)", "月 (1-12)", "星期 (0-7)"]
+
+    /// 逐字段解释；表达式无法解析为 5 个合法字段（含 `@reboot`）时返回 nil。
+    public static func fieldExplanations(_ expression: String) -> [CronFieldExplanation]? {
+        let resolved = resolveExpression(expression)
+        guard !resolved.isEmpty, validationMessage(expression) == nil else { return nil }
+        let parts = resolved.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard parts.count == 5 else { return nil }
+        return parts.enumerated().map { index, token in
+            CronFieldExplanation(
+                label: fieldLabels[index],
+                token: token,
+                explanation: explainField(token, index: index),
+                isWildcard: token == "*"
+            )
+        }
+    }
+
+    /// 用一句中文概括表达式的执行时机。这是 crontab.guru 式的「先给答案」：
+    /// 无法自信概括的写法（步长月份、超长列表等）返回 nil，UI 退回逐字段
+    /// 说明，绝不给出含糊表述。
+    public static func expressionSummary(_ expression: String) -> String? {
+        let trimmed = expression.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed.lowercased() != "@reboot" else { return nil }
+        guard validationMessage(expression) == nil else { return nil }
+        let resolved = resolveExpression(expression)
+        let parts = resolved.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard parts.count == 5, let fields = parseFields(resolved) else { return nil }
+
+        guard let time = describeTimeOfDay(
+            rawHours: parts[1],
+            rawMinutes: parts[0],
+            hours: fields.hours,
+            minutes: fields.minutes
+        ) else { return nil }
+
+        let domWildcard = isWildcard(parts[2])
+        let dowWildcard = isWildcard(parts[4])
+        let domCoverAll = fields.daysOfMonth.count == 31
+        let dowCoverAll = Set(fields.weekdays.map { $0 == 7 ? 0 : $0 }).count == 7
+        // 月份不参与日字段的 OR 规则，只有字面 * 才算不受限；
+        // 受限却无法概括（步长展开超上限等）时放弃整句，绝不静默丢约束。
+        let month: String?
+        if parts[3] == "*" || fields.months.count == 12 {
+            month = nil
+        } else if let described = describeMonth(months: fields.months) {
+            month = described
+        } else {
+            return nil
+        }
+
+        // 「每年 1 月 1 号」是同时约束月与日的常见特例，直接拼成整句。
+        if let m = fields.months.first, fields.months.count == 1,
+           dowWildcard, let d = fields.daysOfMonth.first, fields.daysOfMonth.count == 1 {
+            return String(format: "每年 %d 月 %d 号 %@%@运行", m, d, time, time.contains(":") ? " " : "")
+        }
+
+        // 日匹配语义与 nextRuns 的 vixie 规则一致：通配字段被忽略；
+        // 受限字段全覆盖（1-31 / 0-7）时每一天都命中。
+        let day: String
+        if domWildcard && dowWildcard {
+            day = "每天"
+        } else if domWildcard {
+            if dowCoverAll {
+                day = "每天"
+            } else {
+                guard let dowText = describeDayOfWeek(weekdays: fields.weekdays) else { return nil }
+                day = dowText
+            }
+        } else if dowWildcard {
+            if domCoverAll {
+                day = "每天"
+            } else {
+                guard let domText = describeDayOfMonth(days: fields.daysOfMonth) else { return nil }
+                day = month == nil ? "每月 \(domText)" : domText
+            }
+        } else if domCoverAll || dowCoverAll {
+            day = "每天"
+        } else {
+            guard let domText = describeDayOfMonth(days: fields.daysOfMonth),
+                  let dowText = describeDayOfWeek(weekdays: fields.weekdays) else { return nil }
+            day = month == nil ? "每月 \(domText)或\(dowText)" : "\(domText)或\(dowText)"
+        }
+
+        // 频率式描述（每分钟/每隔 N 分钟/每小时…）自带时间范围，不再叠加「每天」。
+        let needsDaily = time.contains(":")
+        let effectiveDay = needsDaily ? day : (day == "每天" ? nil : day)
+
+        // 时刻形如 "00:00" 时朗读需要空格；频率式（每分钟/每隔 N 分钟/…
+        // 每小时）自带衔接，直接接「运行」。
+        let spacing = time.contains(":") && !time.hasSuffix("每小时") ? " " : ""
+        // 「月的 1 号」需要空格，「月的每周一」不需要。
+        let dayConnector = day.hasPrefix("每") ? "" : " "
+        switch (effectiveDay, month) {
+        case (nil, nil):
+            return "\(time)运行"
+        case (let day?, nil):
+            return "\(day) \(time)\(spacing)运行"
+        case (nil, let month?):
+            return "\(month)的\(time)\(spacing)运行"
+        case (let day?, let month?):
+            return "\(month)的\(dayConnector)\(day) \(time)\(spacing)运行"
+        }
+    }
+
+    /// 时/分字段的人话描述。时刻枚举上限 4 个，超出即放弃概括；
+    /// `*` 判断走集合覆盖，`*/n` 步长仍从原文提取。
+    private static func describeTimeOfDay(
+        rawHours: String,
+        rawMinutes: String,
+        hours: Set<Int>,
+        minutes: Set<Int>
+    ) -> String? {
+        let hoursCoverAll = hours.count == 24
+        let minutesCoverAll = minutes.count == 60
+
+        if hoursCoverAll && minutesCoverAll { return "每分钟" }
+        if hoursCoverAll {
+            if let step = stepAfterStar(rawMinutes) { return "每隔 \(step) 分钟" }
+            if minutes == [0] { return "每小时整点" }
+            if minutes.count <= 4 {
+                return "每小时第 \(numberList(minutes.sorted(), unit: "分"))"
+            }
+            return nil
+        }
+        if minutesCoverAll {
+            guard let step = stepAfterStar(rawHours) else { return nil }
+            return "每隔 \(step) 小时"
+        }
+        // 整点 + 步长小时（*/6）按书写意图读作「每隔 N 小时」，先于时刻枚举。
+        if minutes == [0], let step = stepAfterStar(rawHours) {
+            return "每隔 \(step) 小时"
+        }
+        if minutes.count == 1, let minute = minutes.first {
+            if hours.count <= 4 {
+                return hours.sorted().map { String(format: "%02d:%02d", $0, minute) }.joined(separator: "、")
+            }
+            if minute == 0, isContiguous(hours) {
+                return String(format: "%02d:00 至 %02d:00 每小时", hours.min() ?? 0, hours.max() ?? 0)
+            }
+            return nil
+        }
+        if hours.count * minutes.count <= 4 {
+            var times: [String] = []
+            for hour in hours.sorted() {
+                for minute in minutes.sorted() {
+                    times.append(String(format: "%02d:%02d", hour, minute))
+                }
+            }
+            return times.joined(separator: "、")
+        }
+        return nil
+    }
+
+    /// 日字段描述："1 号"、"1、15 号"、"1 至 15 号"；步长等复杂写法返回 nil。
+    private static func describeDayOfMonth(days: Set<Int>) -> String? {
+        if days.count == 1, let only = days.first { return "\(only) 号" }
+        if isContiguous(days) {
+            return "\(days.min() ?? 0) 至 \(days.max() ?? 0) 号"
+        }
+        if days.count <= 4 {
+            return days.sorted().map(String.init).joined(separator: "、") + " 号"
+        }
+        return nil
+    }
+
+    /// 星期字段描述："每周一"、"每周一至周五"、"每周六、日"。
+    private static func describeDayOfWeek(weekdays: Set<Int>) -> String? {
+        // 短名按下标拼「每周X」："每周日"、"每周一"…
+        let shortNames = ["日", "一", "二", "三", "四", "五", "六"]
+        let normalized = Set(weekdays.map { $0 == 7 ? 0 : $0 }).sorted()
+        guard !normalized.isEmpty else { return nil }
+        if normalized == [0, 6] { return "每周六、日" }
+        if normalized.count == 1 { return "每周\(shortNames[normalized[0]])" }
+        if isContiguous(Set(normalized)) {
+            return "每周\(shortNames[normalized[0]])至周\(shortNames[normalized.last!])"
+        }
+        if normalized.count <= 3 {
+            return "每周" + normalized.map { shortNames[$0] }.joined(separator: "、")
+        }
+        return nil
+    }
+
+    /// 月字段描述："3 月"、"3 至 6 月"、"3、6、12 月"。
+    private static func describeMonth(months: Set<Int>) -> String? {
+        if months.count == 1, let only = months.first { return "\(only) 月" }
+        if isContiguous(months) {
+            return "\(months.min() ?? 0) 至 \(months.max() ?? 0) 月"
+        }
+        if months.count <= 4 {
+            return months.sorted().map(String.init).joined(separator: "、") + " 月"
+        }
+        return nil
+    }
+
+    /// `*/n` 形态的步长；其余写法（含 `a/n`、区间步长）不参与概括。
+    private static func stepAfterStar(_ raw: String) -> Int? {
+        guard raw.hasPrefix("*/") else { return nil }
+        guard let step = Int(raw.dropFirst(2)) else { return nil }
+        return step > 0 ? step : nil
+    }
+
+    private static func isContiguous(_ values: Set<Int>) -> Bool {
+        guard let lowerBound = values.min(), let upperBound = values.max() else { return false }
+        return upperBound - lowerBound + 1 == values.count
+    }
+
+    private static func numberList(_ values: [Int], unit: String) -> String {
+        values.map(String.init).joined(separator: "、") + " " + unit
     }
 
     // MARK: - Private helpers

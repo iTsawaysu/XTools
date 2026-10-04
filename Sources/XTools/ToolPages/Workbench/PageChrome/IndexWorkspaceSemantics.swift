@@ -42,8 +42,10 @@ enum IndexWorkspaceSemantic: Equatable {
             return .naturalInputPageScrolling
         case .fixedInputWorkspace, .base64FileWorkspace:
             return .fixedHeightPageScrolling
-        case .longTextNaturalInput, .regexResultWorkspace:
+        case .longTextNaturalInput:
             return .naturalHeightPageScrolling
+        case .regexResultWorkspace:
+            return .fixedHeightInternalScroll
         case .boundedLongTextInput, .naturalHeightShortResultPanel:
             return .naturalHeightFixedInput
         case .imagePreviewStage, .liveImagePreviewStage:
@@ -84,7 +86,7 @@ enum IndexWorkspaceSemantic: Equatable {
         case .editableDiffWorkspace:
             return .init(layout: .fill, chrome: .compactWorkspace)
         case .regexResultWorkspace:
-            return .init(layout: .scroll, chrome: .standard)
+            return .init(layout: .fill, chrome: .compactWorkspace)
         }
     }
 
@@ -154,7 +156,7 @@ struct IndexWorkspaceBehaviorContract: Equatable {
         usesNaturalHeightSurface: false
     )
 
-    /// 自然高度 + 页面滚动的长文本输入工作区（长文本 / 正则结果）。
+    /// 自然高度 + 页面滚动的长文本输入工作区（长文本）。
     static let naturalHeightPageScrolling = IndexWorkspaceBehaviorContract(
         inputExpandsWithContent: true,
         outputScrollsInternally: false,

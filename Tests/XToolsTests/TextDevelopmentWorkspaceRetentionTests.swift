@@ -186,7 +186,7 @@ struct TextDevelopmentWorkspaceRetentionTests {
         diff.execution.invalidate(resetTo: DiffExecutionBinding(error: "session-error"))
         let crontab = repository.model(for: CrontabToolWorkspaceModel.key)
         crontab.expression = "0 9 * * 1-5"
-        crontab.nextRuns = ["session-run"]
+        crontab.nextRuns = [Date(timeIntervalSinceReferenceDate: 800_000_000)]
         crontab.error = "session-error"
         let port = repository.model(for: RandomPortToolWorkspaceModel.key)
         port.generate()

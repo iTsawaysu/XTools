@@ -10,6 +10,7 @@ struct IndexWorkspaceTextArea: View {
     var autoFocus = false
     var caretPlacementRequestToken: Int? = nil
     var temporaryHighlights: IndexTextAreaTemporaryHighlights? = nil
+    var scrollRequest: IndexTextAreaScrollRequest? = nil
     var diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil
     var diagnosticNavigationToken = 0
     var inputRenderingMode: IndexTextAreaRenderingMode? = nil
@@ -32,6 +33,7 @@ struct IndexWorkspaceTextArea: View {
         autoFocus: Bool = false,
         caretPlacementRequestToken: Int? = nil,
         temporaryHighlights: IndexTextAreaTemporaryHighlights? = nil,
+        scrollRequest: IndexTextAreaScrollRequest? = nil,
         diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
         diagnosticNavigationToken: Int = 0,
         inputRenderingMode: IndexTextAreaRenderingMode? = nil,
@@ -81,6 +83,7 @@ struct IndexWorkspaceTextArea: View {
             autoFocus: autoFocus,
             caretPlacementRequestToken: caretPlacementRequestToken,
             temporaryHighlights: temporaryHighlights,
+            scrollRequest: scrollRequest,
             diagnosticMarker: diagnosticMarker,
             diagnosticNavigationToken: diagnosticNavigationToken,
             inputPolicy: inputPolicy,

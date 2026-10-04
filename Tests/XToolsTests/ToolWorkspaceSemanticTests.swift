@@ -112,10 +112,10 @@ struct ToolWorkspaceSemanticTests {
         )
         assertContract(
             .regexResultWorkspace,
-            inputExpandsWithContent: true,
-            outputScrollsInternally: false,
+            inputExpandsWithContent: false,
+            outputScrollsInternally: true,
             wrapsLongTokensToAvailableWidth: true,
-            usesNaturalHeightSurface: true
+            usesNaturalHeightSurface: false
         )
     }
 
@@ -237,7 +237,6 @@ struct ToolWorkspaceSemanticTests {
         #expect(IndexWorkspaceSemantic.longTextNaturalInput.behavior.inputExpandsWithContent)
         #expect(!IndexWorkspaceSemantic.boundedLongTextInput.behavior.inputExpandsWithContent)
         #expect(IndexWorkspaceSemantic.editableDiffWorkspace.behavior.inputExpandsWithContent)
-        #expect(IndexWorkspaceSemantic.regexResultWorkspace.behavior.inputExpandsWithContent)
     }
 
     @Test func exceptionSemanticsStayDistinctFromReadingDefaults() {
@@ -263,7 +262,7 @@ struct ToolWorkspaceSemanticTests {
         #expect(IndexWorkspaceSemantic.boundedLongTextInput.behavior.usesNaturalHeightSurface)
         #expect(IndexWorkspaceSemantic.naturalHeightShortResultPanel.behavior.usesNaturalHeightSurface)
         #expect(IndexWorkspaceSemantic.longTextNaturalInput.behavior == .naturalHeightPageScrolling)
-        #expect(IndexWorkspaceSemantic.regexResultWorkspace.behavior == .naturalHeightPageScrolling)
+        #expect(IndexWorkspaceSemantic.regexResultWorkspace.behavior == .fixedHeightInternalScroll)
     }
 
     @Test @MainActor func textConversionWorkbenchDefaultsToCopyTransformSemantic() {
@@ -359,7 +358,6 @@ struct ToolWorkspaceSemanticTests {
 
         #expect(IndexWorkspaceSemantic.structuredOutputReading.resolvedWorkspace.textArea.expandsWithContent)
         #expect(IndexWorkspaceSemantic.longTextNaturalInput.resolvedWorkspace.textArea.expandsWithContent)
-        #expect(IndexWorkspaceSemantic.regexResultWorkspace.resolvedWorkspace.textArea.expandsWithContent)
     }
 
     @Test func boundedLongTextInputSelectsTextKit2ViewportWithoutMigratingNaturalInputs() {
