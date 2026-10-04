@@ -130,7 +130,7 @@ private struct RegexMatchRow: View {
                         .strokeBorder(isSelected ? ToolTheme.accent.opacity(0.55) : .clear, lineWidth: 1)
                 }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(IndexBareButtonStyle())
         .onHover { hovered in
             guard showsInteraction else { return }
             isHovered = hovered

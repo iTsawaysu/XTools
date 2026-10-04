@@ -220,6 +220,17 @@ struct IndexIconActionButtonStyle: ButtonStyle {
     }
 }
 
+// MARK: - IndexPasteboard
+
+enum IndexPasteboard {
+    @discardableResult
+    @MainActor
+    static func copyString(_ string: String) -> Bool {
+        NSPasteboard.general.clearContents()
+        return NSPasteboard.general.setString(string, forType: .string)
+    }
+}
+
 // MARK: - IndexCopyButton
 
 struct IndexCopyButton: View {
@@ -273,9 +284,7 @@ struct IndexCopyButton: View {
     private var copyButton: some View {
         Button {
             guard !text.isEmpty else { return }
-            NSPasteboard.general.clearContents()
-            // setString 返回写入是否成功；忽略它会在剪贴板不可写时误报“已复制”。
-            guard NSPasteboard.general.setString(text, forType: .string) else {
+            guard IndexPasteboard.copyString(text) else {
                 toastCenter?.show("剪贴板写入失败。", tone: .error)
                 return
             }

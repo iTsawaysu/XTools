@@ -192,8 +192,7 @@ private struct IndexGeneratedValueRowView: View {
     }
 
     private func copyValue() {
-        NSPasteboard.general.clearContents()
-        guard NSPasteboard.general.setString(row.value, forType: .string) else {
+        guard IndexPasteboard.copyString(row.value) else {
             toastCenter?.show("剪贴板写入失败。", tone: .error)
             return
         }

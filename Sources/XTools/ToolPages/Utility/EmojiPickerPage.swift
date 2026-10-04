@@ -189,9 +189,7 @@ private struct IndexEmojiWorkspaceContent: View {
 
     @MainActor
     private func copyGlyph(_ glyph: String) {
-        NSPasteboard.general.clearContents()
-        // setString 返回写入是否成功；忽略它会在剪贴板不可写时误报“已复制”。
-        guard NSPasteboard.general.setString(glyph, forType: .string) else {
+        guard IndexPasteboard.copyString(glyph) else {
             toastCenter?.show("剪贴板写入失败。", tone: .error)
             return
         }

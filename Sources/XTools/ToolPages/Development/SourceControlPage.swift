@@ -970,8 +970,7 @@ private struct SourceControlWorkspaceContent: View {
     }
 
     private func copyRepositoryPath(_ repository: SourceControlRepository) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(repository.path, forType: .string)
+        IndexPasteboard.copyString(repository.path)
         toastCenter?.show("已拷贝仓库路径", tone: .info)
     }
 

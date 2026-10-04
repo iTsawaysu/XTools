@@ -74,7 +74,7 @@ private struct SidebarToggleButton: View {
     let action: () -> Void
     let colorScheme: ColorScheme
 
-    @StateObject private var hoverState = HoverState()
+    @State private var isHovered = false
 
     private var presentation: SidebarTogglePresentation {
         isSidebarVisible ? .hide : .show
@@ -91,13 +91,13 @@ private struct SidebarToggleButton: View {
                 )
                 .toolMotionIconSwap(id: isSidebarVisible)
         }
-        .buttonStyle(SidebarChromeButtonStyle(isHovered: hoverState.isHovered))
+        .buttonStyle(SidebarChromeButtonStyle(isHovered: isHovered))
         .environment(\.colorScheme, colorScheme)
         .help(presentation.help)
         .accessibilityLabel(presentation.title)
         .accessibilityHint(SidebarTogglePresentation.accessibilityHint)
         .accessibilityIdentifier("window.sidebar-toggle")
-        .onHover { hoverState.isHovered = $0 }
+        .onHover { isHovered = $0 }
     }
 }
 

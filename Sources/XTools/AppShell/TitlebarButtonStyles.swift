@@ -1,12 +1,5 @@
 import SwiftUI
 
-/// Tracks hover state for chrome controls that change appearance on pointer
-/// hover. Shared by the titlebar's sidebar toggle and the command palette rows.
-@MainActor
-final class HoverState: ObservableObject {
-    @Published var isHovered = false
-}
-
 /// Quiet square button for the sidebar toggle: transparent at rest, filled on
 /// hover/press.
 struct SidebarChromeButtonStyle: ButtonStyle {
