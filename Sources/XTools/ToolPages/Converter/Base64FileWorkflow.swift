@@ -272,130 +272,134 @@ enum Base64FileWorkflow {
 }
 
 @MainActor
-protocol Base64FileWorkflowProcessing: Sendable {
-    func readSelection(
-        from url: URL,
-        maxBytes: Int
-    ) async -> Result<Base64FileSelection, Base64FileWorkflowFailure>
+struct Base64FileWorkflowProcessing: Sendable {
+    var readSelection: @Sendable (URL, Int) async -> Result<Base64FileSelection, Base64FileWorkflowFailure> = {
+        await Base64FileWorkflow.readSelection(from: $0, maxBytes: $1)
+    }
+    var outputPreview: @Sendable (Base64FileSelection, Base64Conversion.FileOutputMode) async -> Base64Conversion.EncodedFileOutputPreview = {
+        await Base64FileWorkflow.outputPreview(for: $0, mode: $1)
+    }
+    var fullOutput: @Sendable (Base64FileSelection, Base64Conversion.FileOutputMode) async -> String = {
+        await Base64FileWorkflow.fullOutput(for: $0, mode: $1)
+    }
+    var serializeUTF8: @Sendable (String) async -> Data = { text in
+        await Task.detached(priority: .userInitiated) {
+            Data(text.utf8)
+        }.value
+    }
+    var decodePayload: @Sendable (String) async -> Result<Base64Conversion.FilePayload, Base64FileWorkflowFailure> = {
+        await Base64FileWorkflow.decodePayload($0)
+    }
+    var decodedPayload: @Sendable (Base64FileSelection) async -> Base64Conversion.FilePayload = {
+        await Base64FileWorkflow.decodedPayload(for: $0)
+    }
+    var readEncodedText: @Sendable (URL, Int) async -> Result<Base64FileEncodedTextInput, Base64FileWorkflowFailure> = {
+        await Base64FileWorkflow.readEncodedText(from: $0, maxBytes: $1)
+    }
+    var previewImage: @Sendable (Base64Conversion.FilePayload) async -> Base64FileImagePreview? = {
+        await Base64FileWorkflow.previewImage(for: $0)
+    }
+    var writeData: @Sendable (Data, URL) async -> Result<Void, Base64FileWorkflowFailure> = {
+        await Base64FileWorkflow.write($0, to: $1)
+    }
+    var writeText: @Sendable (String, URL) async -> Result<Void, Base64FileWorkflowFailure> = {
+        await Base64FileWorkflow.write($0, to: $1)
+    }
 
-    func outputPreview(
-        for selection: Base64FileSelection,
-        mode: Base64Conversion.FileOutputMode
-    ) async -> Base64Conversion.EncodedFileOutputPreview
-
-    func fullOutput(
-        for selection: Base64FileSelection,
-        mode: Base64Conversion.FileOutputMode
-    ) async -> String
-
-    func serializeUTF8(_ text: String) async -> Data
-
-    func decodePayload(_ input: String) async -> Result<Base64Conversion.FilePayload, Base64FileWorkflowFailure>
-
-    func decodedPayload(for selection: Base64FileSelection) async -> Base64Conversion.FilePayload
-
-    func readEncodedText(
-        from url: URL,
-        maxBytes: Int
-    ) async -> Result<Base64FileEncodedTextInput, Base64FileWorkflowFailure>
-
-    func previewImage(for payload: Base64Conversion.FilePayload) async -> Base64FileImagePreview?
-
-    func write(_ data: Data, to url: URL) async -> Result<Void, Base64FileWorkflowFailure>
-
-    func write(_ text: String, to url: URL) async -> Result<Void, Base64FileWorkflowFailure>
-}
-
-extension Base64FileWorkflowProcessing {
     func readSelection(
         from url: URL,
         maxBytes: Int
     ) async -> Result<Base64FileSelection, Base64FileWorkflowFailure> {
-        await Base64FileWorkflow.readSelection(from: url, maxBytes: maxBytes)
+        await readSelection(url, maxBytes)
     }
 
     func outputPreview(
         for selection: Base64FileSelection,
         mode: Base64Conversion.FileOutputMode
     ) async -> Base64Conversion.EncodedFileOutputPreview {
-        await Base64FileWorkflow.outputPreview(for: selection, mode: mode)
+        await outputPreview(selection, mode)
     }
 
     func fullOutput(
         for selection: Base64FileSelection,
         mode: Base64Conversion.FileOutputMode
     ) async -> String {
-        await Base64FileWorkflow.fullOutput(for: selection, mode: mode)
+        await fullOutput(selection, mode)
     }
 
     func serializeUTF8(_ text: String) async -> Data {
-        await Task.detached(priority: .userInitiated) {
-            Data(text.utf8)
-        }.value
+        await serializeUTF8(text)
     }
 
     func decodePayload(_ input: String) async -> Result<Base64Conversion.FilePayload, Base64FileWorkflowFailure> {
-        await Base64FileWorkflow.decodePayload(input)
+        await decodePayload(input)
     }
 
     func decodedPayload(for selection: Base64FileSelection) async -> Base64Conversion.FilePayload {
-        await Base64FileWorkflow.decodedPayload(for: selection)
+        await decodedPayload(selection)
     }
 
     func readEncodedText(
         from url: URL,
         maxBytes: Int
     ) async -> Result<Base64FileEncodedTextInput, Base64FileWorkflowFailure> {
-        await Base64FileWorkflow.readEncodedText(from: url, maxBytes: maxBytes)
+        await readEncodedText(url, maxBytes)
     }
 
     func previewImage(for payload: Base64Conversion.FilePayload) async -> Base64FileImagePreview? {
-        await Base64FileWorkflow.previewImage(for: payload)
+        await previewImage(payload)
     }
 
     func write(_ data: Data, to url: URL) async -> Result<Void, Base64FileWorkflowFailure> {
-        await Base64FileWorkflow.write(data, to: url)
+        await writeData(data, url)
     }
 
     func write(_ text: String, to url: URL) async -> Result<Void, Base64FileWorkflowFailure> {
-        await Base64FileWorkflow.write(text, to: url)
+        await writeText(text, url)
     }
 }
 
-struct Base64FileWorkflowLive: Base64FileWorkflowProcessing {}
-
-@MainActor
-protocol Base64FileWorkflowDialoging: Sendable {
-    func selectEncodedOutputURL(defaultFilename: String) async -> URL?
-    func selectDecodedOutputURL(defaultFilename: String, fileExtension: String) async -> URL?
-}
-
-@MainActor
-protocol Base64FilePasteboardWriting: Sendable {
-    /// Takes pre-serialized UTF-8 so callers can build the payload off the
-    /// main thread; NSPasteboard itself must only be touched on main.
-    func writeUTF8(_ data: Data) -> Bool
-}
+typealias Base64FileWorkflowLive = Base64FileWorkflowProcessing
 
 @MainActor
 struct Base64FileWorkflowClient: Sendable {
-    private let dialog: any Base64FileWorkflowDialoging
-    private let pasteboard: any Base64FilePasteboardWriting
+    var selectEncodedOutputURL: @Sendable (String) async -> URL? = { _ in nil }
+    var selectDecodedOutputURL: @Sendable (String, String) async -> URL? = { _, _ in nil }
+    var pasteboard: PasteboardWriter = .init()
+
+    struct PasteboardWriter: Sendable {
+        var write: @Sendable (Data) -> Bool = { data in
+            NSPasteboard.general.clearContents()
+            return NSPasteboard.general.setData(data, forType: .string)
+        }
+        func writeUTF8(_ data: Data) -> Bool {
+            write(data)
+        }
+    }
 
     init(
-        dialog: any Base64FileWorkflowDialoging = NoOpBase64FileWorkflowDialog(),
-        pasteboard: any Base64FilePasteboardWriting = AppKitBase64FilePasteboard()
+        selectEncodedOutputURL: @escaping @Sendable (String) async -> URL? = { _ in nil },
+        selectDecodedOutputURL: @escaping @Sendable (String, String) async -> URL? = { _, _ in nil },
+        pasteboard: PasteboardWriter = .init()
     ) {
-        self.dialog = dialog
+        self.selectEncodedOutputURL = selectEncodedOutputURL
+        self.selectDecodedOutputURL = selectDecodedOutputURL
         self.pasteboard = pasteboard
     }
 
+    init(dialog: SheetBase64FileWorkflowDialog) {
+        self.init(
+            selectEncodedOutputURL: { await dialog.selectEncodedOutputURL(defaultFilename: $0) },
+            selectDecodedOutputURL: { await dialog.selectDecodedOutputURL(defaultFilename: $0, fileExtension: $1) }
+        )
+    }
+
     func selectEncodedOutputURL(defaultFilename: String) async -> URL? {
-        await dialog.selectEncodedOutputURL(defaultFilename: defaultFilename)
+        await selectEncodedOutputURL(defaultFilename)
     }
 
     func selectDecodedOutputURL(defaultFilename: String, fileExtension: String) async -> URL? {
-        await dialog.selectDecodedOutputURL(defaultFilename: defaultFilename, fileExtension: fileExtension)
+        await selectDecodedOutputURL(defaultFilename, fileExtension)
     }
 
     /// Sheet-based production dialog bound to the window-scoped output panel.
@@ -408,16 +412,9 @@ struct Base64FileWorkflowClient: Sendable {
     }
 }
 
-/// Default no-op dialog: the page always injects the sheet dialog bound to
-/// the window-scoped output panel client.
-struct NoOpBase64FileWorkflowDialog: Base64FileWorkflowDialoging {
-    func selectEncodedOutputURL(defaultFilename: String) async -> URL? { nil }
-    func selectDecodedOutputURL(defaultFilename: String, fileExtension: String) async -> URL? { nil }
-}
-
 /// Sheet-based save dialog: selection suspends the caller instead of running
 /// a synchronous modal event loop.
-struct SheetBase64FileWorkflowDialog: Base64FileWorkflowDialoging {
+struct SheetBase64FileWorkflowDialog: Sendable {
     let outputPanel: FileOutputPanelClient
 
     func selectEncodedOutputURL(defaultFilename: String) async -> URL? {
@@ -440,14 +437,6 @@ struct SheetBase64FileWorkflowDialog: Base64FileWorkflowDialoging {
             prompt: "存储"
         )
         return try? await outputPanel.selectFile(request)
-    }
-}
-
-@MainActor
-private struct AppKitBase64FilePasteboard: Base64FilePasteboardWriting {
-    func writeUTF8(_ data: Data) -> Bool {
-        NSPasteboard.general.clearContents()
-        return NSPasteboard.general.setData(data, forType: .string)
     }
 }
 
@@ -514,7 +503,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
     @discardableResult
     func changeOutputMode(
         to newMode: Base64Conversion.FileOutputMode,
-        processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive()
+        processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive()
     ) -> Task<Void, Never>? {
         guard !isReadingFile, outputMode != newMode else { return nil }
         mutate {
@@ -529,7 +518,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
     func selectSourceFile(
         filePanel: FileInputPanelClient,
         maxBytes: Int = maxFileBytes,
-        processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive()
+        processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive()
     ) -> Task<Void, Never> {
         Task {
             do {
@@ -551,7 +540,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
     func readSelectedFile(
         from url: URL,
         maxBytes: Int = maxFileBytes,
-        processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive()
+        processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive()
     ) -> Task<Void, Never>? {
         guard !isReadingFile else { return nil }
 
@@ -596,7 +585,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
 
     @discardableResult
     func refreshOutputPreview(
-        processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive()
+        processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive()
     ) -> Task<Void, Never>? {
         guard let selectedFile else {
             mutate { $0.clearOutputPreviewWorkspace() }
@@ -636,7 +625,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
     @discardableResult
     func copyFullOutput(
         client: Base64FileWorkflowClient = Base64FileWorkflowClient(),
-        processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive(),
+        processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive(),
         onSuccess: @escaping @MainActor () -> Void = {}
     ) -> Task<Void, Never>? {
         guard direction == .encode, outputAction == nil, !isReadingFile, !isPreparingOutput,
@@ -679,7 +668,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
     @discardableResult
     func saveEncodedOutput(
         client: Base64FileWorkflowClient = Base64FileWorkflowClient(),
-        processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive(),
+        processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive(),
         onSuccess: @escaping @MainActor () -> Void = {}
     ) -> Task<Void, Never>? {
         guard direction == .encode, outputAction == nil, !isReadingFile, !isPreparingOutput,
@@ -753,7 +742,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
 
     @discardableResult
     func decodeReverseInput(
-        processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive()
+        processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive()
     ) -> Task<Void, Never>? {
         let trimmed = reverseInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
@@ -798,7 +787,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
 
     @discardableResult
     func sendCurrentOutputToDecodeResult(
-        processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive()
+        processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive()
     ) -> Task<Void, Never>? {
         guard direction == .encode, outputAction == nil, !isReadingFile, !isPreparingOutput,
               let selectedFile else { return nil }
@@ -850,7 +839,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
     @discardableResult
     func importEncodedTextFile(
         filePanel: FileInputPanelClient,
-        processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive()
+        processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive()
     ) -> Task<Void, Never> {
         Task {
             do {
@@ -871,7 +860,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
     @discardableResult
     func importEncodedTextFile(
         from url: URL,
-        processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive()
+        processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive()
     ) -> Task<Void, Never> {
 
         let generation = beginDecodeAttempt(.encodedTextImport)
@@ -908,7 +897,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
     @discardableResult
     func saveDecodedPayload(
         client: Base64FileWorkflowClient = Base64FileWorkflowClient(),
-        processor: any Base64FileWorkflowProcessing = Base64FileWorkflowLive(),
+        processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive(),
         onSuccess: @escaping @MainActor () -> Void = {}
     ) -> Task<Void, Never>? {
         guard !isSavingDecoded, let payload = decodedPayload else { return nil }
@@ -970,7 +959,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
         _ text: String,
         source: Base64FileDecodedResultSource,
         defaultOutputFileName: String,
-        processor: any Base64FileWorkflowProcessing,
+        processor: Base64FileWorkflowProcessing,
         existingGeneration: Int? = nil
     ) -> Task<Void, Never>? {
         let generation = existingGeneration ?? beginDecodeAttempt(.encodedTextImport)

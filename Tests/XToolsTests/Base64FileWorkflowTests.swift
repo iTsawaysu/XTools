@@ -1399,7 +1399,7 @@ struct Base64FileWorkflowTests {
 }
 
 @MainActor
-private final class FakeBase64FileWorkflowProcessor: Base64FileWorkflowProcessing, @unchecked Sendable {
+private final class FakeBase64FileWorkflowProcessor: @unchecked Sendable {
     var readSelectionResult: Result<Base64FileSelection, Base64FileWorkflowFailure> = .success(
         Base64FileSelection(fileName: "source.bin", data: Data("hello".utf8), mimeType: "application/octet-stream")
     )
@@ -1424,6 +1424,53 @@ private final class FakeBase64FileWorkflowProcessor: Base64FileWorkflowProcessin
     private(set) var encodedTextReads: [(url: URL, maxBytes: Int)] = []
     private(set) var textWrites: [(text: String, url: URL)] = []
     private(set) var dataWrites: [(data: Data, url: URL)] = []
+
+    var processing: Base64FileWorkflowProcessing {
+        Base64FileWorkflowProcessing(
+            readSelection: { [weak self] url, maxBytes in
+                guard let self else { return .failure(.readFailed) }
+                return await self.readSelection(from: url, maxBytes: maxBytes)
+            },
+            outputPreview: { [weak self] selection, mode in
+                guard let self else {
+                    return Base64Conversion.encodedOutputPreview(for: selection.data, mimeType: selection.mimeType, mode: mode)
+                }
+                return await self.outputPreview(for: selection, mode: mode)
+            },
+            fullOutput: { [weak self] selection, mode in
+                guard let self else { return "" }
+                return await self.fullOutput(for: selection, mode: mode)
+            },
+            serializeUTF8: { [weak self] text in
+                guard let self else { return Data(text.utf8) }
+                return await self.serializeUTF8(text)
+            },
+            decodePayload: { [weak self] input in
+                guard let self else { return .failure(.invalidPayload) }
+                return await self.decodePayload(input)
+            },
+            decodedPayload: { [weak self] selection in
+                guard let self else { return await Base64FileWorkflow.decodedPayload(for: selection) }
+                return await self.decodedPayload(for: selection)
+            },
+            readEncodedText: { [weak self] url, maxBytes in
+                guard let self else { return .failure(.readFailed) }
+                return await self.readEncodedText(from: url, maxBytes: maxBytes)
+            },
+            previewImage: { [weak self] payload in
+                guard let self else { return nil }
+                return await self.previewImage(for: payload)
+            },
+            writeData: { [weak self] data, url in
+                guard let self else { return .failure(.saveFailed) }
+                return await self.write(data, to: url)
+            },
+            writeText: { [weak self] text, url in
+                guard let self else { return .failure(.saveFailed) }
+                return await self.write(text, to: url)
+            }
+        )
+    }
 
     func readSelection(
         from url: URL,
@@ -1532,7 +1579,7 @@ private final class FakeBase64FileWorkflowProcessor: Base64FileWorkflowProcessin
 }
 
 @MainActor
-private final class FakeBase64FileDialog: Base64FileWorkflowDialoging, @unchecked Sendable {
+private final class FakeBase64FileDialog: @unchecked Sendable {
     var encodedURL: URL?
     var encodedURLHandler: ((String) async -> URL?)?
     var decodedURL: URL?
@@ -1554,7 +1601,7 @@ private final class FakeBase64FileDialog: Base64FileWorkflowDialoging, @unchecke
 }
 
 @MainActor
-private final class FakeBase64Pasteboard: Base64FilePasteboardWriting, @unchecked Sendable {
+private final class FakeBase64Pasteboard: @unchecked Sendable {
     var shouldSucceed = true
     private(set) var payloads: [Data] = []
 
@@ -1566,6 +1613,114 @@ private final class FakeBase64Pasteboard: Base64FilePasteboardWriting, @unchecke
         guard shouldSucceed else { return false }
         payloads.append(data)
         return true
+    }
+}
+
+extension Base64FileWorkflowClient {
+    fileprivate init(dialog: FakeBase64FileDialog? = nil, pasteboard: FakeBase64Pasteboard? = nil) {
+        self.init(
+            selectEncodedOutputURL: { [weak dialog] in await dialog?.selectEncodedOutputURL(defaultFilename: $0) },
+            selectDecodedOutputURL: { [weak dialog] in await dialog?.selectDecodedOutputURL(defaultFilename: $0, fileExtension: $1) },
+            pasteboard: Base64FileWorkflowClient.PasteboardWriter(
+                write: { [weak pasteboard] data in
+                    MainActor.assumeIsolated {
+                        pasteboard?.writeUTF8(data) ?? true
+                    }
+                }
+            )
+        )
+    }
+}
+
+fileprivate extension Base64FileWorkflowSession {
+    @discardableResult
+    func readSelectedFile(
+        from url: URL,
+        maxBytes: Int = Base64FileWorkflowSession.maxFileBytes,
+        processor: FakeBase64FileWorkflowProcessor
+    ) -> Task<Void, Never>? {
+        readSelectedFile(from: url, maxBytes: maxBytes, processor: processor.processing)
+    }
+
+    @discardableResult
+    func changeOutputMode(
+        to newMode: Base64Conversion.FileOutputMode,
+        processor: FakeBase64FileWorkflowProcessor
+    ) -> Task<Void, Never>? {
+        changeOutputMode(to: newMode, processor: processor.processing)
+    }
+
+    @discardableResult
+    func refreshOutputPreview(
+        processor: FakeBase64FileWorkflowProcessor
+    ) -> Task<Void, Never>? {
+        refreshOutputPreview(processor: processor.processing)
+    }
+
+    @discardableResult
+    func selectSourceFile(
+        filePanel: FileInputPanelClient,
+        maxBytes: Int = Base64FileWorkflowSession.maxFileBytes,
+        processor: FakeBase64FileWorkflowProcessor
+    ) -> Task<Void, Never> {
+        selectSourceFile(filePanel: filePanel, maxBytes: maxBytes, processor: processor.processing)
+    }
+
+    @discardableResult
+    func copyFullOutput(
+        client: Base64FileWorkflowClient = Base64FileWorkflowClient(),
+        processor: FakeBase64FileWorkflowProcessor,
+        onSuccess: @escaping @MainActor () -> Void = {}
+    ) -> Task<Void, Never>? {
+        copyFullOutput(client: client, processor: processor.processing, onSuccess: onSuccess)
+    }
+
+    @discardableResult
+    func saveEncodedOutput(
+        client: Base64FileWorkflowClient = Base64FileWorkflowClient(),
+        processor: FakeBase64FileWorkflowProcessor,
+        onSuccess: @escaping @MainActor () -> Void = {}
+    ) -> Task<Void, Never>? {
+        saveEncodedOutput(client: client, processor: processor.processing, onSuccess: onSuccess)
+    }
+
+    @discardableResult
+    func decodeReverseInput(
+        processor: FakeBase64FileWorkflowProcessor
+    ) -> Task<Void, Never>? {
+        decodeReverseInput(processor: processor.processing)
+    }
+
+    @discardableResult
+    func sendCurrentOutputToDecodeResult(
+        processor: FakeBase64FileWorkflowProcessor
+    ) -> Task<Void, Never>? {
+        sendCurrentOutputToDecodeResult(processor: processor.processing)
+    }
+
+    @discardableResult
+    func importEncodedTextFile(
+        filePanel: FileInputPanelClient,
+        processor: FakeBase64FileWorkflowProcessor
+    ) -> Task<Void, Never> {
+        importEncodedTextFile(filePanel: filePanel, processor: processor.processing)
+    }
+
+    @discardableResult
+    func importEncodedTextFile(
+        from url: URL,
+        processor: FakeBase64FileWorkflowProcessor
+    ) -> Task<Void, Never> {
+        importEncodedTextFile(from: url, processor: processor.processing)
+    }
+
+    @discardableResult
+    func saveDecodedPayload(
+        client: Base64FileWorkflowClient = Base64FileWorkflowClient(),
+        processor: FakeBase64FileWorkflowProcessor,
+        onSuccess: @escaping @MainActor () -> Void = {}
+    ) -> Task<Void, Never>? {
+        saveDecodedPayload(client: client, processor: processor.processing, onSuccess: onSuccess)
     }
 }
 
