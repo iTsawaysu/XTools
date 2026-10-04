@@ -380,9 +380,6 @@ struct RootView: View {
                 registry: registry,
                 navigationActions: navigationActions
             )
-            // ENV-gated forensic autopilot (XTOOLS_PALETTE_AUTOPILOT); inert in
-            // normal launches. See CommandPaletteAutopilot.
-            CommandPaletteAutopilot.attachIfRequested(viewModel)
         }
         .onChange(of: scenePhase) { phase in
             // Sample the clipboard only when the app comes forward — never in

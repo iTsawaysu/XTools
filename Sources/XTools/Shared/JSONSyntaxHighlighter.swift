@@ -50,40 +50,6 @@ enum JSONSyntaxHighlighter {
         return out
     }
 
-    static func highlight(line: String, segments: [DiffTextSegment]) -> AttributedString {
-        var out = highlight(line: line)
-        var cursor = out.startIndex
-
-        for segment in segments {
-            let characterCount = segment.text.count
-            guard characterCount > 0 else {
-                continue
-            }
-
-            let end = out.characters.index(cursor, offsetBy: characterCount, limitedBy: out.endIndex) ?? out.endIndex
-            let range = cursor..<end
-
-            switch segment.kind {
-            case .unchanged:
-                break
-            case .added:
-                out[range].backgroundColor = ToolTheme.successSoft
-                out[range].underlineStyle = .single
-            case .removed:
-                out[range].backgroundColor = ToolTheme.errorSoft
-                out[range].underlineStyle = .single
-            }
-
-            cursor = end
-
-            if cursor == out.endIndex {
-                break
-            }
-        }
-
-        return out
-    }
-
     private static func attributedRange(
         for token: JSONHighlightToken,
         in string: AttributedString

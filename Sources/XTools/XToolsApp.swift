@@ -56,9 +56,6 @@ final class XToolsAppDelegate: NSObject, NSApplicationDelegate {
     var openWindowAction: OpenWindowAction?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // ENV-gated forensic autopilot (XTOOLS_PALETTE_AUTOPILOT); inert in
-        // normal launches. See CommandPaletteAutopilot.
-        CommandPaletteAutopilot.startIfRequested()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

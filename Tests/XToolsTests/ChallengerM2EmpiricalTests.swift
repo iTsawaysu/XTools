@@ -91,35 +91,64 @@ struct ChallengerM2EmpiricalTests {
         #expect(p3.data == threeBytes)
     }
 
-    @Test func decodeRejectsCorruptedAndMalformedBase64Strings() async {
-        let malformedInputs = [
-            "",                                      // empty string
-            "   \n\t  ",                             // whitespace only
-            "???not_base64???",                      // invalid characters
-            "aGVsbG8",                              // incomplete length (7 chars, not multiple of 4)
-            "aGVsbG8===",                            // excessive padding
-            "======",                                // only padding
-            "data:",                                 // empty data url
-            "data:image/png",                        // missing base64 marker and comma
-            "data:image/png;base64",                 // missing comma
-            "data:image/png;base64,",                // empty payload
-            "data:image/png;base64,invalid!@#$",     // invalid base64 in data url
-            "data:;base64,aGVsbG8=",                 // missing mime type (should still handle or fail gracefully)
-            "中文测试内容",                          // non-ascii characters
-            "\0\0\0\0"                               // null bytes
+    @Test func decodeRejectsMalformedAndPinsLenientBase64Edges() async {
+        // 一律拒绝：字母表外字符（含非 ASCII 与 NUL）、长度余 1 的不可能
+        // Base64、缺逗号/缺 base64 标记的残缺 data URL。
+        let rejected = [
+            "???not_base64???",
+            "abcde",                             // 5 字符，长度余 1
+            "data:",                             // 无逗号
+            "data:image/png",                    // 无 base64 标记与逗号
+            "data:image/png;base64",             // 无逗号
+            "data:image/png;base64,invalid!@#$", // payload 含字母表外字符
+            "中文测试内容",
+            "\0\0\0\0",
         ]
-
-        for input in malformedInputs {
+        for input in rejected {
             let result = await Base64FileWorkflow.decodePayload(input)
-            if input == "data:image/png;base64," || input == "data:;base64," {
-                continue
-            }
-            if case .success(let payload) = result {
-                #expect(payload.data.count >= 0)
-            } else {
-                #expect(result == .failure(.invalidPayload) || result == .failure(.decodedTooLarge(maxBytes: Base64FileWorkflow.maxDecodedPayloadBytes)))
-            }
+            #expect(result == .failure(.invalidPayload), "应拒绝: \(input)")
         }
+
+        // 宽容语义（decodeData 的既有契约）：纯空白与全填充串归一为空数据；
+        // 缺失/多余填充补齐后照常解码。
+        for input in ["", "   \n\t  ", "======"] {
+            let result = await Base64FileWorkflow.decodePayload(input)
+            guard case .success(let payload) = result else {
+                Issue.record("应按空数据成功解码: \(input)")
+                return
+            }
+            #expect(payload.data.isEmpty)
+            #expect(payload.mimeType == "application/octet-stream")
+            #expect(payload.fileExtension == "bin")
+        }
+        for input in ["aGVsbG8", "aGVsbG8==="] {
+            let result = await Base64FileWorkflow.decodePayload(input)
+            guard case .success(let payload) = result else {
+                Issue.record("应按宽容填充语义解码: \(input)")
+                return
+            }
+            #expect(payload.data == Data("hello".utf8))
+        }
+
+        // data URL 边界：空 payload 用 URL 元数据产出类型；缺 mime 按 RFC
+        // 兜底 text/plain;charset=us-ascii。
+        let emptyPNG = await Base64FileWorkflow.decodePayload("data:image/png;base64,")
+        guard case .success(let pngPayload) = emptyPNG else {
+            Issue.record("空 payload 的 data URL 应成功解码")
+            return
+        }
+        #expect(pngPayload.data.isEmpty)
+        #expect(pngPayload.mimeType == "image/png")
+        #expect(pngPayload.fileExtension == "png")
+
+        let noMime = await Base64FileWorkflow.decodePayload("data:;base64,aGVsbG8=")
+        guard case .success(let plainPayload) = noMime else {
+            Issue.record("缺 mime 的 data URL 应成功解码")
+            return
+        }
+        #expect(plainPayload.data == Data("hello".utf8))
+        #expect(plainPayload.mimeType == "text/plain;charset=us-ascii")
+        #expect(plainPayload.fileExtension == "txt")
     }
 
     @Test func decodePayloadEnforcesSizeLimitsStrictly() async {

@@ -742,7 +742,7 @@ struct CommandPaletteView: View {
             // the selection highlight for one frame mid-fade — the selected
             // row then shows the bare near-white panel, a row-shaped bright
             // step (the residual ⌘K white flash; captured by the 60fps
-            // autopilot ~70ms after esc, see CommandPaletteAutopilot).
+            // capture ~70ms after esc).
             // During close the highlight rides the shared fade unchanged.
             if presentation.shows {
                 rowAnchors = [:]
