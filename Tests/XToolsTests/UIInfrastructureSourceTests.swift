@@ -631,7 +631,7 @@ struct UIInfrastructureSourceTests {
     @Test func sharedNumberInputFiltersAndClampsEditingText() throws {
         let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
 
-        contains(controls, "var minimumDigits = 1", "Shared number input must support fixed-width date/time fields without changing existing call sites")
+        doesNotContain(controls, "minimumDigits", "The retired fixed-digit formatting path must not return; number display is always plain")
         contains(controls, "selectAllOnFocus: true", "Shared number input must select the whole number on focus so replacements do not require cursor surgery")
         contains(controls, ".onChange(of: text) { _ in\n            sanitizeEditingText()", "Shared number input must validate editing text while the field is focused")
         contains(controls, "let digitsOnly = text.filter(\\.isNumber)", "Shared number input must reject non-numeric typed characters")

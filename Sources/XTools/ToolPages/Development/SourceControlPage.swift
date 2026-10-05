@@ -1095,9 +1095,11 @@ private struct SourceControlWorkspaceContent: View {
         Task { @MainActor in
             do {
                 let request = FileInputPanelRequest(title: "选择工作区目录", canChooseDirectories: true, canChooseFiles: false)
-                if let url = try await fileInputPanelClient.selectFile(request) { workspace.setPath(url.path) }
+                if let url = try await fileInputPanelClient.selectFile(request), url.path != workspace.path {
+                    workspace.setPath(url.path)
+                }
             } catch {
-                workspace.setPath(workspace.path)
+                // 面板取消/失败保持现状：不得清空已扫描结果。
             }
         }
     }

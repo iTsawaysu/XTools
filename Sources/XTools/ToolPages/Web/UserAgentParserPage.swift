@@ -120,11 +120,11 @@ private struct IndexUserAgentWorkspaceContent: View {
                             updateID: resultPresenceUpdateID
                         ) { result in
                             VStack(alignment: .leading, spacing: 16) {
-                                IndexKVRow(key: "浏览器", value: result.browser, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "浏览器版本", value: result.browserVersion, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "操作系统", value: result.os, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "系统版本", value: result.osVersion, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "设备类型", value: result.device, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
+                                IndexKVRow(key: "浏览器", value: result.browser, copyable: true, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
+                                IndexKVRow(key: "浏览器版本", value: result.browserVersion, copyable: true, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
+                                IndexKVRow(key: "操作系统", value: result.os, copyable: true, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
+                                IndexKVRow(key: "系统版本", value: result.osVersion, copyable: true, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
+                                IndexKVRow(key: "设备类型", value: result.device, copyable: true, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
                             }
                             .padding(ToolMetrics.Spacing.sm)
                         } empty: {

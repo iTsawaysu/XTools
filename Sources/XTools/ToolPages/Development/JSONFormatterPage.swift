@@ -42,6 +42,7 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
         didSet {
             guard sortKeys != oldValue else { return }
             execution.sourceDidChange()
+            preferences.set(sortKeys, for: TextDevelopmentToolPreferenceKeys.jsonSortKeys)
         }
     }
 
@@ -58,6 +59,7 @@ final class JSONFormatterToolWorkspaceModel: ObservableObject {
         formatMode = FormatMode(rawValue: saved) ?? .four
         unescape = preferences.value(for: TextDevelopmentToolPreferenceKeys.jsonUnescape)
         escape = preferences.value(for: TextDevelopmentToolPreferenceKeys.jsonEscape)
+        sortKeys = preferences.value(for: TextDevelopmentToolPreferenceKeys.jsonSortKeys)
     }
 
     func clear() {

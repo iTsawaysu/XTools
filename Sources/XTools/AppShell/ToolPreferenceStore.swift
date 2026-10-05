@@ -473,6 +473,10 @@ enum TextDevelopmentToolPreferenceKeys {
         "tools.jsonFormatter.escape.v1",
         default: false
     )
+    static let jsonSortKeys = ToolPreferenceKey<Bool>.bool(
+        "tools.jsonFormatter.sortKeys.v1",
+        default: false
+    )
     static let htmlMarkdownRenderedPreview = ToolPreferenceKey<Bool>.bool(
         "tools.htmlToMarkdown.renderedPreview.v1",
         default: true

@@ -87,6 +87,10 @@ private struct IndexImageConverterWorkspaceContent: View {
     @State private var qualityDebouncer = IndexDebouncer()
     private static let singleQualityDebounceDelay: Duration = .milliseconds(90)
     private static let batchQualityDebounceDelay: Duration = .milliseconds(250)
+    /// 自定义填充色是逐字符键入的连续变更：每键全量重转在批量模式下代价过高，
+    /// 复用同一防抖配方（ADR-0018）。
+    @State private var fillHexDebouncer = IndexDebouncer()
+    private static let fillHexDebounceDelay: Duration = .milliseconds(250)
 
     /// 目标格式候选 = 所有已导入图片源格式可用转换目标的交集；
     /// 交集为空（含任一源格式无目标）时提示"无可转换目标"。
@@ -199,7 +203,11 @@ private struct IndexImageConverterWorkspaceContent: View {
                             .frame(width: 118)
                             .accessibilityLabel("自定义透明区域填充颜色")
                             .accessibilityValue(customTransparencyFillAccessibilityValue)
-                            .onChange(of: customTransparencyFillHex) { _ in convert() }
+                            .onChange(of: customTransparencyFillHex) { _ in
+                                fillHexDebouncer.schedule(Self.fillHexDebounceDelay) {
+                                    convert()
+                                }
+                            }
                         }
                     }
                     .accessibilityElement(children: .contain)

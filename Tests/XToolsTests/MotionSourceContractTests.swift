@@ -327,7 +327,7 @@ struct MotionSourceContractTests {
         )
         doesNotContain(regexSummary, ".toolMotionTextSwap", "Regex statistics must not crossfade on every input update")
         doesNotContain(regexSummary, ".toolAnimation", "Regex statistics must not animate on every input update")
-        contains(color, "valueMotion: .immediate", "Color values must not animate while sliders move")
+        doesNotContain(color, "valueMotion", "Color result rows must render unconditionally while sliders move")
         contains(textStats, "valueMotion: .immediate", "Text statistics must not animate on every edit")
         contains(keycode, "valueMotion: .immediate", "Keycode rows must not animate on every keyDown")
         occurrenceCount(userAgent, "valueMotion: .immediate", 5, "User-Agent result rows must not animate on every edit")
@@ -361,7 +361,7 @@ struct MotionSourceContractTests {
         let userAgent = try readSource("Sources/XTools/ToolPages/Web/UserAgentParserPage.swift")
 
         contains(userAgent, "IndexResultPresence(\n                            value: resultProjection,\n                            updateID: resultPresenceUpdateID", "UserAgent optional results must retain a presentation snapshot")
-        contains(userAgent, "IndexKVRow(key: \"浏览器\", value: result.browser, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)", "UserAgent live valid updates must stay immediate inside presence")
+        contains(userAgent, "IndexKVRow(key: \"浏览器\", value: result.browser, copyable: true, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)", "UserAgent live valid updates must stay immediate inside presence")
     }
 
     @Test func basicAuthUsesSensitiveSharedResultPresence() throws {
