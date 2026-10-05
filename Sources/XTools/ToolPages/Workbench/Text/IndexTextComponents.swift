@@ -19,6 +19,12 @@ private func clampedSelectedRange(for textView: NSTextView) -> NSRange {
 /// Shared 2pt caret widening for native text surfaces: the hairline 1pt
 /// insertion point is nearly invisible, so every custom text view widens
 /// both the caret draw rect and its invalidation rect by the same amount.
+///
+/// Also hosts the shared drag-and-drop / IME skeleton for editable text
+/// surfaces: subclasses keep their own differences (hover highlight, drop
+/// diagnostics, shared drop gates) through the three small hooks, while the
+/// drag session overrides, composition callbacks, and pasteboard helpers
+/// stay in one place.
 class IndexCaretWideningTextView: NSTextView {
     let caretWidth: CGFloat = 2
 
@@ -32,6 +38,99 @@ class IndexCaretWideningTextView: NSTextView {
         var widened = invalidRect
         widened.size.width += caretWidth
         super.setNeedsDisplay(widened, avoidAdditionalLayout: flag)
+    }
+
+    // MARK: IME composition feedback
+
+    /// Fired whenever IME composition (marked text) starts or ends. Lets a
+    /// host keep workspace state (e.g. undo baselines) aligned with composition.
+    var onCompositionChange: ((Bool) -> Void)?
+
+    override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
+        onCompositionChange?(hasMarkedText())
+    }
+
+    override func unmarkText() {
+        super.unmarkText()
+        onCompositionChange?(false)
+    }
+
+    // MARK: Text file drop skeleton
+
+    var onFileDrop: ((String) -> Void)?
+
+    /// A drop session was accepted (entered/updated over droppable content).
+    /// Subclasses add their own feedback here; the base keeps none.
+    func acceptDropSession() {}
+
+    /// A drop session ended or the pending file finished loading. Subclasses
+    /// clear their own feedback here.
+    func endDropSession() {}
+
+    /// A local text change happened: subclasses invalidate their pending drop
+    /// gate and any transient diagnostics tied to it.
+    func invalidateDropState() {}
+
+    /// The view detached from its window: pending drop reads become obsolete,
+    /// but surfaces without drop diagnostics only invalidate the gate.
+    func invalidatePendingDropRead() {}
+
+    /// Load the accepted drop URL; subclasses own their gate and diagnostics
+    /// wiring around the shared `IndexDroppedTextFile` reader.
+    func loadDroppedFile(from url: URL) {}
+
+    override func didChangeText() {
+        invalidateDropState()
+        super.didChangeText()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window == nil { invalidatePendingDropRead() }
+    }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        if onFileDrop != nil && Self.hasDroppableFile(sender) {
+            acceptDropSession()
+            return .copy
+        }
+        return super.draggingEntered(sender)
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        if onFileDrop != nil && Self.hasDroppableFile(sender) {
+            acceptDropSession()
+            return .copy
+        }
+        return super.draggingUpdated(sender)
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        guard onFileDrop != nil, let url = Self.droppedFileURL(sender) else {
+            return super.performDragOperation(sender)
+        }
+        endDropSession()
+        loadDroppedFile(from: url)
+        return true
+    }
+
+    static func hasDroppableFile(_ sender: any NSDraggingInfo) -> Bool {
+        guard let types = sender.draggingPasteboard.types else { return false }
+        return types.contains(.fileURL)
+            || types.contains(NSPasteboard.PasteboardType("public.file-url"))
+            || types.contains(NSPasteboard.PasteboardType("NSFilenamesPboardType"))
+    }
+
+    static func droppedFileURL(_ sender: any NSDraggingInfo) -> URL? {
+        if let fileURLs = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
+           let first = fileURLs.first {
+            return first
+        } else if let filenames = sender.draggingPasteboard.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String],
+                  let first = filenames.first {
+            return URL(fileURLWithPath: first)
+        }
+        return nil
     }
 }
 
@@ -56,45 +155,23 @@ final class IndexCaretTextView: IndexCaretWideningTextView, IndexAsymmetricTextC
         isFieldEditor ? fieldEditorUndo.manager : super.undoManager
     }
 
-    /// Fired whenever IME composition (marked text) starts or ends. Lets a host
-    var onCompositionChange: ((Bool) -> Void)?
+    // Drop-session feedback: this surface paints a targeted highlight while a
+    // droppable session hovers, and invalidates through the shared/own gate.
 
-    override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
-        super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
-        onCompositionChange?(hasMarkedText())
+    override func acceptDropSession() {
+        activeDroppedFile?.setDropTargeted(true)
     }
 
-    override func unmarkText() {
-        super.unmarkText()
-        onCompositionChange?(false)
+    override func endDropSession() {
+        activeDroppedFile?.setDropTargeted(false)
     }
 
-    var onFileDrop: ((String) -> Void)?
-
-    override func didChangeText() {
+    override func invalidateDropState() {
         activeDroppedFile?.invalidate(ownedBy: self)
-        super.didChangeText()
     }
 
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        if window == nil { activeDroppedFile?.invalidate(ownedBy: self) }
-    }
-
-    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        if onFileDrop != nil && Self.hasDroppableFile(sender) {
-            activeDroppedFile?.setDropTargeted(true)
-            return .copy
-        }
-        return super.draggingEntered(sender)
-    }
-
-    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        if onFileDrop != nil && Self.hasDroppableFile(sender) {
-            activeDroppedFile?.setDropTargeted(true)
-            return .copy
-        }
-        return super.draggingUpdated(sender)
+    override func invalidatePendingDropRead() {
+        activeDroppedFile?.invalidate(ownedBy: self)
     }
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
@@ -107,16 +184,7 @@ final class IndexCaretTextView: IndexCaretWideningTextView, IndexAsymmetricTextC
         super.draggingEnded(sender)
     }
 
-    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        guard onFileDrop != nil, let url = Self.droppedFileURL(sender) else {
-            return super.performDragOperation(sender)
-        }
-        activeDroppedFile?.setDropTargeted(false)
-        loadDroppedFile(from: url)
-        return true
-    }
-
-    func loadDroppedFile(from url: URL) {
+    override func loadDroppedFile(from url: URL) {
         if activeDroppedFile == nil { droppedFile = IndexDroppedTextFile(view: self) }
         activeDroppedFile?.start(url: url) { [weak self] content in
             self?.onFileDrop?(content)
@@ -125,24 +193,6 @@ final class IndexCaretTextView: IndexCaretWideningTextView, IndexAsymmetricTextC
 
     func invalidateDroppedFile() {
         activeDroppedFile?.invalidate(ownedBy: self)
-    }
-
-    static func hasDroppableFile(_ sender: any NSDraggingInfo) -> Bool {
-        guard let types = sender.draggingPasteboard.types else { return false }
-        return types.contains(.fileURL)
-            || types.contains(NSPasteboard.PasteboardType("public.file-url"))
-            || types.contains(NSPasteboard.PasteboardType("NSFilenamesPboardType"))
-    }
-
-    static func droppedFileURL(_ sender: any NSDraggingInfo) -> URL? {
-        if let fileURLs = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
-           let first = fileURLs.first {
-            return first
-        } else if let filenames = sender.draggingPasteboard.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String],
-                  let first = filenames.first {
-            return URL(fileURLWithPath: first)
-        }
-        return nil
     }
 
     nonisolated static func readDroppedContent(from url: URL) -> String? {

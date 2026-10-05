@@ -1948,22 +1948,21 @@ final class IndexDiffTextView: IndexCaretWideningTextView, IndexAsymmetricTextCo
         }
     }
 
-    var onCompositionChange: ((Bool) -> Void)?
-    var onFileDrop: ((String) -> Void)?
     var onFileDropDiagnostic: ((String?) -> Void)?
 
-    override func didChangeText() {
+    // Drop-state hooks: the shared base drives the drag session; this surface
+    // additionally reports drop rejections through the workspace diagnostic.
+
+    override func invalidateDropState() {
         droppedFile?.invalidate()
         onFileDropDiagnostic?(nil)
-        super.didChangeText()
     }
 
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        if window == nil { droppedFile?.invalidate() }
+    override func invalidatePendingDropRead() {
+        droppedFile?.invalidate()
     }
 
-    func loadDroppedFile(from url: URL) {
+    override func loadDroppedFile(from url: URL) {
         if droppedFile == nil { droppedFile = IndexDroppedTextFile(view: self) }
         onFileDropDiagnostic?(nil)
         droppedFile?.start(url: url, onRejected: { [weak self] rejection in
@@ -1976,38 +1975,6 @@ final class IndexDiffTextView: IndexCaretWideningTextView, IndexAsymmetricTextCo
 
     func invalidateDroppedFile() {
         droppedFile?.invalidate()
-    }
-
-    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        if onFileDrop != nil && IndexCaretTextView.hasDroppableFile(sender) {
-            return .copy
-        }
-        return super.draggingEntered(sender)
-    }
-
-    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        if onFileDrop != nil && IndexCaretTextView.hasDroppableFile(sender) {
-            return .copy
-        }
-        return super.draggingUpdated(sender)
-    }
-
-    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        if onFileDrop != nil, let url = IndexCaretTextView.droppedFileURL(sender) {
-            loadDroppedFile(from: url)
-            return true
-        }
-        return super.performDragOperation(sender)
-    }
-
-    override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
-        super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
-        onCompositionChange?(hasMarkedText())
-    }
-
-    override func unmarkText() {
-        super.unmarkText()
-        onCompositionChange?(false)
     }
 }
 
