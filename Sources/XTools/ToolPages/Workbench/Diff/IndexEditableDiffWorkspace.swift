@@ -1684,52 +1684,28 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
 
         private func applyJSONSyntax(_ line: String, lineRange: NSRange, layoutManager: NSLayoutManager) {
             guard line.utf16.count <= 10_000 else { return }
-            let tokens = JSONHighlighting.tokens(in: line)
+            let tokens = JSONSyntaxHighlighter.tokens(line: line)
             guard !tokens.isEmpty else { return }
 
-            // tokens 按扫描顺序 start 单调递增：单次游标同时累积字符偏移与
-            // UTF-16 偏移，避免每个 token 重复 O(start) 的前缀换算（长单行
-            // JSON 高亮原为 O(n²)）。
-            var characterCursor = line.startIndex
-            var characterOffset = 0
-            var utf16Prefix = 0
-
-            func advance(to target: Int) -> Bool {
-                while characterOffset < target {
-                    guard characterCursor < line.endIndex else { return false }
-                    utf16Prefix += line[characterCursor].utf16.count
-                    characterCursor = line.index(after: characterCursor)
-                    characterOffset += 1
-                }
-                return characterOffset == target
-            }
+            // tokens 按扫描顺序 start 单调递增：共享映射单次游标构建字符
+            // 偏移 → UTF-16 的换算表，逐 token 查表，避免每个 token 重复
+            // O(start) 的前缀换算（长单行 JSON 高亮原为 O(n²)）。
+            let utf16Ranges = IndexSyntaxUTF16RangeMap(line: line)
 
             for token in tokens {
-                guard token.length > 0, advance(to: token.start) else {
-                    continue
-                }
-
-                var tokenUTF16Length = 0
-                var endCursor = characterCursor
-                var consumed = 0
-                while consumed < token.length, endCursor < line.endIndex {
-                    tokenUTF16Length += line[endCursor].utf16.count
-                    endCursor = line.index(after: endCursor)
-                    consumed += 1
-                }
-                guard consumed == token.length, tokenUTF16Length > 0 else {
+                guard let range = utf16Ranges.range(for: token, in: lineRange) else {
                     continue
                 }
 
                 layoutManager.addTemporaryAttribute(
                     .foregroundColor,
                     value: nsColor(for: token.kind),
-                    forCharacterRange: NSRange(location: lineRange.location + utf16Prefix, length: tokenUTF16Length)
+                    forCharacterRange: range
                 )
             }
         }
 
-        private func nsColor(for kind: JSONHighlightToken.Kind) -> NSColor {
+        private func nsColor(for kind: IndexSyntaxToken.Kind) -> NSColor {
             switch kind {
             case .key:
                 return IndexDiffNSPalette.syntaxKey
@@ -1740,6 +1716,9 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             case .literal:
                 return IndexDiffNSPalette.syntaxBool
             case .punctuation:
+                return IndexDiffNSPalette.syntaxPunctuation
+            // JSON 扫描只产出上面五种 token；attribute/comment 仅为穷尽共享 Kind。
+            case .attribute, .comment:
                 return IndexDiffNSPalette.syntaxPunctuation
             }
         }

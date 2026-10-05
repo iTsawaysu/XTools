@@ -395,7 +395,7 @@ struct EditableDiffSourceContractTests {
         let appKitAdapter = try readSource("Sources/XTools/ToolPages/Workbench/Diff/IndexEditableDiffWorkspace.swift")
 
         contains(swiftUIAdapter, "JSONHighlighting.tokens(in: line)", "SwiftUI JSON highlighting must use the shared Core JSON 着色标记 scanner")
-        contains(appKitAdapter, "JSONHighlighting.tokens(in: line)", "Editable diff JSON highlighting must use the shared Core JSON 着色标记 scanner")
-        contains(appKitAdapter, "utf16Prefix += line[characterCursor].utf16.count", "Editable diff JSON highlighting must convert character offsets into UTF-16 NSRange lengths")
+        contains(appKitAdapter, "JSONSyntaxHighlighter.tokens(line: line)", "Editable diff JSON highlighting must reuse the shared Core JSON 着色标记 scanner adapter")
+        contains(appKitAdapter, "IndexSyntaxUTF16RangeMap(line: line)", "Editable diff JSON highlighting must convert character offsets into UTF-16 NSRange lengths via the shared map")
     }
 }
