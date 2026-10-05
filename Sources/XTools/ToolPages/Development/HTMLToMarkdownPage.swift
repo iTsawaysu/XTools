@@ -79,6 +79,17 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                         urlInput
                         fetchButton
                             .fixedSize(horizontal: true, vertical: false)
+                        if session.isURLProcessing {
+                            Button {
+                                session.cancelURLFetch()
+                            } label: {
+                                Label("停止", systemImage: IndexActionSymbol.stop)
+                            }
+                            .buttonStyle(IndexSmallButtonStyle(done: false, framed: true))
+                            .fixedSize(horizontal: true, vertical: false)
+                            .accessibilityLabel("停止解析网页")
+                            .help("停止解析网页")
+                        }
                     }
                 },
                 outputControl: {

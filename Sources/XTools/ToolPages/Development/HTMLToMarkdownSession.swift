@@ -248,6 +248,14 @@ final class HTMLToMarkdownSession: ObservableObject {
         phase = .idle
     }
 
+    /// 停止进行中的 URL 抓取：失效当前世代让在途任务按 CancellationError
+    /// 静默结束（不落错误诊断），页面状态立即回到抓取前的就绪态。
+    func cancelURLFetch() {
+        guard isURLProcessing else { return }
+        _ = workGate.invalidate()
+        phase = markdown.isEmpty && inputHTML.isEmpty ? .idle : .ready
+    }
+
     private func receive(
         _ stage: HTMLToMarkdownURLPipelineStage,
         generation currentGeneration: Int

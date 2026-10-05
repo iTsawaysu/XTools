@@ -112,6 +112,13 @@ private struct IndexCaseConverterWorkspaceContent: View {
         workspace.styles.map { ($0.label, $0.value, nil) }
     }
 
+    /// 全部复制只带结果值（标签是字段名，不进剪贴板），与 Hash 页的
+    /// 「全部复制」按行拼接语义一致；输入为空时按钮经 IndexCopyButton
+    /// 自身的空文本禁用语义自动置灰。
+    private var allResultsText: String {
+        workspace.styles.map(\.value).joined(separator: "\n")
+    }
+
     var body: some View {
         // 输入即时反应：派生结果由 workspace 持有，输入变化时重算（大输入
         // 后台 + 防抖），不再随每帧 body 重算。
@@ -133,6 +140,8 @@ private struct IndexCaseConverterWorkspaceContent: View {
             // 短派生结果自然展开，由页面外层滚动承载长值换行后的高度。
             IndexPanel("转换结果") {
                 IndexShortResultKV(rows: rows, emptyText: IndexEmptyStateCopy.autoShow("文本"), valueMotion: .immediate)
+            } accessory: {
+                IndexCopyButton(text: allResultsText, title: "全部复制")
             }
         }
     }

@@ -4,6 +4,7 @@ import SwiftUI
 enum IndexActionSymbol {
     static let clear = "xmark.circle"
     static let searchClear = "xmark.circle.fill"
+    static let stop = "stop.fill"
     static let removeResource = "trash"
     static let reset = "arrow.counterclockwise"
     static let refresh = "arrow.clockwise"

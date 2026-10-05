@@ -2431,6 +2431,12 @@
     "结果基于上次有效颜色，当前输入仍未完成或无效。" : {
       "extractionState" : "manual"
     },
+    "停止" : {
+      "extractionState" : "manual"
+    },
+    "停止解析网页" : {
+      "extractionState" : "manual"
+    },
     "统计" : {
       "extractionState" : "manual"
     },
