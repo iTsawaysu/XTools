@@ -461,6 +461,76 @@ private enum IndexDiffEditorMetrics {
 }
 
 struct IndexEditableDiffMergeView: NSViewRepresentable {
+    /// 左右编辑器的角色标识，供 `DifferenceHunk` 的侧别查询与协调器的
+    /// UI 标签共用。
+    enum Side {
+        case left
+        case right
+
+        var defaultAccessibilityLabel: String {
+            switch self {
+            case .left:
+                return "原始文本"
+            case .right:
+                return "对比文本"
+            }
+        }
+    }
+
+    /// Consecutive changed rows form one navigation unit. Keeping every
+    /// visual line for each side lets a deletion move to the side that
+    /// actually has source text instead of selecting an unrelated line
+    /// with the same display number in the other editor.
+    struct DifferenceHunk: Equatable {
+        var leftLines: [Int] = []
+        var rightLines: [Int] = []
+
+        func firstLine(for side: Side) -> Int? {
+            switch side {
+            case .left: return leftLines.first
+            case .right: return rightLines.first
+            }
+        }
+
+        func contains(_ line: Int, on side: Side) -> Bool {
+            switch side {
+            case .left: return leftLines.contains(line)
+            case .right: return rightLines.contains(line)
+            }
+        }
+    }
+
+    /// 对齐行 → 连续差异块的纯规划：不读编辑器状态，可直接行为测试，
+    /// 与 `IndexEditableDiffWorkspace.differenceBlockCount` 语义同源。
+    static func planDifferenceHunks(in rows: [DiffAlignedRow]) -> [DifferenceHunk] {
+        var planned: [DifferenceHunk] = []
+        var active: DifferenceHunk?
+
+        func flushActive() {
+            guard let current = active else { return }
+            planned.append(current)
+            active = nil
+        }
+
+        for row in rows {
+            guard row.kind.isDifference else {
+                flushActive()
+                continue
+            }
+            if active == nil {
+                active = DifferenceHunk()
+            }
+            if let line = row.left?.lineNumber {
+                active?.leftLines.append(line)
+            }
+            if let line = row.right?.lineNumber {
+                active?.rightLines.append(line)
+            }
+        }
+        flushActive()
+        return planned
+    }
+
     @Binding var left: String
     @Binding var right: String
     let leftPlaceholder: String
@@ -548,20 +618,6 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject, NSTextViewDelegate {
-        enum Side {
-            case left
-            case right
-
-            var defaultAccessibilityLabel: String {
-                switch self {
-                case .left:
-                    return "原始文本"
-                case .right:
-                    return "对比文本"
-                }
-            }
-        }
-
         var left: Binding<String>
         var right: Binding<String>
         var onFileDropDiagnostic: ((String?) -> Void)?
@@ -620,29 +676,6 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         // still scrolls and selects).
         private var blockWashes: [Side: ToolLocatingWashView] = [:]
         private var locatingWashGeneration = 0
-
-        /// Consecutive changed rows form one navigation unit. Keeping every
-        /// visual line for each side lets a deletion move to the side that
-        /// actually has source text instead of selecting an unrelated line
-        /// with the same display number in the other editor.
-        private struct DifferenceHunk: Equatable {
-            var leftLines: [Int] = []
-            var rightLines: [Int] = []
-
-            func firstLine(for side: Side) -> Int? {
-                switch side {
-                case .left: return leftLines.first
-                case .right: return rightLines.first
-                }
-            }
-
-            func contains(_ line: Int, on side: Side) -> Bool {
-                switch side {
-                case .left: return leftLines.contains(line)
-                case .right: return rightLines.contains(line)
-                }
-            }
-        }
 
         private struct NavigationSelection {
             let hunkIndex: Int
@@ -1002,31 +1035,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         }
 
         private func updateDifferenceHunks(resetNavigation: Bool) {
-            var planned: [DifferenceHunk] = []
-            var active: DifferenceHunk?
-
-            func flushActive() {
-                guard let current = active else { return }
-                planned.append(current)
-                active = nil
-            }
-
-            for row in currentRows {
-                guard row.kind.isDifference else {
-                    flushActive()
-                    continue
-                }
-                if active == nil {
-                    active = DifferenceHunk()
-                }
-                if let line = row.left?.lineNumber {
-                    active?.leftLines.append(line)
-                }
-                if let line = row.right?.lineNumber {
-                    active?.rightLines.append(line)
-                }
-            }
-            flushActive()
+            let planned = planDifferenceHunks(in: currentRows)
 
             let hunksChanged = resetNavigation || planned != differenceHunks
             let hadNavigationSelection = navigationSelection != nil

@@ -148,6 +148,74 @@ struct EditableDiffInteractionTests {
         #expect(Workspace.differenceBlockCount(in: rows) == 2)
     }
 
+    @Test func planDifferenceHunksMergesConsecutiveDifferenceRowsPerSideLineNumbers() {
+        typealias MergeView = IndexEditableDiffMergeView
+        let rows = [
+            DiffAlignedRow(kind: .removed, left: DiffAlignedCell(lineNumber: 1, text: "old 1", indent: 0), right: nil),
+            DiffAlignedRow(kind: .added, left: nil, right: DiffAlignedCell(lineNumber: 1, text: "new 1", indent: 0)),
+            DiffAlignedRow(kind: .changed, left: DiffAlignedCell(lineNumber: 2, text: "old 2", indent: 0), right: DiffAlignedCell(lineNumber: 2, text: "new 2", indent: 0)),
+            DiffAlignedRow(kind: .unchanged, left: DiffAlignedCell(lineNumber: 3, text: "same", indent: 0), right: DiffAlignedCell(lineNumber: 3, text: "same", indent: 0)),
+            DiffAlignedRow(kind: .changed, left: DiffAlignedCell(lineNumber: 4, text: "old 3", indent: 0), right: DiffAlignedCell(lineNumber: 4, text: "new 3", indent: 0))
+        ]
+
+        let hunks = MergeView.planDifferenceHunks(in: rows)
+
+        #expect(hunks.count == 2)
+        #expect(hunks[0].leftLines == [1, 2])
+        #expect(hunks[0].rightLines == [1, 2])
+        #expect(hunks[1].leftLines == [4])
+        #expect(hunks[1].rightLines == [4])
+        #expect(hunks[0].contains(2, on: .left))
+        #expect(!hunks[0].contains(3, on: .left))
+        #expect(hunks[0].firstLine(for: .right) == 1)
+        #expect(hunks[1].firstLine(for: .left) == 4)
+    }
+
+    @Test func planDifferenceHunksReturnsEmptyForUnchangedOrMissingInput() {
+        typealias MergeView = IndexEditableDiffMergeView
+
+        #expect(MergeView.planDifferenceHunks(in: []).isEmpty)
+
+        let unchanged = [
+            DiffAlignedRow(kind: .unchanged, left: DiffAlignedCell(lineNumber: 1, text: "same", indent: 0), right: DiffAlignedCell(lineNumber: 1, text: "same", indent: 0))
+        ]
+        #expect(MergeView.planDifferenceHunks(in: unchanged).isEmpty)
+    }
+
+    @Test func computeDiffSummaryFollowsStateErrorAndSyntaxMatrix() {
+        typealias Workspace = IndexEditableDiffWorkspace<EmptyView>
+        let unchangedRows = [
+            DiffAlignedRow(kind: .unchanged, left: DiffAlignedCell(lineNumber: 1, text: "same", indent: 0), right: DiffAlignedCell(lineNumber: 1, text: "same", indent: 0))
+        ]
+        let differingRows = [
+            DiffAlignedRow(kind: .removed, left: DiffAlignedCell(lineNumber: 1, text: "old", indent: 0), right: nil),
+            DiffAlignedRow(kind: .added, left: nil, right: DiffAlignedCell(lineNumber: 1, text: "new", indent: 0))
+        ]
+
+        let empty = Workspace.computeDiffSummary(left: "", right: "", rows: [], resultState: .current, syntax: .plain, error: nil)
+        #expect(!empty.leftNonEmpty && !empty.rightNonEmpty)
+        #expect(!empty.isIdentical && empty.differenceBlockCount == 0)
+
+        let identical = Workspace.computeDiffSummary(left: "a", right: "a", rows: unchangedRows, resultState: .current, syntax: .plain, error: nil)
+        #expect(identical.leftNonEmpty && identical.rightNonEmpty)
+        #expect(identical.isIdentical && identical.differenceBlockCount == 0)
+
+        let differing = Workspace.computeDiffSummary(left: "a", right: "b", rows: differingRows, resultState: .current, syntax: .plain, error: nil)
+        #expect(!differing.isIdentical && differing.differenceBlockCount == 1)
+
+        let stale = Workspace.computeDiffSummary(left: "a", right: "b", rows: differingRows, resultState: .stale, syntax: .plain, error: nil)
+        #expect(!stale.isIdentical && stale.differenceBlockCount == 0)
+
+        let errored = Workspace.computeDiffSummary(left: "a", right: "b", rows: differingRows, resultState: .current, syntax: .plain, error: "对比输入有误")
+        #expect(!errored.isIdentical && errored.differenceBlockCount == 0)
+
+        let jsonIdentical = Workspace.computeDiffSummary(left: "{}", right: "{}", rows: [], resultState: .current, syntax: .json, error: nil)
+        #expect(jsonIdentical.isIdentical)
+
+        let plainWithEmptyRows = Workspace.computeDiffSummary(left: "{}", right: "{}", rows: [], resultState: .current, syntax: .plain, error: nil)
+        #expect(!plainWithEmptyRows.isIdentical)
+    }
+
     @Test func editorAccessibilityUsesPaneTitlesAndDescribesFoldedReadOnlyState() throws {
         let left = (1...10).map { "line \($0)" }.joined(separator: "\n")
         var rightLines = (1...10).map { "line \($0)" }
