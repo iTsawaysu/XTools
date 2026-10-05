@@ -12,7 +12,7 @@ struct Base64SecuritySourceContractTests {
         contains(source, "IndexWorkbenchControlBar", "String obfuscator settings must use the shared workbench control area")
         contains(source, "IndexOptionGroup", "String obfuscator settings must use the shared option group")
         occurrenceCount(source, "IndexOptionGroup", 4, "String obfuscator must keep preserve-spaces and replacement-character controls in separate option groups")
-        contains(source, "IndexSwitch(title: \"保留空格\"", "String obfuscator must keep the app-style preserve-spaces switch")
+        contains(source, "IndexOptionSwitch(title: \"保留空格\", style: .standalone", "String obfuscator must keep the app-style preserve-spaces switch")
         contains(source, "set: { workspace.setReplacementCharacter($0) }", "String masking replacement-character input must normalize typed and pasted text before persistence")
         contains(source, "String(newValue.prefix(1))", "String obfuscator replacement-character input must allow only one character")
         contains(source, "replacementChar.first ?? \"*\"", "String obfuscator must keep first replacement character with star fallback")

@@ -298,7 +298,7 @@ private struct IndexColorWorkspaceContent: View {
             // 在自测量容器里首帧高度失真，展开后要滚动一次才会触发重新布局。
             VStack(spacing: 0) {
                 ForEach(values) { value in
-                    ColorFormatResultRow(value: value, valueMotion: .immediate)
+                    ColorFormatResultRow(value: value)
                     if value.id != values.last?.id {
                         Divider()
                     }
@@ -327,7 +327,6 @@ private struct IndexColorWorkspaceContent: View {
 
 private struct ColorFormatResultRow: View {
     let value: CSSColorFormattedValue
-    let valueMotion: IndexValueMotionPolicy
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -364,7 +363,7 @@ private struct ColorFormatResultRow: View {
 
     @ViewBuilder
     private var valueText: some View {
-        let text = Text(indexWrappingAttributedText(displayText, lineBreakMode: .byCharWrapping))
+        Text(indexWrappingAttributedText(displayText, lineBreakMode: .byCharWrapping))
             .font(ToolTypography.monoLabel)
             .foregroundStyle(ToolTheme.textPrimary)
             .textSelection(.enabled)
@@ -372,11 +371,5 @@ private struct ColorFormatResultRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityLabel("\(value.label) 结果")
             .accessibilityValue(value.text)
-        switch valueMotion {
-        case .immediate:
-            text
-        case .textSwap:
-            text.toolMotionTextSwap(id: value.text)
-        }
     }
 }

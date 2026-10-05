@@ -249,7 +249,7 @@ private struct IndexStringObfuscatorWorkspaceContent: View {
         }
 
         IndexOptionGroup {
-            IndexSwitch(title: "保留空格", isOn: $workspace.keepSpaces)
+            IndexOptionSwitch(title: "保留空格", style: .standalone, isOn: $workspace.keepSpaces)
         }
 
         IndexOptionGroup {

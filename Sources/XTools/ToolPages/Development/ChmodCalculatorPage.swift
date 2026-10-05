@@ -98,13 +98,13 @@ private struct IndexChmodWorkspaceContent: View {
                     Divider().overlay(ToolTheme.border)
 
                     IndexFlowLayout(spacing: 14, lineSpacing: 8) {
-                        IndexSwitch(title: "setuid", isOn: permissionBinding(\ChmodMode.setuid))
+                        IndexOptionSwitch(title: "setuid", style: .standalone, isOn: permissionBinding(\ChmodMode.setuid))
                             .help("显示所有者 s/S")
                             .accessibilityHint("控制 setuid 特殊权限位")
-                        IndexSwitch(title: "setgid", isOn: permissionBinding(\ChmodMode.setgid))
+                        IndexOptionSwitch(title: "setgid", style: .standalone, isOn: permissionBinding(\ChmodMode.setgid))
                             .help("显示所属组 s/S")
                             .accessibilityHint("控制 setgid 特殊权限位")
-                        IndexSwitch(title: "sticky", isOn: permissionBinding(\ChmodMode.sticky))
+                        IndexOptionSwitch(title: "sticky", style: .standalone, isOn: permissionBinding(\ChmodMode.sticky))
                             .help("显示其他用户 t/T")
                             .accessibilityHint("控制 sticky 特殊权限位")
                     }
@@ -145,9 +145,9 @@ private struct IndexChmodWorkspaceContent: View {
                 .font(ToolTypography.bodyPlain)
                 .foregroundStyle(ToolTheme.textSecondary)
                 .frame(width: 70, alignment: .leading)
-            IndexSwitch(title: "读 r", isOn: r)
-            IndexSwitch(title: "写 w", isOn: w)
-            IndexSwitch(title: "执行 x", isOn: x)
+            IndexOptionSwitch(title: "读 r", style: .standalone, isOn: r)
+            IndexOptionSwitch(title: "写 w", style: .standalone, isOn: w)
+            IndexOptionSwitch(title: "执行 x", style: .standalone, isOn: x)
         }
     }
 }

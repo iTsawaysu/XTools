@@ -234,11 +234,6 @@ struct QueryListAndUtilitySourceContractTests {
 
     @Test func sharedSwitchesUseNativeToggleSemantics() throws {
         let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
-        let switchSurface = sourceSlice(
-            controls,
-            from: "struct IndexSwitch: View",
-            to: "private struct IndexSwitchTrack: View"
-        )
         let optionSwitchSurface = sourceSlice(
             controls,
             from: "struct IndexOptionSwitch: View",
@@ -247,9 +242,9 @@ struct QueryListAndUtilitySourceContractTests {
 
         contains(controls, "Toggle(isOn: $isOn) {\n            Text(title)\n        }", "Shared switches must keep native toggle role and state semantics through one surface")
         contains(optionSwitchSurface, "IndexOptionSwitchToggleStyle(style: style)", "IndexOptionSwitch must expose native toggle role and state semantics")
-        contains(controls, "private struct IndexOptionSwitchToggleStyle: ToggleStyle", "Both switch names must share one custom ToggleStyle family")
+        contains(controls, "private struct IndexOptionSwitchToggleStyle: ToggleStyle", "The switch family must share one custom ToggleStyle")
         contains(controls, ".accessibilityValue(isOn ? \"已开启\" : \"已关闭\")", "Shared switches must announce their current state")
-        doesNotContain(switchSurface, "Button { isOn.toggle() }", "IndexSwitch must not impersonate toggle behavior with a plain button")
+        doesNotContain(controls, "struct IndexSwitch: View", "The retired IndexSwitch thin shell must not return; use IndexOptionSwitch(style: .standalone)")
     }
 
     @Test func regexResultWorkspaceExpandsNaturallyWithoutInternalScroll() throws {
@@ -626,9 +621,9 @@ struct QueryListAndUtilitySourceContractTests {
         let source = try readSource("Sources/XTools/ToolPages/Development/ChmodCalculatorPage.swift")
 
         contains(source, "IndexTextInput(placeholder: \"644 或 4755\"", "Chmod page must accept direct octal input")
-        contains(source, "IndexSwitch(title: \"setuid\"", "Chmod page must expose setuid")
-        contains(source, "IndexSwitch(title: \"setgid\"", "Chmod page must expose setgid")
-        contains(source, "IndexSwitch(title: \"sticky\"", "Chmod page must expose sticky")
+        contains(source, "IndexOptionSwitch(title: \"setuid\", style: .standalone", "Chmod page must expose setuid")
+        contains(source, "IndexOptionSwitch(title: \"setgid\", style: .standalone", "Chmod page must expose setgid")
+        contains(source, "IndexOptionSwitch(title: \"sticky\", style: .standalone", "Chmod page must expose sticky")
         contains(source, ".indexWorkspaceDiagnostic(workspace.error)", "Invalid chmod input must use the workspace diagnostic surface")
         doesNotContain(source, "capabilityWarning", "Chmod no longer needs a warning that special bits are unsupported")
     }

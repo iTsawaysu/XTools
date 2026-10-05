@@ -62,7 +62,8 @@ struct ColorPickerUXSourceContractTests {
         doesNotContain(row, "IndexSurfaceRow", "Result rows must not add nested card surfaces inside the result panel")
         contains(row, "HStack(alignment: .center, spacing: 10)", "Every result must use one stable format-value-action row")
         contains(row, "IndexCopyButton(text: value.text, title: \"复制 \\(value.label)\"", "Every compact result row must retain format-specific copy")
-        contains(source, "ColorFormatResultRow(value: value, valueMotion: .immediate)", "Live color values must keep immediate updates while sliders move")
+        contains(source, "ColorFormatResultRow(value: value)", "Live color values must render unconditionally while sliders move")
+        doesNotContain(row, "valueMotion", "Color result rows must not keep the retired per-row motion policy")
         contains(source, "IndexBadge(\"映射到 sRGB\", tone: .warning)", "Mapped legacy formats must remain visibly honest")
     }
 }

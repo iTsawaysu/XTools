@@ -934,17 +934,6 @@ private struct IndexToggleSurface<Style: ToggleStyle>: View {
     }
 }
 
-/// The standalone spine switch: one member of the option-switch family with
-/// the plain button, editor-background track, and secondary label.
-struct IndexSwitch: View {
-    let title: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        IndexToggleSurface(title: title, isOn: $isOn, style: IndexOptionSwitchToggleStyle(style: .standalone))
-    }
-}
-
 private struct IndexSwitchTrack: View {
     let isOn: Bool
     let offBackground: Color
@@ -1477,7 +1466,6 @@ struct IndexNumberInput: View {
     @Binding var value: Int
     let range: ClosedRange<Int>
     var fieldWidth: CGFloat = 54
-    var minimumDigits = 1
     var onCommit: (() -> Void)? = nil
 
     @State private var text = ""
@@ -1513,7 +1501,7 @@ struct IndexNumberInput: View {
                 value = normalized
             }
             if !isFocused {
-                text = displayText(normalized)
+                text = "\(normalized)"
             }
         }
         .fixedSize(horizontal: true, vertical: false)
@@ -1546,15 +1534,10 @@ struct IndexNumberInput: View {
     private func setValue(_ newValue: Int) {
         let normalized = normalizedValue(newValue)
         value = normalized
-        text = displayText(normalized)
+        text = "\(normalized)"
     }
 
     private func normalizedValue(_ newValue: Int) -> Int {
         min(max(newValue, range.lowerBound), range.upperBound)
-    }
-
-    private func displayText(_ value: Int) -> String {
-        guard minimumDigits > 1 else { return "\(value)" }
-        return String(format: "%0*d", minimumDigits, value)
     }
 }

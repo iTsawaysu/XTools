@@ -177,13 +177,12 @@ private struct IndexDateCalcWorkspaceContent: View {
     // MARK: - Date fields
 
     @ViewBuilder
-    private func startField(autoFocus: Bool = false) -> some View {
+    private func startField() -> some View {
         DateCalculatorDateField(
             title: "开始日期",
             input: $session.startInput,
             date: session.start,
             weekdayText: session.startWeekdayText,
-            autoFocus: autoFocus,
             onCommit: { session.commitStartInputDate($0) },
             onInvalidPaste: { session.markStartInvalidPaste() },
             onSelectDate: { session.applyStartDate($0) },
