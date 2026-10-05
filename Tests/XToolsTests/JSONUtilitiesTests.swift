@@ -354,7 +354,7 @@ struct JSONFormattingTests {
     }
 
     @Test func formatEscapesLowControlCharactersAsUnicode() throws {
-        // U+0001 has no short escape, so escapeString emits it as \u%04X (uppercase hex).
+        // U+0001 has no short escape, so the shared scalar escaper emits it as \u%04X (uppercase hex).
         let output = try JSONFormatting.format("{\"s\":\"\\u0001\"}", sortKeys: false, indentWidth: 2)
 
         #expect(output.contains(#"\u0001"#))

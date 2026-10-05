@@ -268,8 +268,8 @@ public enum JSONFormatting {
         try output.append("\"")
     }
 
-    /// JSON 字符串转义的逐标量 switch,由可取消的 `appendEscaped(_:to:)` 与
-    /// 非抛出的 `escapeString(_:)` 共用,保证两条路径逐 case 一致。
+    /// JSON 字符串转义的逐标量 switch,可取消的 `appendEscaped(_:to:)` 与
+    /// 各调用方共用,保证所有路径逐 case 一致。
     private static func appendEscapedScalar(_ scalar: Unicode.Scalar, to string: inout String) {
         switch scalar {
         case "\"": string += "\\\""
@@ -343,17 +343,6 @@ public enum JSONFormatting {
                 return left.identity < right.identity
             }
             .map { (value: $0.value, compactText: $0.compactText) }
-    }
-
-    private static func escapeString(_ value: String) -> String {
-        var result = ""
-        result.reserveCapacity(value.utf8.count)
-
-        for scalar in value.unicodeScalars {
-            appendEscapedScalar(scalar, to: &result)
-        }
-
-        return result
     }
 }
 
