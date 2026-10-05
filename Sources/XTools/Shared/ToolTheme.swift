@@ -10,7 +10,7 @@ import SwiftUI
 /// derived by intent into a matching warm-neutral set, not a naive invert, and
 /// is verified in-app.
 ///
-/// Existing semantic token *names* are kept so all 36 tools restyle by value;
+/// Existing semantic token *names* are kept so all 34 tools restyle by value;
 /// SPEC §7.1's suggested names are noted in comments for cross-reference.
 enum ToolTheme {
     /// V3 workbench aliases. The home layout has its own geometry, while its
@@ -26,16 +26,12 @@ enum ToolTheme {
 
         static let border = ToolTheme.border
         static let action = ToolTheme.accent
-        static let onAction = ToolTheme.onAccent
-        static let danger = ToolTheme.error
-        static let dangerBackground = ToolTheme.errorSoft
     }
 
     // MARK: - Accent (Claude 黏土橙)
 
     static let accent = dynamicColor(light: 0xC15F3C, dark: 0xD97757)          // §7.1 accent · Clay
     static let accentHover = dynamicColor(light: 0xA84F30, dark: 0xE38A6D)
-    static let accentDim = dynamicColor(light: 0xA84F30, dark: 0xBE6346)       // §7.1 accentDim
     static let accentSoft = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)  // §7.1 accentSoft
     static let accentBorder = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.34, darkAlpha: 0.36) // §7.1 accentBorder
     /// Foreground that sits *on top of* an accent fill (status mode block, brand mark).
@@ -50,8 +46,6 @@ enum ToolTheme {
     static let windowBackground = dynamicColor(light: 0xE8E4DC, dark: 0x0E0F11)     // §7.1 surfaceWindow
     static let workspaceBackground = dynamicColor(light: 0xF4F1EB, dark: 0x151517)  // §7.1 surfaceWorkspace ← 用户指定
     static let sidebarBackground = dynamicColor(light: 0xEAE6DE, dark: 0x121214)    // §7.1 surfaceSidebar
-    static let sidebarHeaderBackground = sidebarBackground
-    static let contentBackground = workspaceBackground
     static let panelBackground = dynamicColor(light: 0xFDFCFA, dark: 0x1E1E22)      // §7.1 surfacePanel
     static let utilityBackground = dynamicColor(light: 0xF5F2EC, dark: 0x242429)    // §7.1 surfacePanel2
     static let editorBackground = dynamicColor(light: 0xF5F2EC, dark: 0x0F0F11)     // §7.1 surfaceField

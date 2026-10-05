@@ -28,8 +28,6 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
     var diagnosticTone: ToolFeedbackTone = .error
     var diagnosticDetail: FormatDiagnostic? = nil
     var diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil
-    /// Retained for call-site compatibility and per-attempt feedback identity.
-    var formatAttempt = 0
     var outputLineNumbers = true
     /// Structured code keeps the editor gutter; plain-text workbenches
     /// (text encoding, like the diff workspace) opt out.
@@ -86,7 +84,6 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         diagnosticTone: ToolFeedbackTone = .error,
         diagnosticDetail: FormatDiagnostic? = nil,
         diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
-        formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
         inputLineNumbers: Bool = true,
         inputCaretPlacementRequestToken: Int? = nil,
@@ -120,7 +117,6 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         self.diagnosticTone = diagnosticTone
         self.diagnosticDetail = diagnosticDetail
         self.diagnosticMarker = diagnosticMarker
-        self.formatAttempt = formatAttempt
         self.outputLineNumbers = outputLineNumbers
         self.inputLineNumbers = inputLineNumbers
         self.inputCaretPlacementRequestToken = inputCaretPlacementRequestToken
@@ -479,7 +475,6 @@ extension IndexFormatWorkbench where InputHeader == EmptyView, OutputControl == 
         diagnosticTone: ToolFeedbackTone = .error,
         diagnosticDetail: FormatDiagnostic? = nil,
         diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
-        formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
         inputLineNumbers: Bool = true,
         inputCaretPlacementRequestToken: Int? = nil,
@@ -511,7 +506,6 @@ extension IndexFormatWorkbench where InputHeader == EmptyView, OutputControl == 
             diagnosticTone: diagnosticTone,
             diagnosticDetail: diagnosticDetail,
             diagnosticMarker: diagnosticMarker,
-            formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
             inputLineNumbers: inputLineNumbers,
             inputCaretPlacementRequestToken: inputCaretPlacementRequestToken,
@@ -550,7 +544,6 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView, InputHeader ==
         diagnosticTone: ToolFeedbackTone = .error,
         diagnosticDetail: FormatDiagnostic? = nil,
         diagnosticMarker: IndexTextAreaDiagnosticMarker? = nil,
-        formatAttempt: Int = 0,
         outputLineNumbers: Bool = true,
         outputSyntax: IndexSyntaxKind? = nil,
         outputPlaceholder: String = IndexEmptyStateCopy.outputWillShowHere,
@@ -578,7 +571,6 @@ extension IndexFormatWorkbench where LeadingControl == EmptyView, InputHeader ==
             diagnosticTone: diagnosticTone,
             diagnosticDetail: diagnosticDetail,
             diagnosticMarker: diagnosticMarker,
-            formatAttempt: formatAttempt,
             outputLineNumbers: outputLineNumbers,
             outputSyntax: outputSyntax,
             outputPlaceholder: outputPlaceholder,

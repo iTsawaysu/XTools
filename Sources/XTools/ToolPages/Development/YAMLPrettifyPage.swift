@@ -55,7 +55,6 @@ struct IndexYAMLPrettifySegment: View {
 private struct IndexYAMLPrettifyWorkspaceContent: View {
     @ObservedObject var workspace: YAMLPrettifyToolWorkspaceModel
     @ObservedObject var execution: IndexFormatExecutionSession
-    @State private var formatAttempt = 0
 
     var body: some View {
         IndexFormatWorkbench(
@@ -68,7 +67,6 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
             diagnosticTone: execution.binding.error == nil ? .warning : .error,
             diagnosticDetail: execution.diagnostic,
             diagnosticMarker: execution.diagnosticMarker,
-            formatAttempt: formatAttempt,
             outputLineNumbers: true,
             outputSyntax: .yaml,
             isRunning: execution.isRunning,
@@ -93,7 +91,6 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
             return
         }
 
-        formatAttempt += 1
         let options = YAMLPrettifier.Options(
             indent: 2,
             sortKeys: workspace.sortKeys

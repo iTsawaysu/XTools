@@ -66,7 +66,6 @@ struct IndexSQLPrettifySegment: View {
 private struct IndexSQLPrettifyWorkspaceContent: View {
     @ObservedObject var workspace: SQLPrettifyToolWorkspaceModel
     @ObservedObject var execution: IndexFormatExecutionSession
-    @State private var formatAttempt = 0
 
     var body: some View {
         IndexFormatWorkbench(
@@ -79,7 +78,6 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
             diagnosticTone: execution.binding.error == nil ? .warning : .error,
             diagnosticDetail: execution.diagnostic,
             diagnosticMarker: execution.diagnosticMarker,
-            formatAttempt: formatAttempt,
             // SQL output is line-oriented; keep the gutter aligned with syntax colors.
             outputLineNumbers: true,
             outputSyntax: .sql,
@@ -136,7 +134,6 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
             return
         }
 
-        formatAttempt += 1
         let indentWidth = workspace.formatMode == .four ? 4 : 2
         let minify = workspace.formatMode == .compact
         let snapshot = (

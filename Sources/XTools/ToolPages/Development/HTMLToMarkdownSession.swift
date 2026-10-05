@@ -248,11 +248,6 @@ final class HTMLToMarkdownSession: ObservableObject {
         phase = .idle
     }
 
-    func cancel() {
-        _ = workGate.invalidate()
-        phase = markdown.isEmpty && inputHTML.isEmpty ? .idle : .ready
-    }
-
     private func receive(
         _ stage: HTMLToMarkdownURLPipelineStage,
         generation currentGeneration: Int

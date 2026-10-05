@@ -551,7 +551,7 @@ struct TextWorkbenchSourceContractTests {
         doesNotContain(json, "statsStrip", "JSON formatter must not keep the retired statistics strip")
         contains(json, "execution.schedule(snapshot: snapshot, sourceText: snapshot.unescape ? nil : snapshot.input, delay: .zero, cooperativeCancellation: true)", "Formatting must submit its source snapshot, withholding unmapped unescape diagnostics")
         doesNotContain(json, "workspace.seedEntryExampleIfNeeded()", "JSON must start with clean placeholder rather than seeding sample text")
-        contains(json, "formatAttempt += 1", "Each format attempt must advance feedback identity")
+        doesNotContain(json, "formatAttempt", "The retired per-attempt feedback counter must not return to the JSON formatter")
 
         contains(sql, "IndexFormatWorkbench(", "SQL formatter segment body must be the prototype workbench")
         doesNotContain(sql, "IndexOptionLabel(\"关键字\")", "SQL formatter toolbar must keep keyword case control compact without a redundant label")
@@ -559,7 +559,7 @@ struct TextWorkbenchSourceContractTests {
         contains(sql, "leadingControl: {", "SQL keyword-case controls must ride the workbench toolbar's leading slot")
         doesNotContain(sql, "IndexActionBar {", "SQL must not keep a page-level action bar")
         contains(sql, "execution.schedule(snapshot: snapshot, sourceText: snapshot.input, delay: .zero, cooperativeCancellation: true)", "SQL formatting must submit the original source snapshot for diagnostics")
-        contains(sql, "formatAttempt += 1", "Each SQL format attempt must advance feedback identity")
+        doesNotContain(sql, "formatAttempt", "The retired per-attempt feedback counter must not return to the SQL formatter")
         contains(sql, "outputLineNumbers: true", "SQL formatter must keep syntax highlighting with a line-number gutter")
         contains(sql, "outputSyntax: .sql", "SQL formatter must keep structured output highlighting")
         doesNotContain(sql, "expandsWithContent: true", "SQL formatter must not hand-assemble input growth for editor-transform behavior")

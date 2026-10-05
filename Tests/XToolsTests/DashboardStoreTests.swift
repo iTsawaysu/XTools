@@ -19,7 +19,7 @@ final class DashboardStoreTests: XCTestCase {
         store.recordLaunch(toolID: "jwt", at: calendar.date(byAdding: .day, value: -89, to: base)!)
         store.recordLaunch(toolID: "old", at: calendar.date(byAdding: .day, value: -90, to: base)!)
         XCTAssertEqual(store.recentTools.map(\.toolID), ["json", "jwt"])
-        XCTAssertEqual(store.recentTools.first?.launchCount, 2)
+        XCTAssertEqual(store.recentTools.count, 2)
     }
 
     func testUnknownToolsCanBeFilteredFromRecents() {
@@ -39,7 +39,8 @@ final class DashboardStoreTests: XCTestCase {
         let date = Date()
         store.recordLaunchIfChanged(toolID: "json", previousToolID: nil, at: date)
         store.recordLaunchIfChanged(toolID: "json", previousToolID: "json", at: date.addingTimeInterval(1))
-        XCTAssertEqual(store.recentTools.first?.launchCount, 1)
+        XCTAssertEqual(store.recentTools.count, 1)
+        XCTAssertEqual(store.recentTools.first?.lastOpenedAt, date)
     }
 
 }

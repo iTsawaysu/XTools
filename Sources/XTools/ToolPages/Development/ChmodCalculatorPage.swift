@@ -35,49 +35,14 @@ final class ChmodToolWorkspaceModel: ObservableObject {
         error = nil
     }
 
-    var u4: Bool {
-        get { mode.owner.read }
-        set { set(newValue, for: \ChmodMode.owner.read) }
-    }
-
-    var u2: Bool {
-        get { mode.owner.write }
-        set { set(newValue, for: \ChmodMode.owner.write) }
-    }
-
     var u1: Bool {
         get { mode.owner.execute }
         set { set(newValue, for: \ChmodMode.owner.execute) }
     }
 
-    var g4: Bool {
-        get { mode.group.read }
-        set { set(newValue, for: \ChmodMode.group.read) }
-    }
-
-    var g2: Bool {
-        get { mode.group.write }
-        set { set(newValue, for: \ChmodMode.group.write) }
-    }
-
-    var g1: Bool {
-        get { mode.group.execute }
-        set { set(newValue, for: \ChmodMode.group.execute) }
-    }
-
     var o4: Bool {
         get { mode.other.read }
         set { set(newValue, for: \ChmodMode.other.read) }
-    }
-
-    var o2: Bool {
-        get { mode.other.write }
-        set { set(newValue, for: \ChmodMode.other.write) }
-    }
-
-    var o1: Bool {
-        get { mode.other.execute }
-        set { set(newValue, for: \ChmodMode.other.execute) }
     }
 }
 

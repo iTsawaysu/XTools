@@ -5,20 +5,17 @@ struct DashboardActivityEvent: Codable, Equatable, Identifiable {
     let id: UUID
     let toolID: ToolID
     let timestamp: Date
-    var count: Int
 
-    init(id: UUID = UUID(), toolID: ToolID, timestamp: Date, count: Int = 1) {
+    init(id: UUID = UUID(), toolID: ToolID, timestamp: Date) {
         self.id = id
         self.toolID = toolID
         self.timestamp = timestamp
-        self.count = max(1, count)
     }
 }
 
 struct DashboardRecentTool: Codable, Equatable, Identifiable {
     let toolID: ToolID
     let lastOpenedAt: Date
-    let launchCount: Int
     var id: ToolID { toolID }
 }
 
@@ -52,7 +49,7 @@ final class DashboardStore: ObservableObject {
     var recentTools: [DashboardRecentTool] {
         Dictionary(grouping: preferences.activity, by: \.toolID).compactMap { toolID, events in
             guard let latest = events.max(by: { $0.timestamp < $1.timestamp }) else { return nil }
-            return DashboardRecentTool(toolID: toolID, lastOpenedAt: latest.timestamp, launchCount: events.reduce(0) { $0 + $1.count })
+            return DashboardRecentTool(toolID: toolID, lastOpenedAt: latest.timestamp)
         }.sorted { $0.lastOpenedAt > $1.lastOpenedAt }
     }
 

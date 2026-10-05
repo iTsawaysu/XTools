@@ -18,10 +18,6 @@ final class RandomPortToolWorkspaceModel: ObservableObject {
         self.generatePort = generatePort
     }
 
-    var copyText: String {
-        output ?? ""
-    }
-
     func generate() {
         hasAttemptedGeneration = true
         output = String(generatePort())

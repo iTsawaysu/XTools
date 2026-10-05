@@ -95,7 +95,6 @@ private struct IndexJSONFormatterWorkspaceContent: View {
 
     @ObservedObject var workspace: JSONFormatterToolWorkspaceModel
     @ObservedObject var execution: IndexFormatExecutionSession
-    @State private var formatAttempt = 0
 
     var body: some View {
         IndexFormatWorkbench(
@@ -108,7 +107,6 @@ private struct IndexJSONFormatterWorkspaceContent: View {
             diagnosticTone: execution.binding.error == nil ? .warning : .error,
             diagnosticDetail: execution.diagnostic,
             diagnosticMarker: execution.diagnosticMarker,
-            formatAttempt: formatAttempt,
             outputLineNumbers: true,
             outputSyntax: .json,
             isRunning: execution.isRunning,
@@ -213,7 +211,6 @@ private struct IndexJSONFormatterWorkspaceContent: View {
             return
         }
 
-        formatAttempt += 1
         let snapshot = Snapshot(
             input: workspace.input,
             mode: workspace.formatMode,

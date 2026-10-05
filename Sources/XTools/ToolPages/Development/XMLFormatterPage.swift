@@ -58,7 +58,6 @@ struct IndexXMLFormatterSegment: View {
 private struct IndexXMLFormatWorkspaceContent: View {
     @ObservedObject var workspace: XMLFormatterToolWorkspaceModel
     @ObservedObject var execution: IndexFormatExecutionSession
-    @State private var formatAttempt = 0
 
     var body: some View {
         IndexFormatWorkbench(
@@ -71,7 +70,6 @@ private struct IndexXMLFormatWorkspaceContent: View {
             diagnosticTone: execution.binding.error == nil ? .warning : .error,
             diagnosticDetail: execution.diagnostic,
             diagnosticMarker: execution.diagnosticMarker,
-            formatAttempt: formatAttempt,
             outputLineNumbers: true,
             outputSyntax: .xml,
             isRunning: execution.isRunning,
@@ -108,7 +106,6 @@ private struct IndexXMLFormatWorkspaceContent: View {
             return
         }
 
-        formatAttempt += 1
         let indentWidth = workspace.formatMode == .four ? 4 : 2
         let minify = workspace.formatMode == .compact
         let snapshot = (input: workspace.input, indentWidth: indentWidth, minify: minify)

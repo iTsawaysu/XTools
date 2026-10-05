@@ -70,7 +70,6 @@ struct IndexDockerWorkspaceContent: View {
 
     @ObservedObject var workspace: DockerConversionToolWorkspaceModel
     @ObservedObject var execution: IndexFormatExecutionSession
-    @State private var formatAttempt = 0
 
     var body: some View {
         IndexPage("Docker Run ↔ Compose", subtitle: "docker run 命令与 Compose YAML 双向转换。", workspaceSemantic: .structuredEditorTransform) {
@@ -83,7 +82,6 @@ struct IndexDockerWorkspaceContent: View {
                 diagnostic: execution.binding.error ?? execution.binding.warning,
                 diagnosticTone: execution.binding.error == nil ? .warning : .error,
                 diagnosticDetail: execution.diagnostic,
-                formatAttempt: formatAttempt,
                 outputLineNumbers: true,
                 outputSyntax: workspace.direction == .runToCompose ? .yaml : nil,
                 actionTitle: "转换",
@@ -128,7 +126,6 @@ struct IndexDockerWorkspaceContent: View {
             return
         }
 
-        formatAttempt += 1
         let snapshot = Snapshot(input: workspace.input, direction: workspace.direction)
         execution.schedule(snapshot: snapshot, delay: .zero) { snapshot in
             Self.binding(for: snapshot)

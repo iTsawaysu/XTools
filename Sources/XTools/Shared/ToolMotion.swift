@@ -41,10 +41,7 @@ enum ToolMotion {
         /// MOTION d.hoverIn / d.hoverOut).
         static let hoverIn: TimeInterval = 0.18
         static let hoverOut: TimeInterval = 0.24
-        /// Wave 2 error feedback: damped-sine shake total (prototype
-        /// MOTION d.shake).
-        static let shake: TimeInterval = 0.3
-        /// Warning tint fade-in (delayed off the shake start) / fade-out.
+        /// Warning tint fade-in / fade-out.
         static let errorTintIn: TimeInterval = 0.24
         static let errorTintOut: TimeInterval = 0.2
         static let errorTintDelay: TimeInterval = 0.08
@@ -256,16 +253,11 @@ enum ToolMotion {
         static let washPeak: Double = 0.01
     }
 
-    /// Wave 2 error feedback terminal values (prototype MOTION d.shake /
-    /// d.errTint* / x.shake*): one damped-sine horizontal jolt plus a
+    /// Wave 2 error feedback terminal values (prototype MOTION d.errTint*):
     /// state-held warning tint. No-flash rule: the tint is a *state*, not a
-    /// pulse — it fades in delayed after the shake starts, holds while the
-    /// error persists, and fades out on resolve; border width never changes.
+    /// pulse — it fades in delayed, holds while the error persists, and fades
+    /// out on resolve; border width never changes.
     enum ErrorFeedback {
-        static let shakeCurve = Curve.inOut(duration: Duration.shake)
-        static let shakeAmplitude: CGFloat = 4
-        static let shakeDecay: Double = 0.68
-        static let shakeOscillations: Double = 3
         static let tintDelay = Duration.errorTintDelay
         static let tintPeak: Double = 0.55
         static let tintIn = Curve.smoothOut(duration: Duration.errorTintIn)

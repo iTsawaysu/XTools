@@ -28,7 +28,6 @@ private struct IndexJWTWorkspaceContent: View {
     @State private var showsParseSecret = false
     @State private var payloadPresentation = "json"
     @State private var localCheckDisclosureState = JWTLocalCheckDisclosureState()
-    @State private var isLocalCheckHeaderHovering = false
 
     /// Align with formatters: large JSON output keeps full text but drops highlight.
     private static let maxHighlightedOutputCharacters = 200_000
@@ -644,7 +643,6 @@ private struct IndexJWTWorkspaceContent: View {
         showsParseSecret = false
         payloadPresentation = "json"
         localCheckDisclosureState.reset()
-        isLocalCheckHeaderHovering = false
     }
 
     private func transferGeneratedToParse() {

@@ -491,11 +491,6 @@ enum TextDevelopmentToolPreferenceKeys {
         default: "2",
         allowedValues: ["2", "4", "compact"]
     )
-    static let yamlIndent = ToolPreferenceKey<String>.string(
-        "tools.yamlFormatter.indent.v1",
-        default: "2",
-        allowedValues: ["2", "4"]
-    )
     static let yamlSortKeys = ToolPreferenceKey<Bool>.bool(
         "tools.yamlFormatter.sortKeys.v1",
         default: false

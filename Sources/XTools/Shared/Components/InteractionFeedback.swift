@@ -127,54 +127,11 @@ extension View {
     }
 }
 
-// MARK: - Error feedback (Wave 2)
-
-/// Damped-sine horizontal jolt for failed explicit runs: amplitude decays
-/// geometrically across the oscillations while the phase animates 0→1, so a
-/// repeated identical failure (attempt bump) replays the same envelope.
-@MainActor
-struct ToolShakeEffect: GeometryEffect {
-    var phase: CGFloat
-
-    var animatableData: CGFloat {
-        get { phase }
-        set { phase = newValue }
-    }
-
-    nonisolated func effectValue(size: CGSize) -> ProjectionTransform {
-        guard phase > 0 else { return ProjectionTransform(CGAffineTransform.identity) }
-        let oscillations = ToolMotion.ErrorFeedback.shakeOscillations
-        let envelope = pow(ToolMotion.ErrorFeedback.shakeDecay, Double(phase) * oscillations)
-        let offset = ToolMotion.ErrorFeedback.shakeAmplitude
-            * envelope
-            * sin(Double(phase) * .pi * 2 * oscillations)
-        return ProjectionTransform(CGAffineTransform(translationX: offset, y: 0))
-    }
-}
-
-/// Shakes once per failed attempt (see `ToolShakeEffect`). Keyed by a caller
-/// bump counter so repeated identical failures re-trigger; Reduce Motion
-/// renders no offset.
-struct ToolErrorShakeModifier: ViewModifier {
-    let attempt: Int
-    let isActive: Bool
-    @State private var shakePhase: CGFloat = 0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        content
-            .modifier(ToolShakeEffect(phase: shakePhase))
-            .onChange(of: attempt) { _ in
-                guard isActive, !reduceMotion else { return }
-                shakePhase = 0
-                withAnimation(ToolMotion.ErrorFeedback.shakeCurve) { shakePhase = 1 }
-            }
-    }
-}
+// MARK: - Error feedback
 
 /// State-held warning tint for error chrome: the border is always laid out
-/// at constant width and only its opacity moves — delayed fade-in after the
-/// shake onset (`ToolMotion.ErrorFeedback.tintDelay`), hold while the error
+/// at constant width and only its opacity moves — delayed fade-in
+/// (`ToolMotion.ErrorFeedback.tintDelay`), hold while the error
 /// persists, fade out on resolve. Never pulses; Reduce Motion jumps between
 /// states without interpolation.
 struct ToolErrorTintModifier: ViewModifier {
@@ -214,11 +171,6 @@ struct ToolErrorTintModifier: ViewModifier {
 }
 
 extension View {
-    /// Error shake for explicit-run failures (see `ToolErrorShakeModifier`).
-    func toolErrorShake(attempt: Int, isActive: Bool) -> some View {
-        modifier(ToolErrorShakeModifier(attempt: attempt, isActive: isActive))
-    }
-
     /// State-held warning border tint (see `ToolErrorTintModifier`).
     func toolErrorTint(active: Bool, cornerRadius: CGFloat) -> some View {
         modifier(ToolErrorTintModifier(active: active, cornerRadius: cornerRadius))

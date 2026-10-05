@@ -31,8 +31,6 @@ enum ToolTypography {
     /// Quiet panel label: sans medium, sentence case (Clay Warmth — the
     /// terminal-style mono uppercase label is retired).
     static let panelTitle = Font.system(size: 12.5, weight: .medium)
-    /// Prominent panel header used by workbench-density panels (13pt semibold).
-    static let panelTitleProminent = Font.system(size: 13, weight: .semibold)
 
     // MARK: - Section Level
 
@@ -87,11 +85,9 @@ enum ToolTypography {
 
     // MARK: - Display Values
 
-    static let valueSmall = Font.system(size: 12, weight: .semibold)
     static let valueMedium = Font.system(size: 18, design: .monospaced)
     static let statValue = Font.system(size: 20, weight: .semibold, design: .monospaced)
     static let heroValue = Font.system(size: 30, weight: .semibold, design: .monospaced)
-    static let giantValue = Font.system(size: 46, weight: .semibold, design: .monospaced)
     /// Rounded personality variant for "result as delight" surfaces (chronometer).
     static let giantValueRounded = Font.system(size: 46, weight: .semibold, design: .rounded)
     /// Hero value with a selectable design (mono default, rounded delight).

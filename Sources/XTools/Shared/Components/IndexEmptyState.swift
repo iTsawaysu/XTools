@@ -86,14 +86,14 @@ public struct IndexEmptyState: View {
             arrivalStage = true
         }
     }
-    
+
     private var iconSize: CGFloat {
         switch density {
         case .panel: return ToolMetrics.IconSize.display
         case .list, .output: return ToolMetrics.IconSize.large
         }
     }
-    
+
     private var iconBoxSize: CGFloat {
         switch density {
         case .panel: return 44

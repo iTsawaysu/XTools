@@ -13,8 +13,6 @@ enum ToolMetrics {
         static let mainMaxWidth: CGFloat = 880
         static let horizontalInset: CGFloat = 32
         static let topInset: CGFloat = 38
-        static let inputHeight: CGFloat = 82
-        static let resultMaxHeight: CGFloat = 180
         static let shortcutRowHeight: CGFloat = 58
         static let sectionGap: CGFloat = 32
         static let compactCorner: CGFloat = 6
@@ -29,8 +27,6 @@ enum ToolMetrics {
         static let md: CGFloat = 12
         static let base: CGFloat = 14      // Default panel padding & spacing
         static let lg: CGFloat = 16
-        static let xl: CGFloat = 20
-        static let xxl: CGFloat = 26
         static let page: CGFloat = 30      // Page horizontal/vertical padding
 
         // Shared panel geometry. Keeping these named prevents individual
@@ -71,17 +67,11 @@ enum ToolMetrics {
     // MARK: - Responsive Breakpoints
 
     enum Breakpoint {
-        /// Default collapse width for IndexPairLayout (simple I/O pairs)
-        static let pairCollapseDefault: CGFloat = 720
-
         /// Collapse width for formatter tools (wider editors). Kept at or below
         /// the usable content width of the minimum window (960 window − 220
         /// sidebar ≈ 740) plus one column budget, so dual-pane formatters fold
         /// before their editors get crushed.
         static let pairCollapseFormatter: CGFloat = 860
-
-        /// Minimum content width per column before folding (guideline)
-        static let minColumnWidth: CGFloat = 360
     }
 
     // MARK: - Legacy Animation Duration

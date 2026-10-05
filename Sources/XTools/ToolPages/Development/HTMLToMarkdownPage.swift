@@ -60,7 +60,6 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 diagnostic: session.error ?? session.warning,
                 diagnosticTone: session.error == nil ? .warning : .error,
                 diagnosticDetail: session.diagnostic,
-                formatAttempt: session.formatAttempt,
                 outputLineNumbers: false,
                 clearDisabled: !session.canClear,
                 onClear: session.clear,
