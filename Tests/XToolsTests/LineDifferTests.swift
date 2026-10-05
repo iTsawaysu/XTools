@@ -627,22 +627,6 @@ struct LineDifferTests {
         #expect(lines[0].newLineNumber == 1)
         #expect(lines[1].newLineNumber == 2)
     }
-
-    @Test func diffDisplayFilteringDoesNotParseTextPrefixes() {
-        let lines = [
-            DiffDisplayLine(kind: .unchanged, oldLineNumber: 1, newLineNumber: 1, text: "+ literal plus", indent: 0),
-            DiffDisplayLine(kind: .added, oldLineNumber: nil, newLineNumber: 2, text: "added", indent: 0),
-            DiffDisplayLine(kind: .structure, oldLineNumber: 2, newLineNumber: 3, text: "}", indent: 0)
-        ]
-
-        let textFiltered = lines.diffFiltered(preservesStructure: false)
-        #expect(textFiltered.count == 1)
-        #expect(textFiltered[0].text == "added") // filtering uses line kind, not text prefix
-
-        let jsonFiltered = lines.diffFiltered(preservesStructure: true)
-        #expect(jsonFiltered.count == 2)
-        #expect(jsonFiltered[1].kind == .structure)
-    }
 }
 
 private final class DiffComparisonKeyProbe: @unchecked Sendable {

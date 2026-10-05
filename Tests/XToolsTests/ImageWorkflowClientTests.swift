@@ -22,7 +22,6 @@ struct ImageWorkflowClientTests {
             .processingFailed(.watermark),
             .processingFailed(.grayscale),
             .processingFailed(.favicon),
-            .noConversionTarget,
             .blockedCompressionSave
         ]
 
@@ -728,73 +727,6 @@ struct ImageWorkflowClientTests {
         }
     }
 
-    @Test func saveIconsWritesFaviconIconSetIntoSelectedDirectory() async throws {
-        let directory = URL(fileURLWithPath: "/tmp/favicons", isDirectory: true)
-        let dialog = FakeImageWorkflowDialog(directoryURL: directory)
-        let writer = FakeImageWorkflowWriter()
-        let client = ImageWorkflowClient(dialog: dialog, reader: FakeImageWorkflowReader(), writer: writer)
-        let icons = [
-            GeneratedIcon(size: 16, data: Data([1, 6]), pixelWidth: 16, pixelHeight: 16, format: .png),
-            GeneratedIcon(size: 32, data: Data([3, 2]), pixelWidth: 32, pixelHeight: 32, format: .png)
-        ]
-
-        let didSave = try await client.saveIcons(icons) { icon in
-            "favicon-\(icon.size)x\(icon.size).png"
-        }
-
-        #expect(didSave)
-        #expect(writer.writes.map { $0.url.lastPathComponent } == [
-            "favicon-16x16.png",
-            "favicon-32x32.png"
-        ])
-        #expect(writer.writes.map(\.data) == [Data([1, 6]), Data([3, 2])])
-    }
-
-    @Test func saveIconsReportsPartialProgressWhenALaterWriteFails() async throws {
-        let directory = URL(fileURLWithPath: "/tmp/icons", isDirectory: true)
-        let dialog = FakeImageWorkflowDialog(directoryURL: directory)
-        // Fail on the second write so one icon is already on disk when the loop
-        // aborts — the failure message must name the partial progress.
-        let writer = FakeImageWorkflowWriter(error: ImageSessionTestError.writeFailed, failAfter: 1)
-        let client = ImageWorkflowClient(
-            dialog: dialog,
-            reader: FakeImageWorkflowReader(),
-            writer: writer
-        )
-
-        let icons = [
-            GeneratedIcon(size: 16, data: Data([1, 6]), pixelWidth: 16, pixelHeight: 16, format: .png),
-            GeneratedIcon(size: 32, data: Data([1, 3, 2]), pixelWidth: 32, pixelHeight: 32, format: .png)
-        ]
-
-        await #expect {
-            try await client.saveIcons(icons) { icon in
-                "favicon-\(icon.pixelWidth)x\(icon.pixelHeight).png"
-            }
-        } throws: { error in
-            guard case ImageWorkflowFailure.partialSaveFailed(savedCount: 1, totalCount: 2) = error else {
-                return false
-            }
-            return true
-        }
-        #expect(writer.writes.count == 1)
-    }
-
-    @Test func saveIconWritesSingleFaviconPNG() async throws {
-        let saveURL = URL(fileURLWithPath: "/tmp/favicon-16x16.png")
-        let dialog = FakeImageWorkflowDialog(saveURL: saveURL)
-        let writer = FakeImageWorkflowWriter()
-        let client = ImageWorkflowClient(dialog: dialog, reader: FakeImageWorkflowReader(), writer: writer)
-        let icon = GeneratedIcon(size: 16, data: Data([1, 6]), pixelWidth: 16, pixelHeight: 16, format: .png)
-
-        let didSave = try await client.saveIcon(icon, defaultFilename: "favicon-16x16.png")
-
-        #expect(didSave)
-        #expect(dialog.requestedSaveNames == ["favicon-16x16.png"])
-        #expect(writer.writes.map(\.url) == [saveURL])
-        #expect(writer.writes.map(\.data) == [icon.data])
-    }
-
     @Test func processedOutputSessionReceivesImageURLAndRendersInBackground() async throws {
         let sourceData = try Self.makeImageData(width: 12, height: 8, format: .png)
         let outputData = try Self.makeImageData(width: 10, height: 6, format: .png)
@@ -1265,35 +1197,6 @@ struct ImageWorkflowClientTests {
         #expect(session.outputImage == nil)
         #expect(session.error == "无法读取图片的尺寸信息。")
         #expect(session.isProcessing == false)
-    }
-
-    @Test @MainActor func processedOutputSessionReportsMissingConversionTargetWithoutRendering() async throws {
-        let sourceData = try Self.makeImageData(width: 12, height: 8, format: .png)
-        let sourceURL = URL(fileURLWithPath: "/tmp/source.png")
-        let client = ImageWorkflowClient(
-            dialog: FakeImageWorkflowDialog(),
-            reader: FakeImageWorkflowReader(dataByURL: [sourceURL: sourceData]),
-            writer: FakeImageWorkflowWriter()
-        )
-        let session = ImageProcessedOutputSession()
-
-        session.receiveImageURL(
-            sourceURL,
-            allowedContentTypes: [.png],
-            client: client,
-            operation: .conversion,
-            shouldRender: { _ in false },
-            skippedRenderFailure: .noConversionTarget
-        ) { _ in
-            fatalError("render must not run without a conversion target")
-        }
-
-        try await waitUntil { session.error != nil }
-
-        #expect(session.sourceURL == sourceURL)
-        #expect(session.output == nil)
-        #expect(session.isProcessing == false)
-        #expect(session.error == "当前图片格式没有可用的转换目标。")
     }
 
     @Test @MainActor func processedOutputSessionDoesNotShowProcessingDuringImageSelectionPanel() async throws {

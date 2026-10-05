@@ -4,7 +4,7 @@ import Foundation
 
 extension JSONStructuralDiff {
     static func alignedDiff(left: String, right: String, labels: JSONDiffValidation.SideLabels, budget: LineDiffBudget = LineDiffBudget(maximumLCSCells: .max)) -> Decision {
-        try! cancellableAlignedDiff(left: left, right: right, labels: labels, budget: budget, shouldCancel: { false })
+        try! cancellablePreparedDiff(left: left, right: right, labels: labels, budget: budget, shouldCancel: { false }).decision
     }
 }
 #endif

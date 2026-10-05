@@ -46,8 +46,6 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
         operation: ImageProcessingOperation,
         selectionPublisher: @escaping ImageSelectionPublisher = { _, publish in publish() },
         onSelection: @escaping (ImageInputSelection) -> Void = { _ in },
-        shouldRender: @escaping (ImageInputSelection) -> Bool = { _ in true },
-        skippedRenderFailure: ImageWorkflowFailure? = nil,
         renderProvider: ImageBackgroundOutputRendererProvider? = nil,
         render: @escaping ImageBackgroundOutputRenderer
     ) {
@@ -61,8 +59,6 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
                     operation: operation,
                     selectionPublisher: selectionPublisher,
                     onSelection: onSelection,
-                    shouldRender: shouldRender,
-                    skippedRenderFailure: skippedRenderFailure,
                     renderProvider: renderProvider,
                     render: render
                 )
@@ -80,8 +76,6 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
         operation: ImageProcessingOperation,
         selectionPublisher: @escaping ImageSelectionPublisher = { _, publish in publish() },
         onSelection: @escaping (ImageInputSelection) -> Void = { _ in },
-        shouldRender: @escaping (ImageInputSelection) -> Bool = { _ in true },
-        skippedRenderFailure: ImageWorkflowFailure? = nil,
         renderProvider: ImageBackgroundOutputRendererProvider? = nil,
         render: @escaping ImageBackgroundOutputRenderer
     ) {
@@ -107,14 +101,7 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
                 }
                 onSelection(selection)
                 self.selectionTask = nil
-                if shouldRender(selection) {
-                    self.renderInBackground(operation: operation, renderProvider?() ?? render)
-                } else {
-                    self.output = nil
-                    self.outputImage = nil
-                    self.isProcessing = false
-                    self.error = skippedRenderFailure?.errorDescription
-                }
+                self.renderInBackground(operation: operation, renderProvider?() ?? render)
             } catch is CancellationError {
                 guard let self, self.renderGate.isCurrent(generation) else { return }
                 self.isProcessing = false

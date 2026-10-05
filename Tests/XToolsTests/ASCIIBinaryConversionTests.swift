@@ -19,77 +19,77 @@ struct ASCIIBinaryConversionTests {
         #expect(ASCIIBinaryConversion.textToBinary("é") == "11000011 10101001")
     }
 
-    @Test func pageTreatsWhitespaceAsTextOnlyInEncodingModes() {
+    @Test func pageTreatsWhitespaceAsTextOnlyInEncodingModes() throws {
         #expect(!IndexASCIIBinarySegment.isEmptyInput(" ", mode: "bin"))
         #expect(!IndexASCIIBinarySegment.isEmptyInput(" ", mode: "ascii"))
         #expect(IndexASCIIBinarySegment.isEmptyInput(" \n\t", mode: "debin"))
         #expect(IndexASCIIBinarySegment.isEmptyInput(" \n\t", mode: "deascii"))
         #expect(ASCIIBinaryConversion.textToBinary(" ") == "00100000")
-        #expect(ASCIIBinaryConversion.textToASCII(" ") == "32")
+        #expect(try ASCIIBinaryConversion.validatedTextToASCII(" ") == "32")
     }
 
     // MARK: - Text to ASCII (decimal scalar values)
 
-    @Test func encodesTextAsDecimalScalarValues() {
-        #expect(ASCIIBinaryConversion.textToASCII("A") == "65")
-        #expect(ASCIIBinaryConversion.textToASCII("ABC") == "65 66 67")
-        #expect(ASCIIBinaryConversion.textToASCII("\n") == "10")
+    @Test func encodesTextAsDecimalScalarValues() throws {
+        #expect(try ASCIIBinaryConversion.validatedTextToASCII("A") == "65")
+        #expect(try ASCIIBinaryConversion.validatedTextToASCII("ABC") == "65 66 67")
+        #expect(try ASCIIBinaryConversion.validatedTextToASCII("\n") == "10")
     }
 
     @Test func rejectsNonASCIITextForASCIIValues() {
-        #expect(ASCIIBinaryConversion.textToASCII("é") == nil)
-        #expect(ASCIIBinaryConversion.textToASCII("你好") == nil)
+        #expect((try? ASCIIBinaryConversion.validatedTextToASCII("é")) == nil)
+        #expect((try? ASCIIBinaryConversion.validatedTextToASCII("你好")) == nil)
     }
 
-    @Test func decodesDecimalASCIIValuesBackToText() {
-        #expect(ASCIIBinaryConversion.asciiToText("65 66 67") == "ABC")
-        #expect(ASCIIBinaryConversion.asciiToText("65,66,67") == "ABC")
-        #expect(ASCIIBinaryConversion.asciiToText("65\n66\t67") == "ABC")
-        #expect(ASCIIBinaryConversion.asciiToText("10") == "\n")
+    @Test func decodesDecimalASCIIValuesBackToText() throws {
+        #expect(try ASCIIBinaryConversion.validatedASCIIToText("65 66 67") == "ABC")
+        #expect(try ASCIIBinaryConversion.validatedASCIIToText("65,66,67") == "ABC")
+        #expect(try ASCIIBinaryConversion.validatedASCIIToText("65\n66\t67") == "ABC")
+        #expect(try ASCIIBinaryConversion.validatedASCIIToText("10") == "\n")
     }
 
     @Test func rejectsInvalidDecimalASCIIValues() {
-        #expect(ASCIIBinaryConversion.asciiToText("") == nil)
-        #expect(ASCIIBinaryConversion.asciiToText("   ,, ") == nil)
-        #expect(ASCIIBinaryConversion.asciiToText("128") == nil)
-        #expect(ASCIIBinaryConversion.asciiToText("-1") == nil)
-        #expect(ASCIIBinaryConversion.asciiToText("65.0") == nil)
-        #expect(ASCIIBinaryConversion.asciiToText("0x41") == nil)
-        #expect(ASCIIBinaryConversion.asciiToText("A") == nil)
+        #expect((try? ASCIIBinaryConversion.validatedASCIIToText("")) == nil)
+        #expect((try? ASCIIBinaryConversion.validatedASCIIToText("   ,, ")) == nil)
+        #expect((try? ASCIIBinaryConversion.validatedASCIIToText("128")) == nil)
+        #expect((try? ASCIIBinaryConversion.validatedASCIIToText("-1")) == nil)
+        #expect((try? ASCIIBinaryConversion.validatedASCIIToText("65.0")) == nil)
+        #expect((try? ASCIIBinaryConversion.validatedASCIIToText("0x41")) == nil)
+        #expect((try? ASCIIBinaryConversion.validatedASCIIToText("A")) == nil)
     }
 
     // MARK: - Binary to text
 
-    @Test func decodesBinaryBackToText() {
-        #expect(ASCIIBinaryConversion.binaryToText("01000001") == "A")
-        #expect(ASCIIBinaryConversion.binaryToText("01000001 01000010") == "AB")
-        #expect(ASCIIBinaryConversion.binaryToText("0100000101000010") == "AB")
-        #expect(ASCIIBinaryConversion.binaryToText("0100 0001 0100 0010") == "AB")
+    @Test func decodesBinaryBackToText() throws {
+        #expect(try ASCIIBinaryConversion.validatedBinaryToText("01000001") == "A")
+        #expect(try ASCIIBinaryConversion.validatedBinaryToText("01000001 01000010") == "AB")
+        #expect(try ASCIIBinaryConversion.validatedBinaryToText("0100000101000010") == "AB")
+        #expect(try ASCIIBinaryConversion.validatedBinaryToText("0100 0001 0100 0010") == "AB")
         // 逗号与空白同为分隔符：与 ASCII 十进制方向（"65,66,67"）规则统一。
-        #expect(ASCIIBinaryConversion.binaryToText("01000001,01000010") == "AB")
-        #expect(ASCIIBinaryConversion.binaryToText("01000001, 01000010,01000011") == "ABC")
+        #expect(try ASCIIBinaryConversion.validatedBinaryToText("01000001,01000010") == "AB")
+        #expect(try ASCIIBinaryConversion.validatedBinaryToText("01000001, 01000010,01000011") == "ABC")
         // Round-trips multibyte UTF-8.
-        #expect(ASCIIBinaryConversion.binaryToText("11000011 10101001") == "é")
+        #expect(try ASCIIBinaryConversion.validatedBinaryToText("11000011 10101001") == "é")
     }
 
-    @Test func decodesWhitespaceOnlyInputToEmptyString() {
+    @Test func decodesWhitespaceOnlyInputToEmptyString() throws {
         // No tokens -> empty byte array -> empty string (not nil).
-        #expect(ASCIIBinaryConversion.binaryToText("") == "")
-        #expect(ASCIIBinaryConversion.binaryToText("   ") == "")
-        #expect(ASCIIBinaryConversion.binaryToText(" , , ") == "")
+        #expect(try ASCIIBinaryConversion.validatedBinaryToText("") == "")
+        #expect(try ASCIIBinaryConversion.validatedBinaryToText("   ") == "")
+        #expect(try ASCIIBinaryConversion.validatedBinaryToText(" , , ") == "")
     }
 
     @Test func returnsNilForMalformedBinary() {
         // Token not exactly 8 digits.
-        #expect(ASCIIBinaryConversion.binaryToText("0100000") == nil)
-        #expect(ASCIIBinaryConversion.binaryToText("010000012") == nil)
+        #expect((try? ASCIIBinaryConversion.validatedBinaryToText("0100000")) == nil)
+        #expect((try? ASCIIBinaryConversion.validatedBinaryToText("010000012")) == nil)
         // Non-binary digit.
-        #expect(ASCIIBinaryConversion.binaryToText("01000002") == nil)
+        #expect((try? ASCIIBinaryConversion.validatedBinaryToText("01000002")) == nil)
     }
 
     @Test func returnsNilForInvalidUTF8ByteSequence() {
         // 0xFF (11111111) is not a valid standalone UTF-8 byte.
-        #expect(ASCIIBinaryConversion.binaryToText("11111111") == nil)
+        #expect((try? ASCIIBinaryConversion.validatedBinaryToText("11111111")) == nil)
     }
 
     @Test func strictConversionsClassifyEveryInvalidInputKind() {
@@ -136,7 +136,7 @@ struct ASCIIBinaryConversionTests {
             case "bin":
                 return ASCIIBinaryConversion.textToBinary(input)
             case "debin":
-                guard let text = ASCIIBinaryConversion.binaryToText(input) else {
+                guard let text = try? ASCIIBinaryConversion.validatedBinaryToText(input) else {
                     throw ConversionProbeError()
                 }
                 return text
@@ -152,12 +152,12 @@ struct ASCIIBinaryConversionTests {
         ) { input, mode in
             switch mode {
             case "ascii":
-                guard let ascii = ASCIIBinaryConversion.textToASCII(input) else {
+                guard let ascii = try? ASCIIBinaryConversion.validatedTextToASCII(input) else {
                     throw ConversionProbeError()
                 }
                 return ascii
             case "deascii":
-                guard let text = ASCIIBinaryConversion.asciiToText(input) else {
+                guard let text = try? ASCIIBinaryConversion.validatedASCIIToText(input) else {
                     throw ConversionProbeError()
                 }
                 return text
@@ -167,8 +167,8 @@ struct ASCIIBinaryConversionTests {
         }
 
         #expect(binaryBackfill == "01000001")
-        #expect(ASCIIBinaryConversion.binaryToText(binaryBackfill ?? "") == "A")
+        #expect(try ASCIIBinaryConversion.validatedBinaryToText(binaryBackfill ?? "") == "A")
         #expect(asciiBackfill == "65")
-        #expect(ASCIIBinaryConversion.asciiToText(asciiBackfill ?? "") == "A")
+        #expect(try ASCIIBinaryConversion.validatedASCIIToText(asciiBackfill ?? "") == "A")
     }
 }

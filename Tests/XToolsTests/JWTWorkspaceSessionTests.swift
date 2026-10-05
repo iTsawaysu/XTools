@@ -233,7 +233,7 @@ struct JWTWorkspaceSessionTests {
         #expect(session.parseError == nil)
         let result = try #require(session.verificationResult)
         #expect(result.summary == .notVerified)
-        #expect(session.verificationSummaryText(result) == "签名未检查 · 没有时间声明")
+        #expect(JWTWorkspaceSession.localCheckPresentation(for: result).summaryText == "签名未检查 · 没有时间声明")
     }
 
     @Test func parseKnownTokenWithSecretVerifies() throws {
@@ -243,7 +243,7 @@ struct JWTWorkspaceSessionTests {
         session.parse()
         let result = try #require(session.verificationResult)
         #expect(result.summary == .verified)
-        #expect(session.verificationSummaryText(result) == "签名匹配 · 没有时间声明")
+        #expect(JWTWorkspaceSession.localCheckPresentation(for: result).summaryText == "签名匹配 · 没有时间声明")
     }
 
     @Test func transferGeneratedToParsePreparesParseBeforeModeSwitch() {

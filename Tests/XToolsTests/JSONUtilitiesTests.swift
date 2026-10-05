@@ -608,23 +608,23 @@ struct JSONFormattingTests {
 
     @Test func escapesJSONStringProperly() throws {
         let minified = #"{"name":"XTools","tags":["a","b"]}"#
-        let escaped = JSONFormatting.escapeJSON(minified)
+        let escaped = try JSONFormatting.escapeJSONChecked(minified)
         #expect(escaped == #""{\"name\":\"XTools\",\"tags\":[\"a\",\"b\"]\}""# || escaped.contains(#"\"name\""#))
         #expect(escaped.hasPrefix("\"") && escaped.hasSuffix("\""))
 
-        let unescaped = JSONFormatting.unescapeJSON(escaped)
+        let unescaped = try JSONFormatting.unescapeJSONChecked(escaped)
         #expect(unescaped == minified)
     }
 
     @Test func unescapesManualEscapedStringWithoutQuotes() throws {
         let rawEscaped = #"{\"name\":\"XTools\"}"#
-        let unescaped = JSONFormatting.unescapeJSON(rawEscaped)
+        let unescaped = try JSONFormatting.unescapeJSONChecked(rawEscaped)
         #expect(unescaped == #"{"name":"XTools"}"#)
     }
 
     @Test func unescapesUnicodeEscapedCharacters() throws {
         let rawEscaped = #"{\"title\":\"\u4e2d\u6587\",\"symbol\":\"\u2705\"}"#
-        let unescaped = JSONFormatting.unescapeJSON(rawEscaped)
+        let unescaped = try JSONFormatting.unescapeJSONChecked(rawEscaped)
         #expect(unescaped == #"{"title":"中文","symbol":"✅"}"#)
     }
 
@@ -632,12 +632,12 @@ struct JSONFormattingTests {
         // Regression: the chained-replacement fallback substituted "\n"
         // before "\\\\", so a literal backslash followed by "n" collapsed
         // into a newline. The single-pass scan decodes "\\" first.
-        let unescaped = JSONFormatting.unescapeJSON(#"a\\n"b"#)
+        let unescaped = try JSONFormatting.unescapeJSONChecked(#"a\\n"b"#)
         #expect(unescaped == #"a\n"b"#)
     }
 
     @Test func unescapeFallbackKeepsUnknownEscapePairsIntact() throws {
-        #expect(JSONFormatting.unescapeJSON(#"a\x9"#) == #"a\x9"#)
+        #expect(try JSONFormatting.unescapeJSONChecked(#"a\x9"#) == #"a\x9"#)
     }
 
     private func invalidJSONDiagnostic(for input: String) throws -> FormatDiagnostic {

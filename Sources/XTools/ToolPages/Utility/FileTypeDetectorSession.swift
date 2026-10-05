@@ -112,7 +112,7 @@ final class FileTypeDetectorSession: ObservableObject {
             case cancelled
         }
 
-        workGate.runDetached {
+        return workGate.runDetached {
             let accessedSecurityScope = url.startAccessingSecurityScopedResource()
             defer {
                 if accessedSecurityScope {
@@ -175,14 +175,6 @@ final class FileTypeDetectorSession: ObservableObject {
                 self.warning = nil
             case .cancelled:
                 break
-            }
-        }
-
-        // Return a completed task handle for API compatibility with callers that await inspect.
-        return Task { @MainActor in
-            // Busy work is owned by workGate; callers only need a joinable Task.
-            while self.isInspecting && self.workGate.isCurrent(generation) {
-                try? await Task.sleep(for: .milliseconds(10))
             }
         }
     }

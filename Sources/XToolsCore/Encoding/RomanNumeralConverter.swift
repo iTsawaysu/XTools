@@ -69,18 +69,6 @@ public enum RomanNumeralConverter {
         return result
     }
 
-    public static func normalizedArabicInput(_ value: String) -> String {
-        String(value.filter { ("0"..."9").contains($0) })
-    }
-
-    public static func normalizedRomanInput(_ value: String) -> String {
-        String(value.uppercased().filter { romanValues[$0] != nil })
-    }
-
-    public static func toNumber(_ value: String) -> Int? {
-        try? validatedNumber(fromRoman: value)
-    }
-
     public static func validatedRoman(fromArabic value: String) throws -> String {
         let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else {

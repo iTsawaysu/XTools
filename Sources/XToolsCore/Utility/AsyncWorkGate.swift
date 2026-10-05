@@ -61,16 +61,18 @@ public final class AsyncWorkGate {
     }
 
     /// Runs `operation` on a detached task, then publishes on the main actor only
-    /// if `token` is still current.
+    /// if `token` is still current. Returns the driving task so callers that need
+    /// to await full completion (operation + publish) can join it.
+    @discardableResult
     public func runDetached<Output: Sendable>(
         operation: @escaping @Sendable () async -> Output,
         publish: @escaping @MainActor (Output) -> Void
-    ) {
+    ) -> Task<Void, Never> {
         let scheduledToken = generation
         requestIdentity &+= 1
         let scheduledRequestIdentity = requestIdentity
         task?.cancel()
-        task = Task { [weak self] in
+        let runningTask = Task { [weak self] in
             guard !Task.isCancelled,
                   self?.isCurrent(scheduledToken) == true,
                   self?.requestIdentity == scheduledRequestIdentity else { return }
@@ -92,5 +94,7 @@ public final class AsyncWorkGate {
                 publish(output)
             }
         }
+        task = runningTask
+        return runningTask
     }
 }

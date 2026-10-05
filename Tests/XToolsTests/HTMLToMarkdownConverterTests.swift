@@ -624,7 +624,6 @@ struct HTMLToMarkdownURLFetchServiceTests {
         ]
 
         for input in invalidInputs {
-            #expect(!HTMLToMarkdownURLFetchService.isValidURL(input), "Expected \(input) to be invalid")
             #expect(throws: (any Error).self) {
                 _ = try HTMLToMarkdownURLFetchService.normalizedURL(from: input)
             }
@@ -644,7 +643,6 @@ struct HTMLToMarkdownURLFetchServiceTests {
         ]
 
         for input in validInputs {
-            #expect(HTMLToMarkdownURLFetchService.isValidURL(input), "Expected \(input) to be valid")
             #expect(throws: Never.self) {
                 _ = try HTMLToMarkdownURLFetchService.normalizedURL(from: input)
             }

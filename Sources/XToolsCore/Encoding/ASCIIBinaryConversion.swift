@@ -34,10 +34,6 @@ public enum ASCIIBinaryConversion {
         input.utf8.map(\.binaryByteString).joined(separator: " ")
     }
 
-    public static func textToASCII(_ input: String) -> String? {
-        try? validatedTextToASCII(input)
-    }
-
     public static func validatedTextToASCII(_ input: String) throws -> String {
         var values: [String] = []
         values.reserveCapacity(input.unicodeScalars.count)
@@ -49,10 +45,6 @@ public enum ASCIIBinaryConversion {
             values.append(String(scalar.value))
         }
         return values.joined(separator: " ")
-    }
-
-    public static func asciiToText(_ input: String) -> String? {
-        try? validatedASCIIToText(input)
     }
 
     public static func validatedASCIIToText(_ input: String) throws -> String {
@@ -78,10 +70,6 @@ public enum ASCIIBinaryConversion {
         }
 
         return output
-    }
-
-    public static func binaryToText(_ input: String) -> String? {
-        try? validatedBinaryToText(input)
     }
 
     public static func validatedBinaryToText(_ input: String) throws -> String {

@@ -212,16 +212,6 @@ struct ImageWorkflowClient {
         return url
     }
 
-    func saveIcon(_ icon: GeneratedIcon, defaultFilename: String) async throws -> Bool {
-        try await save(data: icon.data, defaultFilename: defaultFilename, allowedContentTypes: [.png])
-    }
-
-    func saveIcons(_ icons: [GeneratedIcon], filename: @escaping (GeneratedIcon) -> String) async throws -> Bool {
-        try await saveAll(icons, prompt: "选择保存目录") { icon, _ in
-            (icon.data, filename(icon))
-        }
-    }
-
     private static func utType(for format: ImageFileFormat) -> UTType {
         UTType(format.utTypeIdentifier) ?? .data
     }

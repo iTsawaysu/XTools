@@ -92,19 +92,11 @@ public enum JSONFormatting {
         )
     }
 
-    public static func escapeJSON(_ string: String) -> String {
-        "\"\(escapeString(string))\""
-    }
-
     public static func escapeJSONChecked(_ string: String) throws -> String {
         try StructuredTextExecution.checkCancellation()
         var output = StructuredTextOutput(format: "JSON")
         try appendEscaped(string, to: &output)
         return output.text
-    }
-
-    public static func unescapeJSON(_ string: String) -> String {
-        (try? unescapeJSONChecked(string)) ?? string
     }
 
     public static func unescapeJSONChecked(_ string: String) throws -> String {

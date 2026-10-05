@@ -8,22 +8,8 @@ struct RomanNumeralTests {
     @Test func convertsValidRomanNumerals() throws {
         #expect(RomanNumeralConverter.toRoman(5) == "V")
         #expect(RomanNumeralConverter.toRoman(2024) == "MMXXIV")
-        #expect(RomanNumeralConverter.toNumber("MMXXIV") == 2024)
-        #expect(RomanNumeralConverter.toNumber("mmxxiv") == 2024)
-    }
-
-    @Test func normalizesArabicInput() {
-        #expect(
-            RomanNumeralConverter.normalizedArabicInput(" 1 a2\n3 ")
-            == "123"
-        )
-    }
-
-    @Test func normalizesRomanInput() {
-        #expect(
-            RomanNumeralConverter.normalizedRomanInput(" i c z\nv ")
-            == "ICV"
-        )
+        #expect(try RomanNumeralConverter.validatedNumber(fromRoman: "MMXXIV") == 2024)
+        #expect(try RomanNumeralConverter.validatedNumber(fromRoman: "mmxxiv") == 2024)
     }
 
     @Test func modeBackfillUsesCurrentValidRomanOutput() throws {
@@ -31,15 +17,17 @@ struct RomanNumeralTests {
             input: "5",
             currentMode: "toRoman",
             hasError: false,
-            isEmptyInput: { RomanNumeralConverter.normalizedArabicInput($0).isEmpty }
+            isEmptyInput: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         ) { input, mode in
+            let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+
             if mode == "toRoman",
-               let number = Int(RomanNumeralConverter.normalizedArabicInput(input)),
+               let number = Int(trimmed),
                let roman = RomanNumeralConverter.toRoman(number) {
                 return roman
             }
 
-            if let number = RomanNumeralConverter.toNumber(RomanNumeralConverter.normalizedRomanInput(input)) {
+            if let number = try? RomanNumeralConverter.validatedNumber(fromRoman: trimmed) {
                 return String(number)
             }
 
@@ -47,19 +35,19 @@ struct RomanNumeralTests {
         }
 
         #expect(backfill == "V")
-        #expect(RomanNumeralConverter.toNumber(backfill ?? "") == 5)
+        #expect(try RomanNumeralConverter.validatedNumber(fromRoman: backfill ?? "") == 5)
     }
 
     @Test func rejectsNonCanonicalRomanNumerals() {
-        #expect(RomanNumeralConverter.toNumber("IIII") == nil) // repeated I form
-        #expect(RomanNumeralConverter.toNumber("IC") == nil) // invalid subtractive form
-        #expect(RomanNumeralConverter.toNumber("VX") == nil)
+        #expect((try? RomanNumeralConverter.validatedNumber(fromRoman: "IIII")) == nil) // repeated I form
+        #expect((try? RomanNumeralConverter.validatedNumber(fromRoman: "IC")) == nil) // invalid subtractive form
+        #expect((try? RomanNumeralConverter.validatedNumber(fromRoman: "VX")) == nil)
     }
 
     @Test func rejectsValuesOutsideClassicRange() {
         #expect(RomanNumeralConverter.toRoman(0) == nil)
         #expect(RomanNumeralConverter.toRoman(4000) == nil)
-        #expect(RomanNumeralConverter.toNumber("") == nil)
+        #expect((try? RomanNumeralConverter.validatedNumber(fromRoman: "")) == nil)
     }
 
     @Test func outOfRangeRomanReportsRangeNotArrangement() {

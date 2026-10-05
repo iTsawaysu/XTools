@@ -79,17 +79,6 @@ public struct DiffDisplayLine: Identifiable, Equatable, Sendable {
     }
 }
 
-public extension Array where Element == DiffDisplayLine {
-    func diffFiltered(preservesStructure: Bool) -> [DiffDisplayLine] {
-        DiffReaderProjection(
-            rows: self,
-            onlyShowsDifferences: true,
-            preservesStructure: preservesStructure,
-            enableCollapse: false
-        ).items.compactMap(\.row)
-    }
-}
-
 public struct DiffTextSegment: Equatable, Sendable {
     public enum Kind: Equatable, Sendable {
         case unchanged
@@ -249,16 +238,5 @@ public struct DiffAlignedRow: Identifiable, Equatable, Sendable {
         }
 
         return rows
-    }
-}
-
-public extension Array where Element == DiffAlignedRow {
-    func diffFiltered(preservesStructure: Bool) -> [DiffAlignedRow] {
-        DiffReaderProjection(
-            rows: self,
-            onlyShowsDifferences: true,
-            preservesStructure: preservesStructure,
-            enableCollapse: false
-        ).items.compactMap(\.row)
     }
 }

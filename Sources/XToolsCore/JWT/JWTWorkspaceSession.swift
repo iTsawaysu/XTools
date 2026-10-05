@@ -264,10 +264,6 @@ public struct JWTWorkspaceSession: Equatable, Sendable {
         }
     }
 
-    public func verificationSummaryText(_ result: JWTVerifier.VerificationResult) -> String {
-        Self.localCheckPresentation(for: result).summaryText
-    }
-
     // MARK: - Internals
 
     private mutating func applyGenerationError(_ error: JWTSigner.SigningError) {

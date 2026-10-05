@@ -5,6 +5,14 @@ import Testing
 struct JSONStructuralDiffTests {
     private let labels = JSONDiffValidation.SideLabels(left: "JSON A", right: "JSON B")
 
+    /// Mirrors the canonical display form the production diff pipeline renders
+    /// (sorted keys, 2-space indent), built from public formatting API.
+    private func canonicalDisplayText(_ text: String, options: JSONDiffOptions = JSONDiffOptions()) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return try? JSONFormatting.format(trimmed, sortKeys: true, sortArrays: options.ignoreArrayOrder, indentWidth: 2)
+    }
+
     @Test func sameStructureDifferentFormattingHasNoDiffRows() throws {
         let left = #"{"id":1,"name":"Alice","roles":["admin","dev"],"profile":{"age":30,"city":"Shanghai"}}"#
         let right = """
@@ -46,7 +54,7 @@ struct JSONStructuralDiffTests {
 
     @Test func displayTextForDiffMatchesComparableRows() throws {
         let source = #"{"b":2,"a":{"d":4,"c":3}}"#
-        let display = try #require(JSONStructuralDiff.displayTextForDiff(source))
+        let display = try #require(canonicalDisplayText(source))
         let rows = try comparableRows(left: source, right: #"{"b":3,"a":{"d":4,"c":5}}"#)
         let visibleTexts = rows.flatMap { [$0.left?.text, $0.right?.text].compactMap(\.self) }
 
@@ -75,12 +83,12 @@ struct JSONStructuralDiffTests {
     @Test func arrayOrderChangesProduceNoRowsWhenIgnoreArrayOrderIsTrue() throws {
         let left = #"{"ids":[1,2,3,4],"tags":["json","sql","xml"]}"#
         let right = #"{"ids":[4,3,2,1],"tags":["sql","json","xml"]}"#
-        let decision = try JSONStructuralDiff.cancellableAlignedDiff(
+        let decision = try JSONStructuralDiff.cancellablePreparedDiff(
             left: left,
             right: right,
             labels: labels,
             options: JSONDiffOptions(ignoreArrayOrder: true)
-        )
+        ).decision
         guard case .comparable(let rows) = decision else {
             Issue.record("Expected comparable decision")
             return
@@ -94,12 +102,12 @@ struct JSONStructuralDiffTests {
         let left = "{\"values\":[\(composed),\(decomposed)]}"
         let right = "{\"values\":[\(decomposed),\(composed)]}"
 
-        let decision = try JSONStructuralDiff.cancellableAlignedDiff(
+        let decision = try JSONStructuralDiff.cancellablePreparedDiff(
             left: left,
             right: right,
             labels: labels,
             options: JSONDiffOptions(ignoreArrayOrder: true)
-        )
+        ).decision
 
         #expect(decision == .comparable([]))
     }
@@ -164,7 +172,7 @@ struct JSONStructuralDiffTests {
 
     @Test func cancellableDiffPropagatesCancellationInsteadOfReportingTooLarge() {
         #expect(throws: CancellationError.self) {
-            _ = try JSONStructuralDiff.cancellableAlignedDiff(
+            _ = try JSONStructuralDiff.cancellablePreparedDiff(
                 left: #"{"a":1}"#,
                 right: #"{"a":2}"#,
                 labels: labels,

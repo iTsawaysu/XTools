@@ -45,24 +45,6 @@ public enum JSONStructuralDiff {
         let diagnostic: FormatDiagnostic?
     }
 
-    public static func cancellableAlignedDiff(
-        left: String,
-        right: String,
-        labels: JSONDiffValidation.SideLabels,
-        options: JSONDiffOptions = JSONDiffOptions(),
-        budget: LineDiffBudget = .standard,
-        shouldCancel: @escaping @Sendable () -> Bool = { Task.isCancelled }
-    ) throws -> Decision {
-        try cancellablePreparedDiff(
-            left: left,
-            right: right,
-            labels: labels,
-            options: options,
-            budget: budget,
-            shouldCancel: shouldCancel
-        ).decision
-    }
-
     public static func cancellablePreparedDiff(
         left: String,
         right: String,
@@ -236,15 +218,6 @@ public enum JSONStructuralDiff {
 
     private static func canonicalJSON(_ text: String, options: JSONDiffOptions) throws -> String {
         try JSONFormatting.format(text, sortKeys: true, sortArrays: options.ignoreArrayOrder, indentWidth: 2)
-    }
-
-    public static func displayTextForDiff(_ text: String, options: JSONDiffOptions = JSONDiffOptions()) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return nil
-        }
-
-        return try? canonicalJSON(trimmed, options: options)
     }
 
 }

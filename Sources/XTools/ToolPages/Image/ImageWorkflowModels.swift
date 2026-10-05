@@ -51,7 +51,6 @@ enum ImageWorkflowFailure: Error, Equatable {
     case saveFailed
     case partialSaveFailed(savedCount: Int, totalCount: Int)
     case processingFailed(ImageProcessingOperation)
-    case noConversionTarget
     case blockedCompressionSave
 }
 
@@ -106,8 +105,6 @@ extension ImageWorkflowFailure: LocalizedError {
             return "已保存 \(savedCount)/\(totalCount) 个图标。"
         case let .processingFailed(operation):
             return operation.failureMessage
-        case .noConversionTarget:
-            return "当前图片格式没有可用的转换目标。"
         case .blockedCompressionSave:
             return "当前压缩结果不小于原图，不能作为压缩结果保存。"
         }
@@ -160,8 +157,6 @@ struct ImageWorkflowDialog: Sendable {
     }
 }
 
-typealias SheetImageWorkflowDialog = ImageWorkflowDialog
-
 struct ImageWorkflowFileReader: Sendable {
     var isRegularFile: @Sendable (URL) throws -> Bool = { url in
         let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isPackageKey])
@@ -207,8 +202,6 @@ struct ImageWorkflowFileReader: Sendable {
     }
 }
 
-typealias FoundationImageWorkflowFileReader = ImageWorkflowFileReader
-
 struct ImageWorkflowFileWriter: Sendable {
     var writeHandler: @Sendable (Data, URL) throws -> Void = { data, url in
         try data.write(to: url)
@@ -219,9 +212,6 @@ struct ImageWorkflowFileWriter: Sendable {
     }
 }
 
-typealias FoundationImageWorkflowFileWriter = ImageWorkflowFileWriter
-
 typealias ImageSelectionPublisher = (_ selection: ImageInputSelection, _ publish: () -> Void) -> Void
-typealias ImageProcessedOutputRenderer = (ImageInputSelection) throws -> ProcessedImage
 typealias ImageBackgroundOutputRenderer = @Sendable (ImageProcessingInput) throws -> ProcessedImage
 typealias ImageBackgroundOutputRendererProvider = @MainActor () -> ImageBackgroundOutputRenderer

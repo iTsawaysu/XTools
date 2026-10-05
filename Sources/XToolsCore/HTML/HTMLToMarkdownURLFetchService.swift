@@ -257,10 +257,6 @@ public struct HTMLToMarkdownURLFetchService: Sendable {
         return HTMLToMarkdownFetchedDocument(html: html, responseURL: responseURL)
     }
 
-    public static func isValidURL(_ urlText: String) -> Bool {
-        (try? normalizedURL(from: urlText)) != nil
-    }
-
     public static func normalizedURL(from urlText: String) throws -> URL {
         let trimmed = urlText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {

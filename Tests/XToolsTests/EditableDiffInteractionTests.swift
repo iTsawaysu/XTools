@@ -7,6 +7,14 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct EditableDiffInteractionTests {
+    /// Mirrors the canonical display form the production diff pipeline renders
+    /// (sorted keys, 2-space indent), built from public formatting API.
+    private func canonicalDisplayText(_ text: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return try? JSONFormatting.format(trimmed, sortKeys: true, sortArrays: false, indentWidth: 2)
+    }
+
     @Test func absentDiagnosticLeavesNoReservedStatusRowAboveThePanes() async throws {
         let model = DiffDiagnosticProbeModel()
         let hosting = NSHostingView(rootView: DiffDiagnosticProbe(model: model))
@@ -510,8 +518,8 @@ struct EditableDiffInteractionTests {
     @Test func jsonNavigationMovesTheCaretInsideThePrettyPrintedChangedValue() throws {
         let left = #"{"id":7,"name":"Ada","active":true}"#
         let right = #"{"id":7,"name":"Grace","active":true}"#
-        let leftDisplay = try #require(JSONStructuralDiff.displayTextForDiff(left))
-        let rightDisplay = try #require(JSONStructuralDiff.displayTextForDiff(right))
+        let leftDisplay = try #require(canonicalDisplayText(left))
+        let rightDisplay = try #require(canonicalDisplayText(right))
         let rows = try comparableRows(left: left, right: right)
         let leftValue = MutableStringValue(left)
         let rightValue = MutableStringValue(right)
@@ -694,8 +702,8 @@ struct EditableDiffInteractionTests {
     @Test func endingRightEditingAppliesCanonicalJSONAndCurrentDiffDecorationsTogether() throws {
         let leftSource = #"{"name":"Ada","active":true}"#
         let rightSource = #"{"name":"Grace","active":false,"port":5432}"#
-        let leftDisplay = try #require(JSONStructuralDiff.displayTextForDiff(leftSource))
-        let rightDisplay = try #require(JSONStructuralDiff.displayTextForDiff(rightSource))
+        let leftDisplay = try #require(canonicalDisplayText(leftSource))
+        let rightDisplay = try #require(canonicalDisplayText(rightSource))
         let rows = try comparableRows(left: leftSource, right: rightSource)
         let leftValue = MutableStringValue(leftSource)
         let rightValue = MutableStringValue(rightSource)
@@ -763,8 +771,8 @@ struct EditableDiffInteractionTests {
     @Test func endingRightEditingFallbackStillReconciles() throws {
         let leftSource = #"{"name":"Ada","active":true}"#
         let rightSource = #"{"name":"Grace","active":false,"port":5432}"#
-        let leftDisplay = try #require(JSONStructuralDiff.displayTextForDiff(leftSource))
-        let rightDisplay = try #require(JSONStructuralDiff.displayTextForDiff(rightSource))
+        let leftDisplay = try #require(canonicalDisplayText(leftSource))
+        let rightDisplay = try #require(canonicalDisplayText(rightSource))
         let rows = try comparableRows(left: leftSource, right: rightSource)
         let leftValue = MutableStringValue(leftSource)
         let rightValue = MutableStringValue(rightSource)
@@ -822,8 +830,8 @@ struct EditableDiffInteractionTests {
     @Test func endingEditingDoesNotDecorateRowsThatDoNotMatchTheOtherVisibleSide() throws {
         let leftSource = #"{"name":"Ada"}"#
         let rightSource = #"{"name":"Grace"}"#
-        let leftDisplay = try #require(JSONStructuralDiff.displayTextForDiff(leftSource))
-        let rightDisplay = try #require(JSONStructuralDiff.displayTextForDiff(rightSource))
+        let leftDisplay = try #require(canonicalDisplayText(leftSource))
+        let rightDisplay = try #require(canonicalDisplayText(rightSource))
         let rows = try comparableRows(left: leftSource, right: rightSource)
         let leftValue = MutableStringValue(leftSource)
         let rightValue = MutableStringValue(rightSource)
