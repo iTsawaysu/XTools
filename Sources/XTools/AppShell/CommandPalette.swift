@@ -434,56 +434,27 @@ struct CommandPaletteView: View {
         case .sectionTitle(let text):
             CommandPaletteSectionTitle(text, count: sectionCount)
         case .tool(let entry):
-            CommandPaletteRow(
+            paletteRow(
+                for: item,
                 title: entry.title,
                 highlightRanges: highlightRanges,
                 subtitle: subtitleAnnotation?.text ?? entry.categoryTitle,
                 subtitleHighlightRanges: subtitleAnnotation?.highlightRanges ?? [],
                 systemImage: entry.systemImage,
-                isActive: item.id == activeItemID,
-                isKeyboardActive: item.id == activeItemID
-                    && keyboardDrivenSession == sessionModel.session
-            ) {
-                activate(item)
-            }
-            .background {
-                CommandPaletteRowAttachment(
-                    itemID: item.id,
-                    selectableIndex: selectableIndex,
-                    registry: contentLifecycle.revealRegistry,
-                    session: presentationSession,
-                    interactionEnabled: isPresentationReady,
-                    revealRequest: currentRevealRequest?.id == item.id
-                        ? currentRevealRequest : nil,
-                    pointerMovementTracker: contentLifecycle.pointerMovementTracker,
-                    onMouseMove: { setActiveItem(item) }
-                )
-            }
+                activeItemID: activeItemID,
+                selectableIndex: selectableIndex
+            )
         case .command(let entry):
-            CommandPaletteRow(
+            paletteRow(
+                for: item,
                 title: entry.title,
                 highlightRanges: highlightRanges,
                 subtitle: entry.subtitle,
+                subtitleHighlightRanges: [],
                 systemImage: entry.systemImage,
-                isActive: item.id == activeItemID,
-                isKeyboardActive: item.id == activeItemID
-                    && keyboardDrivenSession == sessionModel.session
-            ) {
-                activate(item)
-            }
-            .background {
-                CommandPaletteRowAttachment(
-                    itemID: item.id,
-                    selectableIndex: selectableIndex,
-                    registry: contentLifecycle.revealRegistry,
-                    session: presentationSession,
-                    interactionEnabled: isPresentationReady,
-                    revealRequest: currentRevealRequest?.id == item.id
-                        ? currentRevealRequest : nil,
-                    pointerMovementTracker: contentLifecycle.pointerMovementTracker,
-                    onMouseMove: { setActiveItem(item) }
-                )
-            }
+                activeItemID: activeItemID,
+                selectableIndex: selectableIndex
+            )
         case .empty:
             VStack(spacing: 10) {
                 Text("没有匹配的工具或命令")
@@ -506,6 +477,46 @@ struct CommandPaletteView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: CommandPaletteMetrics.listHeight)
+        }
+    }
+
+    /// Shared tool/command row construction: both palette entries differ only
+    /// in their subtitle source, so the row, its activation, and the reveal
+    /// attachment stay in one place.
+    private func paletteRow(
+        for item: CommandPaletteRowProjection,
+        title: String,
+        highlightRanges: [Range<String.Index>],
+        subtitle: String?,
+        subtitleHighlightRanges: [Range<String.Index>],
+        systemImage: String,
+        activeItemID: String?,
+        selectableIndex: Int?
+    ) -> some View {
+        CommandPaletteRow(
+            title: title,
+            highlightRanges: highlightRanges,
+            subtitle: subtitle,
+            subtitleHighlightRanges: subtitleHighlightRanges,
+            systemImage: systemImage,
+            isActive: item.id == activeItemID,
+            isKeyboardActive: item.id == activeItemID
+                && keyboardDrivenSession == sessionModel.session
+        ) {
+            activate(item)
+        }
+        .background {
+            CommandPaletteRowAttachment(
+                itemID: item.id,
+                selectableIndex: selectableIndex,
+                registry: contentLifecycle.revealRegistry,
+                session: presentationSession,
+                interactionEnabled: isPresentationReady,
+                revealRequest: currentRevealRequest?.id == item.id
+                    ? currentRevealRequest : nil,
+                pointerMovementTracker: contentLifecycle.pointerMovementTracker,
+                onMouseMove: { setActiveItem(item) }
+            )
         }
     }
 

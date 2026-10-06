@@ -191,8 +191,6 @@ enum CommandPaletteTrace {
 #endif
     }
 
-    static func dismissed(session: Int) {}
-
     static func finish(session: Int) {
 #if DEBUG
         guard isPresentationTraceEnabled else { return }

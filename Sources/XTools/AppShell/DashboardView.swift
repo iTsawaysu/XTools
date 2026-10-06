@@ -268,11 +268,18 @@ private struct WorkbenchRecentButton: View {
         .accessibilityIdentifier("dashboard.recent.\(tool.id.rawValue)")
     }
 
-    private var relativeTimeText: String {
+    /// RelativeDateTimeFormatter construction is expensive; the dashboard
+    /// renders a handful of rows per body pass, so one shared instance serves
+    /// them all. UI reads stay on the main actor.
+    private static let relativeTimeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
         formatter.dateTimeStyle = .named
         formatter.unitsStyle = .full
-        return formatter.localizedString(for: lastOpenedAt, relativeTo: Date())
+        return formatter
+    }()
+
+    private var relativeTimeText: String {
+        Self.relativeTimeFormatter.localizedString(for: lastOpenedAt, relativeTo: Date())
     }
 
 }

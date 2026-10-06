@@ -411,10 +411,6 @@ enum SourceControlToolPreferenceKeys {
         "tools.sourceControl.scanDirectory.v1",
         default: ""
     )
-
-    static let allRawKeys = [
-        scanDirectory.rawKey
-    ]
 }
 
 @MainActor

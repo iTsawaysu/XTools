@@ -137,7 +137,6 @@ final class CommandPalettePresentationModel: ObservableObject {
     func close() {
         guard state.shows else { return }
         let closingSession = state.session
-        CommandPaletteTrace.dismissed(session: closingSession)
         var next = state
         next.shows = false
         next.session += 1
