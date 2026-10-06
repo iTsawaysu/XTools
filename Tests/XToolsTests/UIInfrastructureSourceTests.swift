@@ -455,15 +455,16 @@ struct UIInfrastructureSourceTests {
 
     @Test func emptyResultSurfacesAvoidScrollContainers() throws {
         let textComponents = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextComponents.swift")
+        let outputSurface = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexOutputSurface.swift")
         let sharedComponents = try readSharedBagComponents()
         let resultPresence = try readSource("Sources/XTools/ToolPages/Workbench/Diagnostics/IndexResultPresence.swift")
         let chronometer = try readSource("Sources/XTools/ToolPages/Time/ChronometerPage.swift")
         let httpStatus = try readSource("Sources/XTools/ToolPages/Web/HTTPStatusCodesPage.swift")
 
         contains(textComponents, "if text.isEmpty", "Output surfaces must branch on empty text before creating a ScrollView")
-        contains(textComponents, "placeholderBody", "Output surfaces must render empty placeholders without creating a ScrollView")
-        contains(textComponents, "if scrollsInternally {\n                    ScrollView {", "Output surfaces must only create ScrollView for non-empty internally scrolling output")
-        contains(textComponents, "private var placeholderBody: some View", "Output surfaces must have a non-scrolling placeholder body")
+        contains(outputSurface, "placeholderBody", "Output surfaces must render empty placeholders without creating a ScrollView")
+        contains(outputSurface, "if scrollsInternally {\n                    ScrollView {", "Output surfaces must only create ScrollView for non-empty internally scrolling output")
+        contains(outputSurface, "private var placeholderBody: some View", "Output surfaces must have a non-scrolling placeholder body")
         contains(textComponents, ".frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)", "Output surfaces must keep non-scrolling content top-aligned instead of centering it in tall panes")
         contains(sharedComponents, "struct IndexScrollableKV: View", "Shared scrollable KV remains available for explicit scrolling exceptions")
         contains(resultPresence, "if presentation.phase == .empty", "Scrollable result presence must render empty content without a ScrollView")
@@ -474,10 +475,11 @@ struct UIInfrastructureSourceTests {
 
     @Test func fillingOutputSurfacesUseCompactEmptyMinimumHeight() throws {
         let source = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextComponents.swift")
+        let outputSurface = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexOutputSurface.swift")
 
-        contains(source, "private var effectiveMinHeight: CGFloat", "Output surfaces must compute a compact minimum height for filling layouts")
+        contains(outputSurface, "private var effectiveMinHeight: CGFloat", "Output surfaces must compute a compact minimum height for filling layouts")
         contains(source, "fillsHeight ? 60 : minHeight", "Filling output surfaces must use the same compact 60pt floor as input text areas")
-        contains(source, "minHeight: effectiveMinHeight", "Output placeholder and content bodies must use the compact minimum height")
+        contains(outputSurface, "minHeight: effectiveMinHeight", "Output placeholder and content bodies must use the compact minimum height")
     }
 
     @Test func sharedNumberInputSupportsDirectEditingAndBounds() throws {

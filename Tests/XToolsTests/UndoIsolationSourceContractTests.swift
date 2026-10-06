@@ -34,7 +34,7 @@ struct UndoIsolationSourceContractTests {
     }
 
     @Test func singleLineFieldEditorsOwnPrivateUndoManager() throws {
-        let components = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextComponents.swift")
+        let components = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextCaretViews.swift")
         let segment = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControlledSegmentInput.swift")
         let geometry = try readSource("Sources/XTools/Shared/Components/AppKitTextFieldGeometry.swift")
 
@@ -115,7 +115,8 @@ struct UndoIsolationSourceContractTests {
     }
 
     @Test func programmaticTextResetsSkipUndoRegistration() throws {
-        let source = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextComponents.swift")
+        let source = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextCaretViews.swift")
+        let components = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextComponents.swift")
 
         contains(
             source,
@@ -133,7 +134,7 @@ struct UndoIsolationSourceContractTests {
             "Programmatic replacement must discard undo and redo actions that describe the previous text buffer"
         )
         contains(
-            source,
+            components,
             "secureTextField.setStringFromExternalBinding(text)",
             "Secure binding updates must clear the field-owned history after external replacement"
         )

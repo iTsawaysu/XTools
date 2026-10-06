@@ -181,7 +181,7 @@ struct EditableDiffSourceContractTests {
         contains(source, "scrollView.contentView = IndexLeadingLockedClipView(frame: .zero)", "Diff editors must lock hidden horizontal clip movement without using a separate native ruler column")
         contains(source, "let lineNumberView = IndexDiffLineNumberOverlayView(scrollView: scrollView, textView: textView)", "Diff line numbers must be drawn as an overlay inside the editor surface")
         contains(source, "private final class IndexDiffLineNumberOverlayView: IndexLineNumberColumnView", "Diff line numbers must not use a native ruler view that creates a separate gutter column")
-        let lineNumberChrome = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextComponents.swift")
+        let lineNumberChrome = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexEditorLineNumberGutter.swift")
         contains(lineNumberChrome, "override func hitTest(_ point: NSPoint) -> NSView? {\n        nil", "Diff line-number overlays must not intercept editor clicks")
         doesNotContain(source, "hasVerticalRuler = true", "Diff editors must not use AppKit vertical rulers for the reference-matched line-number UI")
         doesNotContain(source, "rulersVisible = true", "Diff editors must not reveal AppKit ruler chrome")

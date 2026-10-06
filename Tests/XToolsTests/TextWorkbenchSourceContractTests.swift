@@ -437,6 +437,7 @@ struct TextWorkbenchSourceContractTests {
         let workbench = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextConversionWorkbench.swift")
         let sharedComponents = try readSharedBagComponents()
         let textComponents = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextComponents.swift")
+        let outputSurface = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexOutputSurface.swift")
         let json = try readSource("Sources/XTools/ToolPages/Development/JSONFormatterPage.swift")
         let xml = try readSource("Sources/XTools/ToolPages/Development/XMLFormatterPage.swift")
         let yaml = try readSource("Sources/XTools/ToolPages/Development/YAMLPrettifyPage.swift")
@@ -475,8 +476,8 @@ struct TextWorkbenchSourceContractTests {
         doesNotContain(workbench, "accessibilityHidden(!isVisible)", "The fixed pair must expose both panes consistently")
         contains(workbench, "staticDivider", "The fixed pair must keep its existing static separator")
         contains(textComponents, "var expandsWithContent = false", "Text areas must separate height filling from internal scrolling")
-        contains(textComponents, "var scrollsInternally = true", "Output surfaces must keep internal scrolling as the default")
-        contains(textComponents, "if scrollsInternally {\n                    ScrollView {", "Output surfaces must make the scroll container conditional")
+        contains(outputSurface, "var scrollsInternally = true", "Output surfaces must keep internal scrolling as the default")
+        contains(outputSurface, "if scrollsInternally {\n                    ScrollView {", "Output surfaces must make the scroll container conditional")
 
         contains(formatterHub, "workspaceSemantic: .structuredEditorTransform", "Formatter hub must use the editor-transform semantic that resolves the compact fixed page shell")
         contains(docker, "workspaceSemantic: .structuredEditorTransform", "Docker Run to Compose must use the editor-transform semantic that resolves the compact fixed page shell")
@@ -572,6 +573,8 @@ struct TextWorkbenchSourceContractTests {
         let sharedComponents = try readSharedBagComponents()
         let workbench = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextConversionWorkbench.swift")
         let textComponents = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextComponents.swift")
+        let outputSurface = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexOutputSurface.swift")
+        let scrollGeometry = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextScrollGeometry.swift")
         let url = try readSource("Sources/XTools/ToolPages/Converter/URLCoderPage.swift")
         let base64 = try readSource("Sources/XTools/ToolPages/Converter/Base64StringPage.swift")
         let asciiBinary = try readSource("Sources/XTools/ToolPages/Converter/ASCIIBinaryPage.swift")
@@ -589,18 +592,18 @@ struct TextWorkbenchSourceContractTests {
         contains(workbench, "IndexWorkspaceTextArea(\n                placeholder: placeholder,\n                text: $input,\n                fillsHeight: true,\n                autoFocus: autoFocus,", "Copy-transform inputs must stay fixed while wrapping according to the workspace contract")
         contains(workbench, "IndexWorkspaceOutputSurface(\n                    text: output,\n                    placeholder: IndexEmptyStateCopy.outputWillShowHere,\n                    fillsHeight: true,\n                    lineNumbers: outputLineNumbers,\n                    colorize: outputColorize,\n                    workspaceSemantic: workspaceSemantic", "Copy-transform outputs must scroll internally and wrap according to the workspace contract")
         contains(textComponents, "var lineBreakMode: NSLineBreakMode = .byCharWrapping", "Output surfaces must wrap long tokens by default while still allowing caller overrides")
-        contains(textComponents, "Text(indexWrappingAttributedText(text, lineBreakMode: lineBreakMode))", "Plain output must apply explicit wrapping without changing copied text")
-        contains(textComponents, "Text(indexWrappingAttributedText(line.isEmpty ? AttributedString(\" \") : colorize(line), lineBreakMode: lineBreakMode))", "Line-numbered colored output must preserve syntax highlighting while applying wrapping")
-        contains(textComponents, "else if let colorize {\n            colorizedBody(colorize)", "Syntax-colored output must have a non-gutter rendering path")
-        contains(textComponents, "private func colorizedBody(_ colorize: @escaping (String) -> AttributedString)", "The syntax-only output path must preserve dedicated colorized rendering without line numbers")
-        contains(textComponents, "Text(indexWrappingAttributedText(combined, lineBreakMode: lineBreakMode))", "Syntax-only colorize path must render one Text from a combined AttributedString")
+        contains(outputSurface, "Text(indexWrappingAttributedText(text, lineBreakMode: lineBreakMode))", "Plain output must apply explicit wrapping without changing copied text")
+        contains(outputSurface, "Text(indexWrappingAttributedText(line.isEmpty ? AttributedString(\" \") : colorize(line), lineBreakMode: lineBreakMode))", "Line-numbered colored output must preserve syntax highlighting while applying wrapping")
+        contains(outputSurface, "else if let colorize {\n            colorizedBody(colorize)", "Syntax-colored output must have a non-gutter rendering path")
+        contains(outputSurface, "private func colorizedBody(_ colorize: @escaping (String) -> AttributedString)", "The syntax-only output path must preserve dedicated colorized rendering without line numbers")
+        contains(outputSurface, "Text(indexWrappingAttributedText(combined, lineBreakMode: lineBreakMode))", "Syntax-only colorize path must render one Text from a combined AttributedString")
         doesNotContain(
-            sourceSlice(textComponents, from: "private func colorizedBody(_ colorize: @escaping (String) -> AttributedString)", to: "private var gutteredBody"),
+            sourceSlice(outputSurface, from: "private func colorizedBody(_ colorize: @escaping (String) -> AttributedString)", to: "private var gutteredBody"),
             "ForEach(Array(lines.enumerated())",
             "Syntax-only colorize path must not create one SwiftUI Text per line"
         )
         contains(textComponents, "textView.scrollRangeToVisible(clampedSelectedRange(for: textView))", "Fixed internal editors must reveal the current insertion point after large paste/edit operations")
-        contains(textComponents, "guard !growsWithContent else { return }", "Insertion-point reveal must not interfere with naturally growing text areas")
+        contains(scrollGeometry, "guard !growsWithContent else { return }", "Insertion-point reveal must not interfere with naturally growing text areas")
         contains(
             sourceSlice(textComponents, from: "func measure(_ textView: NSTextView)", to: "private func configureUndoManager()"),
             "guard growsWithContent else { return }",
