@@ -323,6 +323,7 @@ struct IconSemanticContractTests {
     @Test func iconOnlyDateAndFavoriteControlsExposeDiscoverableActions() throws {
         let datePicker = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexDatePicker.swift")
         let sidebar = try readSource("Sources/XTools/AppShell/SidebarView.swift")
+        let sidebarRowComponents = try readSource("Sources/XTools/AppShell/SidebarViewRowComponents.swift")
 
         let trigger = sourceSlice(
             datePicker,
@@ -343,7 +344,7 @@ struct IconSemanticContractTests {
         contains(datePicker, #"help: "下一个月""#, "Next-month call site must name its action")
 
         let favorite = sourceSlice(
-            sidebar,
+            sidebarRowComponents,
             from: "// Favorite toggle:",
             to: ".opacity(isFavorite || hoverState.isHovered ? 1 : 0)"
         )
@@ -379,13 +380,14 @@ struct IconSemanticContractTests {
         let dateCalculator = try readSource("Sources/XTools/ToolPages/Time/DateCalculatorPage.swift")
         let titlebar = try readSource("Sources/XTools/AppShell/TitlebarView.swift")
         let sidebar = try readSource("Sources/XTools/AppShell/SidebarView.swift")
+        let sidebarRowComponents = try readSource("Sources/XTools/AppShell/SidebarViewRowComponents.swift")
         let timezone = try readSource("Sources/XTools/ToolPages/Time/TimezoneViewerPage.swift")
         let jwt = try readSource("Sources/XTools/ToolPages/Web/JWTParserPage.swift")
 
         contains(chronometer, #"chronometer.isRunning ? "pause.fill" : "play.fill""#, "Chronometer must keep distinct pause and start state symbols")
         contains(dateCalculator, #"isOn ? "checkmark.square.fill" : "square""#, "Date options must keep checked and unchecked state symbols")
         contains(titlebar, #"isFavorite ? "star.fill" : "star""#, "Toolbar favorite state must keep filled and unfilled symbols")
-        contains(sidebar, #"isFavorite ? "star.fill" : "star""#, "Sidebar favorite state must keep filled and unfilled symbols")
+        contains(sidebarRowComponents, #"isFavorite ? "star.fill" : "star""#, "Sidebar favorite state must keep filled and unfilled symbols")
         contains(timezone, #"isFavorite ? "star.fill" : "star""#, "Timezone favorite state must keep filled and unfilled symbols")
         // JWT 三处状态枚举的符号/颜色 chrome 收敛进单一 JWTStatusChrome 后，
         // 成功/失败符号各只剩一份共享映射。

@@ -8,7 +8,12 @@ struct MotionSourceContractTests {
         let motion = try readSource("Sources/XTools/Shared/ToolMotion.swift")
         let metrics = try readSource("Sources/XTools/Shared/ToolMetrics.swift")
         let root = try readSource("Sources/XTools/AppShell/RootView.swift")
+        let appShellThemeValues = try readSource("Sources/XTools/AppShell/AppShellThemeValues.swift")
+        let paletteGeometry = try readSource("Sources/XTools/AppShell/CommandPaletteVisibilityGeometry.swift")
+        let paletteOverlayHost = try readSource("Sources/XTools/AppShell/CommandPaletteOverlayHost.swift")
+        let rootViewModel = try readSource("Sources/XTools/AppShell/RootViewModel.swift")
         let sidebar = try readSource("Sources/XTools/AppShell/SidebarView.swift")
+        let sidebarRowComponents = try readSource("Sources/XTools/AppShell/SidebarViewRowComponents.swift")
         let sidebarRenderer = try readSource("Sources/XTools/AppShell/SidebarNavigationListCoordinator.swift")
         let disclosureBody = try readSource("Sources/XTools/Shared/ToolDisclosureBody.swift")
         let resultPresence = try readSource("Sources/XTools/ToolPages/Workbench/Diagnostics/IndexResultPresence.swift")
@@ -41,7 +46,7 @@ struct MotionSourceContractTests {
         doesNotContain(sidebar, "ForEach(sidebarEntries)", "Sidebar must not regress to structural SwiftUI row insertion and removal")
         doesNotContain(sidebar, ".animation(disclosureAnimation, value: expandedGroupIDs)", "Sidebar disclosure geometry must have one AppKit animation owner")
         doesNotContain(sidebar, "private var chevronAnimation: Animation?", "Sidebar group chevrons must not keep a local Animation? helper outside ToolMotion.animation")
-        contains(sidebar, "ToolMotion.animation(\n                ToolMotion.Preset.accordion,\n                reduceMotion: reduceMotion || isSearchActive\n            )", "Sidebar group chevron rotation must route through ToolMotion.animation with search/Reduce Motion short-circuit")
+        contains(sidebarRowComponents, "ToolMotion.animation(\n                ToolMotion.Preset.accordion,\n                reduceMotion: reduceMotion || isSearchActive\n            )", "Sidebar group chevron rotation must route through ToolMotion.animation with search/Reduce Motion short-circuit")
         doesNotContain(sidebar, "ToolDisclosureBody(", "Sidebar movable tool rows must not be split across clipped per-group identity domains")
         contains(motion, "static let orderedContent = Curve.smoothOut(duration: Duration.fast)", "Ordered mode reveals must use a shared structural timing")
         contains(motion, "enum OrderedDirection", "Ordered mode direction must use a shared semantic type")
@@ -59,24 +64,24 @@ struct MotionSourceContractTests {
         doesNotContain(motion, "static let pageContent", "Tool page switching is an entry hot path and must not define a page-content animation preset")
         doesNotContain(motion, "static var pageContent", "Tool page switching is an entry hot path and must not define a page-content transition token")
 
-        contains(root, "ToolMotion.Preset.shellResize", "Root shell resize/focus motion must use ToolMotion")
-        contains(root, "CommandPaletteScrim", "Command palette dimming must be a root-owned full-window layer")
-        contains(root, "private struct CommandPalettePresentationMotionModifier<", "First and retained palette presentations must share one stable interpolation owner")
-        contains(root, "@State private var presentationProgress: CGFloat = 0", "Palette visibility progress must be explicit animated state — the panel can never paint a full-bright first frame")
-        contains(root, ".onChange(of: presentation.shows)", "The palette arcs must key on the stable presentation state through one explicit progress transaction")
-        contains(root, ".transition(.identity)", "Mounting retained palette content must not add a second insertion transition")
+        contains(rootViewModel, "ToolMotion.Preset.shellResize", "Root shell resize/focus motion must use ToolMotion")
+        contains(paletteOverlayHost, "CommandPaletteScrim", "Command palette dimming must be a root-owned full-window layer")
+        contains(paletteOverlayHost, "private struct CommandPalettePresentationMotionModifier<", "First and retained palette presentations must share one stable interpolation owner")
+        contains(paletteOverlayHost, "@State private var presentationProgress: CGFloat = 0", "Palette visibility progress must be explicit animated state — the panel can never paint a full-bright first frame")
+        contains(paletteOverlayHost, ".onChange(of: presentation.shows)", "The palette arcs must key on the stable presentation state through one explicit progress transaction")
+        contains(paletteOverlayHost, ".transition(.identity)", "Mounting retained palette content must not add a second insertion transition")
         contains(root, "withToolAnimation(ToolMotion.Preset.modal) {\n            navigationActions.closeCommandPalette()", "v3: palette open/close must run inside one explicit animation transaction")
         doesNotContain(commandPalette, "ToolMotion.Preset.orderedContent.delay", "Command palette rows must not create per-row arrival animations during modal presentation")
-        contains(root, "private struct CommandPaletteOverlayHost: View", "Command palette presentation animation must live in its lightweight overlay observer")
-        contains(root, ".allowsHitTesting(isPresented)", "The retained palette scrim must stop hit testing immediately on close")
+        contains(paletteOverlayHost, "struct CommandPaletteOverlayHost: View", "Command palette presentation animation must live in its lightweight overlay observer")
+        contains(paletteOverlayHost, ".allowsHitTesting(isPresented)", "The retained palette scrim must stop hit testing immediately on close")
         contains(commandPalette, ".allowsHitTesting(isPresentationReady)", "The retained palette panel must stop hit testing immediately on close")
         doesNotContain(root, "value: presentation.shows", "One progress owner only — stacked .animation(value:) arcs are the first-frame race that flashes white")
         contains(commandPalette, "transaction.animation = nil", "Session row replacement must not inherit the panel visibility animation")
-        contains(root, ">: @MainActor AnimatableModifier", "Palette scrim and panel must consume one SwiftUI interpolation owner")
-        contains(commandPalette, "struct CommandPaletteVisibilityGeometry: Equatable", "Palette geometry must expose a pure regression-testable progress mapping")
-        contains(commandPalette, "offsetY: reduceMotion", "Reduce Motion must remove palette translation")
+        contains(paletteOverlayHost, ">: @MainActor AnimatableModifier", "Palette scrim and panel must consume one SwiftUI interpolation owner")
+        contains(paletteGeometry, "struct CommandPaletteVisibilityGeometry: Equatable", "Palette geometry must expose a pure regression-testable progress mapping")
+        contains(paletteGeometry, "offsetY: reduceMotion", "Reduce Motion must remove palette translation")
         doesNotContain(commandPalette, "reduceMotion || !isPresented", "Presentation direction must not hard-switch palette geometry during reversal")
-        contains(root, "withToolAnimation(ToolMotion.Preset.shellResize, reduceMotion: reduceMotion)", "Root shell explicit toggles must route through ToolMotion")
+        contains(rootViewModel, "withToolAnimation(ToolMotion.Preset.shellResize, reduceMotion: reduceMotion)", "Root shell explicit toggles must route through ToolMotion")
         doesNotContain(root, "PaletteIconFlightCoordinator", "The decorative palette icon continuity flight is removed: palette jumps switch directly")
         doesNotContain(root, ".animation(ToolMotion.animation(ToolMotion.Preset.modal, reduceMotion: reduceMotion), value: viewModel.commandPalettePresentation.shows)", "Command palette modal animation must not apply to the whole root tree")
         doesNotContain(root, ".easeOut(duration: 0.18)", "Root shell must not keep hard-coded shell animation durations")
@@ -117,8 +122,8 @@ struct MotionSourceContractTests {
         contains(host, ".id(tool.id)\n                            .onAppear { ToolPageEntryTrace.pageAppeared(traceContext) }", "Tool detail host must keep the identity-bound page appeared marker without adding page content motion")
 
         contains(sidebarRenderer, "ToolMotion.AppKitPreset.accordion", "Sidebar disclosure motion must use the shared accordion preset")
-        contains(root, "enum SidebarVisibility: Equatable", "Sidebar visibility must be an explicit AppShell state")
-        contains(root, "withToolAnimation(ToolMotion.Preset.shellResize, reduceMotion: reduceMotion)", "Sidebar visibility changes must have one explicit motion owner")
+        contains(appShellThemeValues, "enum SidebarVisibility: Equatable", "Sidebar visibility must be an explicit AppShell state")
+        contains(rootViewModel, "withToolAnimation(ToolMotion.Preset.shellResize, reduceMotion: reduceMotion)", "Sidebar visibility changes must have one explicit motion owner")
         doesNotContain(root, ".animation(ToolMotion.animation(ToolMotion.Preset.shellResize", "Root must not add a second implicit shell animation")
         doesNotContain(sidebar, "collapsedToolList", "Sidebar must not regress to the 46-tool collapsed rail")
         doesNotContain(sidebar, "Animation.easeOut(duration: 0.18)", "Sidebar resize motion must not keep a local hard-coded duration")
@@ -429,6 +434,7 @@ struct MotionSourceContractTests {
         let titlebar = try readSource("Sources/XTools/AppShell/TitlebarView.swift")
         let buttonStyles = try readSource("Sources/XTools/AppShell/TitlebarButtonStyles.swift")
         let sidebar = try readSource("Sources/XTools/AppShell/SidebarView.swift")
+        let sidebarRowComponents = try readSource("Sources/XTools/AppShell/SidebarViewRowComponents.swift")
         let palette = try readSource("Sources/XTools/AppShell/CommandPalette.swift")
         let detailHost = try readSource("Sources/XTools/AppShell/ToolDetailHostView.swift")
 
@@ -455,9 +461,9 @@ struct MotionSourceContractTests {
         doesNotContain(palette, ".accessibilityHidden(sessionModel.query.isEmpty)", "Command palette clear must not rely on an ineffective hidden accessibility wrapper")
 
         // Surface 5: favorite star keeps a fixed trailing slot, revealing via opacity on hover/favorite.
-        contains(sidebar, ".opacity(isFavorite || hoverState.isHovered ? 1 : 0)", "Sidebar favorite star must occupy a fixed trailing slot and reveal via opacity")
-        contains(sidebar, ".allowsHitTesting(isFavorite || hoverState.isHovered)", "Sidebar favorite star must disable hit testing when hidden")
-        contains(sidebar, ".toolMotionIconSwap(id: isFavorite)", "Sidebar favorite star must keep its shared icon swap")
+        contains(sidebarRowComponents, ".opacity(isFavorite || hoverState.isHovered ? 1 : 0)", "Sidebar favorite star must occupy a fixed trailing slot and reveal via opacity")
+        contains(sidebarRowComponents, ".allowsHitTesting(isFavorite || hoverState.isHovered)", "Sidebar favorite star must disable hit testing when hidden")
+        contains(sidebarRowComponents, ".toolMotionIconSwap(id: isFavorite)", "Sidebar favorite star must keep its shared icon swap")
 
         // Forbidden zone: tool page replacement animates only through the
         // whitelisted host-owned `.toolPageArrival` modifier; no raw
@@ -632,6 +638,8 @@ struct MotionSourceContractTests {
         let root = try readSource("Sources/XTools/AppShell/RootView.swift")
         let commandPalette = try readSource("Sources/XTools/AppShell/CommandPalette.swift")
         let highlight = try readSource("Sources/XTools/AppShell/CommandPaletteSelectionHighlight.swift")
+        let paletteGeometry = try readSource("Sources/XTools/AppShell/CommandPaletteVisibilityGeometry.swift")
+        let paletteOverlayHost = try readSource("Sources/XTools/AppShell/CommandPaletteOverlayHost.swift")
 
         // Terminal tokens (prototype MOTION d/x/s.cmdk* + listStagger).
         contains(motion, "enum PaletteMotion", "Palette choreography must own one terminal-value namespace")
@@ -643,17 +651,17 @@ struct MotionSourceContractTests {
 
         // Open/close share one directional animation owner; every close path
         // lands on the same arc (prototype closeCmdk unification).
-        contains(root, "shows\n                    ? ToolMotion.PaletteMotion.open\n                    : ToolMotion.PaletteMotion.close,", "One directional selector must own open vs close arcs")
+        contains(paletteOverlayHost, "shows\n                    ? ToolMotion.PaletteMotion.open\n                    : ToolMotion.PaletteMotion.close,", "One directional selector must own open vs close arcs")
 
         // The scrim dims through the same single panel progress as the panel
         // (0.30 ceiling); no independent directional scrim arcs may queue
         // beside the panel's animation.
-        contains(root, ".opacity(geometry.opacity * 0.30)", "The scrim must dim through the single panel progress interpolation")
+        contains(paletteOverlayHost, ".opacity(geometry.opacity * 0.30)", "The scrim must dim through the single panel progress interpolation")
         doesNotContain(root, "ToolMotion.PaletteMotion.scrim", "The scrim must not own an independent animation arc beside the panel progress")
 
         // Geometry: one continuous mapping (no hard-switch on reversal), and
         // no scale channel that would resample the native-view subtree.
-        contains(commandPalette, "ToolMotion.PaletteMotion.riseDistance * (1 - progress)", "Offset must derive from the shared 8pt travel")
+        contains(paletteGeometry, "ToolMotion.PaletteMotion.riseDistance * (1 - progress)", "Offset must derive from the shared 8pt travel")
         doesNotContain(commandPalette, "scaleEffect", "Panel motion must not scale the native-view subtree")
         doesNotContain(commandPalette, "let scale: CGFloat", "Palette geometry must expose only opacity and translation channels")
 

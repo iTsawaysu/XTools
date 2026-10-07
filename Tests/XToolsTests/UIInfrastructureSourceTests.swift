@@ -72,6 +72,7 @@ struct UIInfrastructureSourceTests {
         let geometry = try readSource("Sources/XTools/Shared/Components/AppKitTextFieldGeometry.swift")
         let dateCalculator = try readSource("Sources/XTools/ToolPages/Time/DateCalculatorPage.swift")
         let textEditingConfig = try readSource("Sources/XTools/Shared/Components/AppKitTextEditingConfiguration.swift")
+        let sidebarSearchField = try readSource("Sources/XTools/AppShell/SidebarSearchTextField.swift")
         let inputSurface = sourceSlice(
             source,
             from: "struct IndexTextInput: View",
@@ -95,7 +96,7 @@ struct UIInfrastructureSourceTests {
         contains(geometry, "override func select(", "Shared text cells must apply the content rectangle to native selection")
         contains(inputSurface, "contentInsets: IndexTextFieldContentInsets(leading: 11, trailing: trailingInset)", "IndexTextInput must pass its visual padding into the AppKit cell")
         contains(inputSurface, ".frame(maxWidth: .infinity, maxHeight: .infinity)", "IndexTextInput must let the native field fill the complete visible background")
-        contains(source, "func sizeThatFits(\n        _ proposal: ProposedViewSize,", "The AppKit bridge must accept the visible field height instead of keeping NSTextField's intrinsic 15pt height")
+        contains(sidebarSearchField, "func sizeThatFits(\n        _ proposal: ProposedViewSize,", "The AppKit bridge must accept the visible field height instead of keeping NSTextField's intrinsic 15pt height")
         contains(source, "return CGSize(width: proposal.width ?? textField.fittingSize.width, height: height)", "The AppKit field must use the complete proposed height for hit testing")
         doesNotContain(inputSurface, ".padding(.leading, 11)", "IndexTextInput must not shrink the native hit target with outer leading padding")
         doesNotContain(inputSurface, ".padding(.trailing, trailingInset)", "IndexTextInput must not shrink the native hit target with outer trailing padding")
@@ -238,6 +239,7 @@ struct UIInfrastructureSourceTests {
 
     @Test func sidebarSearchUsesUndoableAppKitTextField() throws {
         let source = try readSource("Sources/XTools/AppShell/SidebarView.swift")
+        let sidebarSearchField = try readSource("Sources/XTools/AppShell/SidebarSearchTextField.swift")
         let lifecycle = try readSource("Sources/XTools/Shared/Components/AppKitSearchFieldLifecycle.swift")
         let searchSurface = sourceSlice(
             source,
@@ -245,11 +247,11 @@ struct UIInfrastructureSourceTests {
             to: "private var expandedToolList: some View"
         )
 
-        contains(source, "private struct SidebarSearchTextField: NSViewRepresentable", "Sidebar search must keep its AppKit-backed adapter port")
-        contains(source, "AppKitSearchFieldLifecycle.makeTextField(", "Sidebar search must delegate native field creation to the shared lifecycle")
-        contains(source, "processedFocusToken: 0", "Sidebar search must treat the launch token as already processed")
-        contains(source, "focusRetryDelays: [0.05]", "Sidebar search must preserve its one delayed focus retry")
-        contains(source, "textField.setAccessibilityIdentifier(\"sidebar.search\")", "Sidebar search must expose a stable automation and accessibility identity")
+        contains(sidebarSearchField, "struct SidebarSearchTextField: NSViewRepresentable", "Sidebar search must keep its AppKit-backed adapter port")
+        contains(sidebarSearchField, "AppKitSearchFieldLifecycle.makeTextField(", "Sidebar search must delegate native field creation to the shared lifecycle")
+        contains(sidebarSearchField, "processedFocusToken: 0", "Sidebar search must treat the launch token as already processed")
+        contains(sidebarSearchField, "focusRetryDelays: [0.05]", "Sidebar search must preserve its one delayed focus retry")
+        contains(sidebarSearchField, "textField.setAccessibilityIdentifier(\"sidebar.search\")", "Sidebar search must expose a stable automation and accessibility identity")
         contains(lifecycle, "let textField = IndexPaddedTextField()", "Shared search lifecycle must create the full-bounds plain NSTextField")
         contains(lifecycle, "textField.indexContentInsets = configuration.contentInsets", "Shared search lifecycle must synchronize AppKit cell content insets")
         contains(lifecycle, "AppKitTextEditingConfiguration.configureCurrentFieldEditor(for: textField)", "Shared search lifecycle must enable native field-editor undo")
@@ -259,7 +261,7 @@ struct UIInfrastructureSourceTests {
         contains(searchSurface, "if !searchText.isEmpty {", "Sidebar clear control must leave the accessibility tree when no clearing action is available")
         doesNotContain(searchSurface, ".opacity(searchText.isEmpty ? 0 : 1)", "Sidebar clear control must not remain as an invisible accessibility element")
         doesNotContain(searchSurface, ".iBeamCursorOnHover()", "Sidebar search must not advertise a false outer I-beam target")
-        contains(source, "func sizeThatFits(\n        _ proposal: ProposedViewSize,", "Sidebar AppKit search port must accept the complete visible height")
+        contains(sidebarSearchField, "func sizeThatFits(\n        _ proposal: ProposedViewSize,", "Sidebar AppKit search port must accept the complete visible height")
         doesNotContain(source, "final class Coordinator", "Sidebar search must not duplicate the shared coordinator")
         doesNotContain(source, "private func requestFocus", "Sidebar search must not duplicate shared focus scheduling")
         doesNotContain(source, "TextField(\"搜索工具...\", text: $searchText)", "Sidebar search must not use SwiftUI TextField because Command-Z is unreliable there")
@@ -529,6 +531,8 @@ struct UIInfrastructureSourceTests {
     @Test func appRemovesObsoleteSearchAndRunHints() throws {
         let root = try readSource("Sources/XTools/AppShell/RootView.swift")
         let sidebar = try readSource("Sources/XTools/AppShell/SidebarView.swift")
+        let appShellThemeValues = try readSource("Sources/XTools/AppShell/AppShellThemeValues.swift")
+        let rootViewModel = try readSource("Sources/XTools/AppShell/RootViewModel.swift")
         let uuidGenerator = try readSource("Sources/XTools/ToolPages/Crypto/UUIDGeneratorPage.swift")
 
         doesNotContain(root, "/ 搜索", "Status bar must not advertise slash search")
@@ -661,15 +665,18 @@ struct UIInfrastructureSourceTests {
     @Test func appShellSidebarAndPageChromeUseUnifiedToolIdentity() throws {
         let app = try readSource("Sources/XTools/XToolsApp.swift")
         let root = try readSource("Sources/XTools/AppShell/RootView.swift")
+        let appShellThemeValues = try readSource("Sources/XTools/AppShell/AppShellThemeValues.swift")
+        let rootViewModel = try readSource("Sources/XTools/AppShell/RootViewModel.swift")
         let sidebarCommands = try readSource("Sources/XTools/AppShell/SidebarCommands.swift")
         let toolbar = try readSource("Sources/XTools/AppShell/TitlebarView.swift")
         let sidebar = try readSource("Sources/XTools/AppShell/SidebarView.swift")
+        let sidebarMetrics = try readSource("Sources/XTools/AppShell/SidebarMetrics.swift")
         let typography = try readSource("Sources/XTools/Shared/ToolTypography.swift")
         let sharedComponents = try readSharedBagComponents()
         let converter = try readSource("Sources/XTools/ToolPages/Workbench/Converter/IndexConverterPage.swift")
         let formatterHub = try readSource("Sources/XTools/ToolPages/Development/FormatterHubPage.swift")
 
-        contains(root, "enum SidebarVisibility: Equatable", "Root shell must use an explicit sidebar visibility state")
+        contains(appShellThemeValues, "enum SidebarVisibility: Equatable", "Root shell must use an explicit sidebar visibility state")
         contains(root, "private var detailColumn: some View", "Detail chrome must stay in one stable detail column")
         contains(root, "ToolDetailHostView(", "Tool detail must consume the full detail-column height below the native toolbar")
         doesNotContain(root, "ToolStatusBar", "App shell must not retain a bottom status bar without exclusive persistent state")
@@ -679,10 +686,10 @@ struct UIInfrastructureSourceTests {
         doesNotContain(root, "toggleWorkspaceFocus", "Root must not expose a second action with the same layout result as hiding the sidebar")
         contains(root, ".frame(width: viewModel.sidebarVisibility == .visible ? SidebarView.idealWidth : 0)", "Sidebar visibility must animate one stable pane width instead of swapping rail trees")
         contains(root, ".focusedSceneObject(viewModel)", "Root must expose the current window's observable app-shell actions to scene commands")
-        contains(root, "var sidebarTogglePresentation: SidebarTogglePresentation", "Root state must publish one sidebar presentation seam")
-        contains(root, "func toggleSidebar(reduceMotion: Bool)", "Root state must publish one sidebar action seam")
-        contains(root, "sidebarVisibility == .visible ? .hide : .show", "Sidebar presentation must derive only from actual visibility")
-        contains(root, "sidebarVisibility = sidebarVisibility == .hidden ? .visible : .hidden", "Sidebar action must perform a direct visible-hidden transition")
+        contains(rootViewModel, "var sidebarTogglePresentation: SidebarTogglePresentation", "Root state must publish one sidebar presentation seam")
+        contains(rootViewModel, "func toggleSidebar(reduceMotion: Bool)", "Root state must publish one sidebar action seam")
+        contains(rootViewModel, "sidebarVisibility == .visible ? .hide : .show", "Sidebar presentation must derive only from actual visibility")
+        contains(rootViewModel, "sidebarVisibility = sidebarVisibility == .hidden ? .visible : .hidden", "Sidebar action must perform a direct visible-hidden transition")
         doesNotContain(root, "Button(\"Toggle Sidebar\"", "Root must not keep a second invisible Command-B registration")
         doesNotContain(root, "registry.toolCount", "App shell chrome must not expose the registry size as status")
         contains(sidebarCommands, "CommandGroup(before: .sidebar)", "Sidebar visibility must live in the standard View-menu command area")
@@ -720,10 +727,10 @@ struct UIInfrastructureSourceTests {
         contains(toolbar, "IndexKeycap(label: \"⌘K\")", "The command trigger must remain the only visible keyboard hint in window chrome, rendered through the unified keycap")
         contains(sidebar, "static let idealWidth: CGFloat = 220", "Sidebar must expose one stable ideal pane width")
         doesNotContain(sidebar, "isCollapsed", "Sidebar must not retain the collapsed rail state")
-        contains(sidebar, "static let titlebarHeight: CGFloat = 40", "Sidebar brand band must stay compact under the native unified toolbar")
+        contains(sidebarMetrics, "static let titlebarHeight: CGFloat = 40", "Sidebar brand band must stay compact under the native unified toolbar")
         contains(sidebar, ".frame(height: SidebarMetrics.titlebarHeight, alignment: .center)", "Brand mark + copy must stay vertically centered in the brand band")
-        contains(sidebar, "static let searchTopPadding: CGFloat = 0", "Search must sit flush under the brand band")
-        contains(sidebar, "static let searchBottomPadding: CGFloat = 8", "Search must keep a stable bottom inset before the navigation list")
+        contains(sidebarMetrics, "static let searchTopPadding: CGFloat = 0", "Search must sit flush under the brand band")
+        contains(sidebarMetrics, "static let searchBottomPadding: CGFloat = 8", "Search must keep a stable bottom inset before the navigation list")
         contains(sidebar, ".padding(.top, SidebarMetrics.searchTopPadding)", "Search top inset must use the shared metric token")
         contains(sidebar, ".padding(.bottom, SidebarMetrics.searchBottomPadding)", "Search bottom inset must use the shared metric token")
         contains(sidebar, "HStack(spacing: 8) {\n                BrandMark()", "Brand mark and copy must share one compact 8pt identity stack")
@@ -776,6 +783,7 @@ struct UIInfrastructureSourceTests {
     @Test func sidebarNavigationUsesOneStableAppKitRenderer() throws {
         let sidebar = try readSource("Sources/XTools/AppShell/SidebarView.swift")
         let entries = try readSource("Sources/XTools/AppShell/SidebarNavigationEntry.swift")
+        let sidebarRowComponents = try readSource("Sources/XTools/AppShell/SidebarViewRowComponents.swift")
         let renderer = try [
             readSource("Sources/XTools/AppShell/SidebarNavigationList.swift"),
             readSource("Sources/XTools/AppShell/SidebarNavigationListRepresentable.swift"),
@@ -784,7 +792,7 @@ struct UIInfrastructureSourceTests {
         ].joined(separator: "\n")
 
         let toolRow = sourceSlice(
-            sidebar,
+            sidebarRowComponents,
             from: "struct SidebarToolRow: View",
             to: "@MainActor\nprivate final class SidebarHoverState"
         )
