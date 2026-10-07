@@ -921,8 +921,12 @@ private struct OrderedJSONParser {
             || ("A"..."F").contains(character)
     }
 
+    /// CharacterSet.decimalDigits 每次访问都会重建位图；数字扫描热路径
+    /// 逐标量查询，缓存单个实例后语义不变。
+    private static let unicodeDecimalDigits = CharacterSet.decimalDigits
+
     private func isUnicodeDecimalDigit(_ character: Unicode.Scalar) -> Bool {
-        CharacterSet.decimalDigits.contains(character)
+        Self.unicodeDecimalDigits.contains(character)
     }
 
     private func isNonASCIIDecimalDigit(_ character: Unicode.Scalar) -> Bool {

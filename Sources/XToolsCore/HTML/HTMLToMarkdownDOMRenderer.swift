@@ -709,7 +709,11 @@ final class HTMLToMarkdownDOMRenderer {
         escaped.reserveCapacity(text.utf8.count)
 
         for character in text {
-            if character == ".", String(escaped.suffix(3)).lowercased() == "www" {
+            // Unicode 简单小写映射到 ASCII 'w' 的标量只有 'w'/'W' 自身，因此
+            // 逐标量比较与原先 `String(escaped.suffix(3)).lowercased() == "www"`
+            // 等价，但省去每个字符两次堆分配。
+            let tail = escaped.unicodeScalars.suffix(3)
+            if character == ".", tail.count == 3, tail.allSatisfy({ $0 == "w" || $0 == "W" }) {
                 escaped.append("\\")
             }
             escaped.append(character)
@@ -718,23 +722,28 @@ final class HTMLToMarkdownDOMRenderer {
         return escaped
     }
 
+    // 行首标记转义的 5 个模式是编译期常量：Foundation 的 regularExpression
+    // 选项每次搜索都会重建 NSRegularExpression，预编译后同一引擎同一语义。
+    private static let orderedListMarkerRegex = try! NSRegularExpression(pattern: #"^( {0,3})\d{1,9}[.)](?=\s)"#)
+    private static let lineStartMarkerRegexes = [
+        try! NSRegularExpression(pattern: #"^( {0,3})#{1,6}(?=\s|$)"#),
+        try! NSRegularExpression(pattern: #"^( {0,3})>"#),
+        try! NSRegularExpression(pattern: #"^( {0,3})[-+*](?=\s)"#),
+        try! NSRegularExpression(pattern: #"^( {0,3})([-*_])(?:\2\2)+\s*$"#),
+    ]
+
     private func escapeLineStartMarkers(in text: String) -> String {
-        let orderedListPattern = #"^( {0,3})\d{1,9}[.)](?=\s)"#
-        if let range = text.range(of: orderedListPattern, options: .regularExpression),
+        let fullRange = NSRange(text.startIndex..., in: text)
+        if let match = Self.orderedListMarkerRegex.firstMatch(in: text, range: fullRange),
+           let range = Range(match.range, in: text),
            let marker = text[range].last,
            let markerRange = text.range(of: String(marker), options: .backwards, range: range) {
             return String(text[..<markerRange.lowerBound]) + "\\\(marker)" + text[markerRange.upperBound...]
         }
 
-        let patterns = [
-            #"^( {0,3})#{1,6}(?=\s|$)"#,
-            #"^( {0,3})>"#,
-            #"^( {0,3})[-+*](?=\s)"#,
-            #"^( {0,3})([-*_])(?:\2\2)+\s*$"#
-        ]
-
-        for pattern in patterns {
-            guard let range = text.range(of: pattern, options: .regularExpression) else { continue }
+        for regex in Self.lineStartMarkerRegexes {
+            guard let match = regex.firstMatch(in: text, range: fullRange),
+                  let range = Range(match.range, in: text) else { continue }
             let marker = String(text[range])
             guard let character = marker.first(where: { !$0.isWhitespace }) else { continue }
             guard let characterRange = marker.range(of: String(character)) else { continue }
