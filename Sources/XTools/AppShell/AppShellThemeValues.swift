@@ -8,6 +8,10 @@ enum AppThemePreference: String, CaseIterable {
     case light
     case dark
 
+    var preferenceValue: String {
+        rawValue
+    }
+
     init(preferenceValue: String) {
         self = AppThemePreference(rawValue: preferenceValue) ?? .system
     }

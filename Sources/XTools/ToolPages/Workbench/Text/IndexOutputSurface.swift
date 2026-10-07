@@ -2,8 +2,6 @@ import AppKit
 import SwiftUI
 import XToolsCore
 
-// MARK: - IndexOutputSurface
-
 struct IndexOutputSurface: View {
     let text: String
     let placeholder: String
@@ -63,8 +61,8 @@ struct IndexOutputSurface: View {
                     .font(ToolTypography.monoCaption)
                     .monospacedDigit()
                     .foregroundStyle(ToolTheme.textTertiary)
-                    .frame(width: 34, alignment: .trailing)
-                    .padding(.trailing, 10)
+                    .frame(width: IndexEditorLineNumberGutterView.numberColumnWidth, alignment: .trailing)
+                    .padding(.trailing, IndexEditorLineNumberGutter.width - IndexEditorLineNumberGutterView.numberColumnWidth)
             }
             Text(placeholder)
                 .font(ToolTypography.body)
@@ -93,7 +91,7 @@ struct IndexOutputSurface: View {
                 Rectangle()
                     .fill(ToolTheme.border)
                     .frame(width: 0.5)
-                    .padding(.leading, 44)
+                    .padding(.leading, IndexEditorLineNumberGutter.width)
             }
         }
     }
@@ -142,8 +140,8 @@ struct IndexOutputSurface: View {
                         .font(ToolTypography.monoCaption)
                         .monospacedDigit()
                         .foregroundStyle(ToolTheme.textTertiary)
-                        .frame(width: 34, alignment: .trailing)
-                        .padding(.trailing, 10)
+                        .frame(width: IndexEditorLineNumberGutterView.numberColumnWidth, alignment: .trailing)
+                        .padding(.trailing, IndexEditorLineNumberGutter.width - IndexEditorLineNumberGutterView.numberColumnWidth)
                     lineText(line)
                         .font(ToolTypography.codeBody)
                         .textSelection(.enabled)
@@ -163,7 +161,7 @@ struct IndexOutputSurface: View {
             Rectangle()
                 .fill(ToolTheme.border)
                 .frame(width: 0.5)
-                .padding(.leading, 44)
+                .padding(.leading, IndexEditorLineNumberGutter.width)
         }
     }
 

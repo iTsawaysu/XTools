@@ -352,6 +352,8 @@ final class IndexCaretTextField: IndexPaddedTextField {
 
 extension NSTextView {
     /// Replace the buffer as a new undo baseline. Syncing the buffer to match an
+    /// external binding must not push onto the undo stack, or the programmatic
+    /// write would swallow the user's most recent manual undo.
     func setStringWithoutUndoRegistration(_ newValue: String) {
         let manager = undoManager
         manager?.disableUndoRegistration()

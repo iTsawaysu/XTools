@@ -3,8 +3,8 @@ import SwiftUI
 
 enum SidebarMetrics {
     /// Local brand band under the native unified toolbar. Kept as a content-area
-    /// spacer (not fullSizeContentView overlay); slightly under 48pt so the
-    /// brand + search slab reads as one header rather than a second titlebar.
+    /// spacer (not fullSizeContentView overlay); 8pt under the 48pt toolbar so
+    /// the brand + search slab reads as one header rather than a second titlebar.
     static let titlebarHeight: CGFloat = 40
     static let brandHorizontalPadding: CGFloat = 16
     static let searchHorizontalPadding: CGFloat = 12

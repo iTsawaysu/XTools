@@ -150,7 +150,6 @@ class IndexTextViewportScrollView: NSScrollView {
     func synchronizeDocumentGeometry() {}
 }
 
-
 @MainActor
 enum IndexTextAreaScrollPositioning {
     static func revealInsertionPoint(in textView: NSTextView, growsWithContent: Bool) {

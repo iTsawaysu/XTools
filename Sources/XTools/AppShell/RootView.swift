@@ -20,7 +20,7 @@ struct RootView: View {
     // a launch must not invalidate the app shell (the palette reads it
     // synchronously when composing snapshots).
     private let paletteRecents: PaletteRecentsStore
-    @AppStorage("dt.theme") private var themeName = AppThemePreference.system.rawValue
+    @AppStorage("dt.theme") private var themeName = AppThemePreference.system.preferenceValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
 
@@ -32,7 +32,7 @@ struct RootView: View {
         systemAppearanceSource: SystemAppearanceSource? = nil
     ) {
         _themeName = AppStorage(
-            wrappedValue: defaults.string(forKey: "dt.theme") ?? AppThemePreference.system.rawValue,
+            wrappedValue: defaults.string(forKey: "dt.theme") ?? AppThemePreference.system.preferenceValue,
             "dt.theme",
             store: defaults
         )
@@ -399,7 +399,7 @@ struct RootView: View {
         // shared envelope instead of hard-cutting (AppKit sidebar chrome still
         // flips natively via WindowAppearanceOwner).
         withToolAnimation(ToolMotion.Preset.themeCrossfade, reduceMotion: reduceMotion) {
-            themeName = next.rawValue
+            themeName = next.preferenceValue
         }
         toastCenter.show(next.toastMessage, tone: .success)
     }

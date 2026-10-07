@@ -744,7 +744,7 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
         textView.delegate = context.coordinator
         textView.setStringWithoutUndoRegistration(text)
         if context.coordinator.placeCaretAtEndIfRequested(caretPlacementRequestToken, in: textView) {
-            revealInsertionPoint(in: textView)
+            IndexTextAreaScrollPositioning.revealInsertionPoint(in: textView, growsWithContent: false)
         }
         if autoFocus {
             context.coordinator.focus(textView)
@@ -772,10 +772,10 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
             textView.selectedRanges = validRanges.isEmpty
                 ? [NSValue(range: NSRange(location: stringLength, length: 0))]
                 : validRanges
-            revealInsertionPoint(in: textView)
+            IndexTextAreaScrollPositioning.revealInsertionPoint(in: textView, growsWithContent: false)
         }
         if context.coordinator.placeCaretAtEndIfRequested(caretPlacementRequestToken, in: textView) {
-            revealInsertionPoint(in: textView)
+            IndexTextAreaScrollPositioning.revealInsertionPoint(in: textView, growsWithContent: false)
         }
     }
 
@@ -801,14 +801,6 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
                 width: max(1, textView.bounds.width),
                 height: .greatestFiniteMagnitude
             )
-        }
-    }
-
-    private func revealInsertionPoint(in textView: NSTextView) {
-        textView.scrollRangeToVisible(clampedSelectedRange(for: textView))
-        DispatchQueue.main.async { [weak textView] in
-            guard let textView else { return }
-            textView.scrollRangeToVisible(clampedSelectedRange(for: textView))
         }
     }
 

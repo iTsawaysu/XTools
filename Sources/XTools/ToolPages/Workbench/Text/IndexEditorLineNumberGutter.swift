@@ -9,13 +9,6 @@ enum IndexEditorLineNumberGutter {
     static let width: CGFloat = 44
 }
 
-/// Draws logical line numbers for a measured-content editor as an overlay
-/// pinned to the owning scroll view (prototype v3 code-editor gutter).
-///
-/// Only visible line fragments are projected, and each logical line draws its
-/// number once at its first visual fragment, so wrapped lines stay aligned
-/// with the editor. The overlay is presentation-only: hit-test transparent,
-/// decorative for accessibility, and never touches text storage.
 @MainActor
 /// Shared chrome for line-number columns: flipped coordinates, hit-test
 /// transparency, the arrow cursor, the trailing hairline, and right-aligned
@@ -55,6 +48,13 @@ class IndexLineNumberColumnView: NSView {
     }
 }
 
+/// Draws logical line numbers for a measured-content editor as an overlay
+/// pinned to the owning scroll view (prototype v3 code-editor gutter).
+///
+/// Only visible line fragments are projected, and each logical line draws its
+/// number once at its first visual fragment, so wrapped lines stay aligned
+/// with the editor. The overlay is presentation-only: hit-test transparent,
+/// decorative for accessibility, and never touches text storage.
 final class IndexEditorLineNumberGutterView: IndexLineNumberColumnView {
     static let numberColumnWidth: CGFloat = 34
 
