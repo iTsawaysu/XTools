@@ -17,6 +17,7 @@ public enum JWTParser {
         case emptyPayload
         case invalidBase64
         case invalidJSON
+        case duplicateJSONMember
 
         public var errorDescription: String? {
             switch self {
@@ -32,6 +33,8 @@ public enum JWTParser {
                 return "JWT 包含无效的 Base64URL 内容。"
             case .invalidJSON:
                 return "JWT Header 或 Payload 不是有效的 JSON 对象。"
+            case .duplicateJSONMember:
+                return "JWT Header 或 Payload 的成员名存在重复，无法明确判定取值。"
             }
         }
     }
@@ -66,10 +69,12 @@ public enum JWTParser {
 
         let object: [String: Any]
         do {
-            guard let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            guard let decoded = try JWTJSONObjectParser.parse(data) as? [String: Any] else {
                 throw ParseError.invalidJSON
             }
             object = decoded
+        } catch JWTJSONObjectParser.ParseFailure.duplicateKey {
+            throw ParseError.duplicateJSONMember
         } catch {
             throw ParseError.invalidJSON
         }

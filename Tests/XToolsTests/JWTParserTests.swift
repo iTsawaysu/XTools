@@ -52,6 +52,18 @@ struct JWTParserTests {
         }
     }
 
+    @Test func rejectsDuplicateJSONMember() throws {
+        let header = Self.base64URL(#"{"alg":"HS256","alg":"none"}"#)
+        let payload = Self.base64URL(#"{"sub":"x"}"#)
+
+        #expect(throws: JWTParser.ParseError.duplicateJSONMember) {
+            _ = try JWTParser.parse("\(header).\(payload).signature")
+        }
+        #expect(
+            JWTParser.ParseError.duplicateJSONMember.errorDescription == "JWT Header 或 Payload 的成员名存在重复，无法明确判定取值。"
+        )
+    }
+
     @Test func rejectsInvalidJSON() throws {
         // Valid unpadded Base64URL but invalid JSON.
         let invalidJSON = "aGVsbG8" // "hello"

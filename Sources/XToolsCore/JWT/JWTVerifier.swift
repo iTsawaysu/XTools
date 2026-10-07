@@ -102,6 +102,7 @@ public enum JWTVerifier {
         case invalidSignature
         case parseError
         case invalidHeaderJSON
+        case duplicateJSONMember
 
         /// 验证失败的文案以 core 为单一真相源；会话层直接透传，
         /// 避免 core 更新文案时页面停留旧版。
@@ -119,6 +120,8 @@ public enum JWTVerifier {
                 return "JWT 格式无效，无法执行本地检查。"
             case .invalidHeaderJSON:
                 return "JWT Header 不是有效 JSON。"
+            case .duplicateJSONMember:
+                return "JWT 的 JSON 成员名存在重复，无法明确判定取值。"
             }
         }
     }
@@ -140,13 +143,15 @@ public enum JWTVerifier {
         }
         let headerJSON: [String: Any]
         do {
-            let decoded = try JSONSerialization.jsonObject(with: headerData)
+            let decoded = try JWTJSONObjectParser.parse(headerData)
             guard let object = decoded as? [String: Any] else {
                 throw VerificationError.invalidHeaderJSON
             }
             headerJSON = object
         } catch let error as VerificationError {
             throw error
+        } catch JWTJSONObjectParser.ParseFailure.duplicateKey {
+            throw VerificationError.duplicateJSONMember
         } catch {
             throw VerificationError.invalidHeaderJSON
         }
@@ -167,7 +172,15 @@ public enum JWTVerifier {
         } catch {
             throw VerificationError.parseError
         }
-        guard let payloadJSON = try? JSONSerialization.jsonObject(with: payloadData) as? [String: Any] else {
+        let payloadJSON: [String: Any]
+        do {
+            guard let decoded = try JWTJSONObjectParser.parse(payloadData) as? [String: Any] else {
+                throw VerificationError.parseError
+            }
+            payloadJSON = decoded
+        } catch JWTJSONObjectParser.ParseFailure.duplicateKey {
+            throw VerificationError.duplicateJSONMember
+        } catch {
             throw VerificationError.parseError
         }
 

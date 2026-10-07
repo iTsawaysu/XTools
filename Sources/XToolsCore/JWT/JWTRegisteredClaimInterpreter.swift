@@ -64,7 +64,7 @@ public enum JWTRegisteredClaimInterpreter {
         timeZone: TimeZone = .autoupdatingCurrent
     ) throws -> [JWTRegisteredClaimInsight] {
         guard let data = payloadJSON.data(using: .utf8),
-              let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+              let payload = try? JWTJSONObjectParser.parse(data) as? [String: Any] else {
             throw InterpretationError.invalidPayloadJSON
         }
 

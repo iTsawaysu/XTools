@@ -397,6 +397,34 @@ struct JWTVerifierTests {
         }
     }
 
+    @Test func duplicateHeaderMemberThrowsDuplicateJSONMember() throws {
+        let token = Self.makeToken(header: #"{"alg":"none","alg":"HS256"}"#, payload: #"{"sub":"x"}"#)
+
+        #expect(throws: JWTVerifier.VerificationError.duplicateJSONMember) {
+            _ = try JWTVerifier.verify(token: token, config: .init(secret: nil))
+        }
+        #expect(
+            JWTVerifier.VerificationError.duplicateJSONMember.errorDescription == "JWT 的 JSON 成员名存在重复，无法明确判定取值。"
+        )
+    }
+
+    @Test func duplicatePayloadMemberThrowsDuplicateJSONMember() throws {
+        let token = Self.makeToken(header: #"{"alg":"HS256"}"#, payload: #"{"sub":"x","sub":"y"}"#)
+
+        #expect(throws: JWTVerifier.VerificationError.duplicateJSONMember) {
+            _ = try JWTVerifier.verify(token: token, config: .init(secret: nil))
+        }
+    }
+
+    @Test func escapeEquivalentDuplicateHeaderMemberThrows() throws {
+        // \u0061 解码后是 a：转义形式与字面形式解码同属重复成员名。
+        let token = Self.makeToken(header: #"{"alg":"HS256","\u0061lg":"none"}"#, payload: #"{"sub":"x"}"#)
+
+        #expect(throws: JWTVerifier.VerificationError.duplicateJSONMember) {
+            _ = try JWTVerifier.verify(token: token, config: .init(secret: nil))
+        }
+    }
+
     @Test func nonJSONPayloadThrowsParseError() throws {
         let token = "\(Self.encodeJSON(#"{"alg":"HS256"}"#)).\(Self.base64URL("not json")).sig"
 

@@ -370,7 +370,7 @@ public enum JWTSigner {
         }
 
         guard let data = minifiedResult.text.data(using: .utf8),
-              let value = try? JSONSerialization.jsonObject(with: data) else {
+              let value = try? JWTJSONObjectParser.parse(data) else {
             throw JSONObjectError.invalidJSON
         }
         guard let object = value as? [String: Any] else {
