@@ -17,7 +17,7 @@ enum ToolSurfaceRole {
     case sidebar
 }
 
-enum ToolSurfaceMaterial {
+private enum ToolSurfaceMaterial {
     static let usesSystemMaterial: Bool = {
         if #available(macOS 26, *) {
             return true

@@ -197,7 +197,7 @@ private struct IndexEmojiWorkspaceContent: View {
     }
 }
 
-struct IndexEmojiCategoryBar: View {
+private struct IndexEmojiCategoryBar: View {
     @Binding var selection: String
 
     var body: some View {

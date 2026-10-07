@@ -12,8 +12,8 @@ public struct RabbitCipher {
 
     /// 与 TextEncryptionService 传统派生路径（EVP_BytesToKey）的固定长度一致：
     /// Rabbit 恒为 16 字节 key + 8 字节 IV。
-    public static let keySize = 16
-    public static let ivSize = 8
+    static let keySize = 16
+    static let ivSize = 8
     /// 密钥流以 128 位（16 字节）块产出。
     private static let blockSize = 16
 

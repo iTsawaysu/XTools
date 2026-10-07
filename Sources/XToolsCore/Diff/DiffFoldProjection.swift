@@ -22,7 +22,7 @@ public enum DiffFoldProjection {
     /// Context lines kept visible around a change inside a folded region.
     public static let contextLines = 3
     /// Minimum hidden lines for a run to be worth folding.
-    public static let minimumHiddenLines = 2
+    static let minimumHiddenLines = 2
 
     /// All foldable regions in `rows`, in document order.
     public static func regions(in rows: [DiffAlignedRow]) -> [DiffFoldRegion] {

@@ -36,7 +36,7 @@ final class IndexDebouncer: ObservableObject {
 
 // MARK: - Environment Key
 
-struct PageAvailableHeightKey: EnvironmentKey {
+private struct PageAvailableHeightKey: EnvironmentKey {
     static let defaultValue: CGFloat = 600
 }
 

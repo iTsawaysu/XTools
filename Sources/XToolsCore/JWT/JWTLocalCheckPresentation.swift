@@ -43,7 +43,7 @@ extension JWTWorkspaceSession {
         }
     }
 
-    public static let localCheckScopeStatement =
+    static let localCheckScopeStatement =
         "未检查 issuer、audience、subject、token type 和业务授权规则；结果不代表具体应用会接受此 Token。"
 
     public var localCheckPresentation: LocalCheckPresentation? {

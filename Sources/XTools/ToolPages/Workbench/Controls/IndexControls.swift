@@ -454,7 +454,7 @@ struct IndexPrimaryActionButton: View {
 }
 
 /// Tiny keycap chip rendered inside primary actions.
-struct IndexKeyboardHintLabel: View {
+private struct IndexKeyboardHintLabel: View {
     let hint: String
 
     var body: some View {

@@ -2,8 +2,8 @@ import SwiftUI
 
 public enum IndexEmptyStateDensity: Sendable {
     case panel // Large, used for whole panels
-    case list // Used in lists
-    case output // Used for output areas
+    case list
+    case output
 }
 
 public enum IndexEmptyStateCopy {

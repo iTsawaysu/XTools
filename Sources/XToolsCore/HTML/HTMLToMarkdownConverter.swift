@@ -32,8 +32,8 @@ public struct HTMLToMarkdownOptions: Equatable, Sendable {
 }
 
 public struct HTMLToMarkdownInputBudget: Equatable, Sendable {
-    public static let defaultCompletedResultThreshold = 512_000
-    public static let defaultPreParseByteLimit = 5 * 1_024 * 1_024
+    static let defaultCompletedResultThreshold = 512_000
+    static let defaultPreParseByteLimit = 5 * 1_024 * 1_024
 
     public static let manual = Self(
         preParseByteLimit: defaultPreParseByteLimit,

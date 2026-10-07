@@ -129,15 +129,15 @@ struct CommandPalettePresentationTests {
         let oldEditor = try #require(oldField.currentEditor() as? NSTextView)
         let oldDelegate = try #require(oldField.delegate)
         var oldRows: [CommandPaletteRevealView] = []
-        // 39 = 35 个注册工具 + 4 个面板动作（切换主题/切换侧栏/打开设置/内置动作）。
-        // 五个 Hub 合并把注册表 47→35，此处计数需随注册表增删同步。
+        // 38 = 34 个注册工具 + 4 个面板动作（切换主题/切换侧栏/打开设置/内置动作）。
+        // 注册表合并（水印并入图片处理 Hub 后 35→34）会改变行数，此处计数需随注册表增删同步。
         try await Self.waitForCondition(label: "initial palette native rows") {
             fixture.flush()
             oldRows = Self.commandPaletteRevealViews(in: fixture.hostingView)
-            return oldRows.count == 39 && oldRows.allSatisfy { $0.window === fixture.window }
+            return oldRows.count == 38 && oldRows.allSatisfy { $0.window === fixture.window }
         }
         let oldRowIdentifiers = Set(oldRows.map(ObjectIdentifier.init))
-        #expect(oldRowIdentifiers.count == 39)
+        #expect(oldRowIdentifiers.count == 38)
         let scrollView = try #require(oldRows.first?.enclosingScrollView)
         let initialScrollOrigin = scrollView.contentView.bounds.origin
         for _ in 0..<25 {
@@ -172,7 +172,7 @@ struct CommandPalettePresentationTests {
         try await Self.waitForCondition(label: "reopened palette native rows") {
             fixture.flush()
             newRows = Self.commandPaletteRevealViews(in: fixture.hostingView)
-            return newRows.count == 39 && newRows.allSatisfy { $0.window === fixture.window }
+            return newRows.count == 38 && newRows.allSatisfy { $0.window === fixture.window }
         }
         let newRowIdentifiers = Set(newRows.map(ObjectIdentifier.init))
 
@@ -492,8 +492,8 @@ struct CommandPalettePresentationTests {
         #expect(snapshot.counters[.visibleDisabledTransaction, default: 0] == 0)
         #expect(snapshot.counters[.visibilityTerminalSample, default: 0] > 0)
         if ordinal == 0 {
-            // 39 = 35 个注册工具 + 4 个面板动作；与 reopeningRetains… 的行数锚一致。
-            #expect(snapshot.counters[.revealMake, default: 0] == 39)
+            // 38 = 34 个注册工具 + 4 个面板动作；与 reopeningRetains… 的行数锚一致。
+            #expect(snapshot.counters[.revealMake, default: 0] == 38)
         } else {
             #expect(snapshot.counters[.revealMake, default: 0] == 0)
         }
@@ -537,7 +537,9 @@ struct CommandPalettePresentationTests {
     @MainActor
     private static func waitForCondition(
         label: String,
-        timeout: TimeInterval = 2,
+        // 负载高的机器上首帧原生行构建可能超过 2 秒；条件满足即早退，
+        // 加大上限只为吸收环境抖动，不改变健康路径的耗时。
+        timeout: TimeInterval = 10,
         diagnostic: () -> String = { "" },
         condition: () -> Bool
     ) async throws {

@@ -25,7 +25,7 @@ struct FileOutputPanelRequest: Sendable {
     }
 }
 
-enum FileOutputPanelFailure: Error, Equatable, LocalizedError {
+private enum FileOutputPanelFailure: Error, Equatable, LocalizedError {
     case windowUnavailable
     case requestInProgress
     case invalidSelection

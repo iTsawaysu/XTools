@@ -7,7 +7,7 @@ import SwiftUI
 /// Hover remains a color cue, while press gets a short scale response so a
 /// click is acknowledged even when the control's selection state does not
 /// change immediately. The animation is disabled for Reduce Motion.
-struct ToolInteractionFeedbackStyle: ButtonStyle {
+private struct ToolInteractionFeedbackStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
@@ -134,7 +134,7 @@ extension View {
 /// (`ToolMotion.ErrorFeedback.tintDelay`), hold while the error
 /// persists, fade out on resolve. Never pulses; Reduce Motion jumps between
 /// states without interpolation.
-struct ToolErrorTintModifier: ViewModifier {
+private struct ToolErrorTintModifier: ViewModifier {
     let active: Bool
     let cornerRadius: CGFloat
     @State private var tintOn = false

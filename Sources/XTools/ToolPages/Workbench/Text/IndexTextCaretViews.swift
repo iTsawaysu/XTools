@@ -331,7 +331,7 @@ final class IndexDroppedTextFile: ObservableObject {
     }
 }
 
-final class IndexCaretTextFieldCell: IndexPaddedTextFieldCell {
+private final class IndexCaretTextFieldCell: IndexPaddedTextFieldCell {
     private var caretEditor: IndexCaretTextView?
 
     override func fieldEditor(for controlView: NSView) -> NSTextView? {

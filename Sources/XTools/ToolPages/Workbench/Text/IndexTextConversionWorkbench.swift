@@ -32,7 +32,7 @@ protocol IndexTextConversionTextSaving {
 /// Sheet-based saver: selection suspends instead of running a synchronous
 /// modal event loop.
 @MainActor
-struct AppKitIndexTextConversionTextSaver: IndexTextConversionTextSaving {
+private struct AppKitIndexTextConversionTextSaver: IndexTextConversionTextSaving {
     func saveText(
         _ text: String,
         fileName: String,

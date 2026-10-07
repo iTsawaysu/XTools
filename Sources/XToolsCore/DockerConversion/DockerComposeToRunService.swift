@@ -29,9 +29,9 @@ public struct DockerComposeToRunResult: Equatable, Sendable {
 }
 
 public enum DockerComposeToRunDiagnostics {
-    public static let invalidYAMLMessage = "无法解析 YAML：缩进或语法不合法。"
-    public static let missingServicesMessage = "未找到 services 段：Compose 文件需要顶级 services 键。"
-    public static let noServicesMessage = "services 段为空：至少需要一个服务定义。"
+    static let invalidYAMLMessage = "无法解析 YAML：缩进或语法不合法。"
+    static let missingServicesMessage = "未找到 services 段：Compose 文件需要顶级 services 键。"
+    static let noServicesMessage = "services 段为空：至少需要一个服务定义。"
 
     /// 与 JSONDiffValidation / 顶栏横幅一致的可读上限；单条与合成共用。
     private static let maximumMessageCharacters = 180

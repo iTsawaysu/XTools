@@ -176,7 +176,7 @@ struct IndexMarkdownPreviewSurface: View {
 /// 只在 MainActor（视图内）访问；故意不做成 Observable——缓存变化永不触发
 /// 视图刷新，identity 由 JSONExactTextIdentity 保证字节级一致。
 @MainActor
-final class MarkdownParseCache {
+private final class MarkdownParseCache {
     private var cachedIdentity: JSONExactTextIdentity?
     private var cachedBlocks: [MarkdownBlock] = []
 
