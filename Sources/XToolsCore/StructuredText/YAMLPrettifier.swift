@@ -87,8 +87,54 @@ public enum YAMLPrettifier {
     }
 
     public static func formatValidated(_ input: String, options: Options) throws -> String {
-        let preflight = try validatedPreflight(input, indent: options.indent)
-        return try format(input, options: options, preflight: preflight)
+        let preflight = try YAMLProcessingPreflight.inspect(input, indent: options.indent)
+        guard !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return ""
+        }
+
+        // 单次解析：Parser.nextRoot 与 compose 共用同一 loadDocument，节点树
+        // 逐值相同。解析先于排序/注释/锚点检查（保持 invalidSyntax 的错误
+        // 优先级），收集到的节点直接供序列化路径复用，省去原先的二次解析。
+        let nodes: [Node]
+        do {
+            let parser = try Yams.Parser(yaml: input)
+            var collected: [Node] = []
+            while let node = try parser.nextRoot() {
+                try StructuredTextExecution.checkCancellation()
+                collected.append(node)
+            }
+            try StructuredTextExecution.checkCancellation()
+            // compose（singleRoot）语义：流里还有第二个文档即报错；nextRoot
+            // 会全部收集，这里补上等价判定，诊断与 compose 路径逐字一致。
+            if collected.count > 1 {
+                throw ValidationError.invalidSyntax(
+                    FormatDiagnostic(
+                        formatName: "YAML",
+                        message: "只允许包含一个 YAML 文档",
+                        suggestion: "删除多余的 --- 分隔符，只保留一个文档。"
+                    )
+                )
+            }
+            nodes = collected
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as StructuredTextResourceError {
+            throw error
+        } catch let error as ValidationError {
+            throw error
+        } catch let yamlError as YamlError {
+            throw ValidationError.invalidSyntax(diagnostic(from: yamlError, input: input))
+        } catch {
+            throw ValidationError.invalidSyntax(
+                FormatDiagnostic(
+                    formatName: "YAML",
+                    message: "YAML 语法错误",
+                    suggestion: genericYAMLSuggestion
+                )
+            )
+        }
+
+        return try format(input, options: options, preflight: preflight, preparsedNodes: nodes)
     }
 
     public static func format(_ input: String, options: Options) throws -> String {
@@ -96,7 +142,7 @@ public enum YAMLPrettifier {
         return try format(input, options: options, preflight: preflight)
     }
 
-    private static func format(_ input: String, options: Options, preflight: YAMLProcessingPreflight.Summary) throws -> String {
+    private static func format(_ input: String, options: Options, preflight: YAMLProcessingPreflight.Summary, preparsedNodes: [Node]? = nil) throws -> String {
         try StructuredTextExecution.validateIndent(options.indent, format: "YAML")
         guard !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return ""
@@ -143,13 +189,19 @@ public enum YAMLPrettifier {
         guard preflight.outputUpperBound <= StructuredTextExecution.outputByteLimit else {
             throw StructuredTextResourceError(format: "YAML", reason: "预计序列化结果超过处理容量上限")
         }
-        // Yams.YamlSequence.next() catches parse errors. Iterate its throwing
-        // parser directly so a malformed later document cannot be dropped.
-        let parser = try Yams.Parser(yaml: input)
-        var nodes: [Node] = []
-        while let node = try parser.nextRoot() {
-            try StructuredTextExecution.checkCancellation()
-            nodes.append(node)
+        // 序列化路径复用 formatValidated 阶段收集的节点，避免同一输入解析
+        // 两次；独立 format 入口（接受多文档）仍在此处自行解析。
+        let nodes: [Node]
+        if let preparsedNodes {
+            nodes = preparsedNodes
+        } else {
+            let parser = try Yams.Parser(yaml: input)
+            var collected: [Node] = []
+            while let node = try parser.nextRoot() {
+                try StructuredTextExecution.checkCancellation()
+                collected.append(node)
+            }
+            nodes = collected
         }
         try StructuredTextExecution.checkCancellation()
         var dumped = try serialize(nodes: nodes, indent: max(0, options.indent), sortKeys: options.sortKeys)

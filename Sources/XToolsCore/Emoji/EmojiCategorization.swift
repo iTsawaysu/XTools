@@ -349,9 +349,13 @@ public enum EmojiCatalog {
         return catalog.groups
     }
 
+#if DEBUG
+    /// Test-only seam mirroring the production fallback composition; the
+    /// shipped build always assembles groups inline instead.
     package static func fallbackCatalog() -> [EmojiGroup] {
         buildFallbackFromScalarProperties() + [buildSpecialSymbolGroup()]
     }
+#endif
 
     package static func buildFallbackFromScalarProperties() -> [EmojiGroup] {
         var buckets: [String: [EmojiEntry]] = [:]

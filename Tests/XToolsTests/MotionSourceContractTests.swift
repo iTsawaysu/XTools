@@ -780,7 +780,7 @@ struct MotionSourceContractTests {
         let root = try readSource("Sources/XTools/AppShell/RootView.swift")
         contains(motion, "static let themeCrossfade: TimeInterval = 0.32", "Theme crossfade must run the terminal 320ms envelope")
         contains(motion, "static let themeCrossfade = Curve.inOut(duration: Duration.themeCrossfade)", "Theme crossfade must stay on the shared inOut family")
-        contains(root, "withToolAnimation(ToolMotion.Preset.themeCrossfade, reduceMotion: reduceMotion) {\n            themeName = next.rawValue\n        }", "The theme flip must dissolve through one animated transaction, Reduce Motion collapsing to a direct switch")
+        contains(root, "withToolAnimation(ToolMotion.Preset.themeCrossfade, reduceMotion: reduceMotion) {\n            themeName = next.preferenceValue\n        }", "The theme flip must dissolve through one animated transaction, Reduce Motion collapsing to a direct switch")
     }
 
     @Test func wave2EmptyStateArrivesInStagedBeats() throws {
