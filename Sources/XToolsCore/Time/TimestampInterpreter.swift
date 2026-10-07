@@ -50,13 +50,18 @@ public enum TimestampInterpreter {
         return .valid(seconds)
     }
 
+#if DEBUG
     /// The timestamp converter's current UI no longer accepts a millisecond
     /// input mode or fractional seconds. Empty text and a lone "-" are
     /// field-local incomplete edits and therefore return nil.
+    ///
+    /// Test-only seam: production reads go through `evaluate`, which this
+    /// helper wraps for direct unit access. Hidden from release builds.
     public static func integerSeconds(fromTrimmed value: String) -> Double? {
         guard case .valid(let seconds) = evaluate(value) else { return nil }
         return seconds
     }
+#endif
 
     public static func wholeSecondText(for date: Date) -> String? {
         integerText(date.timeIntervalSince1970)
