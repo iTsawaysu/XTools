@@ -33,7 +33,7 @@ public enum YAMLPrettifier {
     /// 供其他 YAML 消费方（如 Docker Compose 转换）复用的 Yams 错误翻译：
     /// 把底层 problem/mark 转成带行列与建议的 `FormatDiagnostic`。
     /// 非 Yams 错误返回 nil，由调用方决定兜底文案。
-    public static func parsingDiagnostic(from error: Error, input: String) -> FormatDiagnostic? {
+    static func parsingDiagnostic(from error: Error, input: String) -> FormatDiagnostic? {
         guard let yamlError = error as? YamlError else { return nil }
         return diagnostic(from: yamlError, input: input)
     }

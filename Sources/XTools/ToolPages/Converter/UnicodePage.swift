@@ -2,12 +2,14 @@ import XToolsCore
 import SwiftUI
 
 /// 「文本编码」Hub 的 Unicode 分段：经共享 IndexConverterPage 嵌入
-/// （embedsPageShell: false，页面壳由 Hub 提供），workspace key 沿用
-/// 合并前的 text-to-unicode。
+/// （embedsPageShell: false，页面壳由 Hub 提供），workspace 归属
+/// 注册表 ID "text-encoding" + 槽位 "unicode"（与 Hub 同 toolID，
+/// 离开 Hub 即可按注册表 ID 统一驱逐重载荷）。
 struct IndexUnicodeSegment: View {
     var body: some View {
         IndexConverterPage(
-            toolID: "text-to-unicode",
+            toolID: "text-encoding",
+            slot: "unicode",
             embedsPageShell: false,
             title: "Unicode 转换",
             subtitle: "文本与 Unicode 转义序列互转。",

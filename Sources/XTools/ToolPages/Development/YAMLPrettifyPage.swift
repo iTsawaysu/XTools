@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class YAMLPrettifyToolWorkspaceModel: ObservableObject {
-    static let key = ToolWorkspaceKey<YAMLPrettifyToolWorkspaceModel>(toolID: "yaml-prettify") { preferences in
+    static let key = ToolWorkspaceKey<YAMLPrettifyToolWorkspaceModel>(toolID: "formatter", slot: "yaml") { preferences in
         YAMLPrettifyToolWorkspaceModel(preferences: preferences)
     }
 

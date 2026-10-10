@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class UUIDGeneratorToolWorkspaceModel: ObservableObject {
-    static let key = ToolWorkspaceKey<UUIDGeneratorToolWorkspaceModel>(toolID: "uuid-generator") { preferences in
+    static let key = ToolWorkspaceKey<UUIDGeneratorToolWorkspaceModel>(toolID: "generator", slot: "uuid") { preferences in
         UUIDGeneratorToolWorkspaceModel(preferences: preferences)
     }
 

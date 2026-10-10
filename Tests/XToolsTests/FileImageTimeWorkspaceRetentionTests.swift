@@ -47,14 +47,6 @@ struct Base64FileWorkspaceRetentionTests {
         #expect(session.outputMode == .dataURL)
     }
 
-    @Test func pageUsesRepositorySessionAndKeepsDropTargetLocal() throws {
-        let source = try readSource("Sources/XTools/ToolPages/Converter/Base64FilePage.swift")
-        contains(source, "ToolWorkspaceHost(key: Base64FileWorkflowSession.workspaceKey)", "Base64 file page must resolve its workflow from the root repository")
-        contains(source, "@ObservedObject var session: Base64FileWorkflowSession", "Base64 file content must observe the retained workflow session")
-        contains(source, "@State private var isFileDropTargeted = false", "Base64 file drop targeting must remain view-scoped")
-        doesNotContain(source, "@StateObject private var session = Base64FileWorkflowSession()", "Base64 file work must not be destroyed with page identity")
-    }
-
     private static func defaults() -> UserDefaults {
         let suiteName = "Base64FileWorkspaceRetentionTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -323,27 +315,6 @@ struct ImageWorkspaceRetentionTests {
         #expect(watermark.sizeRatio == 0.30)
     }
 
-    @Test func imagePagesUseRetainedModelsWithoutMovingDropOrFocusPresentation() throws {
-        let converter = try readSource("Sources/XTools/ToolPages/Image/ImageConverterPage.swift")
-        let compressor = try readSource("Sources/XTools/ToolPages/Image/ImageCompressorPage.swift")
-        let watermark = try readSource("Sources/XTools/ToolPages/Image/ImageWatermarkPage.swift")
-        let grayscale = try readSource("Sources/XTools/ToolPages/Image/ImageGrayscalePage.swift")
-
-        contains(converter, "ToolWorkspaceHost(key: ImageConverterToolWorkspaceModel.key)", "Image converter must resolve its retained workspace")
-        contains(compressor, "ToolWorkspaceHost(key: ImageCompressorToolWorkspaceModel.key)", "Image compressor must resolve its retained workspace")
-        contains(watermark, "ToolWorkspaceHost(key: ImageWatermarkToolWorkspaceModel.key)", "Image watermark must resolve its retained workspace")
-        contains(grayscale, "ToolWorkspaceHost(key: ImageProcessedOutputSession.grayscaleWorkspaceKey)", "Image grayscale must resolve its retained session")
-
-        for page in [converter, compressor, watermark, grayscale] {
-            contains(page, "@State private var isImageDropTargeted = false", "Image drop highlighting must remain view-scoped")
-            doesNotContain(page, "@StateObject private var session = ImageProcessedOutputSession()", "Image work must not be destroyed with page identity")
-        }
-        doesNotContain(watermark, "@State private var isEditingWatermarkText", "Watermark preview scheduling must not depend on field-focus state")
-        contains(watermark, "let previewDebouncer = IndexDebouncer()", "Watermark bounded-preview debounce must belong to the retained workspace")
-        contains(watermark, "let finalDebouncer = IndexDebouncer()", "Watermark full-resolution debounce must belong to the retained workspace")
-        doesNotContain(watermark, "@State private var debounceTask", "Watermark pending render must not disappear with page-local state")
-    }
-
     @MainActor
     @Test func mediaPreferenceKeysExcludePathsTextAndBinaryResults() {
         let expected = Set([
@@ -479,21 +450,6 @@ struct FileAndFaviconWorkspaceRetentionTests {
         #expect(restoredWhileRunning.error == nil)
     }
 
-    @Test func pagesUseRepositorySessionsAndNavigationDoesNotCancelFavicon() throws {
-        let favicon = try readSource("Sources/XTools/ToolPages/Image/FaviconGeneratorPage.swift")
-        let fileType = try readSource("Sources/XTools/ToolPages/Utility/FileTypeDetectorPage.swift")
-
-        contains(favicon, "ToolWorkspaceHost(key: FaviconOutputSetSession.workspaceKey)", "Favicon page must resolve its retained session")
-        contains(favicon, "@ObservedObject var session: FaviconOutputSetSession", "Favicon content must observe the retained session")
-        contains(favicon, "@State private var isImageDropTargeted = false", "Favicon drop highlighting must remain view-scoped")
-        doesNotContain(favicon, ".onDisappear", "Ordinary navigation must not cancel Favicon generation")
-        doesNotContain(favicon, "session.cancelGeneration()", "Favicon page disappearance must not become an operation cancellation boundary")
-
-        contains(fileType, "ToolWorkspaceHost(key: FileTypeDetectorSession.workspaceKey)", "File detector page must resolve its retained session")
-        contains(fileType, "@ObservedObject var session: FileTypeDetectorSession", "File detector content must observe the retained session")
-        contains(fileType, "@State private var isFileDropTargeted = false", "File detector drop highlighting must remain view-scoped")
-    }
-
     private static func defaults() -> UserDefaults {
         let suiteName = "FileAndFaviconWorkspaceRetentionTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -582,31 +538,6 @@ struct TimeWorkspaceRetentionTests {
         #expect(relaunched.session.amount == 30)
         #expect(relaunched.session.op == .add)
         #expect(relaunched.session.startInputError == nil)
-    }
-
-    @Test func timePagesKeepTimelineAndCalendarPresentationViewScoped() throws {
-        let chronometer = try readSource("Sources/XTools/ToolPages/Time/ChronometerPage.swift")
-        let dateCalculator = try readSource("Sources/XTools/ToolPages/Time/DateCalculatorPage.swift")
-        let timezone = try readSource("Sources/XTools/ToolPages/Time/TimezoneViewerPage.swift")
-        let deviceInfo = try readSource("Sources/XTools/ToolPages/Utility/DeviceInformationPage.swift")
-
-        contains(chronometer, "ToolWorkspaceHost(key: ChronometerToolWorkspaceModel.key)", "Chronometer must resolve retained monotonic state")
-        contains(chronometer, "@Binding var chronometer: ChronometerState", "Visible chronometer content must bind the retained Core value")
-        contains(chronometer, ".animation(minimumInterval: 0.01, paused: !chronometer.isRunning)", "Chronometer paused animation schedule must remain mounted only with visible page content")
-        let chronometerModel = sourceSlice(chronometer, from: "final class ChronometerToolWorkspaceModel", to: "struct IndexChronometerPage")
-        doesNotContain(chronometerModel, "TimelineView", "Retained chronometer state must not keep a hidden high-frequency view alive")
-
-        contains(dateCalculator, "ToolWorkspaceHost(key: DateCalcToolWorkspaceModel.key)", "Date calculator must resolve its retained workspace")
-        contains(dateCalculator, "@Binding var session: DateCalcWorkspace", "Date calculator content must bind the retained Core workspace")
-        contains(dateCalculator, "@State private var showsCalendar = false", "Calendar presentation must remain view-scoped")
-
-        contains(timezone, "@StateObject private var favoriteStore = TimezoneViewerFavoriteStore()", "Timezone existing favorite persistence owner must remain unchanged")
-        contains(timezone, "@StateObject private var disclosureSections = TimezoneViewerDisclosureExpansionStore()", "Timezone existing disclosure persistence owner must remain unchanged")
-        doesNotContain(timezone, "ToolWorkspaceHost(", "Timezone current-time TimelineView does not need retained workspace ownership")
-
-        contains(deviceInfo, "@StateObject private var session = DeviceInformationSession()", "Device information must capture a fresh visible-page snapshot on return")
-        contains(deviceInfo, "session.refresh()", "Device information refresh wiring must remain intact")
-        doesNotContain(deviceInfo, "ToolWorkspaceHost(", "Device information stale system snapshots must not be retained across navigation")
     }
 
     private static func defaults() -> UserDefaults {

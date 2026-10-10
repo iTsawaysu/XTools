@@ -249,6 +249,7 @@ struct IndexConverterPage: View {
 
     init(
         toolID: ToolID,
+        slot: String = "main",
         embedsPageShell: Bool = true,
         title: String,
         subtitle: String,
@@ -273,7 +274,7 @@ struct IndexConverterPage: View {
 
         let resolvedEmptyInput: IndexConverterEmptyInput = isEmptyInputForMode ?? { input, _ in isEmptyInput(input) }
         let resolvedInitialMode = Self.resolvedInitialMode(requested: initialMode, modes: modes)
-        workspaceKey = ToolWorkspaceKey(toolID: toolID) { _ in
+        workspaceKey = ToolWorkspaceKey(toolID: toolID, slot: slot) { _ in
             IndexConverterToolWorkspaceModel(
                 initialMode: resolvedInitialMode,
                 isEmptyInput: resolvedEmptyInput,

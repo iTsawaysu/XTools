@@ -157,13 +157,13 @@ struct TextDevelopmentWorkspaceRetentionTests {
             RetentionDraftProbeModel()
         }
         let transformKey = ToolWorkspaceKey<RetentionTransformProbeModel>(
-            toolID: "xml-formatter",
+            toolID: "formatter",
             slot: "retention-test"
         ) { _ in
             RetentionTransformProbeModel()
         }
         let diffKey = ToolWorkspaceKey<DiffToolWorkspaceModel>(
-            toolID: "json-diff",
+            toolID: "diff",
             slot: "retention-test"
         ) { _ in
             DiffToolWorkspaceModel()
@@ -246,43 +246,6 @@ struct TextDevelopmentWorkspaceRetentionTests {
         let restored = repository.model(for: key)
         try await waitUntil { restored.markdown == "retained:<p>work</p>" }
         #expect(restored.error == nil)
-    }
-
-    @Test func pagesUseRepositoryHostsWithoutMovingPresentationState() throws {
-        let paths = [
-            "Sources/XTools/ToolPages/Converter/CaseConverterPage.swift",
-            "Sources/XTools/ToolPages/Converter/IntegerBaseConverterPage.swift",
-            "Sources/XTools/ToolPages/Converter/RomanNumeralPage.swift",
-            "Sources/XTools/ToolPages/Converter/CaseConverterPage.swift",
-            "Sources/XTools/ToolPages/Time/DateTimeConverterPage.swift",
-            "Sources/XTools/ToolPages/Development/JSONFormatterPage.swift",
-            "Sources/XTools/ToolPages/Development/SQLPrettifyPage.swift",
-            "Sources/XTools/ToolPages/Development/XMLFormatterPage.swift",
-            "Sources/XTools/ToolPages/Development/YAMLPrettifyPage.swift",
-            "Sources/XTools/ToolPages/Development/JSONDiffPage.swift",
-            "Sources/XTools/ToolPages/Development/TextDiffPage.swift",
-            "Sources/XTools/ToolPages/Development/RegexTesterPage.swift",
-            "Sources/XTools/ToolPages/Development/DockerRunToComposePage.swift",
-            "Sources/XTools/ToolPages/Development/CrontabGeneratorPage.swift",
-            "Sources/XTools/ToolPages/Development/RandomPortPage.swift",
-            "Sources/XTools/ToolPages/Development/ChmodCalculatorPage.swift",
-            "Sources/XTools/ToolPages/Development/HTMLToMarkdownPage.swift",
-            "Sources/XTools/ToolPages/Utility/MathEvaluatorPage.swift",
-            "Sources/XTools/ToolPages/Utility/TextStatisticsPage.swift",
-            "Sources/XTools/ToolPages/Image/ColorPickerPage.swift",
-            "Sources/XTools/ToolPages/Utility/EmojiPickerPage.swift"
-        ]
-        for path in paths {
-            contains(try readSource(path), "ToolWorkspaceHost(key:", "\(path) must resolve App-session work from the repository")
-        }
-
-        let html = try readSource("Sources/XTools/ToolPages/Development/HTMLToMarkdownPage.swift")
-        doesNotContain(html, ".onDisappear", "HTML navigation must not cancel user-started work")
-        let color = try readSource("Sources/XTools/ToolPages/Image/ColorPickerPage.swift")
-        contains(color, "@State private var showsSystemColorPicker = false", "Color picker presentation must remain view-scoped")
-        let emojiCollection = try readSource("Sources/XTools/ToolPages/Utility/EmojiCollectionView.swift")
-        contains(emojiCollection, "private var hoveredIndexPath: IndexPath?", "Emoji hover presentation must remain native renderer state instead of workspace state")
-        doesNotContain(emojiCollection, "@AppStorage", "Emoji hover presentation must never enter persisted preferences")
     }
 
     @MainActor

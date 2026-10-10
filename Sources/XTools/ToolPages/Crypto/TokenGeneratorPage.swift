@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class TokenGeneratorToolWorkspaceModel: ObservableObject {
-    static let key = ToolWorkspaceKey<TokenGeneratorToolWorkspaceModel>(toolID: "token-generator") { preferences in
+    static let key = ToolWorkspaceKey<TokenGeneratorToolWorkspaceModel>(toolID: "generator", slot: "token") { preferences in
         TokenGeneratorToolWorkspaceModel(preferences: preferences)
     }
 

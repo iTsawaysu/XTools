@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class JSONFormatterToolWorkspaceModel: ObservableObject {
-    static let key = ToolWorkspaceKey<JSONFormatterToolWorkspaceModel>(toolID: "json-formatter") { preferences in
+    static let key = ToolWorkspaceKey<JSONFormatterToolWorkspaceModel>(toolID: "formatter", slot: "json") { preferences in
         JSONFormatterToolWorkspaceModel(preferences: preferences)
     }
 

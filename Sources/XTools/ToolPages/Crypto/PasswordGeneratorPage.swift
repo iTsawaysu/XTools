@@ -7,7 +7,7 @@ final class PasswordGeneratorToolWorkspaceModel: ObservableObject {
         let value: String
     }
 
-    static let key = ToolWorkspaceKey<PasswordGeneratorToolWorkspaceModel>(toolID: "password-generator") { preferences in
+    static let key = ToolWorkspaceKey<PasswordGeneratorToolWorkspaceModel>(toolID: "generator", slot: "password") { preferences in
         PasswordGeneratorToolWorkspaceModel(preferences: preferences)
     }
 

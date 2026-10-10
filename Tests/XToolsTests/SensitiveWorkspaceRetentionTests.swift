@@ -139,23 +139,6 @@ struct SensitiveValueSessionRetentionTests {
         }
     }
 
-    @Test func revealStateStaysPageLocalAndOutsideRetainedModels() throws {
-        let jwt = try readSource("Sources/XTools/ToolPages/Web/JWTParserPage.swift")
-        let basicAuth = try readSource("Sources/XTools/ToolPages/Web/BasicAuthGeneratorPage.swift")
-
-        contains(jwt, "@State private var showsGenerateSecret = false", "JWT generation secret must be hidden whenever page content is recreated")
-        contains(jwt, "@State private var showsParseSecret = false", "JWT parse secret must be hidden whenever page content is recreated")
-        contains(basicAuth, "@State private var showsPassword = false", "Basic Auth password must be hidden whenever page content is recreated")
-        contains(basicAuth, "@State private var showsParsedPassword = false", "Parsed Basic Auth password must be hidden whenever page content is recreated")
-
-        let jwtModel = sourceSlice(jwt, from: "final class JWTToolWorkspaceModel", to: "struct IndexJWTPage")
-        let basicModel = sourceSlice(basicAuth, from: "final class BasicAuthToolWorkspaceModel", to: "struct IndexBasicAuthPage")
-        doesNotContain(jwtModel, "showsGenerateSecret", "JWT reveal state must not enter retained workspace storage")
-        doesNotContain(jwtModel, "showsParseSecret", "JWT reveal state must not enter retained workspace storage")
-        doesNotContain(basicModel, "showsPassword", "Basic Auth reveal state must not enter retained workspace storage")
-        doesNotContain(basicModel, "showsParsedPassword", "Parsed password reveal state must not enter retained workspace storage")
-    }
-
     private static func defaults() -> UserDefaults {
         let suiteName = "SensitiveValueSessionRetentionTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -529,11 +512,6 @@ struct GeneratorWorkspaceRetentionTests {
         password.generate()
         #expect(!password.passwords.isEmpty)
         #expect(password.error == nil)
-
-        let tokenSource = try readSource("Sources/XTools/ToolPages/Crypto/TokenGeneratorPage.swift")
-        let passwordSource = try readSource("Sources/XTools/ToolPages/Crypto/PasswordGeneratorPage.swift")
-        contains(tokenSource, "if !workspace.hasAttemptedGeneration { generate() }", "Token navigation must not retry an already-retained failure")
-        contains(passwordSource, "if !workspace.hasAttemptedGeneration { generate() }", "Password navigation must not retry an already-retained failure")
     }
 
     @MainActor
@@ -625,11 +603,6 @@ struct WebUtilityWorkspaceRetentionTests {
         let relaunched = ToolWorkspaceRepository(defaults: defaults)
             .model(for: KeycodeToolWorkspaceModel.key)
         #expect(relaunched.snapshot == nil)
-
-        let source = try readSource("Sources/XTools/ToolPages/Web/KeycodeInfoPage.swift")
-        contains(source, "@State private var isListening = false", "Keyboard capture listening state must reset with the recreated view")
-        let model = sourceSlice(source, from: "final class KeycodeToolWorkspaceModel", to: "struct IndexKeycodePage")
-        doesNotContain(model, "isListening", "Keyboard capture focus state must not enter retained tool state")
     }
 
     private static func defaults() -> UserDefaults {

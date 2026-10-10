@@ -106,10 +106,11 @@ final class DiffToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicti
     }
 }
 
-/// 「对比」Hub 的 JSON 分段。workspace key 沿用 toolID "json-diff"，
-/// 输入与执行状态由 ToolWorkspaceRepository 保活，分段切换不丢。
+/// 「对比」Hub 的 JSON 分段。workspace key 使用注册表 toolID "diff" + slot "json"
+/// （evictHeavyPayloads 按注册表 ID 淘汰，F1），输入与执行状态由
+/// ToolWorkspaceRepository 保活，分段切换不丢。
 struct IndexJSONDiffSegment: View {
-    private static let key = ToolWorkspaceKey<DiffToolWorkspaceModel>(toolID: "json-diff") { _ in
+    static let key = ToolWorkspaceKey<DiffToolWorkspaceModel>(toolID: "diff", slot: "json") { _ in
         DiffToolWorkspaceModel(
             kind: .json(labels: .init(left: "原始 JSON", right: "对比 JSON"))
         )

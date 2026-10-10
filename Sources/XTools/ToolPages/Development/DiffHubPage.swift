@@ -53,8 +53,9 @@ struct IndexDiffHubPage: View {
 }
 
 /// 「对比」Hub：单一 IndexPage 外壳 + 顶部 JSON|文本 两段切换。两分段的输入与
-/// 执行状态由 ToolWorkspaceRepository 按 (toolID, slot) 保活（key 沿用
-/// 合并前 json-diff/text-diff），切换分段或离开再回来不丢输入与结果。
+/// 执行状态由 ToolWorkspaceRepository 按 (toolID "diff", slot json/text) 保活
+/// （evictHeavyPayloads 按注册表 toolID 淘汰，F1），切换分段或离开再回来不丢
+/// 输入与结果。
 private struct IndexDiffHubContent: View {
     @ObservedObject var workspace: DiffHubWorkspaceModel
 

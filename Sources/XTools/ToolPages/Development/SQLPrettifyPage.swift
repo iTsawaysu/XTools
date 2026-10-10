@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class SQLPrettifyToolWorkspaceModel: ObservableObject {
-    static let key = ToolWorkspaceKey<SQLPrettifyToolWorkspaceModel>(toolID: "sql-prettify") { preferences in
+    static let key = ToolWorkspaceKey<SQLPrettifyToolWorkspaceModel>(toolID: "formatter", slot: "sql") { preferences in
         SQLPrettifyToolWorkspaceModel(preferences: preferences)
     }
 

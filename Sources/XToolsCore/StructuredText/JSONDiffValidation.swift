@@ -33,7 +33,7 @@ public enum JSONDiffValidation {
         )
     }
 
-    public static func sideErrorMessage(label: String, diagnostic: FormatDiagnostic) -> String {
+    static func sideErrorMessage(label: String, diagnostic: FormatDiagnostic) -> String {
         "\(label) 格式错误：\(diagnostic.message)"
     }
 

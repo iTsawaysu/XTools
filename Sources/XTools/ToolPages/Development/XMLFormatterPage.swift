@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 final class XMLFormatterToolWorkspaceModel: ObservableObject {
-    static let key = ToolWorkspaceKey<XMLFormatterToolWorkspaceModel>(toolID: "xml-formatter") { preferences in
+    static let key = ToolWorkspaceKey<XMLFormatterToolWorkspaceModel>(toolID: "formatter", slot: "xml") { preferences in
         XMLFormatterToolWorkspaceModel(preferences: preferences)
     }
 
