@@ -51,7 +51,43 @@ extension DockerRunToDockerComposeService {
     }
 
     static func tokenizeWithOrigins(_ command: String, composeShellwords: Bool = false) throws -> [ShellToken] {
-        let chars = Array(command.unicodeScalars)
+        var state = TokenizerState(chars: Array(command.unicodeScalars), composeShellwords: composeShellwords)
+
+        while state.index < state.chars.count {
+            let character = state.chars[state.index]
+
+            if state.quote != nil {
+                try consumeQuotedScalar(character, into: &state)
+            } else if character == "\\" {
+                try consumeUnquotedBackslash(character, into: &state)
+            } else if character == "\"" || character == "'" {
+                state.tokenStarted = true
+                state.quote = character
+                state.index += 1
+            } else if isTokenSeparator(character, composeShellwords: state.composeShellwords) {
+                state.finishStartedToken()
+                state.index += 1
+            } else {
+                state.recordEvaluation()
+                state.append(character)
+                state.tokenStarted = true
+                state.index += 1
+            }
+        }
+
+        if state.quote != nil {
+            throw DockerRunToDockerComposeError.unterminatedQuote
+        }
+
+        state.finishTrailingToken()
+
+        return state.tokens
+    }
+
+    /// tokenizeWithOrigins 的扫描状态：字符游标、当前 token 累积与 shell 求值记录。
+    private struct TokenizerState {
+        let chars: [Unicode.Scalar]
+        let composeShellwords: Bool
         var tokens: [ShellToken] = []
         var current = ""
         var scalarCount = 0
@@ -60,12 +96,12 @@ extension DockerRunToDockerComposeService {
         var tokenStarted = false
         var index = 0
 
-        func append(_ scalar: Unicode.Scalar) {
+        mutating func append(_ scalar: Unicode.Scalar) {
             current.unicodeScalars.append(scalar)
             scalarCount += 1
         }
 
-        func recordEvaluation() {
+        mutating func recordEvaluation() {
             guard !composeShellwords, quote != "'" else { return }
             let scalar = chars[index]
             if scalar == "`" {
@@ -74,7 +110,7 @@ extension DockerRunToDockerComposeService {
             }
             guard scalar == "$", index + 1 < chars.count else { return }
             let next = chars[index + 1]
-            let startsName = Self.isShellNameStart(next)
+            let startsName = isShellNameStart(next)
             // ANSI-C and locale quotes are Shell syntax when unquoted; this
             // lightweight converter cannot treat their leading dollar as data.
             let startsShellQuote = quote == nil && (next == "\"" || next == "'")
@@ -85,113 +121,97 @@ extension DockerRunToDockerComposeService {
                 guard chars[index...].starts(with: expected) else { continue }
                 let end = index + expected.count
                 if candidate == "$PWD", end < chars.count,
-                   Self.isShellNameStart(chars[end]) || ("0"..."9").contains(chars[end]) { continue }
+                   isShellNameStart(chars[end]) || ("0"..."9").contains(chars[end]) { continue }
                 spelling = candidate
                 break
             }
             evaluations.append(.init(offset: scalarCount, currentDirectorySpelling: spelling))
         }
 
-        while index < chars.count {
-            let character = chars[index]
-
-            if let activeQuote = quote {
-                if character == activeQuote {
-                    quote = nil
-                } else if activeQuote == "\"", character == "\\" {
-                    let next = index + 1 < chars.count ? chars[index + 1] : nil
-                    if composeShellwords, let next {
-                        append(next)
-                        index += 2
-                        continue
-                    }
-                    // In double quotes, POSIX shells only consume a backslash
-                    // before $, `, ", \\, or a line continuation. Other
-                    // backslashes are literal command data.
-                    if let next, next == "$" || next == "`" || next == "\"" || next == "\\" {
-                        append(next)
-                        index += 2
-                        continue
-                    }
-                    if next == "\n" {
-                        index += 2
-                        continue
-                    }
-                    append(character)
-                } else {
-                    recordEvaluation()
-                    append(character)
-                }
-                index += 1
-                continue
-            }
-
-            if character == "\\" {
-                tokenStarted = true
-                let next = index + 1 < chars.count ? chars[index + 1] : nil
-
-                if composeShellwords {
-                    guard let next else { throw DockerRunToDockerComposeError.unterminatedQuote }
-                    append(next)
-                    index += 2
-                    continue
-                }
-
-                // An unquoted escaped newline is a line continuation.
-                if next == "\n" {
-                    index += 2
-                    continue
-                }
-                // Preserve ordinary backslashes in unquoted Windows paths.
-                // Only shell separators and quote delimiters consume the
-                // backslash in this lightweight command-input grammar.
-                if let next, next == "\"" || next == "'" || next == "\\" || next == "$" || next == "`" || Character(next).isWhitespace {
-                    append(next)
-                    index += 2
-                    continue
-                }
-                append(character)
-                index += 1
-                continue
-            }
-
-            if character == "\"" || character == "'" {
-                tokenStarted = true
-                quote = character
-                index += 1
-                continue
-            }
-
-            let isSeparator = composeShellwords
-                ? (character == " " || character == "\t" || character == "\n" || character == "\r")
-                : Character(character).isWhitespace
-            if isSeparator {
-                if tokenStarted {
-                    tokens.append(ShellToken(value: current, evaluations: evaluations))
-                    current = ""
-                    scalarCount = 0
-                    evaluations = []
-                    tokenStarted = false
-                }
-                index += 1
-                continue
-            }
-
-            recordEvaluation()
-            append(character)
-            tokenStarted = true
-            index += 1
-        }
-
-        if quote != nil {
-            throw DockerRunToDockerComposeError.unterminatedQuote
-        }
-
-        if tokenStarted {
+        /// 分隔符处把已累积的字符收进 token 并复位累积状态。
+        mutating func finishStartedToken() {
+            guard tokenStarted else { return }
             tokens.append(ShellToken(value: current, evaluations: evaluations))
+            current = ""
+            scalarCount = 0
+            evaluations = []
+            tokenStarted = false
         }
 
-        return tokens
+        /// 输入耗尽时收尾最后一个 token（不再复位状态）。
+        mutating func finishTrailingToken() {
+            if tokenStarted {
+                tokens.append(ShellToken(value: current, evaluations: evaluations))
+            }
+        }
+    }
+
+    /// 引号内的字符：闭引号结束引用；双引号内仅 POSIX 允许的反斜杠转义生效。
+    private static func consumeQuotedScalar(_ character: Unicode.Scalar, into state: inout TokenizerState) throws {
+        guard let activeQuote = state.quote else { return }
+        if character == activeQuote {
+            state.quote = nil
+        } else if activeQuote == "\"", character == "\\" {
+            let next = state.index + 1 < state.chars.count ? state.chars[state.index + 1] : nil
+            if state.composeShellwords, let next {
+                state.append(next)
+                state.index += 2
+                return
+            }
+            // In double quotes, POSIX shells only consume a backslash
+            // before $, `, ", \\, or a line continuation. Other
+            // backslashes are literal command data.
+            if let next, next == "$" || next == "`" || next == "\"" || next == "\\" {
+                state.append(next)
+                state.index += 2
+                return
+            }
+            if next == "\n" {
+                state.index += 2
+                return
+            }
+            state.append(character)
+        } else {
+            state.recordEvaluation()
+            state.append(character)
+        }
+        state.index += 1
+    }
+
+    /// 引号外的反斜杠：转义下一个字符、行继续或保留字面反斜杠。
+    private static func consumeUnquotedBackslash(_ character: Unicode.Scalar, into state: inout TokenizerState) throws {
+        state.tokenStarted = true
+        let next = state.index + 1 < state.chars.count ? state.chars[state.index + 1] : nil
+
+        if state.composeShellwords {
+            guard let next else { throw DockerRunToDockerComposeError.unterminatedQuote }
+            state.append(next)
+            state.index += 2
+            return
+        }
+
+        // An unquoted escaped newline is a line continuation.
+        if next == "\n" {
+            state.index += 2
+            return
+        }
+        // Preserve ordinary backslashes in unquoted Windows paths.
+        // Only shell separators and quote delimiters consume the
+        // backslash in this lightweight command-input grammar.
+        if let next, next == "\"" || next == "'" || next == "\\" || next == "$" || next == "`" || Character(next).isWhitespace {
+            state.append(next)
+            state.index += 2
+            return
+        }
+        state.append(character)
+        state.index += 1
+    }
+
+    /// 分隔符判定：compose 侧沿用 shellwords 的空白定义，粘贴输入用 isWhitespace。
+    private static func isTokenSeparator(_ character: Unicode.Scalar, composeShellwords: Bool) -> Bool {
+        composeShellwords
+            ? (character == " " || character == "\t" || character == "\n" || character == "\r")
+            : Character(character).isWhitespace
     }
 
     static func isShellNameStart(_ scalar: Unicode.Scalar) -> Bool {

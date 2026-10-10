@@ -86,7 +86,7 @@ public struct BasicAuthWorkspaceSession: Equatable, Sendable {
             parsedCredentials = try BasicAuthCodec.parse(trimmed)
         } catch let error as BasicAuthCodec.ParseError {
             parsedCredentials = nil
-            parseError = parseErrorMessage(error)
+            parseError = error.localizedDescription
         } catch {
             parsedCredentials = nil
             parseError = "Basic Auth 解析失败。"
@@ -123,30 +123,5 @@ public struct BasicAuthWorkspaceSession: Equatable, Sendable {
         password = parsedCredentials.password
         generateHasImportedCredentials = true
         mode = .generate
-    }
-
-    // MARK: - Internals
-
-    private func parseErrorMessage(_ error: BasicAuthCodec.ParseError) -> String {
-        switch error {
-        case .emptyInput:
-            return ""
-        case .missingCredentials:
-            return "Authorization 请求头缺少 Basic 凭据。"
-        case .unsupportedHeader:
-            return "只支持 Authorization 请求头。"
-        case .unsupportedScheme:
-            return "认证方式不是 Basic。"
-        case .invalidHeader:
-            return "Basic Auth 请求头格式无效。"
-        case .invalidBase64:
-            return "凭据不是有效的 Base64。"
-        case .invalidUTF8:
-            return "凭据不是有效的 UTF-8 文本。"
-        case .missingSeparator:
-            return "解码后的凭据缺少用户名与密码之间的冒号。"
-        case .credentialsContainControlCharacter:
-            return "凭据不能包含控制字符。"
-        }
     }
 }

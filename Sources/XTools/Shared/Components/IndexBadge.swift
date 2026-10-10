@@ -1,6 +1,6 @@
 import SwiftUI
 
-public enum IndexBadgeTone: Sendable {
+enum IndexBadgeTone: Sendable {
     case neutral
     case success
     case warning
@@ -28,19 +28,19 @@ public enum IndexBadgeTone: Sendable {
     }
 }
 
-public struct IndexBadge: View {
-    public let title: String
-    public let systemImage: String?
-    public let tone: IndexBadgeTone
-    public let isSelected: Bool
-    public let isCapsule: Bool
-    public let fixedWidth: CGFloat?
-    public let help: String?
-    public let action: (() -> Void)?
+struct IndexBadge: View {
+ let title: String
+ let systemImage: String?
+ let tone: IndexBadgeTone
+ let isSelected: Bool
+ let isCapsule: Bool
+ let fixedWidth: CGFloat?
+ let help: String?
+ let action: (() -> Void)?
 
     @State private var isHovering = false
 
-    public init(
+ init(
         _ title: String,
         systemImage: String? = nil,
         tone: IndexBadgeTone = .neutral,
@@ -97,7 +97,7 @@ public struct IndexBadge: View {
         isCapsule ? ToolTypography.tagMicro : ToolTypography.monoValueSmall
     }
 
-    public var body: some View {
+ var body: some View {
         if let action {
             Button(action: action) {
                 content

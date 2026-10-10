@@ -1,6 +1,6 @@
 import SwiftUI
 
-public enum IndexHeroStatTone: Sendable {
+enum IndexHeroStatTone: Sendable {
     case accent
     case primary
     
@@ -12,14 +12,14 @@ public enum IndexHeroStatTone: Sendable {
     }
 }
 
-public struct IndexHeroStat: View {
-    public let caption: String?
-    public let value: String
-    public let tone: IndexHeroStatTone
-    public let copyable: Bool
-    public let design: Font.Design
+struct IndexHeroStat: View {
+ let caption: String?
+ let value: String
+ let tone: IndexHeroStatTone
+ let copyable: Bool
+ let design: Font.Design
     
-    public init(
+ init(
         caption: String? = nil,
         value: String,
         tone: IndexHeroStatTone = .accent,
@@ -33,7 +33,7 @@ public struct IndexHeroStat: View {
         self.design = design
     }
 
-    public var body: some View {
+ var body: some View {
         VStack(spacing: 8) {
             HStack(spacing: 12) {
                 Text(value)

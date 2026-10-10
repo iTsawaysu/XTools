@@ -1,12 +1,33 @@
 import Foundation
 
 extension DockerRunToDockerComposeService {
+    /// 按固定 section 顺序渲染服务 YAML；各 section 的字节级输出由对应的
+    /// append*Sections 私有方法保证（键序即处理顺序，勿重排调用次序）。
     static func renderYAML(service: ComposeService) -> String {
-        var lines: [String] = [
+        var lines: [String] = []
+        appendIdentitySections(for: service, to: &lines)
+        appendEnvironmentAndPortSections(for: service, to: &lines)
+        appendStorageSections(for: service, to: &lines)
+        appendNetworkSections(for: service, to: &lines)
+        appendNetworkExtraSections(for: service, to: &lines)
+        appendLabelAndInitSections(for: service, to: &lines)
+        appendSecuritySections(for: service, to: &lines)
+        appendDeviceSections(for: service, to: &lines)
+        appendDeployResourceSections(for: service, to: &lines)
+        appendExtendedResourceSections(for: service, to: &lines)
+        appendDeviceIOLimitSections(for: service, to: &lines)
+        appendRuntimeSections(for: service, to: &lines)
+        appendTopLevelSections(for: service, to: &lines)
+        return lines.joined(separator: "\n")
+    }
+
+    /// 服务标识：服务名、镜像、平台、容器名、主机名与入口/命令。
+    private static func appendIdentitySections(for service: ComposeService, to lines: inout [String]) {
+        lines.append(contentsOf: [
             "services:",
             "  \(service.name):",
             "    image: \(yamlScalar(service.image))"
-        ]
+        ])
 
         if let platform = service.platform {
             lines.append("    platform: \(yamlScalar(platform))")
@@ -29,7 +50,10 @@ extension DockerRunToDockerComposeService {
             lines.append("    command:")
             lines.append(contentsOf: service.command.map { "      - \(yamlScalar($0))" })
         }
+    }
 
+    /// 环境与端口暴露：environment、env_file、ports、expose。
+    private static func appendEnvironmentAndPortSections(for service: ComposeService, to lines: inout [String]) {
         if !service.environment.isEmpty {
             lines.append("    environment:")
             lines.append(contentsOf: service.environment.map { "      - \(yamlScalar($0))" })
@@ -49,7 +73,10 @@ extension DockerRunToDockerComposeService {
             lines.append("    expose:")
             lines.append(contentsOf: service.expose.map { "      - \(yamlScalar($0))" })
         }
+    }
 
+    /// 存储：短式 volumes、长式 mounts 与 tmpfs。
+    private static func appendStorageSections(for service: ComposeService, to lines: inout [String]) {
         if !service.volumes.isEmpty || !service.mounts.isEmpty {
             lines.append("    volumes:")
             lines.append(contentsOf: service.volumes.map { "      - \(yamlScalar($0))" })
@@ -78,7 +105,10 @@ extension DockerRunToDockerComposeService {
             lines.append("    tmpfs:")
             lines.append(contentsOf: service.tmpfs.map { "      - \(yamlScalar($0))" })
         }
+    }
 
+    /// 网络接入：network_mode 或 networks（含地址/别名的附件明细）。
+    private static func appendNetworkSections(for service: ComposeService, to lines: inout [String]) {
         if let networkMode = service.networkMode {
             lines.append("    network_mode: \(yamlScalar(networkMode))")
         } else if !service.networks.isEmpty {
@@ -103,7 +133,10 @@ extension DockerRunToDockerComposeService {
                 lines.append(contentsOf: service.networks.map { "      - \(yamlScalar($0))" })
             }
         }
+    }
 
+    /// 网络附属：mac_address、DNS 三件套、extra_hosts 与 links。
+    private static func appendNetworkExtraSections(for service: ComposeService, to lines: inout [String]) {
         if let macAddress = service.macAddress {
             lines.append("    mac_address: \(yamlScalar(macAddress))")
         }
@@ -132,7 +165,10 @@ extension DockerRunToDockerComposeService {
             lines.append("    links:")
             lines.append(contentsOf: service.links.map { "      - \(yamlScalar($0))" })
         }
+    }
 
+    /// 标签与 init 开关。
+    private static func appendLabelAndInitSections(for service: ComposeService, to lines: inout [String]) {
         if !service.labels.isEmpty {
             lines.append("    labels:")
             lines.append(contentsOf: service.labels.map { "      - \(yamlScalar($0))" })
@@ -141,8 +177,10 @@ extension DockerRunToDockerComposeService {
         if let initFlag = service.`init`, initFlag {
             lines.append("    init: true")
         }
+    }
 
-        // Security & Capabilities
+    /// Security & Capabilities：特权、capabilities、安全选项与用户命名空间。
+    private static func appendSecuritySections(for service: ComposeService, to lines: inout [String]) {
         if let privileged = service.privileged {
             lines.append("    privileged: \(privileged)")
         }
@@ -174,14 +212,18 @@ extension DockerRunToDockerComposeService {
         if let oomScore = service.oomScoreAdj {
             lines.append("    oom_score_adj: \(yamlScalar(oomScore))")
         }
+    }
 
-        // Devices
+    /// Devices
+    private static func appendDeviceSections(for service: ComposeService, to lines: inout [String]) {
         if !service.devices.isEmpty {
             lines.append("    devices:")
             lines.append(contentsOf: service.devices.map { "      - \(yamlScalar($0))" })
         }
+    }
 
-        // Resource limits (deploy section for Compose v3+)
+    /// Resource limits (deploy section for Compose v3+)
+    private static func appendDeployResourceSections(for service: ComposeService, to lines: inout [String]) {
         let hasResources = service.cpus != nil || service.memory != nil || service.memoryReservation != nil ||
                           service.pidsLimit != nil
         if hasResources {
@@ -206,8 +248,10 @@ extension DockerRunToDockerComposeService {
                 }
             }
         }
+    }
 
-        // Extended resource configs
+    /// Extended resource configs
+    private static func appendExtendedResourceSections(for service: ComposeService, to lines: inout [String]) {
         if let cpuShares = service.cpuShares {
             lines.append("    cpu_shares: \(yamlScalar(cpuShares))")
         }
@@ -230,8 +274,10 @@ extension DockerRunToDockerComposeService {
             lines.append("    blkio_config:")
             lines.append("      weight: \(yamlIntegerScalar(blkioWeight))")
         }
+    }
 
-        // Device I/O limits
+    /// Device I/O limits（blkio_config 的设备级限速）
+    private static func appendDeviceIOLimitSections(for service: ComposeService, to lines: inout [String]) {
         if !service.deviceReadBps.isEmpty || !service.deviceWriteBps.isEmpty ||
            !service.deviceReadIops.isEmpty || !service.deviceWriteIops.isEmpty {
             if service.blkioWeight == nil {
@@ -278,9 +324,10 @@ extension DockerRunToDockerComposeService {
                 }
             }
         }
+    }
 
-        appendRuntimeSections(for: service, to: &lines)
-
+    /// 顶层声明：具名卷与外部网络。
+    private static func appendTopLevelSections(for service: ComposeService, to lines: inout [String]) {
         var namedVolumes = extractNamedVolumes(from: service.volumes)
         for mount in service.mounts where mount.kind == .volume {
             if let source = mount.source, !source.isEmpty {
@@ -303,8 +350,6 @@ extension DockerRunToDockerComposeService {
                 lines.append("    external: true")
             }
         }
-
-        return lines.joined(separator: "\n")
     }
 
     static func extractNamedVolumes(from volumes: [String]) -> Set<String> {

@@ -1,12 +1,33 @@
 import Foundation
 
 extension DockerRunToDockerComposeService {
+    /// 运行时段的编排入口；各子段保持原有顺序逐段追加。
     static func appendRuntimeSections(for service: ComposeService, to lines: inout [String]) {
         if let shmSize = service.shmSize {
             lines.append("    shm_size: \(yamlScalar(shmSize))")
         }
 
-        // Sysctls & Ulimits
+        appendSysctlAndUlimitSections(for: service, to: &lines)
+
+        // Namespace sharing
+        if let pid = service.pid {
+            lines.append("    pid: \(yamlScalar(pid))")
+        }
+        if let uts = service.uts {
+            lines.append("    uts: \(yamlScalar(uts))")
+        }
+        if let ipc = service.ipc {
+            lines.append("    ipc: \(yamlScalar(ipc))")
+        }
+
+        appendHealthcheckSection(for: service, to: &lines)
+        appendLoggingSection(for: service, to: &lines)
+        appendLifecycleSections(for: service, to: &lines)
+        appendInteractionSections(for: service, to: &lines)
+    }
+
+    /// Sysctls & Ulimits
+    private static func appendSysctlAndUlimitSections(for service: ComposeService, to lines: inout [String]) {
         if !service.sysctls.isEmpty {
             lines.append("    sysctls:")
             for sysctl in service.sysctls {
@@ -37,18 +58,10 @@ extension DockerRunToDockerComposeService {
                 }
             }
         }
+    }
 
-        // Namespace sharing
-        if let pid = service.pid {
-            lines.append("    pid: \(yamlScalar(pid))")
-        }
-        if let uts = service.uts {
-            lines.append("    uts: \(yamlScalar(uts))")
-        }
-        if let ipc = service.ipc {
-            lines.append("    ipc: \(yamlScalar(ipc))")
-        }
-
+    /// Healthcheck
+    private static func appendHealthcheckSection(for service: ComposeService, to lines: inout [String]) {
         let hasCustomHealthcheck =
             service.healthCmd != nil
             || service.healthInterval != nil
@@ -57,7 +70,6 @@ extension DockerRunToDockerComposeService {
             || service.healthStartPeriod != nil
             || service.healthStartInterval != nil
 
-        // Healthcheck
         if service.healthcheckDisabled == true {
             lines.append("    healthcheck:")
             lines.append("      disable: true")
@@ -83,8 +95,10 @@ extension DockerRunToDockerComposeService {
                 lines.append("      start_interval: \(yamlScalar(startInterval))")
             }
         }
+    }
 
-        // Logging
+    /// Logging
+    private static func appendLoggingSection(for service: ComposeService, to lines: inout [String]) {
         if service.logDriver != nil || !service.logOptions.isEmpty {
             lines.append("    logging:")
             if let driver = service.logDriver {
@@ -100,8 +114,10 @@ extension DockerRunToDockerComposeService {
                 }
             }
         }
+    }
 
-        // Misc
+    /// Misc 的前半段：重启策略与停止信号/宽限期。
+    private static func appendLifecycleSections(for service: ComposeService, to lines: inout [String]) {
         if let restart = service.restart {
             lines.append("    restart: \(yamlScalar(restart))")
 
@@ -128,7 +144,10 @@ extension DockerRunToDockerComposeService {
                 lines.append("    stop_grace_period: \(stopGrace)s")
             }
         }
+    }
 
+    /// Misc 的后半段：工作目录、用户、只读与交互开关、OOM 与 GPU 预留。
+    private static func appendInteractionSections(for service: ComposeService, to lines: inout [String]) {
         if let workingDir = service.workingDir {
             lines.append("    working_dir: \(yamlScalar(workingDir))")
         }

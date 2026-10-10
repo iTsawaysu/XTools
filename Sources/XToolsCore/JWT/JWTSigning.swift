@@ -125,7 +125,7 @@ public enum JWTSigner {
         }
     }
 
-    public enum SigningError: Error, Equatable {
+    public enum SigningError: Error, Equatable, LocalizedError {
         case emptyPayload
         case invalidPayloadJSON
         case payloadMustBeObject
@@ -141,9 +141,43 @@ public enum JWTSigner {
         case emptySecret
         case invalidBase64Secret
         case weakKey(actualBytes: Int, requiredBytes: Int)
+
+        /// 生成侧错误文案；调用方经 error.localizedDescription 读取。
+        public var errorDescription: String? {
+            switch self {
+            case .invalidAdvancedHeaderJSON:
+                return "Header 不是有效的 JSON。"
+            case .advancedHeaderMustBeObject:
+                return "Header 必须是 JSON 对象。"
+            case .duplicateHeaderKey:
+                return "Header 不能包含重复 key。"
+            case .algorithmOverride:
+                return "Header 不能覆盖算法选择器中的 alg。"
+            case .unsupportedHeaderParameter:
+                return "JWT Header 包含当前不支持的参数。"
+            case .invalidHeaderValue:
+                return "JWT Header 包含值无效的字段。"
+            case .unsupportedAlgorithm:
+                return "JWT 使用了当前不支持的签名算法。"
+            case .invalidPayloadJSON:
+                return "Payload 不是有效的 JSON。"
+            case .payloadMustBeObject:
+                return "Payload 必须是 JSON 对象。"
+            case .duplicatePayloadKey:
+                return "Payload 不能包含重复 key。"
+            case .invalidNumericDate(let claim):
+                return "\(claim) 必须是有效的 NumericDate 数字。"
+            case .emptyPayload, .emptySecret:
+                return ""
+            case .invalidBase64Secret:
+                return "Secret 不是有效的 Base64。"
+            case .weakKey(let actualBytes, let requiredBytes):
+                return "当前密钥为 \(actualBytes) 字节，至少需要 \(requiredBytes) 字节。"
+            }
+        }
     }
 
-    public static func headerPreview(
+    static func headerPreview(
         algorithm: JWTAlgorithm,
         advancedHeaderJSON: String
     ) throws -> String {

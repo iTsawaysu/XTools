@@ -242,7 +242,7 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
         decodeActivity = nil
     }
 
-    public mutating func bumpAllGenerations() {
+    mutating func bumpAllGenerations() {
         fileReadGeneration += 1
         outputGeneration += 1
         decodeGeneration += 1

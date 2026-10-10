@@ -1384,6 +1384,182 @@ struct Base64FileWorkflowTests {
         }
     }
 
+    // MARK: - Challenger M2 并入：roundtrip 属性与边界输入
+
+    @Test func roundtripArbitraryBinaryBuffersOfVaryingSizes() async throws {
+        let testSizes = [0, 1, 2, 3, 4, 15, 16, 17, 255, 256, 1024, 65536]
+
+        for size in testSizes {
+            var bytes = [UInt8](repeating: 0, count: size)
+            if size > 0 {
+                for i in 0..<size {
+                    bytes[i] = UInt8(i % 256)
+                }
+            }
+            let originalData = Data(bytes)
+            let selection = Base64FileSelection(
+                fileName: "test_\(size).bin",
+                data: originalData,
+                mimeType: "application/octet-stream"
+            )
+
+            let rawBase64 = await Base64FileWorkflow.fullOutput(for: selection, mode: .base64)
+            let decodedRaw = await Base64FileWorkflow.decodePayload(rawBase64, maxDecodedBytes: size + 100)
+            guard case .success(let payloadRaw) = decodedRaw else {
+                Issue.record("Failed to decode raw base64 for size \(size)")
+                continue
+            }
+            #expect(payloadRaw.data == originalData, "Payload mismatch for raw base64 size \(size)")
+
+            let dataURL = await Base64FileWorkflow.fullOutput(for: selection, mode: .dataURL)
+            let decodedDataURL = await Base64FileWorkflow.decodePayload(dataURL, maxDecodedBytes: size + 100)
+            guard case .success(let payloadURL) = decodedDataURL else {
+                Issue.record("Failed to decode Data URL for size \(size)")
+                continue
+            }
+            #expect(payloadURL.data == originalData, "Payload mismatch for data URL size \(size)")
+        }
+    }
+
+    @Test func roundtripBoundaryPaddingCases() async throws {
+        // 1 byte -> 2 padding chars (==)
+        let oneByte = Data([0x41])
+        let encoded1 = await Base64FileWorkflow.fullOutput(
+            for: Base64FileSelection(fileName: "1.bin", data: oneByte, mimeType: "application/octet-stream"),
+            mode: .base64
+        )
+        #expect(encoded1.hasSuffix("=="))
+        let decoded1 = await Base64FileWorkflow.decodePayload(encoded1, maxDecodedBytes: 10)
+        guard case .success(let p1) = decoded1 else {
+            Issue.record("Expected successful decode for 1 byte")
+            return
+        }
+        #expect(p1.data == oneByte)
+
+        // 2 bytes -> 1 padding char (=)
+        let twoBytes = Data([0x41, 0x42])
+        let encoded2 = await Base64FileWorkflow.fullOutput(
+            for: Base64FileSelection(fileName: "2.bin", data: twoBytes, mimeType: "application/octet-stream"),
+            mode: .base64
+        )
+        #expect(encoded2.hasSuffix("="))
+        let decoded2 = await Base64FileWorkflow.decodePayload(encoded2, maxDecodedBytes: 10)
+        guard case .success(let p2) = decoded2 else {
+            Issue.record("Expected successful decode for 2 bytes")
+            return
+        }
+        #expect(p2.data == twoBytes)
+
+        // 3 bytes -> 0 padding chars
+        let threeBytes = Data([0x41, 0x42, 0x43])
+        let encoded3 = await Base64FileWorkflow.fullOutput(
+            for: Base64FileSelection(fileName: "3.bin", data: threeBytes, mimeType: "application/octet-stream"),
+            mode: .base64
+        )
+        #expect(!encoded3.hasSuffix("="))
+        let decoded3 = await Base64FileWorkflow.decodePayload(encoded3, maxDecodedBytes: 10)
+        guard case .success(let p3) = decoded3 else {
+            Issue.record("Expected successful decode for 3 bytes")
+            return
+        }
+        #expect(p3.data == threeBytes)
+    }
+
+    @Test func decodeRejectsMalformedAndPinsLenientBase64Edges() async {
+        // 一律拒绝：字母表外字符（含非 ASCII 与 NUL）、长度余 1 的不可能
+        // Base64、缺逗号/缺 base64 标记的残缺 data URL。
+        let rejected = [
+            "???not_base64???",
+            "abcde",                             // 5 字符，长度余 1
+            "data:",                             // 无逗号
+            "data:image/png",                    // 无 base64 标记与逗号
+            "data:image/png;base64",             // 无逗号
+            "data:image/png;base64,invalid!@#$", // payload 含字母表外字符
+            "中文测试内容",
+            "\0\0\0\0",
+        ]
+        for input in rejected {
+            let result = await Base64FileWorkflow.decodePayload(input)
+            #expect(result == .failure(.invalidPayload), "应拒绝: \(input)")
+        }
+
+        // 宽容语义（decodeData 的既有契约）：纯空白与全填充串归一为空数据；
+        // 缺失/多余填充补齐后照常解码。
+        for input in ["", "   \n\t  ", "======"] {
+            let result = await Base64FileWorkflow.decodePayload(input)
+            guard case .success(let payload) = result else {
+                Issue.record("应按空数据成功解码: \(input)")
+                return
+            }
+            #expect(payload.data.isEmpty)
+            #expect(payload.mimeType == "application/octet-stream")
+            #expect(payload.fileExtension == "bin")
+        }
+        for input in ["aGVsbG8", "aGVsbG8==="] {
+            let result = await Base64FileWorkflow.decodePayload(input)
+            guard case .success(let payload) = result else {
+                Issue.record("应按宽容填充语义解码: \(input)")
+                return
+            }
+            #expect(payload.data == Data("hello".utf8))
+        }
+
+        // data URL 边界：空 payload 用 URL 元数据产出类型；缺 mime 按 RFC
+        // 兜底 text/plain;charset=us-ascii。
+        let emptyPNG = await Base64FileWorkflow.decodePayload("data:image/png;base64,")
+        guard case .success(let pngPayload) = emptyPNG else {
+            Issue.record("空 payload 的 data URL 应成功解码")
+            return
+        }
+        #expect(pngPayload.data.isEmpty)
+        #expect(pngPayload.mimeType == "image/png")
+        #expect(pngPayload.fileExtension == "png")
+
+        let noMime = await Base64FileWorkflow.decodePayload("data:;base64,aGVsbG8=")
+        guard case .success(let plainPayload) = noMime else {
+            Issue.record("缺 mime 的 data URL 应成功解码")
+            return
+        }
+        #expect(plainPayload.data == Data("hello".utf8))
+        #expect(plainPayload.mimeType == "text/plain;charset=us-ascii")
+        #expect(plainPayload.fileExtension == "txt")
+    }
+
+    @Test func readSelectionHandlesFileSystemEdgeCases() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+        let validFile = tempDir.appendingPathComponent("workflow_valid_\(UUID().uuidString).txt")
+        let oversizedFile = tempDir.appendingPathComponent("workflow_large_\(UUID().uuidString).bin")
+        let subDirectory = tempDir.appendingPathComponent("workflow_dir_\(UUID().uuidString)")
+        let nonExistentFile = tempDir.appendingPathComponent("workflow_nonexistent_\(UUID().uuidString).txt")
+
+        try "Hello Empirical Challenger".write(to: validFile, atomically: true, encoding: .utf8)
+        try Data(repeating: 0xFF, count: 2048).write(to: oversizedFile)
+        try FileManager.default.createDirectory(at: subDirectory, withIntermediateDirectories: true)
+
+        defer {
+            try? FileManager.default.removeItem(at: validFile)
+            try? FileManager.default.removeItem(at: oversizedFile)
+            try? FileManager.default.removeItem(at: subDirectory)
+        }
+
+        let validResult = await Base64FileWorkflow.readSelection(from: validFile, maxBytes: 1024)
+        guard case .success(let selection) = validResult else {
+            Issue.record("Expected successful file read")
+            return
+        }
+        #expect(selection.fileName == validFile.lastPathComponent)
+        #expect(selection.data == Data("Hello Empirical Challenger".utf8))
+
+        let oversizedResult = await Base64FileWorkflow.readSelection(from: oversizedFile, maxBytes: 1024)
+        #expect(oversizedResult == .failure(.tooLarge(fileName: oversizedFile.lastPathComponent, maxBytes: 1024)))
+
+        let dirResult = await Base64FileWorkflow.readSelection(from: subDirectory, maxBytes: 1024)
+        #expect(dirResult == .failure(.notRegularFile))
+
+        let nonExistentResult = await Base64FileWorkflow.readSelection(from: nonExistentFile, maxBytes: 1024)
+        #expect(nonExistentResult == .failure(.readFailed))
+    }
+
     private static func selection(
         fileName: String = "source.bin",
         data: Data = Data("hello".utf8),

@@ -21,25 +21,19 @@ public enum UnicodeEscaping {
         }
     }
 
-    private static let hexDigits: [UInt8] = Array("0123456789abcdef".utf8)
-
     public static func encode(_ input: String) -> String {
         guard !input.isEmpty else { return "" }
-        let codeUnitCount = input.utf16.count
-        let byteCount = codeUnitCount * 6
-        return String(unsafeUninitializedCapacity: byteCount) { buffer in
-            var offset = 0
-            for codeUnit in input.utf16 {
-                buffer[offset] = UInt8(ascii: "\\")
-                buffer[offset + 1] = UInt8(ascii: "u")
-                buffer[offset + 2] = hexDigits[Int((codeUnit >> 12) & 0x0F)]
-                buffer[offset + 3] = hexDigits[Int((codeUnit >> 8) & 0x0F)]
-                buffer[offset + 4] = hexDigits[Int((codeUnit >> 4) & 0x0F)]
-                buffer[offset + 5] = hexDigits[Int(codeUnit & 0x0F)]
-                offset += 6
-            }
-            return byteCount
+        var output = ""
+        output.reserveCapacity(input.utf16.count * 6)
+        for codeUnit in input.utf16 {
+            // 复用 DigestEncoding 的共享小写 hex 编码；大端字节序保证 \uXXXX 高位在前。
+            output.append("\\u")
+            output.append(
+                [UInt8(codeUnit >> 8), UInt8(truncatingIfNeeded: codeUnit)]
+                    .toHexStringLowercased()
+            )
         }
+        return output
     }
 
     public static func decode(_ value: String) -> String {

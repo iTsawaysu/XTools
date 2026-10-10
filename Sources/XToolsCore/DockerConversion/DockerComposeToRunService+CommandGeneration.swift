@@ -520,30 +520,7 @@ extension DockerComposeToRunService {
                 continue
             }
             if type == "tmpfs" {
-                var mount = "type=tmpfs,target=\(target)"
-                var unsupportedPaths: [String] = []
-                if let tmpfs = long["tmpfs"] as? [String: Any] {
-                    if tmpfs["size"] != nil {
-                        if let size = scalarString(tmpfs["size"]) {
-                            mount += ",tmpfs-size=\(size)"
-                        } else {
-                            unsupportedPaths.append("volumes.tmpfs.tmpfs.size(结构无法映射)")
-                        }
-                    }
-                    if tmpfs["mode"] != nil {
-                        if let mode = scalarString(tmpfs["mode"]) {
-                            mount += ",tmpfs-mode=\(mode)"
-                        } else {
-                            unsupportedPaths.append("volumes.tmpfs.tmpfs.mode(结构无法映射)")
-                        }
-                    }
-                    let unsupported = tmpfs.keys.filter { !["size", "mode"].contains($0) }.sorted()
-                    unsupportedPaths.append(contentsOf: unsupported.map { "volumes.tmpfs.tmpfs.\($0)" })
-                } else if long["tmpfs"] != nil {
-                    unsupportedPaths.append("volumes.tmpfs.tmpfs(结构无法映射)")
-                }
-                let unsupported = long.keys.filter { !["type", "target", "tmpfs"].contains($0) }.sorted()
-                unsupportedPaths.append(contentsOf: unsupported.map { "volumes.tmpfs.\($0)" })
+                let (mount, unsupportedPaths) = tmpfsMountSpec(long, target: target)
                 guard unsupportedPaths.isEmpty else {
                     skipped.append(contentsOf: unsupportedPaths)
                     continue
@@ -556,50 +533,95 @@ extension DockerComposeToRunService {
                 skipped.append("volumes.\(mountPathType(type))")
                 continue
             }
-            let optionKey = type
-            var unsupportedPaths: [String] = []
-            if let options = long[optionKey] as? [String: Any] {
-                let unsupported = options.keys.sorted()
-                unsupportedPaths += unsupported.map { "volumes.\(type).\(optionKey).\($0)" }
-            } else if long[optionKey] != nil {
-                unsupportedPaths.append("volumes.\(type).\(optionKey)(结构无法映射)")
-            }
-            let allowed = Set(["type", "source", "target", "read_only", optionKey])
-            let unsupported = long.keys.filter { !allowed.contains($0) }.sorted()
-            unsupportedPaths += unsupported.map { "volumes.\(type).\($0)" }
-            guard unsupportedPaths.isEmpty else {
+            let (mount, unsupportedPaths) = bindOrVolumeMountSpec(long, type: type, target: target)
+            guard unsupportedPaths.isEmpty, let mount else {
                 skipped.append(contentsOf: unsupportedPaths)
                 continue
-            }
-            let source: String?
-            if let rawSource = long["source"] {
-                guard let value = scalarString(rawSource), !value.isEmpty else {
-                    skipped.append("volumes.\(type).source")
-                    continue
-                }
-                source = value
-            } else if type == "bind" {
-                skipped.append("volumes.bind.source")
-                continue
-            } else {
-                source = nil
-            }
-            guard long["read_only"] == nil || long["read_only"] is Bool else {
-                skipped.append("volumes.\(type).read_only(结构无法映射)")
-                continue
-            }
-            let readOnly = long["read_only"] as? Bool == true
-            var mount = "type=\(type)"
-            if let source {
-                mount += ",source=\(source)"
-            }
-            mount += ",target=\(target)"
-            if readOnly {
-                mount += ",readonly"
             }
             args.append("--mount")
             args.append(shellToken(mount))
         }
+    }
+
+    /// 把 tmpfs 长式挂载折叠为 `--mount type=tmpfs,...` 的参数体；
+    /// 返回的 unsupportedPaths 非空表示该项整体不可映射。
+    private static func tmpfsMountSpec(
+        _ long: [String: Any],
+        target: String
+    ) -> (mount: String, unsupportedPaths: [String]) {
+        var mount = "type=tmpfs,target=\(target)"
+        var unsupportedPaths: [String] = []
+        if let tmpfs = long["tmpfs"] as? [String: Any] {
+            if tmpfs["size"] != nil {
+                if let size = scalarString(tmpfs["size"]) {
+                    mount += ",tmpfs-size=\(size)"
+                } else {
+                    unsupportedPaths.append("volumes.tmpfs.tmpfs.size(结构无法映射)")
+                }
+            }
+            if tmpfs["mode"] != nil {
+                if let mode = scalarString(tmpfs["mode"]) {
+                    mount += ",tmpfs-mode=\(mode)"
+                } else {
+                    unsupportedPaths.append("volumes.tmpfs.tmpfs.mode(结构无法映射)")
+                }
+            }
+            let unsupported = tmpfs.keys.filter { !["size", "mode"].contains($0) }.sorted()
+            unsupportedPaths.append(contentsOf: unsupported.map { "volumes.tmpfs.tmpfs.\($0)" })
+        } else if long["tmpfs"] != nil {
+            unsupportedPaths.append("volumes.tmpfs.tmpfs(结构无法映射)")
+        }
+        let unsupported = long.keys.filter { !["type", "target", "tmpfs"].contains($0) }.sorted()
+        unsupportedPaths.append(contentsOf: unsupported.map { "volumes.tmpfs.\($0)" })
+        return (mount, unsupportedPaths)
+    }
+
+    /// 把 bind/volume 长式挂载折叠为 `--mount` 参数体；mount 为 nil 表示该项
+    /// 整体跳过，unsupportedPaths 携带具体的未映射路径。
+    private static func bindOrVolumeMountSpec(
+        _ long: [String: Any],
+        type: String,
+        target: String
+    ) -> (mount: String?, unsupportedPaths: [String]) {
+        let optionKey = type
+        var unsupportedPaths: [String] = []
+        if let options = long[optionKey] as? [String: Any] {
+            let unsupported = options.keys.sorted()
+            unsupportedPaths += unsupported.map { "volumes.\(type).\(optionKey).\($0)" }
+        } else if long[optionKey] != nil {
+            unsupportedPaths.append("volumes.\(type).\(optionKey)(结构无法映射)")
+        }
+        let allowed = Set(["type", "source", "target", "read_only", optionKey])
+        let unsupported = long.keys.filter { !allowed.contains($0) }.sorted()
+        unsupportedPaths += unsupported.map { "volumes.\(type).\($0)" }
+        guard unsupportedPaths.isEmpty else { return (nil, unsupportedPaths) }
+        let source: String?
+        if let rawSource = long["source"] {
+            guard let value = scalarString(rawSource), !value.isEmpty else {
+                unsupportedPaths.append("volumes.\(type).source")
+                return (nil, unsupportedPaths)
+            }
+            source = value
+        } else if type == "bind" {
+            unsupportedPaths.append("volumes.bind.source")
+            return (nil, unsupportedPaths)
+        } else {
+            source = nil
+        }
+        guard long["read_only"] == nil || long["read_only"] is Bool else {
+            unsupportedPaths.append("volumes.\(type).read_only(结构无法映射)")
+            return (nil, unsupportedPaths)
+        }
+        let readOnly = long["read_only"] as? Bool == true
+        var mount = "type=\(type)"
+        if let source {
+            mount += ",source=\(source)"
+        }
+        mount += ",target=\(target)"
+        if readOnly {
+            mount += ",readonly"
+        }
+        return (mount, unsupportedPaths)
     }
 
     private static func mountPathType(_ type: String) -> String {

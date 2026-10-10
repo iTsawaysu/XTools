@@ -1,35 +1,35 @@
 import SwiftUI
 
-public enum IndexEmptyStateDensity: Sendable {
+enum IndexEmptyStateDensity: Sendable {
     case panel // Large, used for whole panels
     case list
     case output
 }
 
-public enum IndexEmptyStateCopy {
-    public static func autoCalculate(_ source: String) -> String { "输入\(source)后自动换算" }
-    public static func autoShow(_ source: String) -> String { "输入\(source)后自动显示" }
-    public static func autoGenerate(_ what: String) -> String { "选择\(what)后自动生成" }
-    public static func autoParse(_ source: String) -> String { "输入\(source)后自动解析" }
-    public static let noResults = "暂无匹配结果"
-    public static let noParsedResult = "暂无解析结果"
-    public static let noRecords = "暂无记录"
-    public static let outputWillShowHere = "输出将显示在这里"
-    public static let notAvailable = "暂无数据"
+enum IndexEmptyStateCopy {
+ static func autoCalculate(_ source: String) -> String { "输入\(source)后自动换算" }
+ static func autoShow(_ source: String) -> String { "输入\(source)后自动显示" }
+ static func autoGenerate(_ what: String) -> String { "选择\(what)后自动生成" }
+ static func autoParse(_ source: String) -> String { "输入\(source)后自动解析" }
+ static let noResults = "暂无匹配结果"
+ static let noParsedResult = "暂无解析结果"
+ static let noRecords = "暂无记录"
+ static let outputWillShowHere = "输出将显示在这里"
+ static let notAvailable = "暂无数据"
 }
 
-public struct IndexEmptyState: View {
-    public let title: String
-    public let systemImage: String?
-    public let message: String?
-    public let density: IndexEmptyStateDensity
+struct IndexEmptyState: View {
+ let title: String
+ let systemImage: String?
+ let message: String?
+ let density: IndexEmptyStateDensity
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Wave 2 empty-state arrival: flips once on appear; per-element
     /// animations stage the reveal (icon spring first, text follows).
     @State private var arrivalStage = false
 
-    public init(
+ init(
         title: String,
         systemImage: String? = nil,
         message: String? = nil,
@@ -41,7 +41,7 @@ public struct IndexEmptyState: View {
         self.density = density
     }
 
-    public var body: some View {
+ var body: some View {
         VStack(alignment: .center, spacing: density == .panel ? 12 : 8) {
             if let systemImage {
                 Image(systemName: systemImage)

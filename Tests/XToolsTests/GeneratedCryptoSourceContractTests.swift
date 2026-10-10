@@ -75,7 +75,7 @@ struct GeneratedCryptoSourceContractTests {
         contains(source, ".onChange(of: workspace.version) { _ in generate() }", "UUID output must refresh when the retained version changes")
         contains(hub, "UUID v4 或按时间排序的 UUID v7", "UUID subtitle must distinguish identifiers from security tokens")
         contains(source, "emptyText: IndexEmptyStateCopy.noResults", "UUID empty state must remain factual through the canonical shared copy")
-        contains(emptyStates, "public static let noResults = \"暂无匹配结果\"", "The canonical no-results copy must stay defined in the shared empty-state component")
+        contains(emptyStates, "static let noResults = \"暂无匹配结果\"", "The canonical no-results copy must stay defined in the shared empty-state component")
         doesNotContain(source, "安全 Token", "UUID UI must not describe identifiers as security tokens")
         contains(source, "IndexPrimaryActionButton(\n                title: \"生成\",\n                hint: \"⌘↩\",", "Generate must be the prototype primary action with the keycap hint")
         contains(source, ".keyboardShortcut(.return, modifiers: .command)", "Command-Return must regenerate from the keyboard")
@@ -112,7 +112,7 @@ struct GeneratedCryptoSourceContractTests {
     @Test func tokenGeneratorAutoGeneratesWithoutCustomCharacterSet() throws {
         let source = try readSource("Sources/XTools/ToolPages/Crypto/TokenGeneratorPage.swift")
         let generator = try readSource("Sources/XToolsCore/Crypto/TokenGenerator.swift")
-        let preferences = try readSource("Sources/XTools/AppShell/ToolPreferenceStore.swift")
+        let preferences = try readSource("Sources/XTools/Shared/Preferences/SensitiveToolPreferenceKeys.swift")
 
         doesNotContain(source, "customChars", "Token generator must remove custom character state")
         doesNotContain(source, "自定义字符", "Token generator must remove custom character UI")

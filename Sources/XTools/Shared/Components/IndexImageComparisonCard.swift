@@ -1,18 +1,18 @@
 import AppKit
 import SwiftUI
 
-public struct IndexImageComparisonCard<Footer: View>: View {
-    public let title: String
-    public var badgeText: String? = nil
-    public var badgeTone: IndexBadgeTone = .neutral
-    public let image: NSImage?
-    public let accessibilityLabel: String
-    public let accessibilityValue: String
-    public let placeholder: String
-    public var isProcessing: Bool = false
-    public let footer: Footer
+struct IndexImageComparisonCard<Footer: View>: View {
+ let title: String
+ var badgeText: String? = nil
+ var badgeTone: IndexBadgeTone = .neutral
+ let image: NSImage?
+ let accessibilityLabel: String
+ let accessibilityValue: String
+ let placeholder: String
+ var isProcessing: Bool = false
+ let footer: Footer
 
-    public init(
+ init(
         title: String,
         badgeText: String? = nil,
         badgeTone: IndexBadgeTone = .neutral,
@@ -34,7 +34,7 @@ public struct IndexImageComparisonCard<Footer: View>: View {
         self.footer = footer()
     }
 
-    public var body: some View {
+ var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 Text(title)

@@ -16,7 +16,7 @@ public enum BasicAuthCodec {
         case credentialsContainControlCharacter
     }
 
-    public enum ParseError: Error, Equatable {
+    public enum ParseError: Error, Equatable, LocalizedError {
         case emptyInput
         case missingCredentials
         case unsupportedHeader(String)
@@ -26,6 +26,30 @@ public enum BasicAuthCodec {
         case invalidUTF8
         case missingSeparator
         case credentialsContainControlCharacter
+
+        /// 解析侧错误文案；调用方经 error.localizedDescription 读取。
+        public var errorDescription: String? {
+            switch self {
+            case .emptyInput:
+                return ""
+            case .missingCredentials:
+                return "Authorization 请求头缺少 Basic 凭据。"
+            case .unsupportedHeader:
+                return "只支持 Authorization 请求头。"
+            case .unsupportedScheme:
+                return "认证方式不是 Basic。"
+            case .invalidHeader:
+                return "Basic Auth 请求头格式无效。"
+            case .invalidBase64:
+                return "凭据不是有效的 Base64。"
+            case .invalidUTF8:
+                return "凭据不是有效的 UTF-8 文本。"
+            case .missingSeparator:
+                return "解码后的凭据缺少用户名与密码之间的冒号。"
+            case .credentialsContainControlCharacter:
+                return "凭据不能包含控制字符。"
+            }
+        }
     }
 
     public static func authorizationHeader(username: String, password: String) -> String? {

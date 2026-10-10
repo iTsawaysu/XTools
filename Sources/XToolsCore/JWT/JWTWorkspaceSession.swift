@@ -123,7 +123,7 @@ public struct JWTWorkspaceSession: Equatable, Sendable {
             )
         } catch let error as JWTSigner.SigningError {
             generatedHeader = ""
-            generationHeaderError = generationErrorMessage(error)
+            generationHeaderError = error.localizedDescription
             return
         } catch {
             generatedHeader = ""
@@ -258,7 +258,7 @@ public struct JWTWorkspaceSession: Equatable, Sendable {
             refreshGeneration()
             mode = .generate
         } catch let error as JWTSigner.SigningError {
-            transferError = generationErrorMessage(error)
+            transferError = error.localizedDescription
         } catch {
             transferError = "当前 JWT 无法转换为生成参数。"
         }
@@ -285,40 +285,7 @@ public struct JWTWorkspaceSession: Equatable, Sendable {
         case .weakKey(let actualBytes, let requiredBytes):
             generationSecretError = "当前密钥为 \(actualBytes) 字节，\(generateAlgorithm.rawValue) 至少需要 \(requiredBytes) 字节。"
         default:
-            generationHeaderError = generationErrorMessage(error)
-        }
-    }
-
-    private func generationErrorMessage(_ error: JWTSigner.SigningError) -> String {
-        switch error {
-        case .invalidAdvancedHeaderJSON:
-            return "Header 不是有效的 JSON。"
-        case .advancedHeaderMustBeObject:
-            return "Header 必须是 JSON 对象。"
-        case .duplicateHeaderKey:
-            return "Header 不能包含重复 key。"
-        case .algorithmOverride:
-            return "Header 不能覆盖算法选择器中的 alg。"
-        case .unsupportedHeaderParameter:
-            return "JWT Header 包含当前不支持的参数。"
-        case .invalidHeaderValue:
-            return "JWT Header 包含值无效的字段。"
-        case .unsupportedAlgorithm:
-            return "JWT 使用了当前不支持的签名算法。"
-        case .invalidPayloadJSON:
-            return "Payload 不是有效的 JSON。"
-        case .payloadMustBeObject:
-            return "Payload 必须是 JSON 对象。"
-        case .duplicatePayloadKey:
-            return "Payload 不能包含重复 key。"
-        case .invalidNumericDate(let claim):
-            return "\(claim) 必须是有效的 NumericDate 数字。"
-        case .emptyPayload, .emptySecret:
-            return ""
-        case .invalidBase64Secret:
-            return "Secret 不是有效的 Base64。"
-        case .weakKey(let actualBytes, let requiredBytes):
-            return "当前密钥为 \(actualBytes) 字节，至少需要 \(requiredBytes) 字节。"
+            generationHeaderError = error.localizedDescription
         }
     }
 

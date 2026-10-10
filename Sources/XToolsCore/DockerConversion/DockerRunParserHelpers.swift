@@ -216,36 +216,78 @@ extension DockerRunToDockerComposeService {
         return allowed.isEmpty ? "app" : allowed
     }
 
-    static func parseMount(_ mountString: String) -> (mount: ComposeMount?, unsupported: [String]) {
-        var mountType: ComposeMount.Kind?
+    /// parseMount 第一步收集到的原始字段（尚未做必填/组合校验）。
+    private struct MountOptions {
+        var type: ComposeMount.Kind?
         var source: String?
         var target: String?
         var tmpfsSize: String?
         var tmpfsMode: String?
         var isReadonly = false
         var unsupported: [String] = []
+    }
 
+    static func parseMount(_ mountString: String) -> (mount: ComposeMount?, unsupported: [String]) {
+        var options = collectMountOptions(mountString)
+
+        guard let mountType = options.type else {
+            if !options.unsupported.contains("type") { options.unsupported.append("type") }
+            return (nil, options.unsupported)
+        }
+        guard let target = options.target, !target.isEmpty else {
+            options.unsupported.append("target")
+            return (nil, options.unsupported)
+        }
+        // Anonymous volumes have no source; bind mounts still require one.
+        // An explicitly empty source is not the omitted-source form.
+        if (mountType == .bind && options.source?.isEmpty != false) ||
+            (mountType == .volume && options.source?.isEmpty == true) {
+            options.unsupported.append("source")
+        }
+        if mountType != .tmpfs, options.tmpfsSize != nil || options.tmpfsMode != nil {
+            options.unsupported.append("tmpfs")
+        }
+        if mountType == .tmpfs, options.source != nil {
+            options.unsupported.append("source")
+        }
+        guard options.unsupported.isEmpty else { return (nil, options.unsupported) }
+        return (
+            ComposeMount(
+                kind: mountType,
+                source: options.source,
+                target: target,
+                readOnly: options.isReadonly,
+                size: options.tmpfsSize,
+                mode: options.tmpfsMode
+            ),
+            []
+        )
+    }
+
+    /// 按逗号切分 `--mount` 值并识别每个字段；未识别的键记入 unsupported。
+    private static func collectMountOptions(_ mountString: String) -> MountOptions {
+        var options = MountOptions()
         let parts = mountString.split(separator: ",")
         for part in parts {
             let trimmed = part.trimmingCharacters(in: .whitespaces)
 
             if trimmed == "readonly" || trimmed == "ro" {
-                isReadonly = true
+                options.isReadonly = true
                 continue
             }
             if trimmed.hasPrefix("readonly=") {
                 let value = String(trimmed.dropFirst("readonly=".count))
                 if value == "true" {
-                    isReadonly = true
+                    options.isReadonly = true
                 } else if value != "false" {
-                    unsupported.append("readonly")
+                    options.unsupported.append("readonly")
                 }
                 continue
             }
 
             let keyValue = trimmed.split(separator: "=", maxSplits: 1)
             guard keyValue.count == 2 else {
-                unsupported.append("option")
+                options.unsupported.append("option")
                 continue
             }
 
@@ -254,55 +296,23 @@ extension DockerRunToDockerComposeService {
 
             switch key {
             case "type":
-                mountType = ComposeMount.Kind(rawValue: value)
-                if mountType == nil {
-                    unsupported.append("type")
+                options.type = ComposeMount.Kind(rawValue: value)
+                if options.type == nil {
+                    options.unsupported.append("type")
                 }
             case "source", "src":
-                source = value
+                options.source = value
             case "target", "dst", "destination":
-                target = value
+                options.target = value
             case "tmpfs-size":
-                tmpfsSize = value
+                options.tmpfsSize = value
             case "tmpfs-mode":
-                tmpfsMode = value
+                options.tmpfsMode = value
             default:
-                unsupported.append(key)
+                options.unsupported.append(key)
             }
         }
-
-        guard let mountType else {
-            if !unsupported.contains("type") { unsupported.append("type") }
-            return (nil, unsupported)
-        }
-        guard let target, !target.isEmpty else {
-            unsupported.append("target")
-            return (nil, unsupported)
-        }
-        // Anonymous volumes have no source; bind mounts still require one.
-        // An explicitly empty source is not the omitted-source form.
-        if (mountType == .bind && source?.isEmpty != false) ||
-            (mountType == .volume && source?.isEmpty == true) {
-            unsupported.append("source")
-        }
-        if mountType != .tmpfs, tmpfsSize != nil || tmpfsMode != nil {
-            unsupported.append("tmpfs")
-        }
-        if mountType == .tmpfs, source != nil {
-            unsupported.append("source")
-        }
-        guard unsupported.isEmpty else { return (nil, unsupported) }
-        return (
-            ComposeMount(
-                kind: mountType,
-                source: source,
-                target: target,
-                readOnly: isReadonly,
-                size: tmpfsSize,
-                mode: tmpfsMode
-            ),
-            []
-        )
+        return options
     }
 
     static func parseNetworkAttachment(_ value: String) -> (attachment: NetworkAttachment?, unsupported: [String]) {

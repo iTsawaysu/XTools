@@ -53,7 +53,7 @@ public enum CSSColorFormatter {
         return result
     }
 
-    public static func inputText(
+    static func inputText(
         for color: CSSColor,
         family: CSSColorSyntaxFamily,
         predefinedSpace: CSSColorSpace? = nil

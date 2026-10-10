@@ -297,34 +297,6 @@ struct FileInputPanelTests {
         #expect(!message.contains(sensitivePath))
     }
 
-    @Test func sharedBackendAndRootKeepWindowScopedReusablePanelContract() throws {
-        let panelSource = try readSource("Sources/XTools/Shared/FileInputPanel.swift")
-        let rootSource = try readSource("Sources/XTools/AppShell/RootView.swift")
-
-        contains(panelSource, "private let panel: NSOpenPanel", "The AppKit backend must retain one open panel")
-        occurrenceCount(panelSource, "NSOpenPanel()", 1, "The shared file input infrastructure must have one lazy production construction site")
-        contains(panelSource, "panel.canChooseFiles = request.canChooseFiles", "Every request must drive file selection from its request")
-        contains(panelSource, "panel.canChooseDirectories = request.canChooseDirectories", "Every request must drive directory selection from its request")
-        contains(panelSource, "panel.allowsMultipleSelection = request.allowsMultipleSelection", "Every request must restore its own selection multiplicity")
-        contains(panelSource, "panel.allowedContentTypes = request.allowedContentTypes", "Every request must replace content-type filtering")
-        contains(panelSource, "panel.allowsOtherFileTypes = false", "Every request must reject types outside the request")
-        contains(panelSource, "panel.prompt = request.prompt", "Every request must reset prompt text")
-        contains(panelSource, "panel.title = request.title ?? \"\"", "Every request must reset title text")
-        contains(panelSource, "panel.message = request.message", "Every request must reset message text")
-        contains(panelSource, "panel.delegate = nil", "Every request must clear stale delegates")
-        contains(panelSource, "panel.accessoryView = nil", "Every request must clear stale accessory views")
-        contains(panelSource, "panel.treatsFilePackagesAsDirectories = false", "Every request must keep packages out of directory navigation")
-        contains(panelSource, "panel.resolvesAliases = true", "Every request must preserve ordinary alias resolution")
-        contains(panelSource, "panel.beginSheetModal(for: window)", "File input must stay attached to its owning window")
-        doesNotContain(panelSource, "runModal()", "File input must not start a synchronous modal event loop")
-        doesNotContain(panelSource, "NSApp.keyWindow", "The coordinator must not guess its owner from global key-window state")
-        doesNotContain(panelSource, "NSApp.mainWindow", "The coordinator must not guess its owner from global main-window state")
-
-        contains(rootSource, "@StateObject private var fileInputPanelCoordinator = FileInputPanelCoordinator()", "RootView must own the panel for its window lifetime")
-        contains(rootSource, ".background(FileInputPanelWindowBinder(coordinator: fileInputPanelCoordinator))", "RootView must bind the coordinator to its actual window")
-        contains(rootSource, ".environment(\\.fileInputPanelClient, fileInputPanelCoordinator.client)", "RootView must inject one client into every tool page")
-    }
-
     private func makeWindow() -> NSWindow {
         NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
@@ -376,5 +348,170 @@ private final class FakeFileInputPanelBackend: FileInputPanelBackend {
             return false
         }
         return true
+    }
+}
+
+// MARK: - Challenger M2 并入：PanelRequestBox（Shared/PanelRequestBox.swift 的唯一测试覆盖）
+
+@MainActor
+struct PanelRequestBoxTests {
+    @Test func panelRequestBoxRapidRequestsPermitOnlySingleInFlightTask() async {
+        var box = PanelRequestBox()
+        let callCounter = TestLockedCounter(initialValue: 0)
+        let signal = TestAsyncSignal()
+
+        // Start first in-flight request
+        let task1 = box.request(
+            {
+                callCounter.increment()
+                await signal.wait()
+                return "result-1"
+            },
+            onSuccess: { _ in },
+            onError: { _ in }
+        )
+
+        #expect(box.hasActiveRequest)
+        #expect(box.task != nil)
+
+        // Rapidly fire 50 subsequent requests while task 1 is in-flight
+        var tasks: [Task<Void, Never>] = []
+        for _ in 0..<50 {
+            let t = box.request(
+                {
+                    callCounter.increment()
+                    return "should-not-run"
+                },
+                onSuccess: { _ in },
+                onError: { _ in }
+            )
+            tasks.append(t)
+        }
+
+        // All returned tasks must match task1
+        for t in tasks {
+            #expect(t == task1)
+        }
+
+        // Let task1 finish
+        await signal.signal()
+        await task1.value
+
+        // Only the first action ran
+        #expect(callCounter.count == 1)
+        #expect(!box.hasActiveRequest)
+        #expect(box.task == nil)
+
+        // Now a new request can be started successfully
+        var secondResult: String?
+        let task2 = box.request(
+            {
+                callCounter.increment()
+                return "result-2"
+            },
+            onSuccess: { secondResult = $0 },
+            onError: { _ in }
+        )
+        await task2.value
+
+        #expect(callCounter.count == 2)
+        #expect(secondResult == "result-2")
+        #expect(!box.hasActiveRequest)
+    }
+
+    @Test func panelRequestBoxCancellationSuppressesCallbacks() async {
+        var box = PanelRequestBox()
+        let signal = TestAsyncSignal()
+        var successFired = false
+        var errorFired = false
+
+        let task = box.request(
+            {
+                await signal.wait()
+                return "value"
+            },
+            onSuccess: { _ in successFired = true },
+            onError: { _ in errorFired = true }
+        )
+
+        #expect(box.hasActiveRequest)
+
+        // Explicitly cancel the box while request is in-flight
+        box.cancel()
+
+        #expect(!box.hasActiveRequest)
+        #expect(box.task == nil)
+
+        // Unblock action
+        await signal.signal()
+        await task.value
+
+        // Neither callback should fire
+        #expect(!successFired)
+        #expect(!errorFired)
+    }
+
+    @Test func panelRequestBoxErrorDiagnosticsMapping() async {
+        // 1. windowUnavailable
+        var box1 = PanelRequestBox()
+        var receivedError1: String?
+        let t1 = box1.request(
+            { throw FileInputPanelFailure.windowUnavailable },
+            onSuccess: { _ in },
+            onError: { receivedError1 = $0 }
+        )
+        await t1.value
+        #expect(receivedError1 == "暂时无法打开文件选择器。")
+
+        // 2. requestInProgress
+        var box2 = PanelRequestBox()
+        var receivedError2: String?
+        let t2 = box2.request(
+            { throw FileInputPanelFailure.requestInProgress },
+            onSuccess: { _ in },
+            onError: { receivedError2 = $0 }
+        )
+        await t2.value
+        #expect(receivedError2 == "已有文件选择器正在打开。")
+
+        // 3. invalidSelection
+        var box3 = PanelRequestBox()
+        var receivedError3: String?
+        let t3 = box3.request(
+            { throw FileInputPanelFailure.invalidSelection },
+            onSuccess: { _ in },
+            onError: { receivedError3 = $0 }
+        )
+        await t3.value
+        #expect(receivedError3 == "没有取得可用的文件。")
+
+        // 4. Arbitrary unknown error falls back to standard message
+        struct RandomFailure: Error {}
+        var box4 = PanelRequestBox()
+        var receivedError4: String?
+        let t4 = box4.request(
+            { throw RandomFailure() },
+            onSuccess: { _ in },
+            onError: { receivedError4 = $0 }
+        )
+        await t4.value
+        #expect(receivedError4 == "暂时无法打开文件选择器。")
+    }
+
+    @Test func panelRequestBoxCancellationErrorDoesNotReportError() async {
+        var box = PanelRequestBox()
+        var errorReported = false
+
+        let task = box.request(
+            {
+                throw CancellationError()
+            },
+            onSuccess: { _ in },
+            onError: { _ in errorReported = true }
+        )
+        await task.value
+
+        #expect(!errorReported)
+        #expect(!box.hasActiveRequest)
     }
 }

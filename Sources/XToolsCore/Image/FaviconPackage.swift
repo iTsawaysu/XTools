@@ -143,7 +143,10 @@ public enum FaviconICOBuilder {
         }
 
         for size in requiredSizes {
-            output.append(indexed[size]!.data)
+            guard let icon = indexed[size] else {
+                fatalError("FaviconICOBuilder invariant broken: missing icon for size \(size)")
+            }
+            output.append(icon.data)
         }
         return output
     }
@@ -186,6 +189,12 @@ public enum FaviconPackageBuilder {
         let indexed = try index(icons: icons)
         let ico = try FaviconICOBuilder.build(icons: icons)
         let manifest = manifestText()
+        // index(icons:) 已保证全部必需尺寸存在；此处 guard 仅为不变量防御性回退。
+        guard let appleTouchIcon = indexed[180],
+              let manifestIcon192 = indexed[192],
+              let manifestIcon512 = indexed[512] else {
+            fatalError("FaviconPackageBuilder invariant broken: missing required icon size")
+        }
         let artifacts = [
             FaviconArtifact(
                 id: .faviconICO,
@@ -202,7 +211,7 @@ public enum FaviconPackageBuilder {
                 group: .apple,
                 purpose: "Apple Touch Icon / iOS 主屏幕图标",
                 details: "180×180 PNG",
-                data: indexed[180]!.data,
+                data: appleTouchIcon.data,
                 previewSizes: [180]
             ),
             FaviconArtifact(
@@ -211,7 +220,7 @@ public enum FaviconPackageBuilder {
                 group: .pwa,
                 purpose: "普通 Web App 图标",
                 details: "192×192 PNG，purpose 为 any",
-                data: indexed[192]!.data,
+                data: manifestIcon192.data,
                 previewSizes: [192]
             ),
             FaviconArtifact(
@@ -220,7 +229,7 @@ public enum FaviconPackageBuilder {
                 group: .pwa,
                 purpose: "普通 Web App 大尺寸图标",
                 details: "512×512 PNG，purpose 为 any",
-                data: indexed[512]!.data,
+                data: manifestIcon512.data,
                 previewSizes: [512]
             ),
             FaviconArtifact(
@@ -232,10 +241,16 @@ public enum FaviconPackageBuilder {
                 data: Data(manifest.utf8)
             )
         ]
+        let iconPreviews = requiredSizes.map { size -> GeneratedIcon in
+            guard let icon = indexed[size] else {
+                fatalError("FaviconPackageBuilder invariant broken: missing icon for size \(size)")
+            }
+            return icon
+        }
         return FaviconPackage(
             artifacts: artifacts,
             htmlSnippet: htmlSnippet,
-            iconPreviews: requiredSizes.map { indexed[$0]! }
+            iconPreviews: iconPreviews
         )
     }
 

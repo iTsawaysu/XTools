@@ -1,11 +1,11 @@
 import SwiftUI
 
-public struct IndexDropZoneModifier: ViewModifier {
+struct IndexDropZoneModifier: ViewModifier {
     @Binding var isTargeted: Bool
     let onFile: (URL) -> Void
     let onMultipleFiles: (() -> Void)?
 
-    public func body(content: Content) -> some View {
+ func body(content: Content) -> some View {
         content
             .contentShape(Rectangle())
             // targeted 微光吸附：accent 同色光晕画在描边层（形状描边 + blur，
@@ -46,7 +46,7 @@ public struct IndexDropZoneModifier: ViewModifier {
     }
 }
 
-public extension View {
+extension View {
     func indexDropZone(
         isTargeted: Binding<Bool>,
         onFile: @escaping (URL) -> Void,

@@ -3,16 +3,17 @@ import Testing
 
 struct BasicAuthResultActionSourceContractTests {
     @Test func iconOnlyCopyAndIconButtonsShareOneFixedActionSlot() throws {
-        let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
+        let controls = try readIndexControlsSources()
+        let copyButtonSource = try readSource("Sources/XTools/Shared/Components/IndexCopyButton.swift")
         let iconStyle = sourceSlice(
             controls,
             from: "struct IndexIconActionButtonStyle: ButtonStyle",
-            to: "// MARK: - IndexCopyButton"
+            to: "// MARK: - IndexPrimaryActionButton"
         )
         let copyButton = sourceSlice(
-            controls,
+            copyButtonSource,
             from: "struct IndexCopyButton: View",
-            to: "struct IndexProgressMotionLabel<ID: Hashable>: View"
+            to: "// MARK: - IndexCopyTickIconSlot"
         )
         let iconButton = sourceSlice(
             controls,

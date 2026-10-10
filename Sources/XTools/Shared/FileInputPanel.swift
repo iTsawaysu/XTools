@@ -31,31 +31,6 @@ struct FileInputPanelRequest: Sendable {
     }
 }
 
-enum FileInputPanelFailure: Error, Equatable, LocalizedError {
-    case windowUnavailable
-    case requestInProgress
-    case invalidSelection
-
-    var errorDescription: String? {
-        switch self {
-        case .windowUnavailable:
-            return "暂时无法打开文件选择器。"
-        case .requestInProgress:
-            return "已有文件选择器正在打开。"
-        case .invalidSelection:
-            return "没有取得可用的文件。"
-        }
-    }
-
-    static func diagnosticMessage(for error: any Error) -> String {
-        if let failure = error as? FileInputPanelFailure,
-           let message = failure.errorDescription {
-            return message
-        }
-        return FileInputPanelFailure.windowUnavailable.errorDescription ?? "暂时无法打开文件选择器。"
-    }
-}
-
 struct FileInputPanelClient: Sendable {
     private let selectAction: @MainActor @Sendable (FileInputPanelRequest) async throws -> URL?
     private let selectFilesAction: @MainActor @Sendable (FileInputPanelRequest) async throws -> [URL]?
@@ -85,10 +60,7 @@ struct FileInputPanelClient: Sendable {
     }
 }
 
-enum FileInputPanelBackendResult {
-    case selected([URL])
-    case cancelled
-}
+typealias FileInputPanelBackendResult = FilePanelSheetResult<[URL]>
 
 @MainActor
 protocol FileInputPanelBackend: AnyObject {
@@ -101,23 +73,16 @@ protocol FileInputPanelBackend: AnyObject {
 }
 
 @MainActor
-final class FileInputPanelCoordinator: ObservableObject {
-    typealias BackendFactory = @MainActor () -> any FileInputPanelBackend
-
-    private struct ActiveRequest {
-        let id: UUID
-        let continuation: CheckedContinuation<[URL]?, any Error>
-    }
-
-    private let backendFactory: BackendFactory
-    private weak var owningWindow: NSWindow?
+final class FileInputPanelCoordinator: ObservableObject, FilePanelWindowAttaching {
+    private let core: FilePanelSheetRequestCore<[URL]>
+    private let backendFactory: @MainActor () -> any FileInputPanelBackend
     private var backend: (any FileInputPanelBackend)?
-    private var activeRequest: ActiveRequest?
 
     init(
-        backendFactory: @escaping BackendFactory = { AppKitOpenFilePanelBackend() }
+        backendFactory: @escaping @MainActor () -> any FileInputPanelBackend = { AppKitOpenFilePanelBackend() }
     ) {
         self.backendFactory = backendFactory
+        core = FilePanelSheetRequestCore(acceptsPayload: { !$0.isEmpty })
     }
 
     var client: FileInputPanelClient {
@@ -138,15 +103,11 @@ final class FileInputPanelCoordinator: ObservableObject {
     }
 
     func attach(to window: NSWindow) {
-        guard owningWindow !== window else { return }
-        cancelActiveRequest()
-        owningWindow = window
+        core.attach(to: window)
     }
 
     func detach(from window: NSWindow) {
-        guard owningWindow === window else { return }
-        cancelActiveRequest()
-        owningWindow = nil
+        core.detach(from: window)
     }
 
     func selectFile(_ request: FileInputPanelRequest) async throws -> URL? {
@@ -156,33 +117,15 @@ final class FileInputPanelCoordinator: ObservableObject {
     /// 多选与单选共用同一 sheet 请求管线：同一时刻仅一个活动请求，
     /// 后端结果统一上报 `panel.urls`，单选语义由本方法在数组上取 first。
     func selectFiles(_ request: FileInputPanelRequest) async throws -> [URL]? {
-        try Task.checkCancellation()
-        guard activeRequest == nil else {
-            throw FileInputPanelFailure.requestInProgress
-        }
-        guard let owningWindow else {
-            throw FileInputPanelFailure.windowUnavailable
-        }
-
-        let backend = resolvedBackend()
-        backend.configure(for: request)
-        let requestID = UUID()
-
-        return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                activeRequest = ActiveRequest(id: requestID, continuation: continuation)
-                backend.beginSheetModal(for: owningWindow) { [weak self] result in
-                    self?.finishRequest(id: requestID, result: result)
-                }
-
-                if Task.isCancelled {
-                    cancelActiveRequest(id: requestID)
-                }
-            }
-        } onCancel: {
-            Task { @MainActor [weak self] in
-                self?.cancelActiveRequest(id: requestID)
-            }
+        try await core.present { [self] in
+            let backend = resolvedBackend()
+            backend.configure(for: request)
+            return FilePanelSheetSession(
+                present: { window, completion in
+                    backend.beginSheetModal(for: window, completion: completion)
+                },
+                cancel: { backend.cancel() }
+            )
         }
     }
 
@@ -194,38 +137,6 @@ final class FileInputPanelCoordinator: ObservableObject {
         let backend = backendFactory()
         self.backend = backend
         return backend
-    }
-
-    private func finishRequest(id: UUID, result: FileInputPanelBackendResult) {
-        guard let request = takeActiveRequest(id: id) else { return }
-
-        switch result {
-        case .selected(let urls):
-            guard !urls.isEmpty else {
-                request.continuation.resume(throwing: FileInputPanelFailure.invalidSelection)
-                return
-            }
-            request.continuation.resume(returning: urls)
-        case .cancelled:
-            request.continuation.resume(returning: nil)
-        }
-    }
-
-    private func cancelActiveRequest(id: UUID? = nil) {
-        guard let request = activeRequest,
-              id == nil || request.id == id else {
-            return
-        }
-
-        activeRequest = nil
-        backend?.cancel()
-        request.continuation.resume(throwing: CancellationError())
-    }
-
-    private func takeActiveRequest(id: UUID) -> ActiveRequest? {
-        guard let request = activeRequest, request.id == id else { return nil }
-        activeRequest = nil
-        return request
     }
 }
 
@@ -304,71 +215,4 @@ extension EnvironmentValues {
     }
 }
 
-struct FileInputPanelWindowBinder: NSViewRepresentable {
-    let coordinator: FileInputPanelCoordinator
-
-    func makeNSView(context _: Context) -> FileInputPanelWindowView {
-        FileInputPanelWindowView(coordinator: coordinator)
-    }
-
-    func updateNSView(_ nsView: FileInputPanelWindowView, context _: Context) {
-        nsView.updateCoordinator(coordinator)
-    }
-
-    static func dismantleNSView(
-        _ nsView: FileInputPanelWindowView,
-        coordinator _: ()
-    ) {
-        nsView.detach()
-    }
-}
-
-@MainActor
-final class FileInputPanelWindowView: NSView {
-    private var panelCoordinator: FileInputPanelCoordinator
-    private weak var observedWindow: NSWindow?
-
-    init(coordinator: FileInputPanelCoordinator) {
-        panelCoordinator = coordinator
-        super.init(frame: .zero)
-    }
-
-    @available(*, unavailable)
-    required init?(coder _: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        reportWindowChange()
-    }
-
-    func updateCoordinator(_ coordinator: FileInputPanelCoordinator) {
-        guard panelCoordinator !== coordinator else { return }
-        if let observedWindow {
-            panelCoordinator.detach(from: observedWindow)
-        }
-        panelCoordinator = coordinator
-        reportWindowChange()
-    }
-
-    func detach() {
-        if let observedWindow {
-            panelCoordinator.detach(from: observedWindow)
-        }
-        observedWindow = nil
-    }
-
-    private func reportWindowChange() {
-        let nextWindow = window
-        guard observedWindow !== nextWindow else { return }
-
-        if let observedWindow {
-            panelCoordinator.detach(from: observedWindow)
-        }
-        observedWindow = nextWindow
-        if let nextWindow {
-            panelCoordinator.attach(to: nextWindow)
-        }
-    }
-}
+typealias FileInputPanelWindowBinder = FilePanelWindowBinder<FileInputPanelCoordinator>
