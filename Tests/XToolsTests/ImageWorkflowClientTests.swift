@@ -72,6 +72,9 @@ struct ImageWorkflowClientTests {
             color: .white
         )
 
+        // 慢/快两次渲染制造发布竞争。注意：被取代的渲染任务可能被会话
+        // 直接取消丢弃（闭包根本不执行），因此下面用固定窗口而非轮询
+        // "慢渲染完成"——这里验证的是非事件（迟到结果不得覆盖最新值）。
         session.render(
             previewData: first,
             sourcePixelWidth: 12,
@@ -1263,6 +1266,8 @@ struct ImageWorkflowClientTests {
         }
 
         try await Self.waitForOutput(in: session, matching: second)
+        // 固定窗口：被取代的渲染任务可能被取消而不执行闭包，无可观测的
+        // 完成信号；此处验证的是非事件（迟到结果不得覆盖最新值）。
         try await Task.sleep(nanoseconds: 120_000_000)
 
         #expect(session.output == second)
@@ -1346,6 +1351,8 @@ struct ImageWorkflowClientTests {
         }
         try await waitUntil { session.isProcessing }
         session.reset()
+        // 固定窗口：reset 会使 in-flight 渲染任务作废（闭包可能不再执行），
+        // 无完成信号可轮询；此处验证的是非事件（迟到结果不得复活状态）。
         try await Task.sleep(nanoseconds: 120_000_000)
 
         #expect(session.source == nil)
@@ -1847,6 +1854,9 @@ struct ImageWorkflowClientTests {
         })
 
         try await Self.waitForIcons(in: session, matching: secondIcons)
+        // 固定窗口：被取代的生成任务可能在闭包执行前就被取消（闭包根本
+        // 不执行，无完成信号可轮询）；此处验证的是非事件（迟到结果不得
+        // 覆盖最新值）。
         try await Task.sleep(nanoseconds: 120_000_000)
 
         #expect(session.sourceURL == secondURL)
@@ -1900,12 +1910,106 @@ struct ImageWorkflowClientTests {
         })
         try await waitUntil { session.sourceURL == sourceURL && session.isProcessing }
         session.reset()
+        // 固定窗口：reset 会使 in-flight 生成任务作废（闭包可能在执行前就
+        // 被取消，无完成信号可轮询）；此处验证的是非事件（迟到结果不得
+        // 复活状态）。
         try await Task.sleep(nanoseconds: 120_000_000)
 
         #expect(session.source == nil)
         #expect(session.icons.isEmpty)
         #expect(session.error == nil)
         #expect(session.isProcessing == false)
+    }
+
+    // MARK: - Challenger M2 并入：结构化并发压力
+
+    @Test func imageWorkflowClientStructuredConcurrencyUnderRapidCancellation() async throws {
+        let validPNGData = try Self.makeImageData(width: 100, height: 100, format: .png)
+        let sampleURL = URL(fileURLWithPath: "/tmp/sample_\(UUID().uuidString).png")
+
+        let completedCounter = TestLockedCounter(initialValue: 0)
+        let cancelledCounter = TestLockedCounter(initialValue: 0)
+
+        // Launch 30 tasks with varied cancellation timings (from 0ms up to 20ms)
+        for i in 0..<30 {
+            let reader = FakeImageWorkflowReader(
+                dataByURL: [sampleURL: validPNGData],
+                readDelayByURL: [sampleURL: 0.05]
+            )
+            let client = ImageWorkflowClient(
+                dialog: FakeImageWorkflowDialog(),
+                reader: reader,
+                writer: FakeImageWorkflowWriter()
+            )
+
+            let task = Task {
+                do {
+                    _ = try await client.prepareSelectionInBackground(from: sampleURL, allowedContentTypes: [UTType.png])
+                    completedCounter.increment()
+                } catch is CancellationError {
+                    cancelledCounter.increment()
+                } catch {
+                    Issue.record("Unexpected error during rapid cancel test: \(error)")
+                }
+            }
+
+            if i % 2 == 0 {
+                // Rapid cancel
+                task.cancel()
+            } else {
+                // Slightly delayed cancel or let complete
+                try await Task.sleep(for: .milliseconds(i % 5))
+                if i % 3 == 0 {
+                    task.cancel()
+                }
+            }
+            _ = await task.result
+        }
+
+        #expect(completedCounter.count + cancelledCounter.count == 30)
+        #expect(cancelledCounter.count > 0, "At least some tasks should have observed cancellation")
+    }
+
+    @Test func imageWorkflowClientStructuredConcurrencyZeroDeadlockUnderLoad() async throws {
+        let validPNGData = try Self.makeImageData(width: 64, height: 64, format: .png)
+        let sampleURL = URL(fileURLWithPath: "/tmp/sample_batch_\(UUID().uuidString).png")
+
+        let reader = FakeImageWorkflowReader(
+            dataByURL: [sampleURL: validPNGData]
+        )
+        let client = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(),
+            reader: reader,
+            writer: FakeImageWorkflowWriter()
+        )
+
+        // Fire 20 parallel requests concurrently
+        var tasks: [Task<Result<ImageInputSelection, Error>, Never>] = []
+        for _ in 0..<20 {
+            tasks.append(Task { @MainActor in
+                do {
+                    let sel = try await client.prepareSelectionInBackground(from: sampleURL, allowedContentTypes: [UTType.png])
+                    return .success(sel)
+                } catch {
+                    return .failure(error)
+                }
+            })
+        }
+
+        var results: [Result<ImageInputSelection, Error>] = []
+        for t in tasks {
+            results.append(await t.value)
+        }
+
+        #expect(results.count == 20)
+        for r in results {
+            guard case .success(let sel) = r else {
+                Issue.record("Expected all 20 concurrent tasks to succeed without deadlock")
+                continue
+            }
+            #expect(sel.data == validPNGData)
+            #expect(sel.metadata.format == .png)
+        }
     }
 
     private static func makeImageData(width: Int, height: Int, format: ImageFileFormat) throws -> Data {
@@ -1953,15 +2057,13 @@ struct ImageWorkflowClientTests {
         in session: ImageProcessedOutputSession,
         matching expected: ProcessedImage? = nil
     ) async throws {
-        for _ in 0..<50 {
+        // 共享轮询等待：条件满足即早退；超时会抛错，比旧的固定 50×10ms
+        // 循环（静默放弃）更可靠，也免受高负载下的时长不足影响。
+        try await waitUntil {
             if let expected {
-                if session.output == expected {
-                    return
-                }
-            } else if session.output != nil {
-                return
+                return session.output == expected
             }
-            try await Task.sleep(nanoseconds: 10_000_000)
+            return session.output != nil
         }
     }
 

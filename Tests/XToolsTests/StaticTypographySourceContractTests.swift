@@ -5,11 +5,11 @@ struct StaticTypographySourceContractTests {
     @Test func typographyKeepsOneStaticSemanticTokenOwnerWithoutRuntimeScale() throws {
         let typography = try readSource("Sources/XTools/Shared/ToolTypography.swift")
         let root = try readSource("Sources/XTools/AppShell/RootView.swift")
-        let preferences = try readSource("Sources/XTools/AppShell/ToolPreferenceStore.swift")
+        let preferences = try readSource("Sources/XTools/Shared/ToolPreferenceStore.swift")
         let app = try readSource("Sources/XTools/XToolsApp.swift")
         let keycode = try readSource("Sources/XTools/ToolPages/Web/KeycodeInfoPage.swift")
         let emptyState = try readSource("Sources/XTools/Shared/Components/IndexEmptyState.swift")
-        let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
+        let controls = try readIndexControlsSources()
 
         contains(typography, "static let pageTitle = Font.system(size: 18, weight: .semibold)", "Page title must keep the standard 18-point semantic token")
         contains(typography, "static let pageSubtitle = Font.system(size: 12.5)", "Page subtitle must keep the standard 12.5-point semantic token")

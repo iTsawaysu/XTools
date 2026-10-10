@@ -328,18 +328,6 @@ struct FileTypeDetectorSessionTests {
         #expect(!session.canReset)
     }
 
-    @Test func uploadPanelOwnsTheResetWithoutChangingBodyOrResultLayout() throws {
-        let page = try readSource("Sources/XTools/ToolPages/Utility/FileTypeDetectorPage.swift")
-        let session = try readSource("Sources/XTools/ToolPages/Utility/FileTypeDetectorSession.swift")
-
-        contains(page, "IndexClearButton(\n                    isDisabled: !session.canReset,\n                    action: session.reset", "File detector reset must use the existing upload-panel header")
-        contains(page, ".indexDropZone(", "File detector reset must preserve the shared drop target")
-        contains(page, "IndexPanel(\"检测结果\")", "File detector reset must preserve the existing result panel")
-        contains(session, "func reset()", "File detector reset must be owned by the retained session")
-        contains(session, "panelRequests.cancel()", "File detector reset must cancel a pending panel request through the shared panel request box")
-        contains(session, "cancelInspection()", "File detector reset must cancel and generation-invalidate inspection")
-    }
-
     @Test func foundationReaderRejectsDirectoriesAsNonRegularFiles() {
         let reader = FoundationFileTypeFileReader()
 

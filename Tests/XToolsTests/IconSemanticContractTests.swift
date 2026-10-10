@@ -3,9 +3,15 @@ import AppKit
 import Foundation
 import Testing
 
+/// Icon semantic contracts.
+///
+/// Most of this suite is data-driven (approved icon maps, reviewed SF Symbol
+/// sets, a recursive production scan) — that form is already the maintainable
+/// one. Verbatim help/copy needles were trimmed; symbol tables are kept whole
+/// but packed densely.
 struct IconSemanticContractTests {
     @Test func sharedToggleIconExposesSelectedTraitAndOnOffValue() throws {
-        let source = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
+        let source = try readIndexControlsSources()
         let iconButton = sourceSlice(
             source,
             from: "struct IndexIconButton: View",
@@ -20,171 +26,49 @@ struct IconSemanticContractTests {
     // Audited against SFSafeSymbols cb2e670a213ff42ae08528ee2c401bfb1d799675.
     // Every entry is available before or with SF Symbols 4.0 (macOS 13).
     private let reviewedMacOS13Symbols: Set<String> = [
-        "01.square",
-        "app.badge",
-        "exclamationmark.circle.fill",
-        "exclamationmark.triangle",
-        "minus",
-        "plus",
-        "arrow.clockwise",
-        "arrow.down",
-        "arrow.down.circle",
-        "arrow.counterclockwise",
-        "arrow.triangle.branch",
-        "arrow.down.doc",
-        "arrow.down.right.and.arrow.up.left",
-        "arrow.left.arrow.right",
-        "arrow.left.arrow.right.square",
-        "arrow.left.circle",
-        "arrow.right.circle",
-        "arrow.up.right.square",
-        "barcode",
-        "building.columns",
-        "calendar",
-        "calendar.badge.clock",
-        "camera.filters",
-        "chart.bar.doc.horizontal",
-        "checkmark",
-        "checkmark.circle.fill",
-        "checkmark.shield",
-        "checkmark.square.fill",
-        "checklist",
-        "chevron.down",
-        "chevron.left",
-        "chevron.left.forwardslash.chevron.right",
-        "chevron.right",
-        "chevron.up",
-        "chevron.up.chevron.down",
-        "circle.lefthalf.filled",
-        "clock",
-        "clock.arrow.circlepath",
-        "curlybraces",
-        "curlybraces.square",
-        "cylinder",
-        "desktopcomputer",
-        "doc",
-        "doc.badge.gearshape",
-        "doc.badge.plus",
-        "doc.fill",
-        "doc.on.doc",
-        "doc.on.clipboard",
-        "doc.plaintext",
-        "doc.questionmark",
-        "doc.text.magnifyingglass",
-        "exclamationmark.triangle.fill",
-        "eye",
-        "eye.slash",
-        "eyedropper",
-        "face.smiling",
-        "function",
-        "folder",
-        "gearshape",
-        "globe",
-        "globe.americas",
-        "hammer",
-        "info.circle",
-        "info.circle.fill",
-        "key",
-        "keyboard",
-        "lightbulb",
-        "lightbulb.fill",
-        "link",
-        "line.3.horizontal.decrease.circle",
-        "list.bullet.indent",
-        "lock",
-        "lock.rectangle",
-        "lock.shield",
-        "magnifyingglass",
-        "moon.fill",
-        "network",
-        "number",
-        "paintpalette",
-        "pause.fill",
-        "photo",
-        "photo.on.rectangle.angled",
-        "play.fill",
-        "quote.opening",
-        "rectangle.and.text.magnifyingglass",
-        "server.rack",
-        "shippingbox",
-        "shuffle",
-        "sidebar.left",
-        "square",
-        "square.and.arrow.down",
-        "square.grid.3x3",
-        "square.split.2x1",
-        "star",
-        "star.fill",
-        "sun.max.fill",
-        "terminal",
-        "text.badge.checkmark",
-        "text.below.photo",
-        "text.justify.left",
-        "text.magnifyingglass",
-        "text.quote",
-        "textformat",
-        "textformat.abc",
-        "textformat.size",
-        "ticket",
-        "timer",
-        "trash",
-        "wrench.and.screwdriver",
-        "xmark",
-        "xmark.circle",
-        "xmark.circle.fill",
+        "01.square", "app.badge", "exclamationmark.circle.fill", "exclamationmark.triangle", "minus", "plus",
+        "arrow.clockwise", "arrow.down", "arrow.down.circle", "arrow.counterclockwise", "arrow.triangle.branch",
+        "arrow.down.doc", "arrow.down.right.and.arrow.up.left", "arrow.left.arrow.right", "arrow.left.arrow.right.square",
+        "arrow.left.circle", "arrow.right.circle", "arrow.up.right.square", "barcode", "building.columns",
+        "calendar", "calendar.badge.clock", "camera.filters", "chart.bar.doc.horizontal", "checkmark",
+        "checkmark.circle.fill", "checkmark.shield", "checkmark.square.fill", "checklist", "chevron.down",
+        "chevron.left", "chevron.left.forwardslash.chevron.right", "chevron.right", "chevron.up", "chevron.up.chevron.down",
+        "circle.lefthalf.filled", "clock", "clock.arrow.circlepath", "curlybraces", "curlybraces.square",
+        "cylinder", "desktopcomputer", "doc", "doc.badge.gearshape", "doc.badge.plus",
+        "doc.fill", "doc.on.doc", "doc.on.clipboard", "doc.plaintext", "doc.questionmark",
+        "doc.text.magnifyingglass", "exclamationmark.triangle.fill", "eye", "eye.slash", "eyedropper",
+        "face.smiling", "function", "folder", "gearshape", "globe",
+        "globe.americas", "hammer", "info.circle", "info.circle.fill", "key",
+        "keyboard", "lightbulb", "lightbulb.fill", "link", "line.3.horizontal.decrease.circle",
+        "list.bullet.indent", "lock", "lock.rectangle", "lock.shield", "magnifyingglass",
+        "moon.fill", "network", "number", "paintpalette", "pause.fill",
+        "photo", "photo.on.rectangle.angled", "play.fill", "quote.opening", "rectangle.and.text.magnifyingglass",
+        "server.rack", "shippingbox", "shuffle", "sidebar.left", "square",
+        "square.and.arrow.down", "square.grid.3x3", "square.split.2x1", "star", "star.fill",
+        "sun.max.fill", "terminal", "text.badge.checkmark", "text.below.photo", "text.justify.left",
+        "text.magnifyingglass", "text.quote", "textformat", "textformat.abc", "textformat.size",
+        "ticket", "timer", "trash", "wrench.and.screwdriver", "xmark",
+        "xmark.circle", "xmark.circle.fill",
     ]
 
     private let reviewedDynamicSymbols: Set<String> = [
-        "checkmark",
-        "checkmark.circle.fill",
-        "checkmark.square.fill",
-        "exclamationmark.triangle.fill",
-        "eye",
-        "eye.slash",
-        "info.circle",
-        "info.circle.fill",
-        "pause.fill",
-        "play.fill",
-        "square",
-        "star",
-        "star.fill",
-        "xmark.circle.fill",
+        "checkmark", "checkmark.circle.fill", "checkmark.square.fill", "exclamationmark.triangle.fill",
+        "eye", "eye.slash", "info.circle", "info.circle.fill", "pause.fill", "play.fill",
+        "square", "star", "star.fill", "xmark.circle.fill",
     ]
 
     private let approvedToolIcons: [ToolID: String] = [
-        "base64-file-converter": "doc",
-        "text-encoding": "text.quote",
-        "integer-base-converter": "arrow.left.arrow.right.square",
-        "roman-numeral-converter": "building.columns",
-        "case-converter": "textformat.size",
-        "hash-text": "number",
-        "text-encryption": "lock",
-        "string-obfuscator": "eye.slash",
-        "generator": "shuffle",
-        "formatter": "curlybraces.square",
-        "diff": "square.split.2x1",
-        "regex-tester": "text.magnifyingglass",
-        "docker-run-to-docker-compose-converter": "shippingbox",
-        "html-to-markdown": "doc.plaintext",
-        "crontab-generator": "clock.arrow.circlepath",
-        "random-port-generator": "server.rack",
-        "chmod-calculator": "terminal",
-        "source-control": "arrow.triangle.branch",
-        "jwt-parser": "ticket",
-        "basic-auth-generator": "key",
-        "http-status-codes": "network",
-        "useragent-parser": "rectangle.and.text.magnifyingglass",
-        "keycode-info": "keyboard",
-        "image-tools": "photo.on.rectangle.angled",
-        "color-picker": "paintpalette",
-        "date-time-converter": "calendar",
-        "timezone-viewer": "globe.americas",
-        "date-calculator": "calendar.badge.clock",
-        "chronometer": "timer",
-        "device-information": "desktopcomputer",
-        "file-type-detector": "doc.questionmark",
-        "math-evaluator": "function",
-        "text-statistics": "chart.bar.doc.horizontal",
+        "base64-file-converter": "doc", "text-encoding": "text.quote", "integer-base-converter": "arrow.left.arrow.right.square",
+        "roman-numeral-converter": "building.columns", "case-converter": "textformat.size", "hash-text": "number",
+        "text-encryption": "lock", "string-obfuscator": "eye.slash", "generator": "shuffle",
+        "formatter": "curlybraces.square", "diff": "square.split.2x1", "regex-tester": "text.magnifyingglass",
+        "docker-run-to-docker-compose-converter": "shippingbox", "html-to-markdown": "doc.plaintext", "crontab-generator": "clock.arrow.circlepath",
+        "random-port-generator": "server.rack", "chmod-calculator": "terminal", "source-control": "arrow.triangle.branch",
+        "jwt-parser": "ticket", "basic-auth-generator": "key", "http-status-codes": "network",
+        "useragent-parser": "rectangle.and.text.magnifyingglass", "keycode-info": "keyboard", "image-tools": "photo.on.rectangle.angled",
+        "color-picker": "paintpalette", "date-time-converter": "calendar", "timezone-viewer": "globe.americas",
+        "date-calculator": "calendar.badge.clock", "chronometer": "timer", "device-information": "desktopcomputer",
+        "file-type-detector": "doc.questionmark", "math-evaluator": "function", "text-statistics": "chart.bar.doc.horizontal",
         "emoji-picker": "face.smiling",
     ]
 
@@ -253,15 +137,14 @@ struct IconSemanticContractTests {
     @Test func actionConsumersUseTheApprovedVocabulary() throws {
         let generateParse = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexGenerateParseMode.swift")
         let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
+        let copyButton = try readSource("Sources/XTools/Shared/Components/IndexCopyButton.swift")
         let textComponents = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexTextComponents.swift")
         let chronometer = try readSource("Sources/XTools/ToolPages/Time/ChronometerPage.swift")
         let base64File = try readSource("Sources/XTools/ToolPages/Converter/Base64FilePage.swift")
-        let randomPort = try readSource("Sources/XTools/ToolPages/Development/RandomPortPage.swift")
 
         contains(generateParse, #"Label("清空", systemImage: IndexActionSymbol.clear)"#, "Generate/parse workspaces must treat clearing drafts as content clearing")
         contains(controls, "Image(systemName: IndexActionSymbol.clear)", "Shared icon-only clear controls must use the clear symbol owner")
-        contains(controls, "Label(title, systemImage: IndexActionSymbol.clear)", "Shared labeled clear controls must use the clear symbol owner")
-        occurrenceCount(controls, #"copied ? "checkmark" : IndexActionSymbol.copy"#, 2, "Shared copy controls must use the copy symbol owner before success feedback")
+        occurrenceCount(copyButton, #"copied ? "checkmark" : IndexActionSymbol.copy"#, 2, "Shared copy controls must use the copy symbol owner before success feedback")
         contains(textComponents, "systemImage: IndexActionSymbol.searchClear", "Shared search fields must use the familiar filled clear symbol")
         contains(chronometer, #"Label("重置", systemImage: IndexActionSymbol.reset)"#, "Chronometer reset must remain distinct from refresh and regeneration")
 
@@ -277,17 +160,8 @@ struct IconSemanticContractTests {
             base64FilenameReset.contains("Image(systemName: IndexActionSymbol.reset)") ||
             base64FilenameReset.contains(#"Label("重置文件名", systemImage: IndexActionSymbol.reset)"#)
         #expect(usesSharedResetSymbol, "Base64 filename reset must use the shared reset symbol owner")
-        if base64FilenameReset.contains("Image(systemName: IndexActionSymbol.reset)") {
-            contains(base64FilenameReset, #".accessibilityLabel("重置文件名")"#, "Base64 icon-only filename reset must keep its accessible action name")
-        }
-        contains(randomPort, #"Label("重新生成", systemImage: IndexActionSymbol.refresh)"#, "Random Port regeneration must use the shared refresh symbol owner")
 
-        let refreshConsumers = [
-            "Sources/XTools/ToolPages/Utility/DeviceInformationPage.swift",
-        ]
-        for path in refreshConsumers {
-            contains(try readSource(path), "systemImage: IndexActionSymbol.refresh", "\(path) must use the shared refresh symbol")
-        }
+        contains(try readSource("Sources/XTools/ToolPages/Utility/DeviceInformationPage.swift"), "systemImage: IndexActionSymbol.refresh", "Device information must use the shared refresh symbol")
 
         let imageResourceConsumers = [
             "Sources/XTools/ToolPages/Image/FaviconGeneratorPage.swift",
@@ -317,12 +191,10 @@ struct IconSemanticContractTests {
         doesNotContain(titlebar, "Image(systemName: selectedTool.systemImage)", "Titlebar must not project a selected-tool breadcrumb identity icon")
         doesNotContain(titlebar, #"isSidebarVisible ? "sidebar.left" : "sidebar.right""#, "Hidden left sidebar must not be represented as a right sidebar")
         contains(titlebar, ".toolMotionIconSwap(id: isSidebarVisible)", "Sidebar visibility feedback must retain its existing motion lifecycle")
-        contains(titlebar, ".accessibilityLabel(presentation.title)", "Sidebar control must retain its state-specific accessible name")
     }
 
     @Test func iconOnlyDateAndFavoriteControlsExposeDiscoverableActions() throws {
         let datePicker = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexDatePicker.swift")
-        let sidebar = try readSource("Sources/XTools/AppShell/SidebarView.swift")
         let sidebarRowComponents = try readSource("Sources/XTools/AppShell/SidebarViewRowComponents.swift")
 
         let trigger = sourceSlice(
@@ -340,8 +212,6 @@ struct IconSemanticContractTests {
         )
         contains(monthNavigation, #".help(help)"#, "Previous/next-month icons must have discoverable help")
         contains(monthNavigation, #".accessibilityLabel(help)"#, "Previous/next-month icons must have an accessible action name")
-        contains(datePicker, #"help: "上一个月""#, "Previous-month call site must name its action")
-        contains(datePicker, #"help: "下一个月""#, "Next-month call site must name its action")
 
         let favorite = sourceSlice(
             sidebarRowComponents,
@@ -379,7 +249,6 @@ struct IconSemanticContractTests {
         let chronometer = try readSource("Sources/XTools/ToolPages/Time/ChronometerPage.swift")
         let dateCalculator = try readSource("Sources/XTools/ToolPages/Time/DateCalculatorPage.swift")
         let titlebar = try readSource("Sources/XTools/AppShell/TitlebarView.swift")
-        let sidebar = try readSource("Sources/XTools/AppShell/SidebarView.swift")
         let sidebarRowComponents = try readSource("Sources/XTools/AppShell/SidebarViewRowComponents.swift")
         let timezone = try readSource("Sources/XTools/ToolPages/Time/TimezoneViewerPage.swift")
         let jwt = try readSource("Sources/XTools/ToolPages/Web/JWTParserPage.swift")

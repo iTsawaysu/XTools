@@ -9,9 +9,15 @@ public struct TestTimeoutError: Error, CustomStringConvertible, Sendable {
     public var description: String { message }
 }
 
+/// 轮询等待条件成立（默认 10ms 间隔）。
+///
+/// 超时上限为 60 秒而非更短：并行全量测试与真实窗口套件并发运行时，
+/// 协作线程池会被饿死（实测机器 load 30+ 时条件满足可能远晚于 20 秒），
+/// 过短上限会把环境拥塞误报为测试失败。上限仍是有限值——真死锁或
+/// 行为回归依然会在超时后失败，只是不再对慢机器产生假红。
 @MainActor
 func waitUntil(
-    timeout: Duration = .seconds(20),
+    timeout: Duration = .seconds(60),
     interval: Duration = .milliseconds(10),
     _ condition: @escaping @MainActor () -> Bool
 ) async throws {
@@ -25,9 +31,11 @@ func waitUntil(
     }
 }
 
+/// 同 waitUntil，但超时以 `#expect(condition())` 记录失败而非抛错。
+/// 上限 60 秒的原因见 waitUntil 的文档注释。
 @MainActor
 func waitUntilAssert(
-    timeout: Duration = .seconds(20),
+    timeout: Duration = .seconds(60),
     condition: @escaping @MainActor () -> Bool
 ) async {
     let clock = ContinuousClock()

@@ -35,7 +35,9 @@ struct InteractiveGridListPolishSourceContractTests {
         contains(collection, "private var lastViewportHeight: CGFloat = 0", "Emoji layout must react to vertical viewport changes as well as width changes")
         contains(collection, "private var isRefreshingLayout = false", "Emoji layout must guard against recursive viewport callbacks")
         doesNotContain(collection, "collectionView.layoutSubtreeIfNeeded()", "Emoji viewport callbacks must not synchronously force a nested collection layout")
-        occurrenceCount(emoji, "scrollResetIdentity: workspace.category", 2, "Both flat and sectioned Emoji results must reset only when the owning category changes")
+        // 快照并入 DisplayState 后 flat/sectioned 共用一个 IndexEmojiCollectionView
+        // 调用点；滚动重置仍由分类身份驱动（scrollResetIdentity = category）。
+        occurrenceCount(emoji, "scrollResetIdentity: workspace.category", 1, "Flat and sectioned Emoji results must reset only when the owning category changes")
         contains(collection, "private var lastScrollResetIdentity: String?", "The renderer must compare one opaque presentation identity instead of owning category state")
         contains(collection, "if shouldResetScroll, scrollView.contentView.bounds.minY > 0", "A category change already at the top must skip redundant clip-view scrolling")
         contains(collection, "scrollView.contentView.scroll(to: .zero)", "A changed category identity must synchronously reset the panel-local viewport")
@@ -45,7 +47,7 @@ struct InteractiveGridListPolishSourceContractTests {
 
     @Test func emojiToneControlKeepsSharedButtonStylingAtCompactHeaderDensity() throws {
         let emoji = try readSource("Sources/XTools/ToolPages/Utility/EmojiPickerPage.swift")
-        let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
+        let controls = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexSegmentedControl.swift")
 
         contains(emoji, "IndexSegmentedControl(", "Emoji tone options must keep the shared segmented-button styling")
         contains(emoji, "density: .compact", "Emoji tone options must reduce header dominance with compact density")

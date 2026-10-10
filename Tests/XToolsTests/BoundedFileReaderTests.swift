@@ -89,6 +89,24 @@ struct BoundedFileReaderTests {
         )
     }
 
+    // MARK: - Challenger M2 并入：空文件与缺失文件边界
+
+    @Test func emptyFileReadsAsEmptyDataAtAnyBudget() throws {
+        let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent("empty_test_\(UUID().uuidString).bin")
+        try Data().write(to: tempFile)
+        defer { try? FileManager.default.removeItem(at: tempFile) }
+
+        #expect(try BoundedFileReader.read(from: tempFile, maxBytes: 0).isEmpty)
+        #expect(try BoundedFileReader.read(from: tempFile, maxBytes: 10).isEmpty)
+    }
+
+    @Test func missingFileReadThrows() {
+        let nonExistent = URL(fileURLWithPath: "/nonexistent_path_\(UUID().uuidString)/file.bin")
+        #expect(throws: (any Error).self) {
+            _ = try BoundedFileReader.read(from: nonExistent, maxBytes: 1024)
+        }
+    }
+
     private func expectTooLarge(_ url: URL, maxBytes: Int) {
         do {
             _ = try BoundedFileReader.read(from: url, maxBytes: maxBytes)

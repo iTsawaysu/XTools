@@ -456,15 +456,15 @@ struct DiagnosticMessageCorpusAuditTests {
 
         for input in htmlToMarkdownCorpus {
             let result = HTMLToMarkdownConverter.convert(input, options: .manual)
-            if let error = result.error {
-                collectMessage(
-                    ledger,
-                    tool: "html-to-markdown",
-                    input: input,
-                    channel: "error",
-                    message: HTMLToMarkdownDiagnostics.conversionErrorMessage(for: error)
-                )
-            }
+                if let error = result.error {
+                    collectMessage(
+                        ledger,
+                        tool: "html-to-markdown",
+                        input: input,
+                        channel: "error",
+                        message: error.localizedDescription
+                    )
+                }
             if let message = HTMLToMarkdownDiagnostics.conversionWarningMessage(for: result.warnings) {
                 collectMessage(ledger, tool: "html-to-markdown", input: input, channel: "warning", message: message)
             }

@@ -1,13 +1,14 @@
-import XToolsCore
+@testable import XToolsCore
 import Foundation
 import Testing
 
-/// Probes critical development-tool paths (12 tools).
-/// Failures here are product defects or documentation drift against Core contracts.
+/// 独有探针输入：只覆盖各域 A 类测试没有碰过的输入组合。
+/// 与域内测试逐字重复的诊断文案断言已在 2026-10 审计中删除；
+/// 标准向量请去各域测试文件（JSONUtilitiesTests / SQLFormattingTests 等）。
 struct DevelopmentTestDataProbeTests {
     private let jsonLabels = JSONDiffValidation.SideLabels(left: "JSON A", right: "JSON B")
 
-    // MARK: - Empty / quiet inputs (FormatRunner + converters)
+    // MARK: - 跨工具空白输入
 
     @Test func emptyAndWhitespaceInputsStayQuietForFormatters() {
         let blanks = ["", "   ", "\n\t  \n"]
@@ -36,429 +37,165 @@ struct DevelopmentTestDataProbeTests {
         #expect(regex.statistics.matchCount == 0)
     }
 
-    // MARK: - JSON-FMT
+    // MARK: - JSON-FMT 独有输入
 
-    @Test(arguments: [
-        (#"{"id":1,"name":"Alice",}"#, "对象末尾多了逗号"),
-        (#"{id: 1, 'name': 'Alice'}"#, "对象键必须使用双引号"),
-        ("{\n  // comment\n  \"value\": NaN\n}", "JSON 不支持注释"),
-        (#"{"value": NaN}"#, "JSON 不支持 NaN"),
-        (#"{"value": Infinity}"#, "JSON 不支持 Infinity"),
-        (#"{"user":{"id":1,"name":"missing end"}"#, "对象没有完整闭合"),
-        (#"{"leadingZero": 01}"#, "数字不能有前导零"),
-        (#"{"badEscape":"\uZZZZ"}"#, "Unicode 转义"),
-        (#"{"loneLowSurrogate":"\uDE00"}"#, "低位代理项不能单独出现"),
-        (#"{"a":}"#, "对象键后缺少值")
-    ])
-    func jsonFmtErrorSamplesThrow(input: String, expected: String) throws {
-        let diagnostic = try jsonDiagnostic(for: input)
-        #expect(diagnostic.message.contains(expected))
-        #expect(!diagnostic.message.contains("The operation"))
-    }
-
-    @Test func jsonFmtDuplicateKeyWarnsAndOptionsFormat() throws {
-        let dup = try JSONFormatting.formatResult(#"{"id":1,"name":"first","name":"second"}"#, sortKeys: false, indentWidth: 2)
-        #expect(dup.warning?.contains("重复 key") == true)
-        #expect(dup.text.contains(#""name": "first""#))
-        #expect(dup.text.contains(#""name": "second""#))
-
-        let sorted = try JSONFormatting.format(#"{"b":2,"a":1}"#, sortKeys: true, indentWidth: 2)
-        #expect(sorted.contains(#""a": 1"#))
-        #expect(sorted.firstIndex(of: "a")! < sorted.firstIndex(of: "b")!)
-
-        let minified = try JSONFormatting.minify(#"{"b": 2, "a": 1}"#)
-        #expect(minified == #"{"b":2,"a":1}"# || minified.contains(#""b":2"#))
-    }
-
-    @Test func jsonFmtDiagnosticsMatchProductLevelErrorCases() throws {
+    @Test func jsonFmtDiagnosticsPreferTheFirstReportedError() throws {
+        // 同一文档里多个非法数字并存时，只报第一类错误，不串报键名问题。
         let groupedIllegalNumbers = try jsonDiagnostic(
             for: #"{"leadingZero": 01, "plus": +1, "hex": 0x10, "infinity": Infinity}"#
         )
         #expect(groupedIllegalNumbers.message.contains("数字不能有前导零"))
         #expect(!groupedIllegalNumbers.message.contains("对象键必须使用双引号"))
-
-        let plus = try jsonDiagnostic(for: #"{"plus": +1}"#)
-        #expect(plus.message.contains("JSON 数字前不能写加号"))
-        #expect(plus.suggestion == nil)
-
-        let hex = try jsonDiagnostic(for: #"{"hex": 0x10}"#)
-        #expect(hex.message.contains("JSON 不支持十六进制数字"))
-        #expect(hex.suggestion == nil)
-
-        let fullWidth = try jsonDiagnostic(for: #"{"count":１２,"zero":０}"#)
-        #expect(fullWidth.message.contains("JSON 数字只能使用半角 0 到 9"))
-        #expect(!fullWidth.message.contains("对象键必须使用双引号"))
-
-        let localizedFraction = try jsonDiagnostic(for: #"{"n":1.٢}"#)
-        #expect(localizedFraction.message.contains("JSON 小数部分只能使用半角 0 到 9"))
-
-        let unescapedNewline = try jsonDiagnostic(for: "{\"message\":\"first line\nsecond line\"}")
-        #expect(unescapedNewline.message.contains("未转义的控制字符"))
-        #expect(unescapedNewline.suggestion == nil)
     }
 
-    // MARK: - SQL-FMT
-
-    @Test func sqlFmtValidSamples() throws {
-        let ok = try SQLFormatting.format(
-            "with active as (select id from users where active = 1) select * from active order by id;",
-            options: .init(keywordCase: .upper)
-        )
-        #expect(ok.uppercased().contains("WITH"))
-        #expect(ok.uppercased().contains("SELECT"))
-
-        let lower = try SQLFormatting.format("select id from users;", options: .init(keywordCase: .lower))
-        #expect(lower.contains("select"))
-        #expect(!lower.contains("SELECT"))
-
-        let transaction = try SQLFormatting.format("begin; insert into logs(event) values ('start'); commit;")
-        #expect(transaction.contains("BEGIN;"))
-        #expect(transaction.contains("COMMIT;"))
+    @Test func jsonFormatterSupportsTopLevelScalars() throws {
+        #expect(try JSONFormatting.format(#""just a string""#, sortKeys: false, indentWidth: 2) == #""just a string""#)
+        #expect(try JSONFormatting.format("-123.45e+6", sortKeys: false, indentWidth: 2) == "-123.45e+6")
     }
 
-    @Test(arguments: [
-        ("select id, name from users where email = 'alice@example.com;", "字符串字面量没有闭合"),
-        ("select from where order by;", "SELECT 缺少要查询"),
-        ("select * from users where id in (1, 2, 3;", "左括号没有对应的右括号"),
-        ("select id, name from users order by;", "ORDER BY 缺少排序表达式"),
-        ("select $$hello; -- not comment$$ as body;", "PostgreSQL")
-    ])
-    func sqlFmtInvalidSamples(input: String, expected: String) throws {
-        let diagnostic = try sqlDiagnostic(for: input)
-        #expect(diagnostic.message.contains(expected))
+    // MARK: - SQL-FMT 独有输入
+
+    @Test func sqlFmtDollarQuotedPayloadDiagnostic() throws {
+        let diagnostic = try sqlDiagnostic(for: "select $$hello; -- not comment$$ as body;")
+        #expect(diagnostic.message.contains("PostgreSQL"))
         #expect(!diagnostic.localizedDescription.contains("NS"))
         #expect(!diagnostic.localizedDescription.contains("The operation"))
     }
 
-    // MARK: - XML-FMT
+    @Test func sqlCommentLookalikesInsideStringLiteralsStayLiteral() throws {
+        // `--` 出现在字符串字面量内时不是注释；路径里的反斜杠与 % 原样保留。
+        let escaped = #"select 'it''s ok' as message from "order" where note = '-- not a comment' and path like 'C:\\temp\\%';"#
+        let formatted = try SQLFormatting.format(escaped, options: .init(keywordCase: .lower))
 
-    @Test func xmlFmtValidAndMixedContent() throws {
-        let ok = try XMLFormatting.format(#"<root><item id="1">a</item></root>"#)
-        #expect(ok.contains("<root>"))
-        #expect(ok.contains(#"id="1""#) || ok.contains("id=\"1\""))
-
-        let mixed = try XMLFormatting.format(
-            #"<article><p>Hello <strong>world</strong></p></article>"#
-        )
-        #expect(mixed.contains("Hello"))
-        #expect(mixed.contains("<strong>world</strong>") || mixed.contains("world"))
+        #expect(formatted.contains("'-- not a comment'"))
+        #expect(formatted.contains(#"'C:\\temp\\%'"#))
     }
 
-    @Test(arguments: [
-        (#"<root><item>one</items></root>"#, ["标签", "不匹配"]),
-        (#"<user id="1" id="2"><name>Alice</name></user>"#, ["重复", "属性"]),
-        (#"<root><title>Tom & Jerry</title></root>"#, ["&", "转义"]),
-        (#"<one>1</one><two>2</two>"#, ["根节点"])
-    ])
-    func xmlFmtInvalidSamples(input: String, expectedFragments: [String]) throws {
-        let diagnostic = try xmlDiagnostic(for: input)
-        for fragment in expectedFragments {
-            #expect(diagnostic.message.contains(fragment))
-        }
-        #expect(!diagnostic.localizedDescription.contains("NSXMLParserErrorDomain"))
-        #expect(!diagnostic.localizedDescription.contains("The operation"))
-    }
+    // MARK: - XML-FMT 独有输入
 
-    // MARK: - YAML-FMT
-
-    @Test func yamlFmtValidSample() throws {
-        let ok = try YAMLPrettifier.formatValidated("name: Alice\nage: 30")
-        #expect(ok.contains("name:"))
-        #expect(ok.contains("Alice"))
-    }
-
-    @Test(arguments: [
-        ("user:\n  id: 1\n name: Alice", "缩进"),
-        ("user:\n\tid: 1", "缩进必须使用空格"),
-        ("user\n  id: 1", "冒号"),
-        ("service:\n  <<: *missing\n  image: nginx", "未定义"),
-        (#"name: "Alice"#, "引号"),
-        ("first: 1\n---\nsecond: 2", "一个 YAML 文档"),
-        ("service:\n  image: nginx:1.25\n  image: nginx:1.26", "重复")
-    ])
-    func yamlFmtInvalidSamples(input: String, expected: String) throws {
-        let diagnostic = try yamlDiagnostic(for: input)
-        #expect(diagnostic.message.contains(expected))
-        #expect(!diagnostic.localizedDescription.contains("did not find"))
-    }
-
-    // MARK: - JSON-DIFF
-
-    @Test func jsonDiffStructuralEquivalenceAndErrors() {
-        let left = #"{"b":2,"a":1}"#
-        let right = """
-        {
-          "a": 1,
-          "b": 2
-        }
+    @Test func xmlFormatterRejectsExternalEntityDOCTYPE() {
+        // XXE：外部实体声明不得展开进格式化输出。
+        let externalEntity = """
+        <!DOCTYPE root [
+          <!ENTITY ext SYSTEM "file:///etc/passwd">
+        ]>
+        <root>&ext;</root>
         """
-        #expect(JSONDiffValidation.evaluate(left: left, right: right, labels: jsonLabels) == .comparable)
 
-        let changed = JSONDiffValidation.evaluate(
-            left: #"{"id":1,"name":"Alice"}"#,
-            right: #"{"id":1,"name":"Bob","role":"admin"}"#,
-            labels: jsonLabels
-        )
-        #expect(changed == .comparable)
-
-        let duplicateWarning = JSONDiffValidation.comparisonWarning(
-            left: #"{"name":"first","name":"second"}"#,
-            right: #"{"name":"second"}"#,
-            labels: jsonLabels
-        )
-        #expect(duplicateWarning?.contains("重复 key") == true)
-        #expect(duplicateWarning == "JSON A 含重复 key。")
-
-        if case .invalid(let message) = JSONDiffValidation.evaluate(
-            left: #"{"ok":true}"#,
-            right: #"{"ok":true,}"#,
-            labels: jsonLabels
-        ) {
-            #expect(message.contains("JSON B 格式错误"))
-            #expect(message == "JSON B 格式错误：对象末尾多了逗号")
-            #expect(!message.contains("请修正该侧后再对比"))
-            #expect(!message.contains("处理方式："))
-        } else {
-            Issue.record("Expected invalid right side")
-        }
-
-        if case .invalid = JSONDiffValidation.evaluate(
-            left: #"{id:1}"#,
-            right: #"{"id":1}"#,
-            labels: jsonLabels
-        ) {
-            // ok
-        } else {
-            Issue.record("Expected invalid left side")
-        }
-    }
-
-    // MARK: - TEXT-DIFF
-
-    @Test func textDiffLineChangesAndBudgetMessage() {
-        let same = LineDiffer.diff(left: "alpha\nbeta", right: "alpha\nbeta")
-        #expect(same.contains("共 0 行不同"))
-
-        let changed = LineDiffer.diff(left: "line-a\nshared", right: "line-b\nshared")
-        #expect(changed.contains("共 1 行不同") || changed.contains("共 2 行不同") || changed.contains("共"))
-        #expect(changed.contains("line-a"))
-        #expect(changed.contains("line-b"))
-
-        let emptyVs = LineDiffer.diff(left: "", right: "only-right")
-        #expect(emptyVs.contains("only-right") || emptyVs.contains("1") || !emptyVs.isEmpty)
-
-        // Budget: construct line counts that exceed standard LCS cells without huge strings.
-        // estimated cells = (L+1)*(R+1); standard max = 12_000_000
-        // Use safeAlignedDiff path via JSONStructuralDiff / LineDiffer.safeAlignedDiff
-        let leftLines = Array(repeating: "x", count: 4000).joined(separator: "\n")
-        let rightLines = Array(repeating: "y", count: 4000).joined(separator: "\n")
-        // 4001*4001 = ~16M > 12M
         do {
-            _ = try LineDiffer.safeAlignedDiff(left: leftLines, right: rightLines)
-            Issue.record("Expected inputTooLarge for 4000x4000 lines")
-        } catch let error as LineDiffError {
-            #expect(error.errorDescription?.contains("对比内容过大") == true)
-            #expect(error.errorDescription?.contains("请减少内容或分段比较后再试") == false)
-            #expect(error.errorDescription?.contains("处理方式：") == false)
+            let output = try XMLFormatting.format(externalEntity)
+            #expect(!output.contains("root:x:"))
+            #expect(!output.contains("/bin/"))
+        } catch let error as XMLFormatting.FormattingError {
+            #expect(error.diagnostic.displayMessage == "不支持 DOCTYPE 声明")
+            #expect(error.diagnostic.formatName == "XML")
         } catch {
-            Issue.record("Unexpected error \(error)")
+            Issue.record("Expected XML formatting error, got \(error)")
         }
     }
 
-    // MARK: - REGEX
+    // MARK: - JSON-DIFF 独有输入
 
-    @Test func regexFlagsCapturesAndErrors() throws {
+    @Test func jsonDiffCanonicalizesBeforeShowingLargeArrayLocalDifferences() throws {
+        let left = #"{"items":[{"id":1,"status":"ok"},{"id":2,"status":"ok"},{"id":3,"status":"ok"},{"id":4,"status":"ok"},{"id":5,"status":"ok"}]}"#
+        let right = #"{"items":[{"id":1,"status":"ok"},{"id":2,"status":"ok"},{"id":3,"status":"failed"},{"id":4,"status":"ok"},{"id":6,"status":"new"}]}"#
+
+        let rows = try comparableJSONRows(left: left, right: right)
+        let visibleTexts = rows.flatMap { [$0.left?.text, $0.right?.text].compactMap(\.self) }
+
+        #expect(rows.count > 10)
+        #expect(visibleTexts.contains { $0.trimmingCharacters(in: .whitespaces) == #""status": "failed""# })
+        #expect(visibleTexts.contains { $0.trimmingCharacters(in: .whitespaces) == #""id": 6,"# })
+        #expect(rows.filter(\.kind.isDifference).count < rows.count)
+    }
+
+    @Test func jsonDiffIgnoresObjectKeyOrder() throws {
+        let rows = try comparableJSONRows(
+            left: #"{"a":1,"b":2,"c":{"x":10,"y":20}}"#,
+            right: #"{"c":{"y":20,"x":10},"b":2,"a":1}"#
+        )
+        #expect(rows.isEmpty)
+    }
+
+    // MARK: - TEXT-DIFF 独有输入
+
+    @Test func textDiffHandlesUnicodeAndControlCharacterLines() {
+        let trailing = LineDiffer.alignedDiff(left: "alpha\nbeta \ngamma", right: "alpha\nbeta\ngamma\n")
+        #expect(trailing.contains { $0.kind.isDifference })
+
+        let unicode = LineDiffer.alignedDiff(left: "café\nemoji: 👨‍💻", right: "café\nemoji: 👩‍💻")
+        #expect(unicode.contains { $0.kind.isDifference })
+
+        let control = LineDiffer.alignedDiff(left: "col1\tcol2\nline with bell: \u{7}", right: "col1    col2\nline with bell:")
+        #expect(control.contains { $0.kind.isDifference })
+    }
+
+    // MARK: - REGEX 独有输入
+
+    @Test func regexMatcherMultilineAnchorsAndPartialEmailFiltering() throws {
+        // 多行锚点 ^$ 只匹配行首/行尾；残缺邮箱不进结果。
+        let multiline = try RegexMatcher.analyze(
+            pattern: #"^ERROR\s+\[(.+?)\]\s+(.*)$"#,
+            in: "INFO [api] started\nERROR [worker] job failed\nWARN [api] slow request\nERROR [db] connection timeout",
+            flags: "gm"
+        )
+        #expect(multiline.matches.map(\.value) == ["ERROR [worker] job failed", "ERROR [db] connection timeout"])
+
         let email = try RegexMatcher.analyze(
-            pattern: #"\b[\w.+-]+@[\w-]+\.[\w.-]+\b"#,
-            in: "a@example.com and b@test.org",
+            pattern: #"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"#,
+            in: "Contact: alice@example.com, bob.smith+dev@sub.example.co.uk, invalid@, @missing.local, qa@test.io.",
             flags: "g"
         )
-        #expect(email.matches.count == 2)
-
-        let named = try RegexMatcher.analyze(
-            pattern: #"(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})"#,
-            in: "release 2026-07-12 done",
-            flags: "g"
-        )
-        #expect(named.matches.count == 1)
-
-        let caseInsensitive = try RegexMatcher.analyze(pattern: "json", in: "JSON Formatter", flags: "gi")
-        #expect(caseInsensitive.matches.count >= 1)
-
-        let unsupportedFlag = #expect(throws: RegexMatcher.MatcherError.unsupportedFlag("u")) {
-            _ = try RegexMatcher.analyze(pattern: "a", in: "a", flags: "gu")
-        }
-        #expect(unsupportedFlag?.errorDescription?.contains("不支持的正则标志") == true)
-        #expect(unsupportedFlag?.errorDescription?.contains("当前支持 g、i、m、s、x") == true)
-
-        let unclosed = #expect(throws: RegexMatcher.MatcherError.self) {
-            _ = try RegexMatcher.analyze(pattern: "(unclosed", in: "text", flags: "g")
-        }
-        #expect(unclosed?.errorDescription == "括号未闭合。")
-
-        let lookbehindError = #expect(throws: RegexMatcher.MatcherError.self) {
-            _ = try RegexMatcher.analyze(pattern: #"(?<=\d{2,})abc"#, in: "1abc 12abc 123abc", flags: "g")
-        }
-        #expect(lookbehindError?.errorDescription?.contains("变长后顾") == true)
-
-        let firstOnly = try RegexMatcher.analyze(pattern: #"\d+"#, in: "a1 b22 c333", flags: "")
-        #expect(firstOnly.matches.count == 1)
-
-        let global = try RegexMatcher.analyze(pattern: #"\d+"#, in: "a1 b22 c333", flags: "g")
-        #expect(global.matches.count == 3)
+        #expect(email.matches.map(\.value) == ["alice@example.com", "bob.smith+dev@sub.example.co.uk", "qa@test.io"])
     }
 
-    // MARK: - DOCKER
+    // MARK: - DOCKER 独有输入（run→compose 长形式旗标）
 
-    @Test func dockerConvertSuccessWarningsAndErrors() throws {
-        let short = try DockerRunToDockerComposeService.convert("docker run nginx")
-        #expect(short.yaml.contains("image:"))
-        #expect(short.yaml.contains("nginx"))
-
-        let web = try DockerRunToDockerComposeService.convert(
-            "docker run -d --name dev-api -p 8080:80 -e NODE_ENV=production -v /Users/sun/data:/app/data --restart unless-stopped example/api:2.4.0"
+    @Test func dockerRunToComposeLongFormFlagsAndQuotedMounts() throws {
+        let service = try DockerRunToDockerComposeService.convert(
+            #"docker run --env-file .env --hostname app-host --expose 8080 --read-only --init nginx"#
         )
-        #expect(web.yaml.contains("container_name: dev-api"))
-        #expect(web.yaml.contains("8080:80") || web.yaml.contains("\"8080:80\""))
-        #expect(web.yaml.contains("NODE_ENV"))
-        #expect(web.notTranslatable.isEmpty)
-        #expect(web.warnings.isEmpty)
+        #expect(service.yaml.contains("env_file:"))
+        #expect(service.yaml.contains("- .env"))
+        #expect(service.yaml.contains("hostname: app-host"))
+        #expect(service.yaml.contains("expose:"))
+        #expect(service.yaml.contains("- \"8080\""))
+        #expect(service.yaml.contains("read_only: true"))
+        #expect(service.yaml.contains("init: true"))
 
-        let env = try DockerRunToDockerComposeService.convert(
-            #"docker run --name env-test -e EMPTY= -e TOKEN="abc=123==xyz" -e JSON='{"enabled":true,"count":3}' alpine:3.20 env"#
+        let mounts = try DockerRunToDockerComposeService.convert(
+            #"docker run --mount type=bind,source=/host/path,target=/data,readonly --tmpfs /run:size=64m -p127.0.0.1:8080:80/tcp -p 53:53/udp nginx"#
         )
-        #expect(env.yaml.contains("EMPTY") || env.yaml.contains("TOKEN") || env.yaml.contains("environment"))
-
-        let platform = try DockerRunToDockerComposeService.convert(
-            "docker run --platform linux/amd64 --no-healthcheck nginx"
-        )
-        #expect(platform.yaml.contains("nginx"))
-        #expect(platform.yaml.contains("platform: linux/amd64"))
-        #expect(platform.yaml.contains("healthcheck:"))
-        #expect(platform.yaml.contains("disable: true"))
-        #expect(platform.warnings.isEmpty)
-
-        let typo = try DockerRunToDockerComposeService.convert(
-            "docker run --naem typo-nginx -p 8080:80 nginx"
-        )
-        #expect(typo.warnings.contains(where: { $0.kind == .unknownFlag && $0.option.contains("naem") }))
-        let typoWarning = DockerRunToDockerComposeDiagnostics.warningMessage(for: typo.warnings)
-        #expect(typoWarning == "部分 Docker 选项无法转换。")
-
-        #expect {
-            _ = try DockerRunToDockerComposeService.convert("docker run -d --name missing-image -p 8080:80")
-        } throws: { error in
-            guard case DockerRunToDockerComposeError.missingImage = error,
-                  let description = (error as? LocalizedError)?.errorDescription else {
-                return false
-            }
-            return description == "docker run 命令缺少镜像名称。"
-                && !description.contains("处理方式：")
-        }
-        #expect(DockerRunToDockerComposeError.missingImage.errorDescription == "docker run 命令缺少镜像名称。")
-
-        do {
-            _ = try DockerRunToDockerComposeService.convert(#"docker run -e MESSAGE="hello nginx"#)
-            Issue.record("Expected unterminated quote diagnostic")
-        } catch DockerRunToDockerComposeError.unterminatedQuote {
-            let description = DockerRunToDockerComposeError.unterminatedQuote.errorDescription ?? ""
-            #expect(description == "命令包含未闭合的引号。")
-            #expect(!description.contains("处理方式："))
-        } catch {
-            Issue.record("Unexpected Docker conversion error: \(error)")
-        }
-
-        #expect {
-            _ = try DockerRunToDockerComposeService.convert("docker run --rm alpine sh docker run --rm alpine sh")
-        } throws: { error in
-            guard case DockerRunToDockerComposeError.multipleCommands = error,
-                  let description = (error as? LocalizedError)?.errorDescription else {
-                return false
-            }
-            return description == "一次只能转换一条 docker run 命令。"
-        }
-
-        #expect {
-            _ = try DockerRunToDockerComposeService.convert("podman run nginx")
-        } throws: { error in
-            guard case DockerRunToDockerComposeError.invalidCommand = error,
-                  let description = (error as? LocalizedError)?.errorDescription else {
-                return false
-            }
-            return description == "无法识别 docker run 命令：输入必须以 docker run 开头。"
-        }
+        // 8fe8d77：--mount 的完整选项映射为 Compose 长形式（-v 仍为短形式）。
+        #expect(mounts.yaml.contains("- type: bind"))
+        #expect(mounts.yaml.contains("source: /host/path"))
+        #expect(mounts.yaml.contains("target: /data"))
+        #expect(mounts.yaml.contains("read_only: true"))
+        #expect(mounts.yaml.contains("- \"/run:size=64m\""))
+        #expect(mounts.yaml.contains("- \"127.0.0.1:8080:80\""))
+        #expect(mounts.yaml.contains("- \"53:53/udp\""))
     }
 
-    // MARK: - HTML-MD
+    // MARK: - HTML-MD 独有输入
 
-    @Test func htmlToMarkdownCorePathsAndWarnings() {
-        let simple = HTMLToMarkdownConverter.convert(
-            "<h1>Title</h1><p>Hello <strong>world</strong>. Visit <a href=\"https://example.com\">Example</a>.</p>"
+    @Test func htmlToMarkdownNestedStrongLinksAndUnknownEntitiesPassThrough() {
+        let markdown = HTMLToMarkdownConverter.convert(
+            """
+            <p><a href="/docs"><strong>Docs</strong></a></p>
+            <p>unknown entity: &unknown; stays visible</p>
+            <ol><li>one</li><li><del>two</del></li></ol>
+            """
         )
-        #expect(simple.contains("# Title"))
-        #expect(simple.contains("**world**"))
-        #expect(simple.contains("[Example](https://example.com)"))
 
-        let result = HTMLToMarkdownConverter.convert(
-            "<style>body{}</style><script>alert(1)</script><p>Safe</p><video src=\"a.mp4\"></video>",
-            options: HTMLToMarkdownOptions()
-        )
-        #expect(result.markdown.contains("Safe"))
-        #expect(!result.markdown.lowercased().contains("alert(1)"))
-
-        let emptyish = HTMLToMarkdownConverter.convert("<div></div>", options: HTMLToMarkdownOptions())
-        let emptyBody = emptyish.markdown.trimmingCharacters(in: .whitespacesAndNewlines)
-        #expect(emptyish.warnings.contains(.emptyVisibleContent) || emptyBody.isEmpty || emptyBody.count < 20)
+        #expect(markdown.contains("[**Docs**](/docs)"))
+        #expect(markdown.contains("&unknown;"))
+        #expect(markdown.contains("1. one"))
+        #expect(markdown.contains("2. ~~two~~"))
     }
 
-    // MARK: - CRON
+    // MARK: - CHMOD 独有模式（644/755/000 见 ChmodCalculatorTests）
 
-    @Test func cronExpressionsValidAndInvalid() {
-        #expect(CronScheduler.parseFields("*/5 * * * *") != nil)
-        #expect(CronScheduler.parseFields("0 9 * * 1-5") != nil)
-        #expect(CronScheduler.resolveExpression("@reboot").isEmpty || CronScheduler.parseFields(CronScheduler.resolveExpression("@reboot")) == nil)
-
-        let hourly = CronScheduler.resolveExpression("@hourly")
-        #expect(CronScheduler.parseFields(hourly) != nil || hourly.split(separator: " ").count == 5)
-
-        #expect(CronScheduler.parseFields("*/5 * * *") == nil) // wrong field count
-        #expect(CronScheduler.parseFields("60 * * * *") == nil) // out of range
-        #expect(CronScheduler.parseFields("*/0 * * * *") == nil) // step 0
-    }
-
-
-    // MARK: - CHMOD
-
-    @Test func chmodCommonModesMatchExpectedOctalAndSymbolic() {
-        let m644 = ChmodMode(
-            owner: .init(read: true, write: true, execute: false),
-            group: .init(read: true, write: false, execute: false),
-            other: .init(read: true, write: false, execute: false)
-        )
-        #expect(m644.octalString == "644")
-        #expect(
-            ChmodMode(
-                owner: .init(read: true, write: true, execute: false),
-                group: .init(read: true, write: false, execute: false),
-                other: .init(read: true, write: false, execute: false)
-            ).symbolicString == "rw-r--r--"
-        )
-
-        #expect(
-            ChmodMode(
-                owner: .init(read: true, write: true, execute: true),
-                group: .init(read: true, write: false, execute: true),
-                other: .init(read: true, write: false, execute: true)
-            ).octalString == "755"
-        )
-        #expect(
-            ChmodMode(
-                owner: .init(read: true, write: true, execute: true),
-                group: .init(read: true, write: false, execute: true),
-                other: .init(read: true, write: false, execute: true)
-            ).symbolicString == "rwxr-xr-x"
-        )
-
+    @Test func chmodOctalAndSymbolicCoverTheRemainingModes() {
         #expect(
             ChmodMode(
                 owner: .init(read: true, write: true, execute: false),
@@ -471,7 +208,7 @@ struct DevelopmentTestDataProbeTests {
                 owner: .init(read: false, write: false, execute: false),
                 group: .init(read: false, write: false, execute: false),
                 other: .init(read: false, write: false, execute: false)
-            ).octalString == "000"
+            ).symbolicString == "---------"
         )
         #expect(
             ChmodMode(
@@ -482,30 +219,28 @@ struct DevelopmentTestDataProbeTests {
         )
         #expect(
             ChmodMode(
+                owner: .init(read: true, write: true, execute: true),
+                group: .init(read: true, write: true, execute: true),
+                other: .init(read: true, write: true, execute: true)
+            ).symbolicString == "rwxrwxrwx"
+        )
+        #expect(
+            ChmodMode(
                 owner: .init(read: false, write: false, execute: true),
                 group: .init(read: false, write: false, execute: true),
                 other: .init(read: false, write: false, execute: true)
             ).octalString == "111"
         )
-    }
-
-    // MARK: - CROSS
-
-    @Test func crossToolIsolationSamples() throws {
-        #expect(throws: JSONFormatting.FormattingError.self) {
-            _ = try JSONFormatting.format("{id:1}", sortKeys: false, indentWidth: 2)
-        }
-
-        let yaml = try YAMLPrettifier.formatValidated(
-            #"""
-            payloads:
-              json: '{"id":1,"ok":true}'
-              sql: "select id from users"
-            """#
+        #expect(
+            ChmodMode(
+                owner: .init(read: false, write: false, execute: true),
+                group: .init(read: false, write: false, execute: true),
+                other: .init(read: false, write: false, execute: true)
+            ).symbolicString == "--x--x--x"
         )
-        #expect(yaml.contains("payloads:"))
-        #expect(yaml.contains("json:"))
     }
+
+    // MARK: - Helpers
 
     private func jsonDiagnostic(for input: String) throws -> FormatDiagnostic {
         let error = #expect(throws: (any Error).self) {
@@ -535,32 +270,13 @@ struct DevelopmentTestDataProbeTests {
         return diagnosticError.diagnostic
     }
 
-    private func xmlDiagnostic(for input: String) throws -> FormatDiagnostic {
-        let error = #expect(throws: (any Error).self) {
-            _ = try XMLFormatting.format(input)
+    private func comparableJSONRows(left: String, right: String) throws -> [DiffAlignedRow] {
+        let decision = JSONStructuralDiff.alignedDiff(left: left, right: right, labels: jsonLabels)
+        guard case .comparable(let rows) = decision else {
+            Issue.record("Expected comparable JSON diff, got \(decision)")
+            return []
         }
-
-        guard let error,
-              case XMLFormatting.FormattingError.invalidXML(let diagnostic) = error else {
-            Issue.record("Expected XML formatting diagnostic")
-            throw ProbeFailure.missingDiagnostic
-        }
-
-        return diagnostic
-    }
-
-    private func yamlDiagnostic(for input: String) throws -> FormatDiagnostic {
-        let error = #expect(throws: (any Error).self) {
-            _ = try YAMLPrettifier.formatValidated(input)
-        }
-
-        guard let error,
-              case YAMLPrettifier.ValidationError.invalidSyntax(let diagnostic) = error else {
-            Issue.record("Expected YAML formatting diagnostic")
-            throw ProbeFailure.missingDiagnostic
-        }
-
-        return diagnostic
+        return rows
     }
 
     private enum ProbeFailure: Error {

@@ -129,15 +129,17 @@ struct CommandPalettePresentationTests {
         let oldEditor = try #require(oldField.currentEditor() as? NSTextView)
         let oldDelegate = try #require(oldField.delegate)
         var oldRows: [CommandPaletteRevealView] = []
-        // 38 = 34 个注册工具 + 4 个面板动作（切换主题/切换侧栏/打开设置/内置动作）。
-        // 注册表合并（水印并入图片处理 Hub 后 35→34）会改变行数，此处计数需随注册表增删同步。
+        // 行数 = 全部注册工具 + 若干内置面板动作（当前 4 个，见下方注释）。
+        // 下限取运行时注册表工具数：既保证每个工具的原生行都真实挂载，
+        // 又让注册表增删（如 35→34 的 Hub 合并）不必再手改此锚。
+        let minimumRowCount = ToolRegistry.default.matchingTools(query: "").count
         try await Self.waitForCondition(label: "initial palette native rows") {
             fixture.flush()
             oldRows = Self.commandPaletteRevealViews(in: fixture.hostingView)
-            return oldRows.count == 38 && oldRows.allSatisfy { $0.window === fixture.window }
+            return oldRows.count >= minimumRowCount && oldRows.allSatisfy { $0.window === fixture.window }
         }
         let oldRowIdentifiers = Set(oldRows.map(ObjectIdentifier.init))
-        #expect(oldRowIdentifiers.count == 38)
+        #expect(oldRowIdentifiers.count >= minimumRowCount)
         let scrollView = try #require(oldRows.first?.enclosingScrollView)
         let initialScrollOrigin = scrollView.contentView.bounds.origin
         for _ in 0..<25 {
@@ -172,7 +174,7 @@ struct CommandPalettePresentationTests {
         try await Self.waitForCondition(label: "reopened palette native rows") {
             fixture.flush()
             newRows = Self.commandPaletteRevealViews(in: fixture.hostingView)
-            return newRows.count == 38 && newRows.allSatisfy { $0.window === fixture.window }
+            return newRows.count >= minimumRowCount && newRows.allSatisfy { $0.window === fixture.window }
         }
         let newRowIdentifiers = Set(newRows.map(ObjectIdentifier.init))
 
@@ -492,8 +494,12 @@ struct CommandPalettePresentationTests {
         #expect(snapshot.counters[.visibleDisabledTransaction, default: 0] == 0)
         #expect(snapshot.counters[.visibilityTerminalSample, default: 0] > 0)
         if ordinal == 0 {
-            // 38 = 34 个注册工具 + 4 个面板动作；与 reopeningRetains… 的行数锚一致。
-            #expect(snapshot.counters[.revealMake, default: 0] == 38)
+            // 首挂载行数 = 全部注册工具 + 内置面板动作；下限取运行时注册表
+            // 工具数，注册表增删不必手改此锚（与 reopeningRetains… 一致）。
+            #expect(
+                snapshot.counters[.revealMake, default: 0]
+                    >= ToolRegistry.default.matchingTools(query: "").count
+            )
         } else {
             #expect(snapshot.counters[.revealMake, default: 0] == 0)
         }

@@ -5,7 +5,7 @@ struct IndexBadgeSourceContractTests {
     @Test func badgeHoverTracksPointerWhileSelectionKeepsOneSharedHighlightState() throws {
         let badge = try readSource("Sources/XTools/Shared/Components/IndexBadge.swift")
 
-        contains(badge, "public struct IndexBadge: View", "Chips, badges, and tags must consolidate into the single shared IndexBadge component")
+        contains(badge, "struct IndexBadge: View", "Chips, badges, and tags must consolidate into the single shared IndexBadge component")
         contains(badge, "private var isHighlighted: Bool", "Badge feedback must derive one visual state from hover and selection")
         contains(badge, "isSelected || isHovering", "Hover and selection must both project into the shared highlight state")
         contains(badge, "if isSelected {\n            return ToolTheme.selectionFill\n        }", "Actual selection must keep the selection-level fill instead of a weaker generic fill")

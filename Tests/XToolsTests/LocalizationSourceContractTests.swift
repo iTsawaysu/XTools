@@ -34,6 +34,22 @@ struct LocalizationSourceContractTests {
 // MARK: - Scanner
 
 private extension LocalizationSourceContractTests {
+    /// Only the directories that actually carry user-facing copy are scanned:
+    /// ToolPages/AppShell/Shared UI strings plus ToolRegistry display names
+    /// and the app entry point. Resources holds no Swift files; Tests/ and
+    /// any generated/checked-out tree were never part of this scan — the
+    /// explicit list keeps future non-UI additions under Sources/XTools out
+    /// of the sweep without changing what the contract asserts today.
+    static let localizedCopyDirectories = [
+        "Sources/XTools/ToolPages",
+        "Sources/XTools/AppShell",
+        "Sources/XTools/Shared",
+        "Sources/XTools/ToolRegistry"
+    ]
+    static let localizedCopyRootFiles = [
+        "Sources/XTools/XToolsApp.swift"
+    ]
+
     static func catalogObject() throws -> [String: Any]? {
         let url = try sourcePackageRoot()
             .appendingPathComponent("Sources/XTools/Resources/Localizable.xcstrings")
@@ -52,17 +68,27 @@ private extension LocalizationSourceContractTests {
     }
 
     static func cjkLiteralsInAppSources() throws -> Set<String> {
-        let sourceRoot = try sourcePackageRoot()
-            .appendingPathComponent("Sources/XTools")
-        let enumerator = FileManager.default.enumerator(
-            at: sourceRoot,
-            includingPropertiesForKeys: nil
-        )
+        let packageRoot = try sourcePackageRoot()
         var literals: Set<String> = []
-        while let fileURL = enumerator?.nextObject() as? URL {
-            guard fileURL.pathExtension == "swift" else { continue }
-            let source = try String(contentsOf: fileURL, encoding: .utf8)
-            literals.formUnion(cjkLiterals(in: stripComments(source)))
+        for relativePath in localizedCopyDirectories + localizedCopyRootFiles {
+            let url = packageRoot.appendingPathComponent(relativePath)
+            let swiftFileURLs: [URL]
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+               isDirectory.boolValue {
+                let enumerator = FileManager.default.enumerator(
+                    at: url,
+                    includingPropertiesForKeys: nil
+                )
+                swiftFileURLs = (enumerator?.allObjects as? [URL] ?? [])
+                    .filter { $0.pathExtension == "swift" && !$0.lastPathComponent.hasPrefix(".") }
+            } else {
+                swiftFileURLs = url.pathExtension == "swift" ? [url] : []
+            }
+            for fileURL in swiftFileURLs {
+                let source = try String(contentsOf: fileURL, encoding: .utf8)
+                literals.formUnion(cjkLiterals(in: stripComments(source)))
+            }
         }
         return literals
     }

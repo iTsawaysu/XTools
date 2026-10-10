@@ -128,7 +128,7 @@ struct ToolDiagnosticContractSupportTests {
     }
 
     @Test func sharedAndEmojiCopyFailuresUseFactualCopy() throws {
-        let shared = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift")
+        let shared = try readSource("Sources/XTools/Shared/Components/IndexCopyButton.swift")
         let emoji = try readSource("Sources/XTools/ToolPages/Utility/EmojiPickerPage.swift")
 
         #expect(shared.contains("剪贴板写入失败。"))

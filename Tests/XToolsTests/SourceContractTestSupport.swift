@@ -59,6 +59,19 @@ func readSource(_ relativePath: String) throws -> String {
     return try String(contentsOf: url, encoding: .utf8)
 }
 
+/// Reads the shared controls family in its pre-split MARK order.
+/// IndexControls.swift was split into focused files; assertions that span
+/// several control sections keep their original scope over this union.
+func readIndexControlsSources() throws -> String {
+    let parts = [
+        "Sources/XTools/ToolPages/Workbench/Controls/IndexControls.swift",
+        "Sources/XTools/ToolPages/Workbench/Controls/IndexSegmentedControl.swift",
+        "Sources/XTools/ToolPages/Workbench/Controls/IndexOptionControls.swift",
+        "Sources/XTools/ToolPages/Workbench/Controls/IndexSliderAndNumberInput.swift",
+    ]
+    return try parts.map { try readSource($0) }.joined(separator: "\n")
+}
+
 func sourcePackageRoot() throws -> URL {
     let fileManager = FileManager.default
     var current = URL(fileURLWithPath: fileManager.currentDirectoryPath)

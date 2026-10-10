@@ -88,7 +88,7 @@ struct UndoIsolationSourceContractTests {
     }
 
     @Test func diffWorkspaceVendsPerSidePrivateUndoManagers() throws {
-        let source = try readSource("Sources/XTools/ToolPages/Workbench/Diff/IndexEditableDiffWorkspace.swift")
+        let source = try readSource("Sources/XTools/ToolPages/Workbench/Diff/IndexEditableDiffMergeView.swift")
 
         contains(
             source,
