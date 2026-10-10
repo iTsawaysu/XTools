@@ -55,18 +55,6 @@ final class ToolPageStageModel: ObservableObject {
         pendingArrivals.remove(key)
     }
 
-    /// 离开动画（220ms productiveExit）结束后调用：将停靠页无动画静默置入到达起始姿态
-    /// （透明 + 上浮 10pt + 0.995 缩放）。因透明度已为 0，静默置位在屏幕上完全不可见；
-    /// 之后用户再次回访该页时，视图层即可从该起始姿态播放完整到达动画（含 10pt 浮起与缩放回正）。
-    func settleParkedForArrival(_ key: ToolPageKey) {
-        guard parked.contains(key), displayed != key else { return }
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            _ = pendingArrivals.insert(key)
-        }
-    }
-
     /// 到达事务（pageArrival）内调用：呈现新页或唤回停靠页。
     func arrive(_ key: ToolPageKey) {
         if !mounted.contains(key) {

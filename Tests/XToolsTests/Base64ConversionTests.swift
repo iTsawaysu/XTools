@@ -65,7 +65,7 @@ struct Base64ConversionTests {
     /// 自家 base64url 输出互通）。
     @Test func urlSafeAlphabetDecodesLikeStandard() throws {
         // "-" ↔ "+"：标准 "+/" 形态的 ... 数据用 url-safe 写法应解出同值。
-        let standard = try Data(base64Encoded: "a+b/")!
+        let standard = Data(base64Encoded: "a+b/")!
         #expect(
             try Base64Conversion.decodeData("a-b_") == standard
         )

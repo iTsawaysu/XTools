@@ -2,8 +2,9 @@ import AppKit
 import SwiftUI
 
 /// AppKit cursor-rect is unreliable inside a SwiftUI host, so the I-beam is
-/// driven from SwiftUI hover instead of the field's own cursor rects. Re-asserting
-/// on every move prevents a missed exit event from leaving the cursor stuck.
+/// driven from SwiftUI hover instead of the field's own cursor rects. `onHover`
+/// fires once per enter/exit (no per-move wakeups); the AppKit arrow-rect
+/// layers below remain the authoritative fallback for chrome zones.
 private struct IBeamCursorModifier: ViewModifier {
     /// Chrome column (the line-number gutter) kept out of the I-beam hover
     /// target so the arrow owns it while text keeps the beam.
@@ -69,8 +70,8 @@ extension View {
     /// Chrome (glass footers, field accessory buttons, gutters) floating over
     /// an editable or selectable text surface: the hover point is not
     /// typeable or selectable content, so the cursor must stay an arrow.
-    /// Registers the arrow rect up front and re-asserts on move — the menu
-    /// panel's proven pattern generalized.
+    /// Registers the arrow rect up front and asserts it on hover enter —
+    /// the menu panel's proven pattern generalized.
     func arrowCursorOnHover() -> some View {
         overlay {
             ArrowCursorRectLayer()

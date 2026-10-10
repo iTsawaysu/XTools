@@ -213,7 +213,7 @@ private struct IndexEmojiWorkspaceContent: View {
     @MainActor
     private func copyGlyph(_ glyph: String) {
         guard IndexPasteboard.copyString(glyph) else {
-            toastCenter?.show("剪贴板写入失败。", tone: .error)
+            toastCenter?.show(ToolFeedbackCopy.clipboardWriteFailure, tone: .error)
             return
         }
         toastCenter?.show(ToolFeedbackCopy.copied(glyph: glyph), tone: .success)

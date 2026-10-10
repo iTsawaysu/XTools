@@ -193,7 +193,7 @@ private struct IndexGeneratedValueRowView: View {
 
     private func copyValue() {
         guard IndexPasteboard.copyString(row.value) else {
-            toastCenter?.show("剪贴板写入失败。", tone: .error)
+            toastCenter?.show(ToolFeedbackCopy.clipboardWriteFailure, tone: .error)
             return
         }
         toastCenter?.show(ToolFeedbackCopy.copied, tone: .success)

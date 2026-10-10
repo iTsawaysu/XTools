@@ -68,6 +68,9 @@ private struct ToolPageHostedItem: View, Equatable {
     let routing: any DetailActionRouting
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        // registry 不参与比较：ToolRegistry 是不可变值（RootView 持有
+        // ToolRegistry.default），页面内容只随 key/dashboardStore/routing 变化。
+        // 若未来 registry 变为多实例或可变，必须把它的身份纳入比较。
         lhs.key == rhs.key &&
         lhs.dashboardStore === rhs.dashboardStore &&
         MainActor.assumeIsolated { lhs.routing === rhs.routing }

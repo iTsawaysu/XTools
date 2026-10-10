@@ -147,8 +147,8 @@ struct IndexOptionsMenu: View {
         // Static row text installs an I-beam cursor rect that flashes before
         // hover-driven cursor fixes can react, so the source is overridden: a
         // transparent AppKit layer registers an arrow cursor rect over the
-        // whole menu (hit-test transparent, clicks pass through). The hover
-        // re-assert stays as a belt-and-suspenders fallback.
+        // whole menu (hit-test transparent, clicks pass through). The
+        // hover-enter assert stays as a belt-and-suspenders fallback.
         .overlay {
             IndexMenuArrowCursorLayer()
         }

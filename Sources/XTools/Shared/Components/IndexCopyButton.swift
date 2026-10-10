@@ -75,7 +75,7 @@ struct IndexCopyButton: View {
         Button {
             guard !text.isEmpty else { return }
             guard IndexPasteboard.copyString(text) else {
-                toastCenter?.show("剪贴板写入失败。", tone: .error)
+                toastCenter?.show(ToolFeedbackCopy.clipboardWriteFailure, tone: .error)
                 return
             }
             toastCenter?.show(successToast ?? ToolFeedbackCopy.copied, tone: .success)

@@ -410,7 +410,7 @@ struct JWTWorkspaceSessionTests {
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
     }
-    @Test func signatureTitleMappingStaysStructuralNotStringMatching() throws {
+    @Test func wrongSecretParseReportsSignatureMismatchStatusAndTitle() throws {
         var session = JWTWorkspaceSession()
         session.parseInput = Self.knownToken
         session.parseSecret = "wrong-secret"

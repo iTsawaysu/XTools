@@ -3,11 +3,15 @@ import Foundation
 /// Canonical user-facing feedback copy for success actions.
 ///
 /// Every copy/save success toast and done-state label must pull from this
-/// table so the same action never ships two phrasings. Failures do not live
-/// here — they route through workspace diagnostics, not toasts.
+/// table so the same action never ships two phrasings. The single failure
+/// toast (clipboard write) is canonicalized here too; other failures route
+/// through workspace diagnostics, not toasts.
 enum ToolFeedbackCopy {
     /// Clipboard write succeeded (button done-state and toast).
     static let copied = "已复制"
+    /// Clipboard write failed for every copy surface (button, emoji picker,
+    /// generated-value rows).
+    static let clipboardWriteFailure = "剪贴板写入失败。"
     /// Clipboard write succeeded, identity variant for glyph-like payloads.
     static func copied(glyph: String) -> String {
         "已复制 \(glyph)"

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+@testable import XTools
 
 enum ToolDiagnosticContract {
     static let maximumMessageCharacters = 180
@@ -128,6 +129,8 @@ struct ToolDiagnosticContractSupportTests {
     }
 
     @Test func sharedAndEmojiCopyFailuresUseFactualCopy() {
-        ToolDiagnosticContract.expectFactual("剪贴板写入失败。")
+        // 三处复制入口（IndexCopyButton / EmojiPickerPage / IndexGeneratedValueRowList）
+        // 共用同一常量，这里对真实交付的文案跑事实性契约。
+        ToolDiagnosticContract.expectFactual(ToolFeedbackCopy.clipboardWriteFailure)
     }
 }
