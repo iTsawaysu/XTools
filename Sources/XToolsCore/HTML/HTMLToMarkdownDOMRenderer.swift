@@ -708,15 +708,25 @@ final class HTMLToMarkdownDOMRenderer {
         var escaped = ""
         escaped.reserveCapacity(text.utf8.count)
 
+        // 滚动窗口保存已追加标量的末尾至多 3 个：String.UnicodeScalarView 不是
+        // RandomAccessCollection，对增长的 escaped 反复取 suffix(3) 每次都要
+        // 整串遍历，整体退化为 O(n²)（大文本节点一次转义可达数十秒）。窗口
+        // 与「escaped 的末 3 标量」逐点一致（预置反斜杠紧跟 '.'，永远到不了
+        // 全 w 窗口，见 escapeWWWAutolinks 语义），行为与旧实现逐字节等价。
+        var trailing: [Unicode.Scalar] = []
+        trailing.reserveCapacity(3)
+
         for character in text {
-            // Unicode 简单小写映射到 ASCII 'w' 的标量只有 'w'/'W' 自身，因此
-            // 逐标量比较与原先 `String(escaped.suffix(3)).lowercased() == "www"`
-            // 等价，但省去每个字符两次堆分配。
-            let tail = escaped.unicodeScalars.suffix(3)
-            if character == ".", tail.count == 3, tail.allSatisfy({ $0 == "w" || $0 == "W" }) {
+            if character == ".",
+               trailing.count == 3,
+               trailing.allSatisfy({ $0 == "w" || $0 == "W" }) {
                 escaped.append("\\")
             }
             escaped.append(character)
+            for scalar in character.unicodeScalars {
+                if trailing.count == 3 { trailing.removeFirst() }
+                trailing.append(scalar)
+            }
         }
 
         return escaped

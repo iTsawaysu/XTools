@@ -1,22 +1,31 @@
 import SwiftUI
 
+/// 工具页列的动作出口。动作经一个生命周期与视图一致的对象转发，而不是
+/// 每次 body 重估都生成新闭包：SwiftUI 按值比较子视图输入，新闭包必然
+/// 判定不等，会让 detail 列（含当前工具页整棵树）在每次 shell 抖动（侧栏
+/// 键入、toast、建议横幅）时整链重估并重跑 makePage()。引用类型的路由盒
+/// 让输入退化为可指针比较的稳定值。
+@MainActor
+protocol DetailActionRouting: AnyObject {
+    func selectTool(_ toolID: ToolID)
+}
+
 struct ToolDetailHostView: View {
     let registry: ToolRegistry
     let selectedToolID: ToolID?
     let dashboardStore: DashboardStore?
-    let favoriteIDs: [ToolID]
-    let onSelectTool: (ToolID) -> Void
-    let onOpenCommandPalette: () -> Void
-    let autoResumeLastTool: Bool
-    let onSetAutoResumeLastTool: @MainActor @Sendable (Bool) -> Void
+    let routing: any DetailActionRouting
 
-    init(registry: ToolRegistry, selectedToolID: ToolID?, dashboardStore: DashboardStore? = nil,
-         favoriteIDs: [ToolID] = [], onSelectTool: @escaping (ToolID) -> Void = { _ in },
-         onOpenCommandPalette: @escaping () -> Void = {}, autoResumeLastTool: Bool = false,
-         onSetAutoResumeLastTool: @escaping @MainActor @Sendable (Bool) -> Void = { _ in }) {
-        self.registry = registry; self.selectedToolID = selectedToolID; self.dashboardStore = dashboardStore
-        self.favoriteIDs = favoriteIDs; self.onSelectTool = onSelectTool; self.onOpenCommandPalette = onOpenCommandPalette
-        self.autoResumeLastTool = autoResumeLastTool; self.onSetAutoResumeLastTool = onSetAutoResumeLastTool
+    init(
+        registry: ToolRegistry,
+        selectedToolID: ToolID?,
+        dashboardStore: DashboardStore? = nil,
+        routing: any DetailActionRouting
+    ) {
+        self.registry = registry
+        self.selectedToolID = selectedToolID
+        self.dashboardStore = dashboardStore
+        self.routing = routing
     }
 
     var body: some View {
@@ -59,7 +68,7 @@ struct ToolDetailHostView: View {
                 DashboardView(
                     store: dashboardStore,
                     registry: registry,
-                    onSelectTool: onSelectTool
+                    onSelectTool: { routing.selectTool($0) }
                 )
                 .toolPageArrival(id: "dashboard")
             }

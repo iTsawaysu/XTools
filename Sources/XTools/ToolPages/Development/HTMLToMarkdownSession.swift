@@ -158,7 +158,7 @@ final class HTMLToMarkdownSession: ObservableObject {
                 // A new action, clear, or session deallocation owns the replacement state.
             } catch let conversionError as HTMLToMarkdownConversionError {
                 self.finishFailure(
-                    HTMLToMarkdownDiagnostics.conversionErrorMessage(for: conversionError),
+                    conversionError.localizedDescription,
                     generation: currentGeneration
                 )
             } catch let fetchError as HTMLToMarkdownURLFetchError {
@@ -168,7 +168,7 @@ final class HTMLToMarkdownSession: ObservableObject {
                 )
             } catch let extractionError as HTMLReadableArticleExtractionError {
                 self.finishFailure(
-                    HTMLToMarkdownDiagnostics.articleExtractionErrorMessage(for: extractionError),
+                    extractionError.localizedDescription,
                     generation: currentGeneration
                 )
             } catch {
@@ -224,7 +224,7 @@ final class HTMLToMarkdownSession: ObservableObject {
                 // Superseded generation or explicit cancel — do not publish markdown.
             } catch let conversionError as HTMLToMarkdownConversionError {
                 self.finishFailure(
-                    HTMLToMarkdownDiagnostics.conversionErrorMessage(for: conversionError),
+                    conversionError.localizedDescription,
                     generation: currentGeneration
                 )
             } catch {

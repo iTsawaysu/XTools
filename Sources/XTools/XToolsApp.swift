@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsCore
 
 @MainActor
 enum AppKitUndoCommandRouter {
@@ -104,6 +105,11 @@ struct XToolsApp: App {
         // ~45ms once per process, so warm it off the main thread instead of
         // paying inside the first palette/sidebar query.
         ToolSearchEngine.prewarmTransliterationEngine()
+
+        // The emoji picker reads EmojiCatalog.groups inside its first render
+        // pass; decoding the 384KB plist there put the whole catalog build on
+        // the main thread at click time. Same treatment as the ICU prewarm.
+        EmojiCatalog.prewarmCatalog()
     }
 
     var body: some Scene {

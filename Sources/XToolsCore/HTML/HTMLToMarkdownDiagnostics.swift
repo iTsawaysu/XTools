@@ -84,15 +84,6 @@ public enum HTMLToMarkdownDiagnostics {
         }
     }
 
-    public static func conversionErrorMessage(for error: HTMLToMarkdownConversionError) -> String {
-        switch error {
-        case .inputExceedsPreParseByteLimit(let limit):
-            return "输入超过 \(ByteSizeFormatter.format(bytes: limit))，未开始转换。"
-        case .domDepthExceeded(let limit):
-            return "HTML 嵌套超过 \(limit) 层，未进行转换。"
-        }
-    }
-
     public static func urlFetchErrorMessage(for error: HTMLToMarkdownURLFetchError) -> String {
         switch error {
         case .emptyURL:
@@ -117,19 +108,6 @@ public enum HTMLToMarkdownDiagnostics {
             return "URL 返回空内容。"
         case .undecodableText:
             return "无法识别页面文本编码。"
-        }
-    }
-
-    public static func articleExtractionErrorMessage(for error: HTMLReadableArticleExtractionError) -> String {
-        switch error {
-        case .readabilityUnavailable, .articleNotFound:
-            return "未能识别网页正文。"
-        case .readabilityTimedOut:
-            return "网页正文解析超时。"
-        case .readabilityMalformedResult:
-            return "网页正文解析结果无效。"
-        case .articleBecameEmptyAfterCleaning:
-            return "网页正文清理后没有可转换内容。"
         }
     }
 

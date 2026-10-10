@@ -15,6 +15,11 @@ struct RootView: View {
     @StateObject private var systemAppearanceSource: SystemAppearanceSource
     @State private var previousSelectedToolID: ToolID?
     @State private var showsPreferences = false
+    // 投影记忆化：RootView 会在无关 shell 抖动（toast、面板呈现、建议横幅）
+    // 时整体重估 body；查询、收藏、选择三者未变时重建整个过滤导航树是纯浪费。
+    @State private var sidebarProjectionCache = SidebarProjectionCache()
+    // detail 列的动作路由盒：见 DetailActionRouting 协议注释。
+    @State private var detailRouting = DetailActionRoutingBox()
     // ⌘K frecency: palette launches feed the recents landing section and
     // within-tier ranking refinement. Deliberately NOT observed: recording
     // a launch must not invalidate the app shell (the palette reads it
@@ -174,16 +179,13 @@ struct RootView: View {
     }
 
     private var detailColumn: some View {
-        VStack(spacing: 0) {
+        detailRouting.update(actions: navigationActions)
+        return VStack(spacing: 0) {
             ToolDetailHostView(
                 registry: registry,
                 selectedToolID: viewModel.selectedToolID,
                 dashboardStore: dashboardStore,
-                favoriteIDs: favorites.favoriteIDs,
-                onSelectTool: { _ = navigationActions.selectTool($0) },
-                onOpenCommandPalette: { openCommandPaletteAnimated() },
-                autoResumeLastTool: viewModel.autoResumeLastTool,
-                onSetAutoResumeLastTool: { viewModel.autoResumeLastTool = $0 }
+                routing: detailRouting
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -239,7 +241,7 @@ struct RootView: View {
 
     private var sidebarProjection: ToolNavigationProjection {
         CommandPaletteTrace.count(.sidebarProjection)
-        return ToolNavigationProjection(
+        return sidebarProjectionCache.projection(
             registry: registry,
             favoriteIDs: favorites.favoriteIDs,
             selectedToolID: viewModel.selectedToolID,
@@ -417,5 +419,58 @@ struct RootView: View {
         if !viewModel.searchText.isEmpty {
             viewModel.searchText = ""
         }
+    }
+}
+
+/// 单条目投影缓存：输入三元组（查询、收藏、选择）未变时直接复用上一次
+/// 的投影结果；任一真实变化仍会全量重建。只为砍掉无关 shell 抖动引发的
+/// 重复构建，不改变任何投影语义。
+@MainActor
+private final class SidebarProjectionCache {
+    private var query: String?
+    private var favoriteIDs: [ToolID]?
+    private var selectedToolID: ToolID?
+    private var projection: ToolNavigationProjection?
+
+    func projection(
+        registry: ToolRegistry,
+        favoriteIDs: [ToolID],
+        selectedToolID: ToolID?,
+        query: String
+    ) -> ToolNavigationProjection {
+        if let projection,
+           self.query == query,
+           self.favoriteIDs == favoriteIDs,
+           self.selectedToolID == selectedToolID {
+            return projection
+        }
+
+        let rebuilt = ToolNavigationProjection(
+            registry: registry,
+            favoriteIDs: favoriteIDs,
+            selectedToolID: selectedToolID,
+            query: query
+        )
+        self.query = query
+        self.favoriteIDs = favoriteIDs
+        self.selectedToolID = selectedToolID
+        self.projection = rebuilt
+        return rebuilt
+    }
+}
+
+/// DetailActionRouting 的 RootView 侧实现：持有的动作集在每次 body 重估时
+/// 刷新，但盒本体是与视图同生命周期的稳定引用，子视图的输入比较不再被
+/// 逐次重建的闭包身份击穿。
+@MainActor
+private final class DetailActionRoutingBox: DetailActionRouting {
+    private var actions: ToolNavigationActions?
+
+    func update(actions: ToolNavigationActions) {
+        self.actions = actions
+    }
+
+    func selectTool(_ toolID: ToolID) {
+        _ = actions?.selectTool(toolID)
     }
 }

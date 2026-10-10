@@ -30,12 +30,26 @@ public enum HTMLReadableArticleCleaningPolicy: Equatable, Sendable {
     case readableArticleParity
 }
 
-public enum HTMLReadableArticleExtractionError: Error, Equatable, Sendable {
+public enum HTMLReadableArticleExtractionError: Error, Equatable, Sendable, LocalizedError {
     case readabilityUnavailable
     case readabilityTimedOut
     case readabilityMalformedResult
     case articleNotFound
     case articleBecameEmptyAfterCleaning
+
+    /// 正文提取失败文案；调用方经 error.localizedDescription 读取。
+    public var errorDescription: String? {
+        switch self {
+        case .readabilityUnavailable, .articleNotFound:
+            return "未能识别网页正文。"
+        case .readabilityTimedOut:
+            return "网页正文解析超时。"
+        case .readabilityMalformedResult:
+            return "网页正文解析结果无效。"
+        case .articleBecameEmptyAfterCleaning:
+            return "网页正文清理后没有可转换内容。"
+        }
+    }
 }
 
 public protocol HTMLReadableArticleExtracting: Sendable {

@@ -54,9 +54,19 @@ public struct HTMLToMarkdownInputBudget: Equatable, Sendable {
     }
 }
 
-public enum HTMLToMarkdownConversionError: Error, Equatable, Sendable {
+public enum HTMLToMarkdownConversionError: Error, Equatable, Sendable, LocalizedError {
     case inputExceedsPreParseByteLimit(Int)
     case domDepthExceeded(Int)
+
+    /// 转换失败文案；调用方经 error.localizedDescription 读取。
+    public var errorDescription: String? {
+        switch self {
+        case .inputExceedsPreParseByteLimit(let limit):
+            return "输入超过 \(ByteSizeFormatter.format(bytes: limit))，未开始转换。"
+        case .domDepthExceeded(let limit):
+            return "HTML 嵌套超过 \(limit) 层，未进行转换。"
+        }
+    }
 }
 
 public enum HTMLToMarkdownWarning: Equatable, Sendable {

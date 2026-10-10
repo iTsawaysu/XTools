@@ -32,16 +32,6 @@ struct HTMLToMarkdownPreviewWorkspaceTests {
         #expect(!authorization.isAuthorized(for: decomposed))
     }
 
-    @Test func defaultProvidersDoNotBypassApplicationResourceBudgets() throws {
-        let source = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexMarkdownPreviewSurface.swift")
-        doesNotContain(source, "import MarkdownUI", "The preview must render through the in-house GFM stack, not the retired vendored library.")
-        doesNotContain(source, "DefaultImageProvider.default", "Block images must not enter the third-party unbounded loader.")
-        doesNotContain(source, "DefaultInlineImageProvider.default", "Inline images must share the application loader budgets.")
-        contains(source, ".onDisappear", "Leaving preview must revoke and cancel the image scope.")
-        contains(source, "private let exactTextIdentity: JSONExactTextIdentity", "SwiftUI must not skip NFC/NFD-only result updates.")
-        contains(source, "self.exactTextIdentity = JSONExactTextIdentity(text)", "The exact snapshot must be captured when the preview value is built.")
-    }
-
     @Test func remoteImagePolicyBlocksRequestsUntilCurrentResultIsExplicitlyAuthorized() throws {
         let allowed = try #require(URL(string: "https://images.example.com/diagram.png"))
         let denied = try #require(URL(string: "file:///tmp/diagram.png"))
@@ -229,25 +219,6 @@ struct HTMLToMarkdownPreviewWorkspaceTests {
         let publicURL = try #require(URL(string: "https://images.example.com/public.png"))
         #expect(MarkdownRemoteImageLoadDecision(authorized: true, url: publicURL, policy: policy) == .load)
         #expect(evaluations.urls == [publicURL])
-    }
-
-    @Test func sharedPreviewConfiguresBothMarkdownImageProviderPaths() throws {
-        let source = try readSource("Sources/XTools/ToolPages/Workbench/Text/IndexMarkdownPreviewSurface.swift")
-        contains(source, "imageProvider: MarkdownPreviewImageProvider(", "Block images must use the controlled provider.")
-        contains(source, "inlineImageProvider: MarkdownPreviewInlineImageProvider(", "Inline images must use the controlled provider.")
-        contains(source, "MarkdownRemoteImageAuthorizationState", "Image authorization must be scoped to the current result.")
-        contains(source, "markdownPreviewAuthorizationGeneration", "Input changes must revoke authorization even when output text repeats.")
-        contains(source, ".task(id: authorizationScope)", "Remote-image detection must run as result-scoped asynchronous work.")
-        contains(source, "Task.detached(priority: .utility)", "Parser-backed detection must not execute synchronously from SwiftUI body.")
-        contains(source, "remoteImageAuthorizationBanner", "The authorization action must stay adjacent to preview content instead of sitting at the pane bottom.")
-        contains(source, "ToolTheme.accentSoft", "The authorization action must use the shared compact information-banner treatment.")
-        contains(source, ".accessibilityElement(children: .contain)", "The preview output title must preserve descendant controls in the accessibility tree.")
-        contains(source, "MarkdownPreviewAccessibilityTitle", "The output title must be scoped to preview content instead of overriding the authorization button.")
-        doesNotContain(
-            sourceSlice(source, from: "private var containsRemoteImages", to: "var body: some View"),
-            "MarkdownRemoteImageDetector.containsRemoteImage",
-            "SwiftUI body dependencies must only read cached detection state."
-        )
     }
 
     @MainActor

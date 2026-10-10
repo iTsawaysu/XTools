@@ -28,7 +28,7 @@ struct HTMLToMarkdownDiagnosticsTests {
     }
 
     @Test func deepDOMErrorUsesStableChineseMessage() {
-        let message = HTMLToMarkdownDiagnostics.conversionErrorMessage(for: .domDepthExceeded(64))
+        let message = HTMLToMarkdownConversionError.domDepthExceeded(64).localizedDescription
         #expect(message == "HTML 嵌套超过 64 层，未进行转换。")
         ToolDiagnosticContract.expectFactual(message)
     }
@@ -96,15 +96,15 @@ struct HTMLToMarkdownDiagnosticsTests {
     }
 
     @Test func allArticleExtractionErrorsMatchGoldenChinese() {
-        #expect(HTMLToMarkdownDiagnostics.articleExtractionErrorMessage(for: .readabilityUnavailable)
+        #expect(HTMLReadableArticleExtractionError.readabilityUnavailable.localizedDescription
             == "未能识别网页正文。")
-        #expect(HTMLToMarkdownDiagnostics.articleExtractionErrorMessage(for: .readabilityTimedOut)
+        #expect(HTMLReadableArticleExtractionError.readabilityTimedOut.localizedDescription
             == "网页正文解析超时。")
-        #expect(HTMLToMarkdownDiagnostics.articleExtractionErrorMessage(for: .readabilityMalformedResult)
+        #expect(HTMLReadableArticleExtractionError.readabilityMalformedResult.localizedDescription
             == "网页正文解析结果无效。")
-        #expect(HTMLToMarkdownDiagnostics.articleExtractionErrorMessage(for: .articleNotFound)
+        #expect(HTMLReadableArticleExtractionError.articleNotFound.localizedDescription
             == "未能识别网页正文。")
-        #expect(HTMLToMarkdownDiagnostics.articleExtractionErrorMessage(for: .articleBecameEmptyAfterCleaning)
+        #expect(HTMLReadableArticleExtractionError.articleBecameEmptyAfterCleaning.localizedDescription
             == "网页正文清理后没有可转换内容。")
     }
 

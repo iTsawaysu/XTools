@@ -311,6 +311,20 @@ public enum EmojiCatalog {
     /// reallocate the combined array on each keystroke.
     public static let allEntries: [EmojiEntry] = groups.flatMap(\.entries)
 
+    /// Pays the ~384KB catalog plist decode plus the 2,172-entry object graph
+    /// build off the main thread. Without this the decode runs lazily inside
+    /// the first render pass that touches the catalog (opening the Emoji page),
+    /// blocking that click's frame budget. `static let` initialization is
+    /// process-safe: if the user reaches the picker before the prewarm lands,
+    /// the main thread joins the already-running decode instead of paying a
+    /// second one.
+    public static func prewarmCatalog() {
+        Task.detached(priority: .userInitiated) {
+            _ = groups
+            _ = allEntries
+        }
+    }
+
     public static let totalProducible: Int = {
         groups.filter { $0.name != specialSymbolGroupName }.reduce(0) { acc, group in
             acc + group.entries.reduce(0) { $0 + ($1.skinToneCapable ? skinTones.count : 1) }
