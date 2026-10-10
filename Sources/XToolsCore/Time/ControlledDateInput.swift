@@ -39,6 +39,8 @@ public enum DateOnlySegment: CaseIterable, Equatable, Hashable, Sendable {
     }
 }
 
+extension DateOnlySegment: SegmentedFieldSegment {}
+
 public struct DateOnlyComponents: Equatable, Hashable, Sendable {
     public var year: Int
     public var month: Int
@@ -56,25 +58,22 @@ public enum ControlledDatePasteResult: Equatable, Sendable {
     case rejected
 }
 
+/// 纯日期（yyyy-MM-dd）分段受控输入。游标状态机由
+/// SegmentedFieldState 承载；本类型保留段值 clamp 与显示格式化。
 public struct ControlledDateInput: Equatable, Sendable {
     public private(set) var components: DateOnlyComponents?
-    public private(set) var activeSegment: DateOnlySegment
-    public private(set) var draft: String
+    var state: SegmentedFieldState<DateOnlySegment>
 
-    private var didAutoAdvanceAfterDigit: Bool
+    private typealias FieldState = SegmentedFieldState<DateOnlySegment>
 
     public init() {
         self.components = nil
-        self.activeSegment = .year
-        self.draft = ""
-        self.didAutoAdvanceAfterDigit = false
+        self.state = FieldState()
     }
 
     public init(components: DateOnlyComponents) {
         self.components = Self.normalized(components)
-        self.activeSegment = .year
-        self.draft = ""
-        self.didAutoAdvanceAfterDigit = false
+        self.state = FieldState()
     }
 
     public init(date: Date, timeZone: TimeZone) {
@@ -82,83 +81,75 @@ public struct ControlledDateInput: Equatable, Sendable {
     }
 
     public var isEmpty: Bool {
-        components == nil && draft.isEmpty
+        components == nil && state.draft.isEmpty
+    }
+
+    public var activeSegment: DateOnlySegment {
+        state.activeSegment
+    }
+
+    public var draft: String {
+        state.draft
     }
 
     public var isFirstSegment: Bool {
-        activeSegment == DateOnlySegment.allCases.first
+        state.isFirstSegment
     }
 
     public var isLastSegment: Bool {
-        activeSegment == DateOnlySegment.allCases.last
+        state.isLastSegment
     }
 
     public var displayText: String {
         guard let components else { return "" }
 
         return [
-            displayText(for: .year, value: components.year),
+            state.digitText(for: .year, value: components.year),
             "-",
-            displayText(for: .month, value: components.month),
+            state.digitText(for: .month, value: components.month),
             "-",
-            displayText(for: .day, value: components.day)
+            state.digitText(for: .day, value: components.day)
         ].joined()
     }
 
     public func displayRange(for segment: DateOnlySegment) -> Range<Int>? {
-        guard components != nil else { return nil }
-
-        var cursor = 0
-        for current in DateOnlySegment.allCases {
-            let text = displayText(for: current, value: value(for: current))
-            let range = cursor..<(cursor + text.count)
-            if current == segment {
-                return range
-            }
-            cursor = range.upperBound
-            cursor += current == .day ? 0 : 1
-        }
-        return nil
+        state.displayRange(
+            for: segment,
+            hasComponents: components != nil,
+            value: value(for:),
+            separatorLength: { $0 == .day ? 0 : 1 }
+        )
     }
 
     public func segment(containingDisplayOffset offset: Int) -> DateOnlySegment {
-        guard components != nil else { return .year }
-
-        for segment in DateOnlySegment.allCases {
-            guard let range = displayRange(for: segment) else { continue }
-            if offset < range.lowerBound || offset < range.upperBound {
-                return segment
-            }
-        }
-        return .day
+        state.segment(
+            atDisplayOffset: offset,
+            hasComponents: components != nil,
+            value: value(for:),
+            separatorLength: { $0 == .day ? 0 : 1 }
+        )
     }
 
     public mutating func replace(with date: Date, timeZone: TimeZone) {
         components = Self.components(from: date, timeZone: timeZone)
-        activeSegment = .year
-        draft = ""
-        didAutoAdvanceAfterDigit = false
+        state.reset()
     }
 
     public mutating func clear() {
         components = nil
-        activeSegment = .year
-        draft = ""
-        didAutoAdvanceAfterDigit = false
+        state.reset()
     }
 
     public mutating func select(_ segment: DateOnlySegment) {
-        activeSegment = segment
-        draft = ""
-        didAutoAdvanceAfterDigit = false
+        state.select(segment)
     }
 
     public mutating func movePrevious() {
-        select(activeSegment.previous)
+        state.movePrevious()
     }
 
     public mutating func moveNext() {
-        select(activeSegment.next)
+        state.moveNext()
     }
 
     public mutating func inputCharacter(
@@ -177,71 +168,35 @@ public struct ControlledDateInput: Equatable, Sendable {
         timeZone: TimeZone,
         editingSeed: Date = Date()
     ) -> Date? {
-        guard let value = asciiDigitValue(digit) else { return nil }
+        let outcome = state.appendDigit(digit)
+        guard outcome != .ignored else { return nil }
         ensureComponentsForEditing(timeZone: timeZone, editingSeed: editingSeed)
-        didAutoAdvanceAfterDigit = false
-
-        if draft.count >= activeSegment.digitCount {
-            draft = ""
-        }
-
-        draft.append(String(value))
-
-        guard draft.count >= activeSegment.digitCount else { return nil }
+        guard outcome == .filled else { return nil }
         let date = commitActiveSegment(timeZone: timeZone, advance: true)
-        didAutoAdvanceAfterDigit = true
+        state.noteAutoAdvanceAfterDigit()
         return date
     }
 
     public mutating func inputSeparator(timeZone: TimeZone) -> Date? {
-        if didAutoAdvanceAfterDigit && draft.isEmpty {
-            didAutoAdvanceAfterDigit = false
-            return nil
-        }
-
-        didAutoAdvanceAfterDigit = false
+        guard state.beginSeparatorInput() else { return nil }
         let date = commitActiveSegment(timeZone: timeZone)
-        activeSegment = activeSegment.next
+        state.advanceToNextSegment()
         return date
     }
 
     public mutating func deleteBackward() {
-        if draft.isEmpty {
-            activeSegment = activeSegment.previous
-        } else {
-            draft.removeLast()
-        }
-        didAutoAdvanceAfterDigit = false
+        state.deleteBackward()
     }
 
     @discardableResult
     public mutating func commitActiveSegment(timeZone: TimeZone, advance: Bool = false) -> Date? {
-        guard var nextComponents = components else {
-            draft = ""
-            didAutoAdvanceAfterDigit = false
-            return nil
-        }
-
-        guard !draft.isEmpty else {
-            if advance {
-                activeSegment = activeSegment.next
-            }
-            didAutoAdvanceAfterDigit = false
-            return nil
-        }
-
-        assignDraft(to: &nextComponents)
-        nextComponents = Self.normalized(nextComponents)
-        components = nextComponents
-        draft = ""
-        if advance {
-            activeSegment = activeSegment.next
-        }
-        didAutoAdvanceAfterDigit = false
-
-        return DateOnlyConversion.date(
-            fromText: "\(nextComponents.year)-\(nextComponents.month)-\(nextComponents.day)",
-            timeZone: timeZone
+        state.commitActiveSegment(
+            components: &components,
+            timeZone: timeZone,
+            advance: advance,
+            assignDraft: Self.assignDraft,
+            normalized: Self.normalized,
+            resolve: Self.resolveDate
         )
     }
 
@@ -255,14 +210,14 @@ public struct ControlledDateInput: Equatable, Sendable {
     }
 
     public static func lastDay(year: Int, month: Int) -> Int {
-        let clampedMonth = clamp(month, to: 1...12)
+        let clampedMonth = FieldState.clamp(month, to: 1...12)
         switch clampedMonth {
         case 1, 3, 5, 7, 8, 10, 12:
             return 31
         case 4, 6, 9, 11:
             return 30
         case 2:
-            let clampedYear = clamp(year, to: 1...9999)
+            let clampedYear = FieldState.clamp(year, to: 1...9999)
             let isLeap = (clampedYear % 4 == 0 && clampedYear % 100 != 0) || (clampedYear % 400 == 0)
             return isLeap ? 29 : 28
         default:
@@ -282,9 +237,9 @@ public struct ControlledDateInput: Equatable, Sendable {
     }
 
     private static func normalized(_ components: DateOnlyComponents) -> DateOnlyComponents {
-        let year = clamp(components.year, to: 1...9999)
-        let month = clamp(components.month, to: 1...12)
-        let day = clamp(components.day, to: 1...lastDay(year: year, month: month))
+        let year = FieldState.clamp(components.year, to: 1...9999)
+        let month = FieldState.clamp(components.month, to: 1...12)
+        let day = FieldState.clamp(components.day, to: 1...lastDay(year: year, month: month))
         return DateOnlyComponents(year: year, month: month, day: day)
     }
 
@@ -292,13 +247,6 @@ public struct ControlledDateInput: Equatable, Sendable {
         if components == nil {
             components = Self.components(from: editingSeed, timeZone: timeZone)
         }
-    }
-
-    private func displayText(for segment: DateOnlySegment, value: Int) -> String {
-        if segment == activeSegment && !draft.isEmpty {
-            return draft
-        }
-        return String(format: "%0\(segment.digitCount)d", value)
     }
 
     private func value(for segment: DateOnlySegment) -> Int {
@@ -314,31 +262,29 @@ public struct ControlledDateInput: Equatable, Sendable {
         }
     }
 
-    private mutating func assignDraft(to components: inout DateOnlyComponents) {
+    private static func assignDraft(
+        _ segment: DateOnlySegment,
+        _ draft: String,
+        to components: inout DateOnlyComponents
+    ) {
         let value = Int(draft) ?? 0
 
-        switch activeSegment {
+        switch segment {
         case .year:
-            components.year = Self.clamp(value, to: 1...9999)
-            components.day = min(components.day, Self.lastDay(year: components.year, month: components.month))
+            components.year = FieldState.clamp(value, to: 1...9999)
+            components.day = min(components.day, lastDay(year: components.year, month: components.month))
         case .month:
-            components.month = Self.clamp(value, to: 1...12)
-            components.day = min(components.day, Self.lastDay(year: components.year, month: components.month))
+            components.month = FieldState.clamp(value, to: 1...12)
+            components.day = min(components.day, lastDay(year: components.year, month: components.month))
         case .day:
-            components.day = Self.clamp(value, to: 1...Self.lastDay(year: components.year, month: components.month))
+            components.day = FieldState.clamp(value, to: 1...lastDay(year: components.year, month: components.month))
         }
     }
 
-    private static func clamp(_ value: Int, to range: ClosedRange<Int>) -> Int {
-        min(max(value, range.lowerBound), range.upperBound)
-    }
-
-    private func asciiDigitValue(_ character: Character) -> Int? {
-        guard let scalar = character.unicodeScalars.first,
-              character.unicodeScalars.count == 1,
-              ("0"..."9").contains(scalar) else {
-            return nil
-        }
-        return Int(scalar.value - UnicodeScalar("0").value)
+    private static func resolveDate(_ components: DateOnlyComponents, timeZone: TimeZone) -> Date? {
+        DateOnlyConversion.date(
+            fromText: "\(components.year)-\(components.month)-\(components.day)",
+            timeZone: timeZone
+        )
     }
 }

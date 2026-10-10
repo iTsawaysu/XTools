@@ -23,7 +23,7 @@ public struct SourceControlUpdateExecutor: Sendable {
         catch { return [] }
     }
 
-    public func updateOrThrow(
+    func updateOrThrow(
         repositories: [SourceControlRepository],
         force: Bool = false,
         onResult: (@Sendable (SourceControlOperationResult) async -> Void)? = nil

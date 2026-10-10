@@ -10,10 +10,14 @@ struct SourceControlSourceContractTests {
         #expect(page.contains("IndexProgressHairline("))
         #expect(page.contains(".contentShape(Rectangle())"))
         #expect(page.contains("contextMenu {"), "行右键菜单是准入交互")
-        #expect(!page.contains("UserDefaults"))
-        #expect(!page.contains("Keychain"))
-        #expect(!page.contains("buttonStyle(.plain)"))
-        #expect(!page.contains("localizedDescription"))
+        // 模型已从页面文件抽离；禁用项沿用拆分前「模型+视图」整文件口径。
+        let workspaceModel = try sourceControlReadSource("Sources/XTools/ToolPages/Development/SourceControlWorkspaceModel.swift")
+        for source in [page, workspaceModel] {
+            #expect(!source.contains("UserDefaults"))
+            #expect(!source.contains("Keychain"))
+            #expect(!source.contains("buttonStyle(.plain)"))
+            #expect(!source.contains("localizedDescription"))
+        }
     }
 
     @Test func registryContainsOneSourceControlTool() throws {

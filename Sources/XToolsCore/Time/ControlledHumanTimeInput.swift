@@ -61,6 +61,8 @@ public enum HumanDateTimeSegment: CaseIterable, Equatable, Hashable, Sendable {
     }
 }
 
+extension HumanDateTimeSegment: SegmentedFieldSegment {}
+
 public enum ControlledHumanTimePasteResult: Equatable, Sendable {
     case accepted(Date)
     case rejected
@@ -68,29 +70,27 @@ public enum ControlledHumanTimePasteResult: Equatable, Sendable {
     case rejectedNonexistentLocalTime
 }
 
+/// 日期时间（yyyy-MM-dd HH:mm:ss）分段受控输入。游标状态机由
+/// SegmentedFieldState 承载；本类型保留段值 clamp、夏令时诊断与显示格式化。
 public struct ControlledHumanTimeInput: Equatable, Sendable {
     public private(set) var components: HumanDateTimeComponents?
-    public private(set) var activeSegment: HumanDateTimeSegment
-    public private(set) var draft: String
+    var state: SegmentedFieldState<HumanDateTimeSegment>
     /// 最近一次 commitActiveSegment 的失败原因；成功或无草稿时为 nil。
     /// UI 据此把“静默 nil”区分为可解释诊断（夏令时空洞）。
     public private(set) var lastCommitFailure: HumanDateTimeConversion.ParseFailure?
-    private var didAutoAdvanceAfterDigit: Bool
+
+    private typealias FieldState = SegmentedFieldState<HumanDateTimeSegment>
 
     public init() {
         self.components = nil
-        self.activeSegment = .year
-        self.draft = ""
+        self.state = FieldState()
         self.lastCommitFailure = nil
-        self.didAutoAdvanceAfterDigit = false
     }
 
     public init(components: HumanDateTimeComponents) {
         self.components = Self.normalized(components)
-        self.activeSegment = .year
-        self.draft = ""
+        self.state = FieldState()
         self.lastCommitFailure = nil
-        self.didAutoAdvanceAfterDigit = false
     }
 
     public init(date: Date, timeZone: TimeZone) {
@@ -98,92 +98,84 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
     }
 
     public var isEmpty: Bool {
-        components == nil && draft.isEmpty
+        components == nil && state.draft.isEmpty
+    }
+
+    public var activeSegment: HumanDateTimeSegment {
+        state.activeSegment
+    }
+
+    public var draft: String {
+        state.draft
     }
 
     public var isFirstSegment: Bool {
-        activeSegment == HumanDateTimeSegment.allCases.first
+        state.isFirstSegment
     }
 
     public var isLastSegment: Bool {
-        activeSegment == HumanDateTimeSegment.allCases.last
+        state.isLastSegment
     }
 
     public var displayText: String {
         guard let components else { return "" }
 
         return [
-            displayText(for: .year, value: components.year),
+            state.digitText(for: .year, value: components.year),
             "-",
-            displayText(for: .month, value: components.month),
+            state.digitText(for: .month, value: components.month),
             "-",
-            displayText(for: .day, value: components.day),
+            state.digitText(for: .day, value: components.day),
             " ",
-            displayText(for: .hour, value: components.hour),
+            state.digitText(for: .hour, value: components.hour),
             ":",
-            displayText(for: .minute, value: components.minute),
+            state.digitText(for: .minute, value: components.minute),
             ":",
-            displayText(for: .second, value: components.second)
+            state.digitText(for: .second, value: components.second)
         ].joined()
     }
 
     public func displayRange(for segment: HumanDateTimeSegment) -> Range<Int>? {
-        guard components != nil else { return nil }
-
-        var cursor = 0
-        for current in HumanDateTimeSegment.allCases {
-            let text = displayText(for: current, value: value(for: current))
-            let range = cursor..<(cursor + text.count)
-            if current == segment {
-                return range
-            }
-            cursor = range.upperBound
-            cursor += separator(after: current)?.count ?? 0
-        }
-        return nil
+        state.displayRange(
+            for: segment,
+            hasComponents: components != nil,
+            value: value(for:),
+            separatorLength: { separator(after: $0)?.count ?? 0 }
+        )
     }
 
     public func segment(containingDisplayOffset offset: Int) -> HumanDateTimeSegment {
-        guard components != nil else { return .year }
-
-        for segment in HumanDateTimeSegment.allCases {
-            guard let range = displayRange(for: segment) else { continue }
-            if offset < range.lowerBound || offset < range.upperBound {
-                return segment
-            }
-        }
-        return .second
+        state.segment(
+            atDisplayOffset: offset,
+            hasComponents: components != nil,
+            value: value(for:),
+            separatorLength: { separator(after: $0)?.count ?? 0 }
+        )
     }
 
     public mutating func replace(with date: Date, timeZone: TimeZone) {
         components = HumanDateTimeConversion.components(from: date, timeZone: timeZone)
-        activeSegment = .year
-        draft = ""
+        state.reset()
         lastCommitFailure = nil
-        didAutoAdvanceAfterDigit = false
     }
 
     public mutating func clear() {
         components = nil
-        activeSegment = .year
-        draft = ""
+        state.reset()
         lastCommitFailure = nil
-        didAutoAdvanceAfterDigit = false
     }
 
     public mutating func select(_ segment: HumanDateTimeSegment) {
-        activeSegment = segment
-        draft = ""
+        state.select(segment)
         lastCommitFailure = nil
-        didAutoAdvanceAfterDigit = false
     }
 
     public mutating func movePrevious() {
-        select(activeSegment.previous)
+        select(state.activeSegment.previous)
     }
 
     public mutating func moveNext() {
-        select(activeSegment.next)
+        select(state.activeSegment.next)
     }
 
     public mutating func inputCharacter(
@@ -202,76 +194,48 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
         timeZone: TimeZone,
         editingSeed: Date = Date()
     ) -> Date? {
-        guard let value = asciiDigitValue(digit) else { return nil }
+        let outcome = state.appendDigit(digit)
+        guard outcome != .ignored else { return nil }
         ensureComponentsForEditing(timeZone: timeZone, editingSeed: editingSeed)
-        didAutoAdvanceAfterDigit = false
-
-        if draft.count >= activeSegment.digitCount {
-            draft = ""
-        }
-
-        draft.append(String(value))
-
-        guard draft.count >= activeSegment.digitCount else { return nil }
+        guard outcome == .filled else { return nil }
         let date = commitActiveSegment(timeZone: timeZone, advance: true)
-        didAutoAdvanceAfterDigit = true
+        state.noteAutoAdvanceAfterDigit()
         return date
     }
 
     public mutating func inputSeparator(timeZone: TimeZone) -> Date? {
-        if didAutoAdvanceAfterDigit && draft.isEmpty {
-            didAutoAdvanceAfterDigit = false
-            return nil
-        }
-
-        didAutoAdvanceAfterDigit = false
+        guard state.beginSeparatorInput() else { return nil }
         let date = commitActiveSegment(timeZone: timeZone)
-        activeSegment = activeSegment.next
+        state.advanceToNextSegment()
         return date
     }
 
     public mutating func deleteBackward() {
-        if draft.isEmpty {
-            activeSegment = activeSegment.previous
-        } else {
-            draft.removeLast()
-        }
-        didAutoAdvanceAfterDigit = false
+        state.deleteBackward()
     }
 
     @discardableResult
     public mutating func commitActiveSegment(timeZone: TimeZone, advance: Bool = false) -> Date? {
         lastCommitFailure = nil
-        guard var nextComponents = components else {
-            draft = ""
-            didAutoAdvanceAfterDigit = false
-            return nil
-        }
-
-        guard !draft.isEmpty else {
-            if advance {
-                activeSegment = activeSegment.next
+        var failure: HumanDateTimeConversion.ParseFailure?
+        let date = state.commitActiveSegment(
+            components: &components,
+            timeZone: timeZone,
+            advance: advance,
+            assignDraft: Self.assignDraft,
+            normalized: Self.normalized,
+            resolve: { resolved, zone in
+                switch HumanDateTimeConversion.parseResult(from: resolved, timeZone: zone) {
+                case .date(let date):
+                    return date
+                case .failure(let parseFailure):
+                    failure = parseFailure
+                    return nil
+                }
             }
-            didAutoAdvanceAfterDigit = false
-            return nil
-        }
-
-        assignDraft(to: &nextComponents)
-        nextComponents = Self.normalized(nextComponents)
-        components = nextComponents
-        draft = ""
-        if advance {
-            activeSegment = activeSegment.next
-        }
-        didAutoAdvanceAfterDigit = false
-
-        switch HumanDateTimeConversion.parseResult(from: nextComponents, timeZone: timeZone) {
-        case .date(let date):
-            return date
-        case .failure(let failure):
-            lastCommitFailure = failure
-            return nil
-        }
+        )
+        lastCommitFailure = failure
+        return date
     }
 
     public mutating func paste(_ text: String, timeZone: TimeZone) -> ControlledHumanTimePasteResult {
@@ -293,8 +257,8 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
         var components = DateComponents()
         components.calendar = calendar
         components.timeZone = calendar.timeZone
-        components.year = clamp(year, to: 1...9999)
-        components.month = clamp(month, to: 1...12)
+        components.year = FieldState.clamp(year, to: 1...9999)
+        components.month = FieldState.clamp(month, to: 1...12)
         components.day = 1
 
         guard let date = calendar.date(from: components),
@@ -308,13 +272,6 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
         if components == nil {
             components = HumanDateTimeConversion.components(from: editingSeed, timeZone: timeZone)
         }
-    }
-
-    private func displayText(for segment: HumanDateTimeSegment, value: Int) -> String {
-        if segment == activeSegment && !draft.isEmpty {
-            return draft
-        }
-        return String(format: "%0\(segment.digitCount)d", value)
     }
 
     private func value(for segment: HumanDateTimeSegment) -> Int {
@@ -349,48 +306,39 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
         }
     }
 
-    private mutating func assignDraft(to components: inout HumanDateTimeComponents) {
+    private static func assignDraft(
+        _ segment: HumanDateTimeSegment,
+        _ draft: String,
+        to components: inout HumanDateTimeComponents
+    ) {
         let value = Int(draft) ?? 0
 
-        switch activeSegment {
+        switch segment {
         case .year:
-            components.year = Self.clamp(value, to: 1...9999)
-            components.day = min(components.day, Self.lastDay(year: components.year, month: components.month))
+            components.year = FieldState.clamp(value, to: 1...9999)
+            components.day = min(components.day, lastDay(year: components.year, month: components.month))
         case .month:
-            components.month = Self.clamp(value, to: 1...12)
-            components.day = min(components.day, Self.lastDay(year: components.year, month: components.month))
+            components.month = FieldState.clamp(value, to: 1...12)
+            components.day = min(components.day, lastDay(year: components.year, month: components.month))
         case .day:
-            components.day = Self.clamp(value, to: 1...Self.lastDay(year: components.year, month: components.month))
+            components.day = FieldState.clamp(value, to: 1...lastDay(year: components.year, month: components.month))
         case .hour:
-            components.hour = Self.clamp(value, to: 0...23)
+            components.hour = FieldState.clamp(value, to: 0...23)
         case .minute:
-            components.minute = Self.clamp(value, to: 0...59)
+            components.minute = FieldState.clamp(value, to: 0...59)
         case .second:
-            components.second = Self.clamp(value, to: 0...59)
+            components.second = FieldState.clamp(value, to: 0...59)
         }
     }
 
     private static func normalized(_ components: HumanDateTimeComponents) -> HumanDateTimeComponents {
         var normalized = components
-        normalized.year = clamp(normalized.year, to: 1...9999)
-        normalized.month = clamp(normalized.month, to: 1...12)
-        normalized.day = clamp(normalized.day, to: 1...lastDay(year: normalized.year, month: normalized.month))
-        normalized.hour = clamp(normalized.hour, to: 0...23)
-        normalized.minute = clamp(normalized.minute, to: 0...59)
-        normalized.second = clamp(normalized.second, to: 0...59)
+        normalized.year = FieldState.clamp(normalized.year, to: 1...9999)
+        normalized.month = FieldState.clamp(normalized.month, to: 1...12)
+        normalized.day = FieldState.clamp(normalized.day, to: 1...lastDay(year: normalized.year, month: normalized.month))
+        normalized.hour = FieldState.clamp(normalized.hour, to: 0...23)
+        normalized.minute = FieldState.clamp(normalized.minute, to: 0...59)
+        normalized.second = FieldState.clamp(normalized.second, to: 0...59)
         return normalized
-    }
-
-    private static func clamp(_ value: Int, to range: ClosedRange<Int>) -> Int {
-        min(max(value, range.lowerBound), range.upperBound)
-    }
-
-    private func asciiDigitValue(_ character: Character) -> Character? {
-        guard character.unicodeScalars.count == 1,
-              let scalar = character.unicodeScalars.first,
-              (48...57).contains(scalar.value) else {
-            return nil
-        }
-        return Character(scalar)
     }
 }

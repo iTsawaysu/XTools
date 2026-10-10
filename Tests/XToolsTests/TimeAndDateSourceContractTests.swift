@@ -138,6 +138,7 @@ struct TimeAndDateSourceContractTests {
     @Test func timestampConverterUsesControlledHumanTimeAndUnixSecondsOnly() throws {
         let timestampConverter = try readSource("Sources/XTools/ToolPages/Time/DateTimeConverterPage.swift")
         let controlledInput = try readSource("Sources/XTools/ToolPages/Workbench/Controls/IndexControlledSegmentInput.swift")
+        let textEditingConfig = try readSource("Sources/XTools/Shared/Components/AppKitTextEditingConfiguration.swift")
         let controlledSurface = sourceSlice(
             controlledInput,
             from: "private struct IndexControlledSegmentInput<TrailingAccessory: View>: View",
@@ -195,7 +196,8 @@ struct TimeAndDateSourceContractTests {
         doesNotContain(controlledSurface, ".padding(.trailing, trailingInset)", "Controlled segmented inputs must not shrink their native target with outer trailing padding")
         doesNotContain(controlledSurface, ".iBeamCursorOnHover()", "Controlled segmented inputs must use the native full-bounds cursor rect without covering trailing accessories")
         contains(controlledInput, "func sizeThatFits(\n        _ proposal: ProposedViewSize,", "Controlled segmented representables must accept the visible 38pt height")
-        contains(controlledInput, "textField.indexContentInsets = contentInsets", "Controlled segmented fields must synchronize cell insets in both make and update paths")
+        contains(controlledInput, "AppKitTextEditingConfiguration.applyBorderlessBodyStyle(", "Controlled segmented fields must apply the shared borderless body style in both make and update paths")
+        contains(textEditingConfig, "textField.indexContentInsets = contentInsets", "Shared borderless body style must synchronize cell insets on every configure call")
         contains(controlledInput, "struct IndexControlledHumanTimeInput", "Shared controlled input must expose a human-time wrapper")
         contains(timestampConverter, "Label(\"现在\", systemImage: \"clock\")", "Current time page action must show clock plus Now")
         contains(timestampConverter, ".accessibilityLabel(\"使用当前时间\")", "Current time page action must keep an explicit accessibility label")

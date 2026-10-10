@@ -15,11 +15,9 @@ public struct SourceControlScanner: Sendable {
         onProgress: (@Sendable (SourceControlScanProgress) async -> Void)? = nil
     ) async throws -> SourceControlScanSnapshot {
         try Task.checkCancellation()
-        let paths = try discoverRepositoryPaths(scope: scope) { discovered in
+        let paths = try await discoverRepositoryPaths(scope: scope) { discovered in
             let progress = SourceControlScanProgress(discoveredCount: discovered, readCompletedCount: 0, readTotalCount: nil)
-            // The walk is synchronous on a background executor; hop to the
-            // caller's context without blocking the enumeration.
-            Task { await onProgress?(progress) }
+            await onProgress?(progress)
         }
         guard !paths.isEmpty else {
             if scope.isSingleRepository { throw SourceControlError.notRepository }
@@ -68,8 +66,8 @@ public struct SourceControlScanner: Sendable {
 
     private func discoverRepositoryPaths(
         scope: SourceControlScanScope,
-        onDiscovery: ((Int) -> Void)? = nil
-    ) throws -> [String] {
+        onDiscovery: (@Sendable (Int) async -> Void)? = nil
+    ) async throws -> [String] {
         let fileManager = FileManager.default
         let root = URL(fileURLWithPath: scope.path).standardizedFileURL
         var isDirectory: ObjCBool = false
@@ -112,7 +110,7 @@ public struct SourceControlScanner: Sendable {
                 }
                 if hasGitMarker(at: item) {
                     result.insert(item.standardizedFileURL.path)
-                    onDiscovery?(result.count)
+                    await onDiscovery?(result.count)
                     enumerator.skipDescendants()
                 }
             }
