@@ -20,6 +20,7 @@ struct IndexKeycodePage: View {
 
 private struct IndexKeycodeWorkspaceContent: View {
     @ObservedObject var workspace: KeycodeToolWorkspaceModel
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
     @State private var isListening = false
     @State private var focusRequestToken = 0
 
@@ -97,6 +98,10 @@ private struct IndexKeycodeWorkspaceContent: View {
             }
         }
         .onAppear {
+            focusRequestToken &+= 1
+        }
+        .onChange(of: entryGeneration) { generation in
+            guard generation > 0 else { return }
             focusRequestToken &+= 1
         }
     }

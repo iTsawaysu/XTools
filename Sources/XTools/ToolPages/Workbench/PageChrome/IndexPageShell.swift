@@ -114,6 +114,7 @@ struct IndexPageHeader<Accessory: View>: View {
     let title: String
     let subtitle: String
     let chrome: IndexPageChrome
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
     private let accessory: Accessory
     private let hasAccessory: Bool
 
@@ -146,9 +147,10 @@ struct IndexPageHeader<Accessory: View>: View {
             leadingPadding: chrome.headerLeadingPadding,
             railWidth: chrome.headerRailWidth
         )
-        // 工具切换即换标题:以标题为身份重建 arrival 头,保证逐字编排
-        // 每次到页都完整重播(宿主的 .id(tool.id) 已重建整页,这里是兜底)。
-        .id(title)
+        // 以「标题 + 进入代际」为身份重建 arrival 头:整页重建时代每次
+        // 进入都重播逐字编排;页面停靠保活后由代际驱动等价重播(停靠页
+        // 代际恒为 0,环境翻转仅重建页头这一小块,代价可忽略)。
+        .id("\(title)\u{1}\(entryGeneration)")
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

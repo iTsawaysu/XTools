@@ -21,7 +21,6 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
     let inputTitle: String
     let outputTitle: String
     @Binding var input: String
-    private let exactInputIdentity: JSONExactTextIdentity
     let output: String
     var inputPlaceholder = ""
     var diagnostic: String? = nil
@@ -110,7 +109,6 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         self.inputTitle = inputTitle
         self.outputTitle = outputTitle
         self._input = input
-        self.exactInputIdentity = JSONExactTextIdentity(input.wrappedValue)
         self.output = output
         self.inputPlaceholder = inputPlaceholder
         self.diagnostic = diagnostic

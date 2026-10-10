@@ -15,10 +15,23 @@ private struct ToolPageEntryTraceContextKey: EnvironmentKey {
     static let defaultValue: ToolPageEntryTraceContext? = nil
 }
 
+/// 页面进入代际：每次到达（含停靠页唤回）由 ToolPageStage 递增并注入
+/// 显示页环境（停靠页恒为 0）。页面内「每次进入都要发生」的行为（页头
+/// 逐字动画、自动聚焦、onAppear 同步类逻辑）用它以 onChange 驱动，使
+/// 停靠保活与整页重建时代的进入语义完全一致。
+private struct ToolPageEntryGenerationKey: EnvironmentKey {
+    static let defaultValue = 0
+}
+
 extension EnvironmentValues {
     var toolPageEntryTraceContext: ToolPageEntryTraceContext? {
         get { self[ToolPageEntryTraceContextKey.self] }
         set { self[ToolPageEntryTraceContextKey.self] = newValue }
+    }
+
+    var toolPageEntryGeneration: Int {
+        get { self[ToolPageEntryGenerationKey.self] }
+        set { self[ToolPageEntryGenerationKey.self] = newValue }
     }
 }
 

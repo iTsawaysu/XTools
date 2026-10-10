@@ -131,6 +131,8 @@ private struct IndexUndoableTextField: NSViewRepresentable {
     let onSubmit: (() -> Void)?
     let onEscape: (() -> Void)?
     let onFocusChange: ((Bool) -> Void)?
+    // 停靠保活后回访不再重建视图；进入聚焦以代际驱动保持「每次进入聚焦」语义。
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -149,7 +151,12 @@ private struct IndexUndoableTextField: NSViewRepresentable {
         textField.delegate = context.coordinator
         textField.stringValue = text
         if autoFocus {
-            context.coordinator.focus(textField, entryTraceContext: entryTraceContext, placeholder: placeholder)
+            context.coordinator.focus(
+                textField,
+                entryGeneration: entryGeneration,
+                entryTraceContext: entryTraceContext,
+                placeholder: placeholder
+            )
         }
         if let focusRequestToken {
             context.coordinator.requestFocus(textField, token: focusRequestToken)
@@ -175,7 +182,12 @@ private struct IndexUndoableTextField: NSViewRepresentable {
         }
 
         if autoFocus {
-            context.coordinator.focus(textField, entryTraceContext: entryTraceContext, placeholder: placeholder)
+            context.coordinator.focus(
+                textField,
+                entryGeneration: entryGeneration,
+                entryTraceContext: entryTraceContext,
+                placeholder: placeholder
+            )
         }
         if let focusRequestToken {
             context.coordinator.requestFocus(textField, token: focusRequestToken)
@@ -192,23 +204,12 @@ private struct IndexUndoableTextField: NSViewRepresentable {
     }
 
     private func configure(_ textField: NSTextField) {
-        textField.placeholderString = placeholder
-        textField.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
-        textField.textColor = .labelColor
-        textField.alignment = nsAlignment
-        textField.isEditable = true
-        textField.isSelectable = true
-        textField.isBordered = false
-        textField.isBezeled = false
-        textField.drawsBackground = false
-        textField.focusRingType = .none
-        textField.usesSingleLineMode = true
-        textField.lineBreakMode = .byTruncatingTail
-        textField.cell?.isScrollable = true
-        textField.cell?.wraps = false
-        textField.indexContentInsets = contentInsets
-        textField.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        AppKitTextEditingConfiguration.applyBorderlessBodyStyle(
+            textField,
+            placeholder: placeholder,
+            alignment: nsAlignment,
+            contentInsets: contentInsets
+        )
     }
 
     private var nsAlignment: NSTextAlignment {
@@ -231,7 +232,6 @@ private struct IndexUndoableTextField: NSViewRepresentable {
         var onEscape: (() -> Void)?
         var onFocusChange: ((Bool) -> Void)?
 
-        private var didFocus = false
         private var processedFocusRequestToken: Int?
         private var shouldPlaceCursorAtEndAfterFocus = false
 
@@ -251,9 +251,18 @@ private struct IndexUndoableTextField: NSViewRepresentable {
             self.onFocusChange = onFocusChange
         }
 
-        func focus(_ textField: NSTextField, entryTraceContext: ToolPageEntryTraceContext?, placeholder: String) {
-            guard !didFocus else { return }
-            didFocus = true
+        private var focusedEntryGeneration: Int?
+
+        func focus(
+            _ textField: NSTextField,
+            entryGeneration: Int,
+            entryTraceContext: ToolPageEntryTraceContext?,
+            placeholder: String
+        ) {
+            // generation > 0 表示本页当前显示中；停靠（0）不聚焦。同一代际
+            // 只聚焦一次——等价于整页重建时代「每视图实例一次」的守卫。
+            guard entryGeneration > 0, focusedEntryGeneration != entryGeneration else { return }
+            focusedEntryGeneration = entryGeneration
             ToolPageEntryTrace.inputFocusRequested(entryTraceContext, placeholder: placeholder)
             DispatchQueue.main.async {
                 self.shouldPlaceCursorAtEndAfterFocus = true
@@ -695,6 +704,9 @@ struct IndexTextAreaInputRejection {
 
 /// layout manager opts the view into TextKit 1 compatibility mode and forces a
 struct IndexTextKit2ViewportTextView: NSViewRepresentable {
+    // 停靠保活后回访不再重建视图；进入聚焦以代际驱动保持「每次进入聚焦」语义。
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
+
     @Binding var text: String
     var exactTextIdentity: JSONExactTextIdentity? = nil
     var lineBreakMode: NSLineBreakMode
@@ -747,7 +759,7 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
             IndexTextAreaScrollPositioning.revealInsertionPoint(in: textView, growsWithContent: false)
         }
         if autoFocus {
-            context.coordinator.focus(textView)
+            context.coordinator.focus(textView, entryGeneration: entryGeneration)
         }
         return scrollView
     }
@@ -776,6 +788,9 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
         }
         if context.coordinator.placeCaretAtEndIfRequested(caretPlacementRequestToken, in: textView) {
             IndexTextAreaScrollPositioning.revealInsertionPoint(in: textView, growsWithContent: false)
+        }
+        if autoFocus {
+            context.coordinator.focus(textView, entryGeneration: entryGeneration)
         }
     }
 
@@ -812,7 +827,7 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
                 configureUndoManager()
             }
         }
-        private var didFocus = false
+        private var focusedEntryGeneration: Int?
         private var caretPlacementState = IndexTextAreaCaretPlacementState(processedRequestToken: nil)
         private let privateUndo = IndexPrivateUndoStack()
 
@@ -823,9 +838,11 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
             configureUndoManager()
         }
 
-        func focus(_ textView: NSTextView) {
-            guard !didFocus else { return }
-            didFocus = true
+        func focus(_ textView: NSTextView, entryGeneration: Int) {
+            // generation > 0 表示本页显示中；停靠（0）不聚焦。同代际只聚焦
+            // 一次，等价整页重建时代「每实例一次」的守卫。
+            guard entryGeneration > 0, focusedEntryGeneration != entryGeneration else { return }
+            focusedEntryGeneration = entryGeneration
             DispatchQueue.main.async {
                 textView.window?.makeFirstResponder(textView)
             }
@@ -914,6 +931,9 @@ private final class IndexTextKit2ViewportScrollView: IndexTextViewportScrollView
 // MARK: - Legacy measured text view
 
 struct IndexUndoableTextView: NSViewRepresentable {
+    // 停靠保活后回访不再重建视图；进入聚焦以代际驱动保持「每次进入聚焦」语义。
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
+
     @Binding var text: String
     var exactTextIdentity: JSONExactTextIdentity? = nil
     var growsWithContent: Bool
@@ -977,7 +997,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
             IndexTextAreaScrollPositioning.revealInsertionPoint(in: textView, growsWithContent: growsWithContent)
         }
         if autoFocus {
-            context.coordinator.focus(textView)
+            context.coordinator.focus(textView, entryGeneration: entryGeneration)
         }
         return scrollView
     }
@@ -1022,6 +1042,9 @@ struct IndexUndoableTextView: NSViewRepresentable {
         context.coordinator.diagnosticController.update(diagnosticMarker, requestToken: diagnosticNavigationToken, in: textView, gutter: context.coordinator.lineNumberGutter)
         context.coordinator.measure(textView)
         keepContentGrowingScrollOriginStable(in: scrollView)
+        if autoFocus {
+            context.coordinator.focus(textView, entryGeneration: entryGeneration)
+        }
     }
 
     private func installLineNumberGutter(
@@ -1089,7 +1112,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
         }
         weak var lineNumberGutter: IndexEditorLineNumberGutterView?
         let diagnosticController = IndexTextAreaDiagnosticController()
-        private var didFocus = false
+        private var focusedEntryGeneration: Int?
         private var caretPlacementState = IndexTextAreaCaretPlacementState(processedRequestToken: nil)
         private let privateUndo = IndexPrivateUndoStack()
         private var lastAppliedTemporaryHighlights: IndexTextAreaTemporaryHighlights?
@@ -1145,9 +1168,11 @@ struct IndexUndoableTextView: NSViewRepresentable {
             configureUndoManager()
         }
 
-        func focus(_ textView: NSTextView) {
-            guard !didFocus else { return }
-            didFocus = true
+        func focus(_ textView: NSTextView, entryGeneration: Int) {
+            // generation > 0 表示本页显示中；停靠（0）不聚焦。同代际只聚焦
+            // 一次，等价整页重建时代「每实例一次」的守卫。
+            guard entryGeneration > 0, focusedEntryGeneration != entryGeneration else { return }
+            focusedEntryGeneration = entryGeneration
             DispatchQueue.main.async {
                 textView.window?.makeFirstResponder(textView)
             }

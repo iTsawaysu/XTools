@@ -360,6 +360,9 @@ private struct IndexControlledSegmentInputAdapter {
 }
 
 private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
+    // 停靠保活后回访不再重建视图；进入聚焦以代际驱动保持「每次进入聚焦」语义。
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
+
     let adapter: IndexControlledSegmentInputAdapter
     let placeholder: String
     let timeZone: TimeZone
@@ -388,7 +391,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
         configure(textField)
         textField.stringValue = adapter.displayText()
         if autoFocus {
-            context.coordinator.focus(textField)
+            context.coordinator.focus(textField, entryGeneration: entryGeneration)
         }
         return textField
     }
@@ -404,7 +407,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
         configure(textField)
         context.coordinator.syncTextField(textField)
         if autoFocus {
-            context.coordinator.focus(textField)
+            context.coordinator.focus(textField, entryGeneration: entryGeneration)
         }
     }
 
@@ -418,23 +421,12 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
     }
 
     private func configure(_ textField: NSTextField) {
-        textField.placeholderString = placeholder
-        textField.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
-        textField.textColor = .labelColor
-        textField.alignment = .left
-        textField.isEditable = true
-        textField.isSelectable = true
-        textField.isBordered = false
-        textField.isBezeled = false
-        textField.drawsBackground = false
-        textField.focusRingType = .none
-        textField.usesSingleLineMode = true
-        textField.lineBreakMode = .byTruncatingTail
-        textField.cell?.isScrollable = true
-        textField.cell?.wraps = false
-        textField.indexContentInsets = contentInsets
-        textField.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        textField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        AppKitTextEditingConfiguration.applyBorderlessBodyStyle(
+            textField,
+            placeholder: placeholder,
+            alignment: .left,
+            contentInsets: contentInsets
+        )
     }
 
     @MainActor
@@ -446,7 +438,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
         var onNonexistentLocalTime: () -> Void
         var onFocusChange: (Bool) -> Void
 
-        private var didFocus = false
+        private var focusedEntryGeneration: Int?
 
         init(
             adapter: IndexControlledSegmentInputAdapter,
@@ -464,9 +456,11 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
             self.onFocusChange = onFocusChange
         }
 
-        func focus(_ textField: NSTextField) {
-            guard !didFocus else { return }
-            didFocus = true
+        func focus(_ textField: NSTextField, entryGeneration: Int = 1) {
+            // generation > 0 表示本页显示中；停靠（0）不聚焦。同代际只聚焦
+            // 一次，等价整页重建时代「每实例一次」的守卫。
+            guard entryGeneration > 0, focusedEntryGeneration != entryGeneration else { return }
+            focusedEntryGeneration = entryGeneration
             DispatchQueue.main.async {
                 textField.window?.makeFirstResponder(textField)
             }
