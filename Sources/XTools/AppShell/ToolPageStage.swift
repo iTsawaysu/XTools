@@ -56,15 +56,7 @@ struct ToolPageStage<Page: View>: View {
     var body: some View {
         ZStack {
             ForEach(model.mounted, id: \.self) { key in
-                page(key)
-                    .modifier(ToolPageParkingModifier(pose: pose(for: key)))
-                    .zIndex(key == displayed ? 1 : 0)
-                    .allowsHitTesting(key == displayed)
-                    .accessibilityHidden(key != displayed)
-                    .environment(
-                        \.toolPageEntryGeneration,
-                        key == displayed ? model.generation : 0
-                    )
+                stagedPageView(for: key)
             }
         }
         .onAppear {
@@ -74,6 +66,21 @@ struct ToolPageStage<Page: View>: View {
         .onChange(of: target) { newKey in
             navigate(to: newKey)
         }
+    }
+
+    @ViewBuilder
+    private func stagedPageView(for key: ToolPageKey) -> some View {
+        let isCurrent = (key == displayed)
+        let pagePose = pose(for: key)
+        let gen = isCurrent ? model.generation : 0
+        let zIndexValue: Double = isCurrent ? 1 : 0
+
+        page(key)
+            .modifier(ToolPageParkingModifier(pose: pagePose))
+            .zIndex(zIndexValue)
+            .allowsHitTesting(isCurrent)
+            .accessibilityHidden(!isCurrent)
+            .environment(\.toolPageEntryGeneration, gen)
     }
 
     private func pose(for key: ToolPageKey) -> ToolPageParkingPose {
@@ -100,10 +107,6 @@ struct ToolPageStage<Page: View>: View {
         if let oldKey = displayed {
             withAnimation(ToolMotion.Preset.pageDeparture) {
                 model.depart(oldKey)
-            }
-            Task { @MainActor [weak model] in
-                try? await Task.sleep(nanoseconds: 250_000_000)
-                model?.settleParkedForArrival(oldKey)
             }
         }
         withAnimation(ToolMotion.Preset.pageArrival) {

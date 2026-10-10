@@ -5,6 +5,7 @@ import XToolsCore
 /// Clamps the live selection into the current UTF-16 text length before
 /// scroll-to-reveal: large programmatic replacements can leave a stale
 /// selected range that would crash AppKit when scrolled raw.
+@MainActor
 func clampedSelectedRange(for textView: NSTextView) -> NSRange {
     let textLength = (textView.string as NSString).length
     let selectedRange = textView.selectedRange()

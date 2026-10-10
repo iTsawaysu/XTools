@@ -1795,10 +1795,10 @@ private final class FakeBase64Pasteboard: @unchecked Sendable {
 extension Base64FileWorkflowClient {
     fileprivate init(dialog: FakeBase64FileDialog? = nil, pasteboard: FakeBase64Pasteboard? = nil) {
         self.init(
-            selectEncodedOutputURL: { [weak dialog] in await dialog?.selectEncodedOutputURL(defaultFilename: $0) },
-            selectDecodedOutputURL: { [weak dialog] in await dialog?.selectDecodedOutputURL(defaultFilename: $0, fileExtension: $1) },
+            selectEncodedOutputURL: { await dialog?.selectEncodedOutputURL(defaultFilename: $0) },
+            selectDecodedOutputURL: { await dialog?.selectDecodedOutputURL(defaultFilename: $0, fileExtension: $1) },
             pasteboard: Base64FileWorkflowClient.PasteboardWriter(
-                write: { [weak pasteboard] data in
+                write: { data in
                     MainActor.assumeIsolated {
                         pasteboard?.writeUTF8(data) ?? true
                     }

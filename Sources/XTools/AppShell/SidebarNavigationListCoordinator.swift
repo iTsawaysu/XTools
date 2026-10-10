@@ -16,11 +16,11 @@ final class SidebarNavigationListCoordinator {
     private struct HostedContentKey: Equatable {
         let entry: SidebarNavigationEntry
         /// Row-derived selection state instead of the raw selection: a tool
-        /// switch flips these on only the outgoing/incoming rows (and the rows
-        /// of the newly active section), so every other track keeps its cached
-        /// SwiftUI content instead of re-rendering on every click.
+        /// switch flips these on only the outgoing/incoming rows, so every
+        /// unselected track in the newly active or inactive section keeps its
+        /// cached SwiftUI content instead of re-rendering and re-laying out on every click.
         let isRowSelected: Bool
-        let isRowInActiveSection: Bool
+        let isRowHighlighted: Bool
         let isSectionActive: Bool
         let isSearchActive: Bool
         let interaction: SidebarNavigationTrackInteraction
@@ -467,13 +467,15 @@ final class SidebarNavigationListCoordinator {
             return false
         }
 
+        let isRowSelected = Self.isRowSelected(entry: entry, selectedToolID: configuration.selectedToolID)
+        let isRowInActiveSection = Self.isRowInActiveSection(
+            entry: entry,
+            selectedSection: configuration.selectedSection
+        )
         let key = HostedContentKey(
             entry: entry,
-            isRowSelected: Self.isRowSelected(entry: entry, selectedToolID: configuration.selectedToolID),
-            isRowInActiveSection: Self.isRowInActiveSection(
-                entry: entry,
-                selectedSection: configuration.selectedSection
-            ),
+            isRowSelected: isRowSelected,
+            isRowHighlighted: isRowSelected && isRowInActiveSection,
             isSectionActive: Self.isSectionActive(
                 entry: entry,
                 selectedSection: configuration.selectedSection

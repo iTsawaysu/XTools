@@ -33,7 +33,13 @@ struct ToolDetailHostView: View {
         // so tool pages, the dashboard, and the empty state share the same
         // page swap choreography (see `ToolPageStage`).
         ToolPageStage(target: pageKey) { key in
-            page(for: key)
+            ToolPageHostedItem(
+                key: key,
+                registry: registry,
+                dashboardStore: dashboardStore,
+                routing: routing
+            )
+            .equatable()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(ToolTheme.workspaceBackground)
@@ -47,13 +53,32 @@ struct ToolDetailHostView: View {
         return dashboardStore != nil ? .dashboard : .emptySelection
     }
 
-    @ViewBuilder
-    private func page(for key: ToolPageKey) -> some View {
+    static func tracedPage(for tool: RegisteredTool) -> AnyView {
+        ToolPageEntryTrace.makePageStarted(tool)
+        let page = tool.makePage()
+        ToolPageEntryTrace.makePageFinished(tool)
+        return page
+    }
+}
+
+private struct ToolPageHostedItem: View, Equatable {
+    let key: ToolPageKey
+    let registry: ToolRegistry
+    let dashboardStore: DashboardStore?
+    let routing: any DetailActionRouting
+
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.key == rhs.key &&
+        lhs.dashboardStore === rhs.dashboardStore &&
+        MainActor.assumeIsolated { lhs.routing === rhs.routing }
+    }
+
+    var body: some View {
         switch key.payload {
         case .tool(let toolID):
             if let tool = registry.tool(for: toolID) {
                 let traceContext = ToolPageEntryTraceContext(toolID: tool.id, title: tool.title)
-                tracedPage(for: tool)
+                ToolDetailHostView.tracedPage(for: tool)
                     .environment(\.toolPageEntryTraceContext, traceContext)
                     .background {
                         Color.clear
@@ -76,13 +101,6 @@ struct ToolDetailHostView: View {
             EmptyToolSelectionView()
                 .toolPageArrival(id: "empty-selection")
         }
-    }
-
-    private func tracedPage(for tool: RegisteredTool) -> AnyView {
-        ToolPageEntryTrace.makePageStarted(tool)
-        let page = tool.makePage()
-        ToolPageEntryTrace.makePageFinished(tool)
-        return page
     }
 }
 

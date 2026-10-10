@@ -198,7 +198,7 @@ struct IndexInputHeaderAccessory: View {
         ViewThatFits(in: .horizontal) {
             row(clearIconOnly: false)
 
-            if let onClear {
+            if onClear != nil {
                 row(clearIconOnly: true)
             }
         }

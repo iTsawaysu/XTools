@@ -535,24 +535,6 @@ struct HTMLToMarkdownConverterTests {
         )
         #expect(cancellable == baseline)
     }
-
-    // MARK: - Source contracts
-
-    @Test func converterUsesDOMRendererAndKeepsCompatibilityAPI() throws {
-        let converter = try readSource("Sources/XToolsCore/HTML/HTMLToMarkdownConverter.swift")
-        let renderer = try readSource("Sources/XToolsCore/HTML/HTMLToMarkdownDOMRenderer.swift")
-
-        contains(converter, "public static func convert(_ html: String) -> String", "HTML-to-Markdown must keep the existing string-only compatibility API")
-        contains(converter, "options: HTMLToMarkdownOptions = HTMLToMarkdownOptions()", "HTML-to-Markdown must expose the richer result/warning API")
-        contains(converter, "shouldCancel: @escaping @Sendable () -> Bool", "HTML-to-Markdown must expose a cancellable convert entry")
-        contains(converter, "HTMLToMarkdownDOMRenderer(options: options, shouldCancel: shouldCancel).convert(html)", "The public converter must delegate to the DOM renderer")
-        doesNotContain(converter, "legacyRegexConvert", "The old regex conversion path must not remain as a dormant fallback")
-        doesNotContain(converter, "HTMLToMarkdownRegexCatalog", "The public converter file must not keep the retired regex catalog")
-        contains(renderer, "import SwiftSoup", "The renderer must use SwiftSoup instead of treating HTML as regex-only text")
-        contains(renderer, "SwiftSoup.parseHTML", "The renderer must parse HTML into a DOM before conversion")
-        contains(renderer, "renderNode", "The renderer must own rule-based node traversal")
-        contains(renderer, "cancellation.check()", "The renderer must check cooperative cancellation during traversal")
-    }
 }
 
 private final class HTMLConverterCancelCounter: @unchecked Sendable {

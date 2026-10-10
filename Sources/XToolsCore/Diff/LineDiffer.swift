@@ -116,21 +116,7 @@ public enum LineDiffError: Error, Equatable, LocalizedError, Sendable {
     }
 }
 
-struct DiffCancellationChecker: Sendable {
-    private let shouldCancel: (@Sendable () -> Bool)?
-
-    init(shouldCancel: (@Sendable () -> Bool)? = nil) {
-        self.shouldCancel = shouldCancel
-    }
-
-    static let disabled = Self()
-
-    func check() throws {
-        if shouldCancel?() == true {
-            throw CancellationError()
-        }
-    }
-}
+// DiffCancellationChecker 已沉淀为通用 CancellationChecker（见 XToolsCore/Utility/CancellationChecker.swift）。
 
 public struct TextDiffOptions: Equatable, Sendable {
     public var ignoreWhitespace: Bool

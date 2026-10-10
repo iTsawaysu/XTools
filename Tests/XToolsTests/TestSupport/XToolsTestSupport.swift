@@ -221,3 +221,25 @@ final class TestLockedCounter: @unchecked Sendable {
         count
     }
 }
+
+private struct MissingPackageRootError: Error {}
+
+func sourcePackageRoot() throws -> URL {
+    let fileManager = FileManager.default
+    var current = URL(fileURLWithPath: fileManager.currentDirectoryPath)
+
+    while true {
+        let packageFile = current.appendingPathComponent("Package.swift").path
+        let sourceDirectory = current.appendingPathComponent("Sources/XTools").path
+        if fileManager.fileExists(atPath: packageFile),
+           fileManager.fileExists(atPath: sourceDirectory) {
+            return current
+        }
+
+        let parent = current.deletingLastPathComponent()
+        if parent.path == current.path {
+            throw MissingPackageRootError()
+        }
+        current = parent
+    }
+}

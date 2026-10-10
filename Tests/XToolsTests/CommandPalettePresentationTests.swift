@@ -214,7 +214,7 @@ struct CommandPalettePresentationTests {
         let savedItems: [[NSPasteboard.PasteboardType: Data]] = (pasteboard.pasteboardItems ?? [])
             .map { item in
                 var entries: [NSPasteboard.PasteboardType: Data] = [:]
-                for type in item.types ?? [] {
+                for type in item.types {
                     if let data = item.data(forType: type) {
                         entries[type] = data
                     }

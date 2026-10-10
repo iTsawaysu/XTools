@@ -152,8 +152,10 @@ struct IndexOptionsMenu: View {
         .overlay {
             IndexMenuArrowCursorLayer()
         }
-        .onContinuousHover { _ in
-            NSCursor.arrow.set()
+        .onHover { isHovering in
+            if isHovering {
+                NSCursor.arrow.set()
+            }
         }
         .background {
             GeometryReader { geometry in

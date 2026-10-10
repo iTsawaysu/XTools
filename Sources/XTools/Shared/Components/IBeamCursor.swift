@@ -12,11 +12,10 @@ private struct IBeamCursorModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .contentShape(LeadingExcludedHoverShape(excludedLeading: excludingLeading))
-            .onContinuousHover { phase in
-                switch phase {
-                case .active:
+            .onHover { isHovering in
+                if isHovering {
                     NSCursor.iBeam.set()
-                case .ended:
+                } else {
                     NSCursor.arrow.set()
                 }
             }
@@ -76,8 +75,10 @@ extension View {
         overlay {
             ArrowCursorRectLayer()
         }
-        .onContinuousHover { _ in
-            NSCursor.arrow.set()
+        .onHover { isHovering in
+            if isHovering {
+                NSCursor.arrow.set()
+            }
         }
     }
 }
