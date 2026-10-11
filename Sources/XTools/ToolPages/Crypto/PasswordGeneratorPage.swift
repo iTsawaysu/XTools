@@ -101,6 +101,7 @@ struct IndexPasswordGeneratorSegment: View {
 /// Prototype v3 generator body (UUID-style): one wrapping parameter card with
 /// the recipe facts and generation actions, above wrapped password rows.
 private struct IndexPasswordGeneratorWorkspaceContent: View {
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @ObservedObject var workspace: PasswordGeneratorToolWorkspaceModel
     @State private var motionGeneration = 0
 
@@ -172,7 +173,7 @@ private struct IndexPasswordGeneratorWorkspaceContent: View {
                 help: "生成密码（⌘↩）",
                 action: generate
             )
-            .keyboardShortcut(.return, modifiers: .command)
+            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
         }
         .frame(height: 30, alignment: .center)
     }

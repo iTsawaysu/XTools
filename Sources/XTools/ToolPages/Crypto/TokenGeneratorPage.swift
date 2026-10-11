@@ -104,6 +104,7 @@ struct IndexTokenGeneratorSegment: View {
 /// the recipe facts and generation actions, above wrapped value rows. Token
 /// values reach 512 characters, so rows wrap instead of truncating.
 private struct IndexTokenWorkspaceContent: View {
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @ObservedObject var workspace: TokenGeneratorToolWorkspaceModel
     @State private var motionGeneration = 0
 
@@ -187,7 +188,7 @@ private struct IndexTokenWorkspaceContent: View {
                 help: "生成 Token（⌘↩）",
                 action: generate
             )
-            .keyboardShortcut(.return, modifiers: .command)
+            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
         }
         .frame(height: 30, alignment: .center)
     }

@@ -126,6 +126,7 @@ struct IndexTextEncryptionPage: View {
 }
 
 private struct IndexTextEncryptionWorkspaceContent: View {
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @ObservedObject var workspace: TextEncryptionToolWorkspaceModel
     @State private var showsPassword = false
     @State private var weakAlgorithmPresentation = IndexWorkspaceDiagnosticPresentationState()
@@ -201,6 +202,9 @@ private struct IndexTextEncryptionWorkspaceContent: View {
                 workspaceSemantic: .securityTransformWorkspace
             )
         }
+        .onChange(of: entryGeneration) { generation in
+            if generation == 0 { showsPassword = false }
+        }
         .onChange(of: weakAlgorithmDiagnostic) { diagnostic in
             if let announcement = weakAlgorithmPresentation.update(to: diagnostic) {
                 toastCenter?.show(announcement.text, tone: announcement.tone)
@@ -262,7 +266,7 @@ private struct IndexTextEncryptionWorkspaceContent: View {
         Button { run() } label: { Label(primaryActionTitle, systemImage: "play.fill") }
             .buttonStyle(IndexButtonStyle(primary: true))
             .frame(minWidth: 76)
-            .keyboardShortcut(.return, modifiers: .command)
+            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
     }
 
     private var widePasswordInput: some View {

@@ -136,7 +136,7 @@ private struct RegexMatchRow: View {
             isHovered = hovered
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("匹配 \(ordinal)，范围 \(match.index) 到 \(match.end)")
+        .accessibilityLabel(Text("匹配 \(ordinal)，范围 \(match.displayRange.start) 到 \(match.displayRange.end)") + Text(match.displayRange.unitSuffix))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
@@ -149,7 +149,7 @@ private struct RegexMatchRow: View {
 
                 RegexMatchValue(match.value, valueMotion: valueMotion)
 
-                Text("[\(match.index), \(match.end))")
+                Text(match.displayRange.label)
                     .font(ToolTypography.monoCaption)
                     .foregroundStyle(ToolTheme.textSecondary)
                     .textSelection(.enabled)
@@ -225,7 +225,7 @@ private struct RegexCaptureList: View {
                             .foregroundStyle(tint(index))
                             .lineLimit(1)
 
-                        Text("[\(capture.start), \(capture.end))")
+                        Text(capture.displayRange.label)
                             .font(ToolTypography.caption)
                             .foregroundStyle(ToolTheme.textSecondary)
 

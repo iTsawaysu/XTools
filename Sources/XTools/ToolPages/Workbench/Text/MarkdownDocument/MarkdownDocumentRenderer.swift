@@ -12,14 +12,18 @@ import Foundation
 extension Array where Element == MarkdownBlock {
     func renderPlainText() -> String {
         let result = makeDocument { document in
-            String(cString: cmark_render_plaintext(document, CMARK_OPT_DEFAULT, 0))
+            guard let buffer = cmark_render_plaintext(document, CMARK_OPT_DEFAULT, 0) else { return "" }
+            defer { cmark_get_default_mem_allocator().pointee.free(buffer) }
+            return String(cString: buffer)
         } ?? ""
         return result.hasSuffix("\n") ? String(result.dropLast()) : result
     }
 
     func renderHTML() -> String {
         makeDocument { document in
-            String(cString: cmark_render_html(document, CMARK_OPT_DEFAULT, nil))
+            guard let buffer = cmark_render_html(document, CMARK_OPT_DEFAULT, nil) else { return "" }
+            defer { cmark_get_default_mem_allocator().pointee.free(buffer) }
+            return String(cString: buffer)
         } ?? ""
     }
 

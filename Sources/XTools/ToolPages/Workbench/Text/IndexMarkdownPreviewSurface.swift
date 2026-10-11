@@ -15,6 +15,7 @@ struct IndexMarkdownPreviewSurface: View {
     var fillsHeight = false
     var remoteImagePolicy: MarkdownRemoteImagePolicy = .publicHTTPAndHTTPS
     var accessibilityTitle: String? = nil
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @Environment(\.markdownPreviewAuthorizationGeneration) private var authorizationGeneration
     @State private var remoteImageAuthorization = MarkdownRemoteImageAuthorizationState()
     @State private var remoteImageDetection = MarkdownRemoteImageDetectionState()
@@ -44,7 +45,7 @@ struct IndexMarkdownPreviewSurface: View {
     }
 
     private var remoteImagesAuthorized: Bool {
-        remoteImageAuthorization.isAuthorized(for: authorizationScope)
+        entryGeneration > 0 && remoteImageAuthorization.isAuthorized(for: authorizationScope)
             && remoteImageLoader?.isCancelled == false
     }
 
@@ -105,7 +106,11 @@ struct IndexMarkdownPreviewSurface: View {
             revokeRemoteImages()
         }
         .onDisappear { revokeRemoteImages() }
-        .task(id: authorizationScope) {
+        .onChange(of: entryGeneration) { generation in
+            if generation == 0 { revokeRemoteImages() }
+        }
+        .task(id: entryGeneration == 0 ? nil : authorizationScope) {
+            guard entryGeneration > 0 else { return }
             let scope = authorizationScope
             guard remoteImageDetection.beginDetection(for: scope) else { return }
             do {

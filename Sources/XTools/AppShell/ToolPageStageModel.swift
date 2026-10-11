@@ -2,10 +2,10 @@ import SwiftUI
 
 /// ToolPageStage 的挂载簿记：显示中的页面 + 有界 LRU 停靠页。
 ///
-/// 01 景深沉降 的双事务编排（离开 220ms productiveExit / 到达 300ms smoothOut）
+/// 01 景深沉降 的编排（离开 220ms productiveExit / 到达 300ms smoothOut）
 /// 由视图层按原语义驱动；本类型只决定「谁在树上、谁停靠、何时静默淘汰」。
 /// 停靠页留在 ZStack 里（透明、不可命中、无障碍隐藏、环境代际恒为 0），
-/// 再次进入时无需重建整棵页面树——重页面的回访成本从建树级降到接近零。
+/// 再次进入时复用原有页面身份，避免重建页面的本地状态与原生视图。
 /// 淘汰按最久显示优先，在禁用动画的事务里静默进行，不重播任何过渡。
 @MainActor
 final class ToolPageStageModel: ObservableObject {
@@ -25,7 +25,7 @@ final class ToolPageStageModel: ObservableObject {
 
     /// 最久显示优先的顺序表（尾部 = 最近显示）。
     private var displayOrder: [ToolPageKey] = []
-    /// 回访停靠页前的一次性形态：视图层据此无动画跳到到达起始姿态。
+    /// 冷进入和回访共用的起始姿态，直到视图层接收这一代页面才释放。
     @Published private(set) var pendingArrivals: Set<ToolPageKey> = []
 
     func isParked(_ key: ToolPageKey) -> Bool {
@@ -55,27 +55,24 @@ final class ToolPageStageModel: ObservableObject {
         pendingArrivals.remove(key)
     }
 
-    /// 到达事务（pageArrival）内调用：呈现新页或唤回停靠页。
+    /// 登记新页或唤回停靠页；下一次视图更新先接收透明的到达起始姿态。
     func arrive(_ key: ToolPageKey) {
         if !mounted.contains(key) {
             mounted.append(key)
         }
         parked.remove(key)
-        pendingArrivals.remove(key)
+        pendingArrivals.insert(key)
         displayOrder.removeAll { $0 == key }
         displayOrder.append(key)
         displayed = key
         generation &+= 1
     }
 
-    /// 唤回停靠页的事务前调用：标记一次性到达起始姿态（透明 + 上浮 +
-    /// 99.5% 缩放），使唤回动画与全新插入的到达过渡逐帧一致。
-    func stageArrivalStart(_ key: ToolPageKey) {
-        var transaction = Transaction()
-        transaction.disablesAnimations = true
-        withTransaction(transaction) {
-            _ = pendingArrivals.insert(key)
-        }
+    /// 页面树接收起始姿态后开启到达动画；已离开或已换代的任务无效。
+    func finishArrival(_ key: ToolPageKey, generation: Int) {
+        guard displayed == key, self.generation == generation,
+              pendingArrivals.contains(key) else { return }
+        pendingArrivals.remove(key)
     }
 
     /// 超出停靠容量的页面按 LRU 静默淘汰（透明页移除无可见过渡）。

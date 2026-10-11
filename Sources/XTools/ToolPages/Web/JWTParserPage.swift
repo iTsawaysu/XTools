@@ -16,14 +16,19 @@ final class JWTToolWorkspaceModel: ObservableObject {
 
 struct IndexJWTPage: View {
     var body: some View {
-        ToolWorkspaceHost(key: JWTToolWorkspaceModel.key) { _, bindings in
-            IndexJWTWorkspaceContent(session: bindings.session)
+        ToolWorkspaceHost(key: JWTToolWorkspaceModel.key) { workspace, _ in
+            IndexJWTWorkspaceContent(workspace: workspace)
         }
     }
 }
 
 private struct IndexJWTWorkspaceContent: View {
-    @Binding var session: JWTWorkspaceSession
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
+    @ObservedObject var workspace: JWTToolWorkspaceModel
+    private var session: JWTWorkspaceSession {
+        get { workspace.session }
+        nonmutating set { workspace.session = newValue }
+    }
     @State private var showsGenerateSecret = false
     @State private var showsParseSecret = false
     @State private var payloadPresentation = "json"
@@ -70,6 +75,23 @@ private struct IndexJWTWorkspaceContent: View {
             }
         }
         .onAppear(perform: refreshGeneration)
+        // Observe the owner before mode-content diffing can equate canonically
+        // equivalent Strings whose signing bytes are different.
+        .onChange(of: session.generateAlgorithm) { _ in refreshVisibleGeneration() }
+        .onChange(of: ExactUTF8Identity(session.generatePayload)) { _ in refreshVisibleGeneration() }
+        .onChange(of: ExactUTF8Identity(session.generateSecret)) { _ in refreshVisibleGeneration() }
+        .onChange(of: session.generateSecretEncoding) { _ in refreshVisibleGeneration() }
+        .onChange(of: ExactUTF8Identity(session.parseSecret)) { _ in
+            guard session.mode == .parse else { return }
+            verify()
+            localCheckDisclosureState.secretChanged(isEmpty: session.parseSecret.isEmpty)
+        }
+        .onChange(of: entryGeneration) { generation in
+            if generation == 0 {
+                showsGenerateSecret = false
+                showsParseSecret = false
+            }
+        }
     }
 
     // MARK: - Generate
@@ -99,7 +121,7 @@ private struct IndexJWTWorkspaceContent: View {
 
                 IndexSecureInput(
                     placeholder: "输入 HMAC Secret",
-                    text: $session.generateSecret,
+                    text: $workspace.session.generateSecret,
                     showsSecret: $showsGenerateSecret,
                     secretNoun: "Secret"
                 )
@@ -132,7 +154,7 @@ private struct IndexJWTWorkspaceContent: View {
             IndexPanel("Payload") {
                 IndexWorkspaceTextArea(
                     placeholder: #"例如 {"sub":"1234567890"}"#,
-                    text: $session.generatePayload,
+                    text: $workspace.session.generatePayload,
                     minHeight: 84,
                     fillsHeight: true,
                     autoFocus: true,
@@ -162,10 +184,6 @@ private struct IndexJWTWorkspaceContent: View {
                 IndexCopyButton(text: session.generatedToken)
             }
         }
-        .onChange(of: session.generateAlgorithm) { _ in refreshGeneration() }
-        .onChange(of: session.generatePayload) { _ in refreshGeneration() }
-        .onChange(of: session.generateSecret) { _ in refreshGeneration() }
-        .onChange(of: session.generateSecretEncoding) { _ in refreshGeneration() }
     }
 
     private var generateAlgorithmBinding: Binding<String> {
@@ -186,6 +204,11 @@ private struct IndexJWTWorkspaceContent: View {
         session.refreshGeneration()
     }
 
+    private func refreshVisibleGeneration() {
+        guard session.mode == .generate else { return }
+        refreshGeneration()
+    }
+
     // MARK: - Parse
 
     @ViewBuilder
@@ -193,7 +216,7 @@ private struct IndexJWTWorkspaceContent: View {
         IndexPanel("JWT") {
             IndexWorkspaceTextArea(
                 placeholder: "粘贴 JWT（eyJ...）",
-                text: $session.parseInput,
+                text: $workspace.session.parseInput,
                 minHeight: 84,
                 autoFocus: true,
                 workspaceSemantic: .longTextNaturalInput
@@ -366,14 +389,10 @@ private struct IndexJWTWorkspaceContent: View {
 
                     IndexSecureInput(
                         placeholder: "输入 HMAC Secret（用于 HS256/HS384/HS512）",
-                        text: $session.parseSecret,
+                        text: $workspace.session.parseSecret,
                         showsSecret: $showsParseSecret,
                         secretNoun: "Secret"
                     )
-                    .onChange(of: session.parseSecret) { value in
-                        verify()
-                        localCheckDisclosureState.secretChanged(isEmpty: value.isEmpty)
-                    }
 
                     Text(secretEncodingHelp(session.parseSecretEncoding))
                         .font(ToolTypography.caption)

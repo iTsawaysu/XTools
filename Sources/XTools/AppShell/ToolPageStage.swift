@@ -28,21 +28,11 @@ struct ToolPageKey: Hashable {
 /// page sinks to 99.2% while fading (220ms productiveExit). Both arcs run at
 /// once with the incoming layer on top.
 ///
-/// Insertion and departure need *different* timings, which one implicit
-/// `.animation` cannot split — so a switch is issued as two explicit
-/// transactions inside the same render pass: first `withAnimation(pageDeparture)`
-/// parks the old key at its sink pose (opacity 0 + 99.2%), then
-/// `withAnimation(pageArrival)` mounts the new key. Rapid re-switching
-/// retargets through the same two transactions, which matches the prototype's
-/// take-last queue without blocking input. The parked layer stops hit testing
-/// and leaves the accessibility tree immediately (prototype:
-/// `body.switching #stage { pointer-events: none }`).
-///
-/// Departed pages stay mounted as *parked* pages (bounded LRU, see
-/// `ToolPageStageModel`): revisiting one skips rebuilding the whole page tree
-/// and replays the arrival choreography from the same start pose, so the
-/// visible motion is frame-identical to a fresh mount. Reduce Motion swaps
-/// the page directly and keeps no parked pages; first mount never animates.
+/// Pages keep the same modifier structure while only pose values change.
+/// The arrival start is installed before the page's generation task makes it
+/// visible; a stale task cannot complete a newer navigation. Each page chooses
+/// its own arrival/departure timing. Reduce Motion swaps directly without parked
+/// pages, and the first mount never animates.
 @MainActor
 struct ToolPageStage<Page: View>: View {
     let target: ToolPageKey
@@ -66,6 +56,9 @@ struct ToolPageStage<Page: View>: View {
         .onChange(of: target) { newKey in
             navigate(to: newKey)
         }
+        .onChange(of: reduceMotion) { enabled in
+            if enabled { swapImmediately(to: target) }
+        }
     }
 
     @ViewBuilder
@@ -76,11 +69,15 @@ struct ToolPageStage<Page: View>: View {
         let zIndexValue: Double = isCurrent ? 1 : 0
 
         page(key)
-            .modifier(ToolPageParkingModifier(pose: pagePose))
+            .modifier(ToolPageParkingModifier(pose: pagePose, reduceMotion: reduceMotion))
             .zIndex(zIndexValue)
             .allowsHitTesting(isCurrent)
             .accessibilityHidden(!isCurrent)
             .environment(\.toolPageEntryGeneration, gen)
+            .task(id: gen) {
+                guard gen > 0, !Task.isCancelled else { return }
+                model.finishArrival(key, generation: gen)
+            }
     }
 
     private func pose(for key: ToolPageKey) -> ToolPageParkingPose {
@@ -101,17 +98,10 @@ struct ToolPageStage<Page: View>: View {
             return
         }
 
-        if model.isParked(newKey) {
-            model.stageArrivalStart(newKey)
-        }
         if let oldKey = displayed {
-            withAnimation(ToolMotion.Preset.pageDeparture) {
-                model.depart(oldKey)
-            }
+            model.depart(oldKey)
         }
-        withAnimation(ToolMotion.Preset.pageArrival) {
-            model.arrive(newKey)
-        }
+        model.arrive(newKey)
         model.evictOverflow()
     }
 
@@ -125,11 +115,7 @@ struct ToolPageStage<Page: View>: View {
     }
 }
 
-/// 停靠页的姿态。`arrivalStart` 与到达过渡的插入起始帧完全一致（透明 +
-/// 上浮 `Distance.pageSinkRise` + `Scale.pageArrivalSink`），`parked` 与
-/// 离开过渡的结束帧完全一致（透明 + `Scale.pageDepartureSink`）；因此
-/// 「停靠 → 唤回」与「全新插入 → 到达」两条路径的可见动效逐帧相同。
-private enum ToolPageParkingPose {
+private enum ToolPageParkingPose: Equatable {
     case visible
     case arrivalStart
     case parked
@@ -137,20 +123,29 @@ private enum ToolPageParkingPose {
 
 private struct ToolPageParkingModifier: ViewModifier {
     let pose: ToolPageParkingPose
+    let reduceMotion: Bool
 
     func body(content: Content) -> some View {
+        content
+            .opacity(pose == .visible ? 1 : 0)
+            .offset(y: pose == .arrivalStart ? ToolMotion.Distance.pageSinkRise : 0)
+            .scaleEffect(scale)
+            .animation(reduceMotion ? nil : animation, value: pose)
+    }
+
+    private var scale: CGFloat {
         switch pose {
-        case .visible:
-            content
-        case .arrivalStart:
-            content
-                .opacity(0)
-                .offset(y: ToolMotion.Distance.pageSinkRise)
-                .scaleEffect(ToolMotion.Scale.pageArrivalSink)
-        case .parked:
-            content
-                .opacity(0)
-                .scaleEffect(ToolMotion.Scale.pageDepartureSink)
+        case .visible: 1
+        case .arrivalStart: ToolMotion.Scale.pageArrivalSink
+        case .parked: ToolMotion.Scale.pageDepartureSink
+        }
+    }
+
+    private var animation: Animation? {
+        switch pose {
+        case .visible: ToolMotion.Preset.pageArrival
+        case .arrivalStart: nil
+        case .parked: ToolMotion.Preset.pageDeparture
         }
     }
 }

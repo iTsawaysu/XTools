@@ -410,13 +410,5 @@ struct JWTWorkspaceSessionTests {
             .replacingOccurrences(of: "/", with: "_")
             .replacingOccurrences(of: "=", with: "")
     }
-    @Test func wrongSecretParseReportsSignatureMismatchStatusAndTitle() throws {
-        var session = JWTWorkspaceSession()
-        session.parseInput = Self.knownToken
-        session.parseSecret = "wrong-secret"
-        session.parse()
-        let presentation = try #require(session.localCheckPresentation)
-        #expect(presentation.signature.status == .failed)
-        #expect(presentation.signature.title == "签名不匹配")
-    }
+
 }

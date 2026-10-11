@@ -253,22 +253,17 @@ struct NativeInitialLayoutTests {
                 "The terminal empty LF line must remain reachable without full layout")
     }
 
-    @Test func indexedLineRangesRetainAllExistingNewlineSemantics() {
+    @Test func indexedLineRangesMatchDiffLogicalNewlineSemantics() {
         for separator in ["\r\n", "\r", "\n", "\u{85}", "\u{2028}", "\u{2029}"] {
             let text = "👩🏽‍💻" + separator + "e\u{301}" + separator
             let ranges = DiffSourceText.lineRanges(in: text)
             let source = text as NSString
             let lines = ranges.map { source.substring(with: $0) }
-            if separator == "\r" || separator == "\n" {
+            if ["\r\n", "\r", "\n"].contains(separator) {
                 #expect(lines == ["👩🏽‍💻", "e\u{301}", ""])
-            } else if separator == "\r\n" {
-                // CRLF is one Swift Character: the existing hasSuffix checks
-                // do not append the terminal empty entry for this separator.
-                #expect(lines == ["👩🏽‍💻", "e\u{301}"])
             } else {
-                // Preserve the pre-existing Core contract: only CR/LF are
-                // stripped from ranges, although NSString recognizes others.
-                #expect(lines == ["👩🏽‍💻" + separator, "e\u{301}" + separator])
+                // Native decoration ranges share LineDiffer's CR/LF boundary contract.
+                #expect(lines == [text])
             }
         }
         #expect(DiffSourceText.lineRanges(in: "") == [NSRange(location: 0, length: 0)])

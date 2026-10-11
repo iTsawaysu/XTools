@@ -84,12 +84,8 @@ private struct ToolPageHostedItem: View, Equatable {
                 ToolDetailHostView.tracedPage(for: tool)
                     .environment(\.toolPageEntryTraceContext, traceContext)
                     .background {
-                        Color.clear
-                            .frame(width: 0, height: 0)
-                            .id(tool.id)
-                            .onAppear { ToolPageEntryTrace.pageAppeared(traceContext) }
+                        ToolPageEntryTraceProbe(context: traceContext)
                     }
-                    .toolPageArrival(id: tool.id.rawValue)
             }
         case .dashboard:
             if let dashboardStore {
@@ -98,11 +94,9 @@ private struct ToolPageHostedItem: View, Equatable {
                     registry: registry,
                     onSelectTool: { routing.selectTool($0) }
                 )
-                .toolPageArrival(id: "dashboard")
             }
         case .emptySelection:
             EmptyToolSelectionView()
-                .toolPageArrival(id: "empty-selection")
         }
     }
 }

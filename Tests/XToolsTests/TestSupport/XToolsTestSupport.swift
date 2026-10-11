@@ -46,47 +46,6 @@ func waitUntilAssert(
     #expect(condition())
 }
 
-actor TestAsyncGate<Input: Sendable, Output: Sendable> {
-    private var openedOutput: Output?
-    private var continuations: [CheckedContinuation<Output, Never>] = []
-    private var recordedInputs: [Input] = []
-
-    func awaitGate(input: Input) async -> Output {
-        recordedInputs.append(input)
-        if let output = openedOutput {
-            return output
-        }
-        return await withCheckedContinuation { continuation in
-            continuations.append(continuation)
-        }
-    }
-
-    func open(with output: Output) {
-        openedOutput = output
-        let pending = continuations
-        continuations.removeAll()
-        for continuation in pending {
-            continuation.resume(returning: output)
-        }
-    }
-
-    var inputs: [Input] {
-        recordedInputs
-    }
-
-    var requestCount: Int {
-        recordedInputs.count
-    }
-
-    func waitForRequests(count: Int, timeout: Duration = .seconds(20)) async {
-        let clock = ContinuousClock()
-        let deadline = clock.now.advanced(by: timeout)
-        while recordedInputs.count < count, clock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(5))
-        }
-    }
-}
-
 actor TestKeyedAsyncGate<Key: Hashable & Sendable, Value: Sendable> {
     private var continuations: [Key: [CheckedContinuation<Value, Never>]] = [:]
     private var requestCounts: [Key: Int] = [:]
@@ -158,19 +117,16 @@ actor TestKeyedAsyncGate<Key: Hashable & Sendable, Value: Sendable> {
 
 actor TestAsyncSignal {
     private var isSignalled = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
 
     func signal() {
         guard !isSignalled else { return }
         isSignalled = true
-        let pending = waiters
-        waiters.removeAll()
-        for waiter in pending { waiter.resume() }
     }
 
     func wait() async {
-        guard !isSignalled else { return }
-        await withCheckedContinuation { waiters.append($0) }
+        if !(await wait(timeout: .seconds(20))) {
+            Issue.record("Timed out waiting for signal")
+        }
     }
 
     func wait(timeout: Duration) async -> Bool {

@@ -53,10 +53,16 @@ final class RegexToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvict
     }
 }
 
-private struct RegexWorkspaceInput: Equatable {
+struct RegexWorkspaceInput: Equatable {
     let pattern: String
     let flags: String
     let text: String
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.flags == rhs.flags
+            && ExactUTF8Identity.isExactlyEqual(lhs.pattern, rhs.pattern)
+            && ExactUTF8Identity.isExactlyEqual(lhs.text, rhs.text)
+    }
 
     init(pattern: String, flags: String, text: String) {
         self.pattern = pattern
@@ -246,45 +252,11 @@ private struct IndexRegexWorkspaceContent: View {
             return nil
         }
 
-        // 零长度区间无可绘制范围，先过滤，保证投影结果与输入一一配对。
-        var matchPairs: [(index: Int, range: IndexTextAreaCharacterRange)] = []
-        for (index, match) in report.matches.enumerated() where match.end > match.index {
-            matchPairs.append((index, IndexTextAreaCharacterRange(start: match.index, end: match.end)))
-        }
-        let matchUtf16Ranges = IndexTextAreaCharacterRangeProjection.utf16Ranges(
-            in: sourceText,
-            characterRanges: matchPairs.map(\.range)
+        return RegexHighlightProjection.make(
+            report: report,
+            sourceText: sourceText,
+            selectedMatchIndex: selectedMatchIndex
         )
-
-        var styled: [IndexTextAreaStyledRange] = []
-        for (pair, range) in zip(matchPairs, matchUtf16Ranges) {
-            let style: IndexTextAreaHighlightStyle = pair.index == selectedMatchIndex
-                ? .activeMatch
-                : .match
-            styled.append(IndexTextAreaStyledRange(range: range, style: style))
-        }
-
-        var capturePairs: [(index: Int, range: IndexTextAreaCharacterRange)] = []
-        for match in report.matches {
-            for (groupIndex, capture) in match.captures.enumerated() where capture.end > capture.start {
-                capturePairs.append((groupIndex, IndexTextAreaCharacterRange(start: capture.start, end: capture.end)))
-            }
-        }
-        // 投影要求区间单调推进；嵌套组按「起点早者优先、外层先于内层」排序。
-        capturePairs.sort {
-            $0.range.start == $1.range.start
-                ? $0.range.end > $1.range.end
-                : $0.range.start < $1.range.start
-        }
-        let captureUtf16Ranges = IndexTextAreaCharacterRangeProjection.utf16Ranges(
-            in: sourceText,
-            characterRanges: capturePairs.map(\.range)
-        )
-        for (pair, range) in zip(capturePairs, captureUtf16Ranges) {
-            styled.append(IndexTextAreaStyledRange(range: range, style: .capture(pair.index)))
-        }
-
-        return IndexTextAreaTemporaryHighlights(sourceText: sourceText, styledRanges: styled)
     }
 
     private var resultStatus: (text: String, tone: IndexBadgeTone) {
@@ -304,7 +276,7 @@ private struct IndexRegexWorkspaceContent: View {
             return ("未找到匹配。", .neutral)
         }
 
-        let highlightedCount = report.matches.count { $0.end > $0.index }
+        let highlightedCount = report.matches.count { ($0.utf16Range?.length ?? ($0.end - $0.index)) > 0 }
         if highlightedCount == report.matches.count {
             return ("已高亮 \(highlightedCount) 个匹配。", .success)
         }
@@ -379,11 +351,12 @@ private struct IndexRegexWorkspaceContent: View {
 
         selectedMatchIndex = index
         let match = report.matches[index]
-        guard match.end > match.index else { return }
-        let range = IndexTextAreaCharacterRangeProjection.utf16Ranges(
-            in: execution.reportSourceText ?? "",
-            characterRanges: [IndexTextAreaCharacterRange(start: match.index, end: match.end)]
-        ).first
+        let range = RegexHighlightProjection.range(
+            exact: match.utf16Range,
+            start: match.index,
+            end: match.end,
+            in: execution.reportSourceText ?? ""
+        )
         guard let range, range.length > 0 else { return }
         scrollRequestToken &+= 1
         scrollRequest = IndexTextAreaScrollRequest(token: scrollRequestToken, utf16Range: range)
@@ -509,8 +482,8 @@ private struct IndexRegexWorkspaceContent: View {
     private var report: RegexMatcher.Report? {
         guard let report = execution.report,
               let sourceText = execution.reportSourceText,
-              sourceText == workspace.text,
-              report.pattern == workspace.pattern,
+              ExactUTF8Identity.isExactlyEqual(sourceText, workspace.text),
+              ExactUTF8Identity.isExactlyEqual(report.pattern, workspace.pattern),
               report.flags == workspace.flags else {
             return nil
         }
@@ -519,5 +492,41 @@ private struct IndexRegexWorkspaceContent: View {
 
     private var error: String? {
         execution.error
+    }
+}
+
+/// Keep each capture's group identity beside its exact native range. Nested
+/// captures may overlap; filtering ranges must never shift the palette index.
+enum RegexHighlightProjection {
+    static func make(
+        report: RegexMatcher.Report,
+        sourceText: String,
+        selectedMatchIndex: Int?
+    ) -> IndexTextAreaTemporaryHighlights {
+        var styled: [IndexTextAreaStyledRange] = []
+        for (index, match) in report.matches.enumerated() {
+            if let range = range(exact: match.utf16Range, start: match.index, end: match.end, in: sourceText) {
+                styled.append(.init(range: range, style: index == selectedMatchIndex ? .activeMatch : .match))
+            }
+        }
+        for match in report.matches {
+            for (groupIndex, capture) in match.captures.enumerated() {
+                if let range = range(exact: capture.utf16Range, start: capture.start, end: capture.end, in: sourceText) {
+                    styled.append(.init(range: range, style: .capture(groupIndex)))
+                }
+            }
+        }
+        return IndexTextAreaTemporaryHighlights(sourceText: sourceText, styledRanges: styled)
+    }
+
+    static func range(exact: NSRange?, start: Int, end: Int, in text: String) -> NSRange? {
+        if let exact {
+            return exact.location != NSNotFound && exact.length > 0 ? exact : nil
+        }
+        // Compatibility for reports built manually before exact ranges existed.
+        return IndexTextAreaCharacterRangeProjection.utf16Ranges(
+            in: text,
+            characterRanges: [.init(start: start, end: end)]
+        ).first
     }
 }

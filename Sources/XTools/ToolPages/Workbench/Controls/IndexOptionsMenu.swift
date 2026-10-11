@@ -47,6 +47,7 @@ struct IndexOptionsMenu: View {
     @State private var dismissalBox = IndexOptionsMenuDismissalBox()
     @FocusState private var triggerFocus: TriggerFocusField?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
 
     fileprivate static let triggerHeight: CGFloat = 24
 
@@ -64,6 +65,12 @@ struct IndexOptionsMenu: View {
                 }
             }
             .toolAnimation(ToolMotion.Preset.settle, value: isOpen)
+            .onChange(of: entryGeneration) { generation in
+                guard generation == 0 else { return }
+                dismissalBox.remove()
+                triggerFocus = nil
+                closeMenu(restoringTriggerFocus: false)
+            }
     }
 
     private var enabledOptions: [String] {
@@ -165,6 +172,7 @@ struct IndexOptionsMenu: View {
             }
         }
         .onAppear {
+            guard entryGeneration > 0 else { return }
             dismissalBox.dismiss = {
                 isOpen = false
                 highlightedRow = nil
@@ -223,22 +231,22 @@ struct IndexOptionsMenu: View {
             Button("关闭处理选项菜单") {
                 closeMenu(restoringTriggerFocus: true)
             }
-            .keyboardShortcut(.cancelAction)
+            .keyboardShortcut(entryGeneration > 0 ? .cancelAction : nil)
 
             Button("下一个处理选项") {
                 moveRowFocus(+1)
             }
-            .keyboardShortcut(.downArrow, modifiers: [])
+            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.downArrow, modifiers: []) : nil)
 
             Button("上一个处理选项") {
                 moveRowFocus(-1)
             }
-            .keyboardShortcut(.upArrow, modifiers: [])
+            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.upArrow, modifiers: []) : nil)
 
             Button("切换当前处理选项") {
                 toggleHighlightedRow()
             }
-            .keyboardShortcut(.space, modifiers: [])
+            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.space, modifiers: []) : nil)
         }
         .opacity(0)
         .frame(width: 0, height: 0)
@@ -263,6 +271,7 @@ struct IndexOptionsMenu: View {
     }
 
     private func openMenu() {
+        guard entryGeneration > 0 else { return }
         isOpen = true
         highlightedRow = 0
         // Hand the keyboard to the menu: the hidden Space surrogate owns

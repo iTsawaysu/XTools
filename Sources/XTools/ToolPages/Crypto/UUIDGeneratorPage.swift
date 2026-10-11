@@ -55,6 +55,7 @@ struct IndexUUIDGeneratorSegment: View {
 /// scrolls internally while the parameters stay put. Every generation replays
 /// the staggered row pop-in.
 private struct IndexUUIDWorkspaceContent: View {
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     /// Prototype v3 parameter bounds (stepper clamps 1…32).
     private static let quantityRange = 1...32
 
@@ -123,7 +124,7 @@ private struct IndexUUIDWorkspaceContent: View {
                 help: "生成 UUID（⌘↩）",
                 action: generate
             )
-            .keyboardShortcut(.return, modifiers: .command)
+            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)

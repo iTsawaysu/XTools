@@ -24,7 +24,7 @@ final class DockerConversionToolWorkspaceModel: ObservableObject {
 
     @Published var input = "" {
         didSet {
-            guard input != oldValue else { return }
+            guard !ExactUTF8Identity.isExactlyEqual(input, oldValue) else { return }
             execution.sourceDidChange()
         }
     }
@@ -241,6 +241,9 @@ struct IndexDockerWorkspaceContent: View {
         } catch let error as DockerComposeToRunError {
             // 细化诊断优先：invalidYAML 现在携带行列与针对性建议。
             let diagnostic = DockerComposeToRunDiagnostics.diagnostic(for: error)
+            return FormatBinding(error: diagnostic.workspaceMessage, diagnostic: diagnostic)
+        } catch let error as any FormatDiagnosticProviding {
+            let diagnostic = error.diagnostic
             return FormatBinding(error: diagnostic.workspaceMessage, diagnostic: diagnostic)
         } catch {
             let msg = "docker-compose YAML 格式无效。"

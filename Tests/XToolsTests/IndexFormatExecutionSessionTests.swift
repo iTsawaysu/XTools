@@ -1,6 +1,7 @@
 @testable import XTools
 @testable import XToolsCore
 import Foundation
+import os
 import Testing
 
 @MainActor
@@ -114,6 +115,7 @@ struct IndexFormatExecutionSessionTests {
     @Test func newerScheduledGenerationDropsWorkerPendingBeforeDebounce() async throws {
         let probe = FormatOperationProbe()
         let releaseFirst = DispatchSemaphore(value: 0)
+        defer { releaseFirst.signal() }
         let session = IndexFormatExecutionSession()
 
         session.schedule(snapshot: "first", delay: .zero) { snapshot in
@@ -122,7 +124,7 @@ struct IndexFormatExecutionSessionTests {
             if snapshot == "first" {
                 // Keep the active worker deterministic while the obsolete request
                 // is queued and the latest debounce is scheduled.
-                releaseFirst.wait()
+                #expect(releaseFirst.wait(timeout: .now() + 20) == .success)
             }
             return FormatBinding(output: snapshot)
         }
@@ -219,23 +221,44 @@ struct IndexFormatExecutionSessionTests {
     @Test func largeFormatterOperationLeavesMainActorAvailable() async throws {
         let session = IndexFormatExecutionSession()
         let input = "[" + String(repeating: "{\"value\":1},", count: 30_000).dropLast() + "]"
-        var mainActorProbeCount = 0
+        let entered = OSAllocatedUnfairLock(initialState: false)
+        let finished = OSAllocatedUnfairLock(initialState: false)
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
 
         session.schedule(snapshot: input, delay: .zero) { snapshot in
-            FormatRunner.run(snapshot) {
+            #expect(!Thread.isMainThread)
+            entered.withLock { $0 = true }
+            defer { finished.withLock { $0 = true } }
+            #expect(release.wait(timeout: .now() + 20) == .success)
+            return FormatRunner.run(snapshot) {
                 try JSONFormatting.format($0, sortKeys: false, indentWidth: 2)
             }
             .binding(text: { $0 })
         }
 
-        while session.binding.output.isEmpty && session.isRunning {
-            mainActorProbeCount += 1
-            await Task.yield()
+        let startDeadline = ContinuousClock.now.advanced(by: .seconds(20))
+        while !entered.withLock({ $0 }), ContinuousClock.now < startDeadline {
+            try await Task.sleep(for: .milliseconds(5))
         }
-
+        try #require(entered.withLock { $0 })
+        // This continuation resumes on MainActor only after the worker entered.
+        // A worker accidentally run on MainActor expires its safety latch first
+        // and cannot satisfy the unfinished-operation assertion.
+        await Task.yield()
+        #expect(isRunningOnMainThread())
+        #expect(!finished.withLock { $0 })
+        #expect(session.isRunning)
+        #expect(session.binding.output.isEmpty)
+        release.signal()
         try await waitUntil { !session.isRunning }
         #expect(!session.binding.output.isEmpty)
-        #expect(mainActorProbeCount > 0)
+        #expect(session.binding.error == nil)
+        #expect(finished.withLock { $0 })
+    }
+
+    private func isRunningOnMainThread() -> Bool {
+        Thread.isMainThread
     }
 
     @Test func operationReceivesAnImmutableOptionSnapshot() async throws {

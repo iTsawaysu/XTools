@@ -24,15 +24,24 @@ final class IndexEditableDiffScrollHostView: NSView {
     let documentView = IndexDiffScrollDocumentView(frame: .zero)
     var onLayout: (() -> Void)?
     var onNavigateDifference: ((Bool) -> Void)?
+    var isPageActive = true {
+        didSet {
+            guard !isPageActive,
+                  let responder = window?.firstResponder as? NSView,
+                  responder.isDescendant(of: self) else { return }
+            window?.makeFirstResponder(nil)
+        }
+    }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard isPageActive else { return false }
         if event.type == .keyDown,
            event.modifierFlags.intersection(.deviceIndependentFlagsMask) == [.option, .command] {
-            if event.charactersIgnoringModifiers == String(NSDownArrowFunctionKey) {
+            if event.charactersIgnoringModifiers == UnicodeScalar(NSDownArrowFunctionKey).map(String.init) {
                 onNavigateDifference?(true)
                 return true
             }
-            if event.charactersIgnoringModifiers == String(NSUpArrowFunctionKey) {
+            if event.charactersIgnoringModifiers == UnicodeScalar(NSUpArrowFunctionKey).map(String.init) {
                 onNavigateDifference?(false)
                 return true
             }

@@ -4,6 +4,7 @@ import Testing
 @testable import XTools
 import XToolsCore
 
+@Suite(.serialized)
 @MainActor
 struct ToolPageStageModelTests {
     @Test func initialState() {
@@ -60,12 +61,11 @@ struct ToolPageStageModelTests {
         #expect(model.isParked(key1))
         #expect(!model.isParked(key2))
 
-        // Key1 revisited
-        model.stageArrivalStart(key1)
-        #expect(model.pendingArrivals.contains(key1))
-
+        // Key1 revisited: the start pose survives until this generation is mounted.
         model.depart(key2)
         model.arrive(key1)
+        #expect(model.pendingArrivals.contains(key1))
+        model.finishArrival(key1, generation: model.generation)
         #expect(model.displayed == key1)
         #expect(!model.isParked(key1))
         #expect(!model.pendingArrivals.contains(key1))
@@ -121,8 +121,21 @@ struct ToolPageStageModelTests {
         #expect(model.parked.contains(key5))
     }
 
-    @Test func entryGenerationDrivesRevisitFocusInCoordinators() {
-        let textView = NSTextView()
+    @Test func entryGenerationDrivesRevisitFocusInCoordinators() async throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
+            styleMask: [.titled], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        let container = NSView(frame: window.contentLayoutRect)
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 150, height: 100))
+        let other = NSTextView(frame: NSRect(x: 160, y: 0, width: 150, height: 100))
+        container.addSubview(textView)
+        container.addSubview(other)
+        window.contentView = container
+        window.orderFront(nil)
+        defer { window.close() }
+
         var text = ""
         var height: CGFloat = 100
         let undoableCoordinator = IndexUndoableTextView.Coordinator(
@@ -131,27 +144,113 @@ struct ToolPageStageModelTests {
             growsWithContent: false,
             inputPolicy: nil
         )
-
-        // Parked page (entryGeneration == 0) ignores focus
-        undoableCoordinator.focus(textView, entryGeneration: 0)
-
-        // Page arrival (generation == 2) triggers focus
-        undoableCoordinator.focus(textView, entryGeneration: 2)
-
-        // Redundant updateNSView calls in same generation do not re-trigger
-        undoableCoordinator.focus(textView, entryGeneration: 2)
-
-        // Revisit in next generation (generation == 3) triggers focus again
-        undoableCoordinator.focus(textView, entryGeneration: 3)
-
         let textKit2Coordinator = IndexTextKit2ViewportTextView.Coordinator(
-            text: Binding(get: { text }, set: { text = $0 }),
-            inputPolicy: nil
+            text: Binding(get: { text }, set: { text = $0 }), inputPolicy: nil
         )
-        textKit2Coordinator.focus(textView, entryGeneration: 0)
-        textKit2Coordinator.focus(textView, entryGeneration: 2)
-        textKit2Coordinator.focus(textView, entryGeneration: 2)
-        textKit2Coordinator.focus(textView, entryGeneration: 3)
+        let focusActions: [(Int) -> Void] = [
+            { undoableCoordinator.focus(textView, entryGeneration: $0) },
+            { textKit2Coordinator.focus(textView, entryGeneration: $0) }
+        ]
+        for focus in focusActions {
+            try #require(window.makeFirstResponder(other))
+            focus(0)
+            await drainFocusQueue()
+            #expect(window.firstResponder === other)
+
+            // Navigation away before queued focus executes must invalidate it.
+            focus(2)
+            focus(0)
+            await drainFocusQueue()
+            #expect(window.firstResponder === other)
+
+            focus(3)
+            await drainFocusQueue()
+            #expect(window.firstResponder === textView)
+            try #require(window.makeFirstResponder(other))
+            focus(3)
+            await drainFocusQueue()
+            #expect(window.firstResponder === other)
+
+            focus(4)
+            await drainFocusQueue()
+            #expect(window.firstResponder === textView)
+            focus(0)
+            await drainFocusQueue()
+            #expect(window.firstResponder !== textView)
+        }
+    }
+
+    @Test func singleLineEntryFocusCannotOutliveItsActiveGeneration() async throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
+            styleMask: [.titled], backing: .buffered, defer: false
+        )
+        window.isReleasedWhenClosed = false
+        let container = NSView(frame: window.contentLayoutRect)
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 150, height: 24))
+        let other = NSTextView(frame: NSRect(x: 0, y: 40, width: 150, height: 100))
+        container.addSubview(field)
+        container.addSubview(other)
+        window.contentView = container
+        window.orderFront(nil)
+        defer { window.close() }
+        let coordinator = IndexUndoableTextField.Coordinator(
+            text: .constant(""), allowsCopy: true, selectAllOnFocus: false,
+            onSubmit: nil, onEscape: nil, onFocusChange: nil
+        )
+        func focus(_ generation: Int) {
+            coordinator.focus(field, entryGeneration: generation, entryTraceContext: nil, placeholder: "")
+        }
+        try #require(window.makeFirstResponder(other))
+        focus(2)
+        focus(0)
+        await drainFocusQueue()
+        #expect(window.firstResponder === other)
+        coordinator.requestFocus(field, token: 1)
+        await drainFocusQueue()
+        #expect(window.firstResponder === other)
+        focus(3)
+        await drainFocusQueue()
+        try #require(field.currentEditor() != nil)
+        #expect(window.firstResponder === field.currentEditor())
+        try #require(window.makeFirstResponder(other))
+        focus(3)
+        await drainFocusQueue()
+        #expect(window.firstResponder === other)
+        focus(4)
+        await drainFocusQueue()
+        #expect(window.firstResponder === field.currentEditor())
+        focus(0)
+        await drainFocusQueue()
+        #expect(field.currentEditor() == nil)
+    }
+
+    @Test func staleArrivalCompletionCannotFinishTheLatestEntry() {
+        let model = ToolPageStageModel()
+        let a = ToolPageKey.tool(ToolID("a"))
+        let b = ToolPageKey.tool(ToolID("b"))
+        model.swapImmediately(to: a)
+        model.depart(a)
+        model.arrive(b)
+        let oldGeneration = model.generation
+        model.depart(b)
+        model.arrive(a)
+        model.depart(a)
+        model.arrive(b)
+        model.finishArrival(b, generation: oldGeneration)
+        #expect(model.pendingArrivals.contains(b))
+        model.finishArrival(b, generation: model.generation)
+        #expect(model.pendingArrivals.isEmpty)
+        model.swapImmediately(to: a)
+        model.finishArrival(b, generation: oldGeneration)
+        #expect(model.displayed == a)
+        #expect(model.pendingArrivals.isEmpty)
+    }
+
+    private func drainFocusQueue() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
     }
 
     @Test func rapidSwitchingMaintainsInvariants() {
@@ -163,10 +262,9 @@ struct ToolPageStageModelTests {
             if let current = model.displayed {
                 model.depart(current)
             }
-            if model.isParked(nextKey) {
-                model.stageArrivalStart(nextKey)
-            }
             model.arrive(nextKey)
+            #expect(model.pendingArrivals.contains(nextKey))
+            model.finishArrival(nextKey, generation: model.generation)
             model.evictOverflow()
 
             #expect(model.displayed == nextKey)

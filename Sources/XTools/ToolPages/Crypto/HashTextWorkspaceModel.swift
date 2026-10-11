@@ -18,7 +18,7 @@ final class HashTextToolWorkspaceModel: ObservableObject {
 
     @Published var input = "" {
         didSet {
-            guard input != oldValue else { return }
+            guard !ExactUTF8Identity.isExactlyEqual(input, oldValue) else { return }
             inputDidChange()
         }
     }

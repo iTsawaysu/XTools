@@ -40,6 +40,7 @@ struct IndexCrontabPage: View {
 /// 两面板结构：表达式与预设同板，解析摘要、逐字段说明与下次运行同板。
 /// 摘要（Core 的 expressionSummary）先给答案，逐字段行退居参考细节。
 private struct IndexCrontabWorkspaceContent: View {
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @ObservedObject var workspace: CrontabToolWorkspaceModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -148,7 +149,10 @@ private struct IndexCrontabWorkspaceContent: View {
                 }
             }
         }
-        .onAppear { validate() }
+        .onAppear { if entryGeneration > 0 { validate() } }
+        .onChange(of: entryGeneration) { generation in
+            if generation > 0 { validate() }
+        }
     }
 
     /// 表达式的五段拆解：受限字段 accent 描边突出，通配字段弱化，

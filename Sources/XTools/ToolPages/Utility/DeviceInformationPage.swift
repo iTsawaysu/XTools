@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 struct IndexDeviceInfoPage: View {
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @StateObject private var session = DeviceInformationSession()
 
     private var rows: [(String, String, Color?)] {
@@ -38,7 +39,11 @@ struct IndexDeviceInfoPage: View {
             .withoutDiagnosticStatusSlot()
         }
         .onReceive(screenParametersChanged) { _ in
-            session.refresh()
+            if entryGeneration > 0 { session.refresh() }
+        }
+        .onAppear { session.enterPage(generation: entryGeneration) }
+        .onChange(of: entryGeneration) { generation in
+            session.enterPage(generation: generation)
         }
     }
 

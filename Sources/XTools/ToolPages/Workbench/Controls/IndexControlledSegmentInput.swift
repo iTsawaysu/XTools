@@ -386,17 +386,17 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
 
     func makeNSView(context: Context) -> IndexControlledSegmentNSTextField {
         let textField = IndexControlledSegmentNSTextField()
+        textField.isPageActive = entryGeneration > 0
         textField.segmentHandler = context.coordinator
         textField.delegate = context.coordinator
         configure(textField)
         textField.stringValue = adapter.displayText()
-        if autoFocus {
-            context.coordinator.focus(textField, entryGeneration: entryGeneration)
-        }
+        context.coordinator.focus(textField, entryGeneration: entryGeneration, autoFocus: autoFocus)
         return textField
     }
 
     func updateNSView(_ textField: IndexControlledSegmentNSTextField, context: Context) {
+        textField.isPageActive = entryGeneration > 0
         context.coordinator.adapter = adapter
         context.coordinator.timeZone = timeZone
         context.coordinator.onCommit = onCommit
@@ -406,9 +406,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
         textField.segmentHandler = context.coordinator
         configure(textField)
         context.coordinator.syncTextField(textField)
-        if autoFocus {
-            context.coordinator.focus(textField, entryGeneration: entryGeneration)
-        }
+        context.coordinator.focus(textField, entryGeneration: entryGeneration, autoFocus: autoFocus)
     }
 
     func sizeThatFits(
@@ -439,6 +437,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
         var onFocusChange: (Bool) -> Void
 
         private var focusedEntryGeneration: Int?
+        private var currentEntryGeneration = 0
 
         init(
             adapter: IndexControlledSegmentInputAdapter,
@@ -456,12 +455,22 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
             self.onFocusChange = onFocusChange
         }
 
-        func focus(_ textField: NSTextField, entryGeneration: Int = 1) {
-            // generation > 0 表示本页显示中；停靠（0）不聚焦。同代际只聚焦
-            // 一次，等价整页重建时代「每实例一次」的守卫。
-            guard entryGeneration > 0, focusedEntryGeneration != entryGeneration else { return }
+        func focus(_ textField: NSTextField, entryGeneration: Int = 1, autoFocus: Bool = true) {
+            currentEntryGeneration = entryGeneration
+            guard entryGeneration > 0 else {
+                DispatchQueue.main.async { [weak self, weak textField] in
+                    guard self?.currentEntryGeneration == 0, let textField,
+                          let editor = textField.currentEditor(),
+                          textField.window?.firstResponder === editor else { return }
+                    textField.window?.makeFirstResponder(nil)
+                }
+                return
+            }
+            guard autoFocus, focusedEntryGeneration != entryGeneration else { return }
             focusedEntryGeneration = entryGeneration
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self, weak textField] in
+                guard let self, let textField,
+                      self.currentEntryGeneration == entryGeneration else { return }
                 textField.window?.makeFirstResponder(textField)
             }
         }
@@ -527,6 +536,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
         }
 
         func handlePaste(in textField: IndexControlledSegmentNSTextField) -> Bool {
+            guard textField.canHandleSegmentCommands else { return false }
             let text = NSPasteboard.general.string(forType: .string) ?? ""
             switch adapter.paste(text, timeZone) {
             case .accepted(let date):
@@ -630,6 +640,15 @@ protocol IndexControlledSegmentFieldHandling: AnyObject {
 }
 
 final class IndexControlledSegmentNSTextField: IndexPaddedTextField {
+    var isPageActive = true
+
+    fileprivate var canHandleSegmentCommands: Bool {
+        guard isPageActive, let window else { return false }
+        if window.firstResponder === self { return true }
+        guard let editor = currentEditor() else { return false }
+        return window.firstResponder === editor
+    }
+
     override class var cellClass: AnyClass? {
         get { IndexControlledSegmentTextFieldCell.self }
         set {}
@@ -649,6 +668,7 @@ final class IndexControlledSegmentNSTextField: IndexPaddedTextField {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard canHandleSegmentCommands else { return false }
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if modifiers.contains(.command),
            event.charactersIgnoringModifiers?.lowercased() == "v",
@@ -659,6 +679,7 @@ final class IndexControlledSegmentNSTextField: IndexPaddedTextField {
     }
 
     @objc func paste(_ sender: Any?) {
+        guard canHandleSegmentCommands else { return }
         if segmentHandler?.handlePaste(in: self) == true {
             return
         }
@@ -745,10 +766,11 @@ final class IndexControlledSegmentFieldEditor: IndexCaretWideningTextView {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard let textField, textField.canHandleSegmentCommands,
+              textField.currentEditor() === self else { return false }
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if modifiers.contains(.command),
            event.charactersIgnoringModifiers?.lowercased() == "v",
-           let textField,
            segmentHandler?.handlePaste(in: textField) == true {
             return true
         }
@@ -756,7 +778,9 @@ final class IndexControlledSegmentFieldEditor: IndexCaretWideningTextView {
     }
 
     @objc override func paste(_ sender: Any?) {
-        if let textField, segmentHandler?.handlePaste(in: textField) == true {
+        guard let textField, textField.canHandleSegmentCommands,
+              textField.currentEditor() === self else { return }
+        if segmentHandler?.handlePaste(in: textField) == true {
             return
         }
         super.paste(sender)

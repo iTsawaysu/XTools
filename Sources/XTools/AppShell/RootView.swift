@@ -13,7 +13,6 @@ struct RootView: View {
     @StateObject private var smartPaste = SmartPasteMonitor()
     @StateObject private var hubSegmentEntryHint = HubSegmentEntryHint()
     @StateObject private var systemAppearanceSource: SystemAppearanceSource
-    @State private var previousSelectedToolID: ToolID?
     @State private var showsPreferences = false
     // 投影记忆化：RootView 会在无关 shell 抖动（toast、面板呈现、建议横幅）
     // 时整体重估 body；查询、收藏、选择三者未变时重建整个过滤导航树是纯浪费。
@@ -34,6 +33,7 @@ struct RootView: View {
     init(
         viewModel: RootViewModel? = nil,
         defaults: UserDefaults = .standard,
+        workspaceRepository: ToolWorkspaceRepository? = nil,
         systemAppearanceSource: SystemAppearanceSource? = nil
     ) {
         _themeName = AppStorage(
@@ -51,7 +51,7 @@ struct RootView: View {
             wrappedValue: FavoritesStore(defaults: defaults, validToolIDs: validToolIDs)
         )
         _workspaceRepository = StateObject(
-            wrappedValue: ToolWorkspaceRepository(preferences: preferences)
+            wrappedValue: workspaceRepository ?? ToolWorkspaceRepository(preferences: preferences)
         )
         _dashboardStore = StateObject(wrappedValue: DashboardStore(defaults: defaults))
         _systemAppearanceSource = StateObject(
@@ -155,7 +155,6 @@ struct RootView: View {
             )
         }
         .onAppear {
-            previousSelectedToolID = viewModel.selectedToolID
             smartPaste.noteSelectedTool(viewModel.selectedToolID)
             navigationActions.selectDefaultToolIfNeeded(sidebarProjection.defaultToolID)
             ToolPageEntryBenchmark.runIfRequested(
@@ -170,10 +169,6 @@ struct RootView: View {
             smartPaste.refresh(registry: registry)
         }
         .onChange(of: viewModel.selectedToolID) { newToolID in
-            if let previous = previousSelectedToolID, previous != newToolID {
-                workspaceRepository.evictHeavyPayloads(for: previous)
-            }
-            previousSelectedToolID = newToolID
             smartPaste.noteSelectedTool(newToolID)
         }
     }

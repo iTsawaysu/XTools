@@ -1,6 +1,7 @@
 @testable import XTools
 import XToolsCore
 import Foundation
+import Combine
 import Testing
 
 @MainActor
@@ -28,10 +29,8 @@ struct TextStatisticsWorkspaceModelTests {
     }
 
     @Test func rapidChangesCoalesceToLatestWithoutPublishingStaleResults() async throws {
-        let probe = TextStatisticsAnalysisProbe(delays: [
-            "first": 0.5,
-            "latest": 0.6
-        ])
+        let probe = TextStatisticsAnalysisProbe(heldInputs: ["first", "latest"])
+        defer { probe.release("first"); probe.release("latest") }
         let workspace = TextStatisticsWorkspaceModel(
             analysisOperation: { input, _ in
                 probe.begin(input)
@@ -40,24 +39,33 @@ struct TextStatisticsWorkspaceModelTests {
             },
             debounce: .milliseconds(10)
         )
+        let observation = workspace.$stats.sink { probe.recordPublication($0.characters) }
+        defer { observation.cancel() }
 
         workspace.text = "first"
         try await waitUntil { probe.startedInputs == ["first"] }
 
         workspace.text = "obsolete"
         workspace.text = "latest"
+        probe.release("first")
         try await waitUntil { probe.startedInputs == ["first", "latest"] }
+        #expect(probe.finishedInputs == ["first"])
+        #expect(probe.publishedCharacters == [0])
+        #expect(workspace.isAnalyzing)
+        probe.release("latest")
 
         try await waitUntil {
             workspace.stats.characters == "latest".count && !workspace.isAnalyzing
         }
 
         #expect(probe.startedInputs == ["first", "latest"])
+        #expect(probe.publishedCharacters == [0, "latest".count])
         #expect(probe.maxConcurrent == 1)
     }
 
     @Test func clearingImmediatelyPublishesZeroAndRejectsRunningCompletion() async throws {
-        let probe = TextStatisticsAnalysisProbe(delays: ["slow": 0.6])
+        let probe = TextStatisticsAnalysisProbe(heldInputs: ["slow"])
+        defer { probe.release("slow") }
         let workspace = TextStatisticsWorkspaceModel(
             analysisOperation: { input, _ in
                 probe.begin(input)
@@ -66,6 +74,8 @@ struct TextStatisticsWorkspaceModelTests {
             },
             debounce: .milliseconds(10)
         )
+        let observation = workspace.$stats.sink { probe.recordPublication($0.characters) }
+        defer { observation.cancel() }
 
         workspace.text = "seed"
         try await waitUntil {
@@ -79,8 +89,12 @@ struct TextStatisticsWorkspaceModelTests {
         #expect(workspace.stats == .zero)
         #expect(!workspace.isAnalyzing)
 
-        try await Task.sleep(for: .milliseconds(400))
+        probe.release("slow")
+        try await waitUntil { probe.finishedInputs.contains("slow") }
+        // The operation has really returned; allow its queued completion to run.
+        try await Task.sleep(for: .milliseconds(30))
         #expect(workspace.stats == .zero)
+        #expect(probe.publishedCharacters == [0, "seed".count, 0])
         #expect(!workspace.isAnalyzing)
         #expect(probe.maxConcurrent == 1)
     }
@@ -176,15 +190,17 @@ struct TextStatisticsWorkspaceModelTests {
 
 private final class TextStatisticsAnalysisProbe: @unchecked Sendable {
     private let lock = NSLock()
-    private let delays: [String: TimeInterval]
+    private let heldInputs: [String: DispatchSemaphore]
     private var active = 0
     private var storedMaxConcurrent = 0
     private var storedStartedInputs: [String] = []
+    private var storedFinishedInputs: [String] = []
+    private var storedPublishedCharacters: [Int] = []
     private var storedCancelledInputs: [String] = []
     private var storedRanOnMainThread = false
 
-    init(delays: [String: TimeInterval] = [:]) {
-        self.delays = delays
+    init(heldInputs: [String] = []) {
+        self.heldInputs = Dictionary(uniqueKeysWithValues: heldInputs.map { ($0, DispatchSemaphore(value: 0)) })
     }
 
     var maxConcurrent: Int {
@@ -199,6 +215,15 @@ private final class TextStatisticsAnalysisProbe: @unchecked Sendable {
         lock.withLock { storedCancelledInputs }
     }
 
+    var finishedInputs: [String] { lock.withLock { storedFinishedInputs } }
+    var publishedCharacters: [Int] { lock.withLock { storedPublishedCharacters } }
+
+    func recordPublication(_ characters: Int) {
+        lock.withLock { storedPublishedCharacters.append(characters) }
+    }
+
+    func release(_ input: String) { heldInputs[input]?.signal() }
+
     var ranOnMainThread: Bool {
         lock.withLock { storedRanOnMainThread }
     }
@@ -210,14 +235,15 @@ private final class TextStatisticsAnalysisProbe: @unchecked Sendable {
             storedStartedInputs.append(input)
             storedRanOnMainThread = storedRanOnMainThread || Thread.isMainThread
         }
-        if let delay = delays[input] {
-            Thread.sleep(forTimeInterval: delay)
+        if let gate = heldInputs[input], gate.wait(timeout: .now() + 20) == .timedOut {
+            Issue.record("Timed out waiting to release analysis for \(input)")
         }
     }
 
     func finish(_ input: String) {
         lock.withLock {
             active -= 1
+            storedFinishedInputs.append(input)
         }
     }
 

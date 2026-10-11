@@ -431,7 +431,7 @@ struct EditableDiffInteractionTests {
             syntax: .plain,
             foldUnchanged: false
         )
-        let hostingView = NSHostingView(rootView: mergeView)
+        let hostingView = NSHostingView(rootView: mergeView.environment(\.toolPageEntryGeneration, 1))
         hostingView.frame = NSRect(x: 0, y: 0, width: 900, height: 560)
         let window = NSWindow(
             contentRect: hostingView.frame,
@@ -452,8 +452,8 @@ struct EditableDiffInteractionTests {
             timestamp: 0,
             windowNumber: window.windowNumber,
             context: nil,
-            characters: String(NSDownArrowFunctionKey),
-            charactersIgnoringModifiers: String(NSDownArrowFunctionKey),
+            characters: "\u{F701}",
+            charactersIgnoringModifiers: "\u{F701}",
             isARepeat: false,
             keyCode: 125
         ))
@@ -464,6 +464,12 @@ struct EditableDiffInteractionTests {
             location: (left as NSString).range(of: "old").location,
             length: 0
         ))
+
+        hostingView.rootView = mergeView.environment(\.toolPageEntryGeneration, 0)
+        hostingView.layoutSubtreeIfNeeded()
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.05))
+        #expect(window.firstResponder !== leftTextView)
+        #expect(!window.performKeyEquivalent(with: downArrow))
     }
 
     @Test func differenceNavigationStartsAtFirstBlockThenWrapsByBlock() throws {

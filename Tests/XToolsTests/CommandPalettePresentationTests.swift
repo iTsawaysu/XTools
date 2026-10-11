@@ -417,7 +417,7 @@ struct CommandPalettePresentationTests {
         let fixture = try Fixture()
         defer { fixture.dispose() }
 
-        _ = try await Self.runPresentation(ordinal: 0, kind: "warmup", fixture: fixture)
+        let initial = try await Self.runPresentation(ordinal: 0, kind: "warmup", fixture: fixture)
         let repeatCount = Int(
             ProcessInfo.processInfo.environment["TOOLS_COMMAND_PALETTE_BENCHMARK_REPEATS"] ?? ""
         ) ?? 30
@@ -430,6 +430,8 @@ struct CommandPalettePresentationTests {
                 kind: "warm",
                 fixture: fixture
             )
+            #expect(sample.rowIdentities == initial.rowIdentities)
+            #expect(sample.fieldIdentity == initial.fieldIdentity)
             readySamples.append(sample.readyMilliseconds)
             layoutSamples.append(sample.layoutMilliseconds)
             focusSamples.append(sample.focusMilliseconds)
@@ -489,7 +491,7 @@ struct CommandPalettePresentationTests {
         #expect(snapshot.counters[.rootBody, default: 0] == 0)
         #expect(snapshot.counters[.sidebarProjection, default: 0] == 0)
         #expect(snapshot.counters[.commandProjection, default: 0] == 1)
-        #expect(snapshot.counters[.rowSnapshot, default: 0] == 1)
+        #expect(snapshot.counters[.rowSnapshot, default: 0] == (ordinal == 0 ? 1 : 0))
         #expect(snapshot.counters[.visibleAnimatedTransaction, default: 0] > 0)
         #expect(snapshot.counters[.visibleDisabledTransaction, default: 0] == 0)
         #expect(snapshot.counters[.visibilityTerminalSample, default: 0] > 0)
@@ -504,6 +506,19 @@ struct CommandPalettePresentationTests {
             #expect(snapshot.counters[.revealMake, default: 0] == 0)
         }
         #expect(snapshot.counters[.hoverMake, default: 0] == 0)
+        let field = try #require(commandPaletteField(in: fixture.hostingView))
+        let rowViews = commandPaletteRevealViews(in: fixture.hostingView)
+        var rowIdentities: [String: ObjectIdentifier] = [:]
+        for row in rowViews {
+            let inputs = try #require(row.lastConfiguredInputs)
+            #expect(row.window === fixture.window)
+            #expect(row.frame.width > 0 && row.frame.height > 0)
+            #expect(inputs.session == session && inputs.interactionEnabled)
+            #expect(rowIdentities[inputs.itemID] == nil)
+            rowIdentities[inputs.itemID] = ObjectIdentifier(row)
+        }
+        let expectedToolRows = Set(ToolRegistry.default.matchingTools(query: "").map { "tool.\($0.id.rawValue)" })
+        #expect(expectedToolRows.isSubset(of: Set(rowIdentities.keys)))
         let layout = try #require(layoutMilliseconds)
         let focus = try #require(focusMilliseconds)
         let ready = max(layout, focus)
@@ -536,7 +551,9 @@ struct CommandPalettePresentationTests {
         return PresentationSample(
             layoutMilliseconds: layout,
             focusMilliseconds: focus,
-            readyMilliseconds: ready
+            readyMilliseconds: ready,
+            rowIdentities: rowIdentities,
+            fieldIdentity: ObjectIdentifier(field)
         )
     }
 
@@ -734,6 +751,8 @@ private struct PresentationSample {
     let layoutMilliseconds: Double
     let focusMilliseconds: Double
     let readyMilliseconds: Double
+    let rowIdentities: [String: ObjectIdentifier]
+    let fieldIdentity: ObjectIdentifier
 }
 
 private enum PresentationBenchmarkError: Error {

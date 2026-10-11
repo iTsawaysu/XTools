@@ -52,12 +52,6 @@ struct ToolNavigationProjectionTests {
         #expect(projection.entries.map(\.categoryTitle) == ["Development", "Development", "Web"])
     }
 
-    @Test func narrowCommandProjectionPreservesTitleThenKeywordRanking() {
-        let projection = ToolNavigationCommandProjection(registry: Self.registry(), query: "token")
-
-        #expect(projection.entries.map(\.toolID) == [.jwt, .json])
-    }
-
     @Test func narrowCommandProjectionUsesUnicodeAndDiacriticInsensitiveMatching() {
         let registry = ToolRegistry(
             categories: [

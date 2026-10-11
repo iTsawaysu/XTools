@@ -28,6 +28,15 @@ struct IndexConverterRequest: Equatable, Hashable, Sendable {
     let input: String
     let mode: String
 
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.mode == rhs.mode && ExactUTF8Identity.isExactlyEqual(lhs.input, rhs.input)
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(mode)
+        hasher.combine(ExactUTF8Identity(input))
+    }
+
     var inputByteCount: Int {
         input.utf8.count
     }
@@ -55,7 +64,7 @@ final class IndexConverterToolWorkspaceModel: ObservableObject {
     }
     @Published var input = "" {
         didSet {
-            guard input != oldValue, !isApplyingControlledMutation else { return }
+            guard !ExactUTF8Identity.isExactlyEqual(input, oldValue), !isApplyingControlledMutation else { return }
             inputReplacementToken = 0
             refresh()
         }

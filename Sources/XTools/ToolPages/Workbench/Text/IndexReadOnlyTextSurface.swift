@@ -1,10 +1,19 @@
 import AppKit
 import SwiftUI
+import XToolsCore
 
 struct IndexReadOnlyTextSurface: View {
     let text: String
     let placeholder: String
     var fillsHeight = false
+    private let exactTextIdentity: ExactUTF8Identity
+
+    init(text: String, placeholder: String, fillsHeight: Bool = false) {
+        self.text = text
+        self.placeholder = placeholder
+        self.fillsHeight = fillsHeight
+        exactTextIdentity = ExactUTF8Identity(text)
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -47,6 +56,12 @@ private final class IndexReadOnlyTextScrollView: IndexTextViewportScrollView {
 
 private struct IndexReadOnlyTextView: NSViewRepresentable {
     let text: String
+    private let exactTextIdentity: ExactUTF8Identity
+
+    init(text: String) {
+        self.text = text
+        exactTextIdentity = ExactUTF8Identity(text)
+    }
 
     private static func makeTextView() -> NSTextView {
         let textView = NSTextView(usingTextLayoutManager: true)
@@ -86,7 +101,7 @@ private struct IndexReadOnlyTextView: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
         configure(textView)
-        guard textView.string != text else { return }
+        guard !ExactUTF8Identity.isExactlyEqual(textView.string, text) else { return }
 
         let selectedRange = textView.selectedRange()
         textView.string = text

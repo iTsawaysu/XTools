@@ -21,6 +21,7 @@ struct IndexChronometerPage: View {
 
 private struct IndexChronometerWorkspaceContent: View {
     @Binding var chronometer: ChronometerState
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
 
     private var lapRows: [IndexScrollableKVRow] {
         chronometer.laps.enumerated().map { offset, lap in
@@ -47,7 +48,7 @@ private struct IndexChronometerWorkspaceContent: View {
             IndexPanel("秒表") {
                 VStack(spacing: 8) {
                     TimelineView(
-                        .animation(minimumInterval: 0.01, paused: !chronometer.isRunning)
+                        .animation(minimumInterval: 0.01, paused: !chronometer.isRunning || entryGeneration == 0)
                     ) { context in
                         Text(ChronometerFormatter.format(currentTime(tick: context.date)))
                             .font(ToolTypography.giantValueRounded)

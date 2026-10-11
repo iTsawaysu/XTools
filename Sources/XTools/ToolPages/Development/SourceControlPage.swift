@@ -11,6 +11,7 @@ struct IndexSourceControlPage: View {
 }
 
 private struct SourceControlWorkspaceContent: View {
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @Environment(\.fileInputPanelClient) private var fileInputPanelClient
     @Environment(\.toolToastCenter) private var toastCenter
     @ObservedObject var workspace: SourceControlWorkspaceModel
@@ -23,6 +24,15 @@ private struct SourceControlWorkspaceContent: View {
     /// setPath）。此前每个按键都会取消运行中的扫描、推进 generation、同步
     /// 写偏好存储并清空全部扫描派生态——逐字输入等于连续自毁现场。
     @State private var pathDraft = ""
+
+    private struct CompletionPresentation: Equatable {
+        let entryGeneration: Int
+        let summary: SourceControlWorkspaceModel.UpdateCompletionSummary?
+    }
+
+    private var completionPresentation: CompletionPresentation {
+        CompletionPresentation(entryGeneration: entryGeneration, summary: workspace.lastCompletion)
+    }
 
     private var visibleRepositories: [SourceControlRepository] {
         let query = repositoryQuery.trimmingCharacters(in: .whitespacesAndNewlines).localizedLowercase
@@ -77,12 +87,12 @@ private struct SourceControlWorkspaceContent: View {
         // Esc 取消正在运行的扫描/更新；⌘R 触发扫描。空闲时不拦截按键。
         .background {
             Button("") { workspace.cancel() }
-                .keyboardShortcut(.cancelAction)
+                .keyboardShortcut(entryGeneration > 0 ? .cancelAction : nil)
                 .disabled(!(workspace.isScanning || workspace.isUpdating))
                 .accessibilityHidden(true)
             // ⌘R 不经过字段失焦：扫描前先提交草稿，语义与回车一致。
             Button("") { scanFromCommittedPath() }
-                .keyboardShortcut("r", modifiers: .command)
+                .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut("r", modifiers: .command) : nil)
                 .disabled(!workspace.canScan)
                 .accessibilityHidden(true)
         }
@@ -94,18 +104,28 @@ private struct SourceControlWorkspaceContent: View {
                 showsFailureSheet = false
             }
         }
-        .onChange(of: workspace.failureSummary) { failures in
-            if !failures.isEmpty { showsFailureSheet = true }
+        .onAppear { presentCompletion(completionPresentation) }
+        .onChange(of: completionPresentation) { request in
+            presentCompletion(request)
         }
-        .onChange(of: workspace.lastCompletion) { summary in
-            defer { workspace.acknowledgeCompletionToast() }
-            guard let summary, summary.failedCount == 0 else { return }
-            if summary.updatedCount > 0 {
-                toastCenter?.show("已更新 \(summary.updatedCount) 个仓库", tone: .success)
-            } else {
-                toastCenter?.show("所有仓库均已是最新", tone: .success)
-            }
+    }
+
+    private func presentCompletion(_ request: CompletionPresentation) {
+        guard request.entryGeneration > 0 else {
+            showsFailureSheet = false
+            return
         }
+        guard let summary = request.summary,
+              workspace.lastCompletion?.id == summary.id else { return }
+        if summary.failedCount > 0 {
+            guard !workspace.failureSummary.isEmpty else { return }
+            showsFailureSheet = true
+        } else if summary.updatedCount > 0 {
+            toastCenter?.show("已更新 \(summary.updatedCount) 个仓库", tone: .success)
+        } else {
+            toastCenter?.show("所有仓库均已是最新", tone: .success)
+        }
+        workspace.acknowledgeCompletionToast()
     }
 
     // MARK: - Sync
@@ -667,6 +687,7 @@ private struct SourceControlCheckboxShape: View {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
                 .strokeBorder(borderColor, lineWidth: 1)
             Image(systemName: state == nil ? "minus" : "checkmark")
+                .opacity(state == false ? 0 : 1)
                 .font(ToolTypography.controlLabel(weight: .semibold))
                 .foregroundStyle(state == true ? ToolTheme.onAccent : ToolTheme.accent)
                 .accessibilityHidden(true)

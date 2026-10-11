@@ -34,7 +34,7 @@ final class StringObfuscatorToolWorkspaceModel: ObservableObject {
 
     @Published var input = "" {
         didSet {
-            guard input != oldValue else { return }
+            guard !ExactUTF8Identity.isExactlyEqual(input, oldValue) else { return }
             refresh()
         }
     }
@@ -104,7 +104,7 @@ final class StringObfuscatorToolWorkspaceModel: ObservableObject {
 
     func setReplacementCharacter(_ newValue: String) {
         let limitedValue = String(newValue.prefix(1))
-        guard replacementChar != limitedValue else { return }
+        guard !ExactUTF8Identity.isExactlyEqual(replacementChar, limitedValue) else { return }
         replacementChar = limitedValue
         preferences.set(limitedValue, for: SensitiveToolPreferenceKeys.obfuscatorReplacementCharacter)
         refresh()

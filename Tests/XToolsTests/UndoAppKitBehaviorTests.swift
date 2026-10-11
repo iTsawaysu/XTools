@@ -337,6 +337,7 @@ struct UndoAppKitBehaviorTests {
         let leftTextView = try #require(textView(in: leftPane))
         let rightTextView = try #require(textView(in: rightPane))
         let window = makeWindow(containing: leftPane, rightPane)
+        coordinator.update(left: left.value, right: right.value, rows: [], syntax: .plain, foldUnchanged: false)
 
         #expect(window.makeFirstResponder(leftTextView))
         insertUserText("abcdef", in: leftTextView)
@@ -344,15 +345,69 @@ struct UndoAppKitBehaviorTests {
         let rightManager = try #require(rightTextView.undoManager)
         #expect(leftManager !== rightManager)
         #expect(leftManager.canUndo)
+        coordinator.update(left: left.value, right: right.value, rows: [], syntax: .plain, foldUnchanged: false)
+
+        #expect(window.makeFirstResponder(rightTextView))
+        insertUserText("right history", in: rightTextView)
+        try #require(rightManager.canUndo)
+        #expect(right.value == "right history")
+        coordinator.update(left: left.value, right: right.value, rows: [], syntax: .plain, foldUnchanged: false)
 
         #expect(window.makeFirstResponder(nil))
-        coordinator.update(left: "x", right: "", rows: [], syntax: .plain, foldUnchanged: false)
+        coordinator.update(left: "x", right: "right history", rows: [], syntax: .plain, foldUnchanged: false)
 
         #expect(leftTextView.string == "x")
         #expect(!leftManager.canUndo)
         #expect(!leftManager.canRedo)
-        #expect(!rightManager.canUndo)
-        #expect(!rightManager.canRedo)
+        #expect(rightManager.canUndo)
+        #expect(rightTextView.string == "right history")
+        rightManager.undo()
+        #expect(rightTextView.string.isEmpty)
+        #expect(leftTextView.string == "x")
+        #expect(rightManager.canRedo)
+        rightManager.redo()
+        #expect(rightTextView.string == "right history")
+        #expect(leftTextView.string == "x")
+    }
+
+    @Test func hostedDiffImmediateBlurPreservesLatestDraftAndUndo() async throws {
+        let state = HostedDiffUndoState()
+        let host = NSHostingView(rootView: HostedDiffUndoView(state: state))
+        host.frame = NSRect(x: 0, y: 0, width: 900, height: 500)
+        let window = makeWindow(containing: host)
+        window.isReleasedWhenClosed = false
+        window.makeKeyAndOrderFront(nil)
+        defer { window.close() }
+        for _ in 0..<5 {
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let editors = diffEditors(in: host)
+        let rightEditor = try #require(editors.first { $0.accessibilityLabel() == "Right" })
+        #expect(window.makeFirstResponder(rightEditor))
+        insertUserText("latest draft", in: rightEditor)
+        let manager = try #require(rightEditor.undoManager)
+        try #require(manager.canUndo)
+        try #require(state.right == "latest draft")
+        // A legal focus change can precede SwiftUI's next representable pass.
+        // Do not flush/yield between the native edit and its end-editing event.
+        #expect(window.makeFirstResponder(nil))
+        #expect(rightEditor.string == "latest draft")
+        for _ in 0..<5 {
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(state.right == "latest draft")
+        #expect(rightEditor.string == "latest draft")
+        try #require(manager.canUndo)
+        manager.undo()
+        #expect(rightEditor.string.isEmpty)
+        #expect(state.right.isEmpty)
+        #expect(manager.canRedo)
+    }
+
+    private func diffEditors(in root: NSView) -> [IndexDiffTextView] {
+        (root as? IndexDiffTextView).map { [$0] } ?? root.subviews.flatMap { diffEditors(in: $0) }
     }
 
     private func exerciseProgrammaticBaseline(in textView: NSTextView, window: NSWindow) throws {
@@ -429,6 +484,27 @@ struct UndoAppKitBehaviorTests {
 
     private func binding(to value: MutableUndoTestHeight) -> Binding<CGFloat> {
         Binding(get: { value.value }, set: { value.value = $0 })
+    }
+}
+
+@MainActor
+private final class HostedDiffUndoState: ObservableObject {
+    @Published var left = ""
+    @Published var right = ""
+}
+
+@MainActor
+private struct HostedDiffUndoView: View {
+    @ObservedObject var state: HostedDiffUndoState
+
+    var body: some View {
+        IndexEditableDiffMergeView(
+            left: $state.left, right: $state.right,
+            leftPlaceholder: "Left", rightPlaceholder: "Right",
+            leftAccessibilityLabel: "Left", rightAccessibilityLabel: "Right",
+            leftDisplayText: nil, rightDisplayText: nil,
+            rows: [], syntax: .plain, foldUnchanged: false
+        )
     }
 }
 

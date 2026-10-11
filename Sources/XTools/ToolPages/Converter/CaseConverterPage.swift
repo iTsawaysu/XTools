@@ -27,7 +27,7 @@ final class CaseConverterToolWorkspaceModel: ObservableObject {
 
     @Published var text = "" {
         didSet {
-            guard text != oldValue else { return }
+            guard !ExactUTF8Identity.isExactlyEqual(text, oldValue) else { return }
             refresh()
         }
     }

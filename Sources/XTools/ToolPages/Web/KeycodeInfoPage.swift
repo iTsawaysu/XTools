@@ -98,6 +98,7 @@ private struct IndexKeycodeWorkspaceContent: View {
             }
         }
         .onAppear {
+            guard entryGeneration > 0 else { return }
             focusRequestToken &+= 1
         }
         .onChange(of: entryGeneration) { generation in
@@ -110,6 +111,7 @@ private struct IndexKeycodeWorkspaceContent: View {
         ZStack {
             KeyCaptureRepresentable(
                 isListening: $isListening,
+                isActive: entryGeneration > 0,
                 focusRequestToken: focusRequestToken,
                 accessibilitySummary: captureAccessibilitySummary,
                 onEvent: handleEvent
@@ -193,6 +195,7 @@ private struct IndexKeycodeWorkspaceContent: View {
 
 fileprivate struct KeyCaptureRepresentable: NSViewRepresentable {
     @Binding var isListening: Bool
+    let isActive: Bool
     let focusRequestToken: Int
     let accessibilitySummary: String
     let onEvent: (KeyboardEventInput) -> Void
@@ -200,6 +203,7 @@ fileprivate struct KeyCaptureRepresentable: NSViewRepresentable {
     func makeNSView(context: Context) -> KeyCaptureNSView {
         let view = KeyCaptureNSView()
         view.isListening = $isListening
+        view.setActive(isActive)
         view.onEvent = onEvent
         view.accessibilitySummary = accessibilitySummary
         view.configureAccessibility()
@@ -208,14 +212,19 @@ fileprivate struct KeyCaptureRepresentable: NSViewRepresentable {
 
     func updateNSView(_ nsView: KeyCaptureNSView, context: Context) {
         nsView.isListening = $isListening
+        nsView.setActive(isActive)
         nsView.onEvent = onEvent
         nsView.accessibilitySummary = accessibilitySummary
         nsView.configureAccessibility()
         nsView.requestInitialFocus(token: focusRequestToken)
     }
+
+    static func dismantleNSView(_ nsView: KeyCaptureNSView, coordinator: ()) {
+        nsView.setActive(false)
+    }
 }
 
-fileprivate final class KeyCaptureNSView: NSView {
+final class KeyCaptureNSView: NSView {
     private enum InitialFocusAttempt {
         case focused
         case deferredUntilWindowIsKey
@@ -225,13 +234,25 @@ fileprivate final class KeyCaptureNSView: NSView {
     var isListening: Binding<Bool>?
     var onEvent: ((KeyboardEventInput) -> Void)?
     var accessibilitySummary = "暂无按键结果"
+    private var isActive = false
 
     private let initialFocusRetryDelays: [TimeInterval] = [0.05, ToolMotion.Duration.fast + 0.05]
     private var processedInitialFocusToken = 0
     private var initialFocusRequestGeneration = 0
     private var pendingInitialFocusGeneration: Int?
 
-    override var acceptsFirstResponder: Bool { true }
+    override var acceptsFirstResponder: Bool { isActive }
+
+    func setActive(_ active: Bool) {
+        guard isActive != active else { return }
+        isActive = active
+        if !active {
+            cancelInitialFocusRequests()
+            if window?.firstResponder === self {
+                window?.makeFirstResponder(nil)
+            }
+        }
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -267,6 +288,7 @@ fileprivate final class KeyCaptureNSView: NSView {
     }
 
     override func becomeFirstResponder() -> Bool {
+        guard isActive else { return false }
         let accepted = super.becomeFirstResponder()
         if accepted {
             updateListening(true)
@@ -283,11 +305,13 @@ fileprivate final class KeyCaptureNSView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        guard isActive else { return }
         cancelInitialFocusRequests()
         window?.makeFirstResponder(self)
     }
 
     override func keyDown(with event: NSEvent) {
+        guard isActive else { return }
         onEvent?(input(from: event, kind: .keyDown))
 
         if event.keyCode == 0x35 {
@@ -297,17 +321,19 @@ fileprivate final class KeyCaptureNSView: NSView {
     }
 
     override func flagsChanged(with event: NSEvent) {
+        guard isActive else { return }
         onEvent?(input(from: event, kind: .modifierFlagsChanged))
     }
 
     override func accessibilityPerformPress() -> Bool {
+        guard isActive else { return false }
         cancelInitialFocusRequests()
         window?.makeFirstResponder(self)
         return window?.firstResponder === self
     }
 
     func requestInitialFocus(token: Int) {
-        guard token > 0, processedInitialFocusToken != token else { return }
+        guard isActive, token > 0, processedInitialFocusToken != token else { return }
         processedInitialFocusToken = token
         initialFocusRequestGeneration &+= 1
         let generation = initialFocusRequestGeneration
@@ -317,10 +343,11 @@ fileprivate final class KeyCaptureNSView: NSView {
             let isFinalAttempt = index == initialFocusRetryDelays.count - 1
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
                 guard let self,
+                      self.isActive,
                       self.pendingInitialFocusGeneration == generation else { return }
 
                 let outcome = self.attemptInitialFocus()
-                if isFinalAttempt, outcome != .deferredUntilWindowIsKey {
+                if outcome == .focused || (isFinalAttempt && outcome != .deferredUntilWindowIsKey) {
                     self.pendingInitialFocusGeneration = nil
                 }
             }
@@ -328,7 +355,7 @@ fileprivate final class KeyCaptureNSView: NSView {
     }
 
     @objc private func windowDidBecomeKey(_ notification: Notification) {
-        guard pendingInitialFocusGeneration != nil else { return }
+        guard isActive, pendingInitialFocusGeneration != nil else { return }
 
         switch attemptInitialFocus() {
         case .focused, .blockedByActiveTextInput:

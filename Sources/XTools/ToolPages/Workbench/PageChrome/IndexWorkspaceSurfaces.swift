@@ -51,6 +51,7 @@ struct IndexWorkspaceTextArea: View {
         self.autoFocus = autoFocus
         self.caretPlacementRequestToken = caretPlacementRequestToken
         self.temporaryHighlights = temporaryHighlights
+        self.scrollRequest = scrollRequest
         self.diagnosticMarker = diagnosticMarker
         self.diagnosticNavigationToken = diagnosticNavigationToken
         self.inputRenderingMode = inputRenderingMode

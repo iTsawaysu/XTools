@@ -42,13 +42,14 @@ final class TimezoneViewerFavoriteStore: ObservableObject {
 }
 
 struct IndexTimezoneViewerPage: View {
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @StateObject private var favoriteStore = TimezoneViewerFavoriteStore()
     @StateObject private var disclosureSections = TimezoneViewerDisclosureExpansionStore()
 
     private static let favoritesDisclosureID = "favorites"
 
     var body: some View {
-        TimelineView(.periodic(from: Date(), by: 1)) { timeline in
+        TimelineView(.animation(minimumInterval: 1, paused: entryGeneration == 0)) { timeline in
             page(currentTime: timeline.date)
         }
     }

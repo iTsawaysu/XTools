@@ -20,7 +20,8 @@ private struct ToolPageEntryTraceContextKey: EnvironmentKey {
 /// 逐字动画、自动聚焦、onAppear 同步类逻辑）用它以 onChange 驱动，使
 /// 停靠保活与整页重建时代的进入语义完全一致。
 private struct ToolPageEntryGenerationKey: EnvironmentKey {
-    static let defaultValue = 0
+    // 独立控件默认活动；仅 Stage 显式注入的 0 表示停靠。
+    static let defaultValue = 1
 }
 
 extension EnvironmentValues {
@@ -32,6 +33,25 @@ extension EnvironmentValues {
     var toolPageEntryGeneration: Int {
         get { self[ToolPageEntryGenerationKey.self] }
         set { self[ToolPageEntryGenerationKey.self] = newValue }
+    }
+}
+
+/// A view-tree activation boundary, not a displayed frame or animation completion.
+/// Retained pages do not appear again, so warm entries observe the generation.
+struct ToolPageEntryTraceProbe: View {
+    let context: ToolPageEntryTraceContext
+    @Environment(\.toolPageEntryGeneration) private var generation
+
+    var body: some View {
+        Color.clear
+            .frame(width: 0, height: 0)
+            .onAppear { recordActivation(generation: generation) }
+            .onChange(of: generation) { recordActivation(generation: $0) }
+    }
+
+    private func recordActivation(generation: Int) {
+        guard generation > 0 else { return }
+        ToolPageEntryTrace.pageActivated(context)
     }
 }
 
@@ -116,22 +136,22 @@ enum ToolPageEntryTrace {
 #endif
     }
 
-    static func pageAppeared(_ context: ToolPageEntryTraceContext) {
+    static func pageActivated(_ context: ToolPageEntryTraceContext) {
 #if DEBUG
         guard isEnabled, let signpostID = activeEntryIDs[context.toolID] else { return }
         os_signpost(
             .event,
             log: log,
-            name: "Tool Page Appeared",
+            name: "Tool Page Activated",
             signpostID: signpostID,
             "tool=%{public}@ title=%{public}@",
             context.toolID.rawValue as NSString,
             context.title as NSString
         )
-        emitBenchmarkPhaseMeasurement(context, phase: "appeared")
+        emitBenchmarkPhaseMeasurement(context, phase: "activated")
 
         guard !focusPendingToolIDs.contains(context.toolID) else { return }
-        endEntryIfActive(context, status: "page-visible")
+        endEntryIfActive(context, status: "page-activated")
 #endif
     }
 

@@ -23,6 +23,7 @@ struct IndexBasicAuthPage: View {
 }
 
 private struct IndexBasicAuthWorkspaceContent: View {
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @Binding var session: BasicAuthWorkspaceSession
     @State private var showsPassword = false
     @State private var showsParsedPassword = false
@@ -45,6 +46,12 @@ private struct IndexBasicAuthWorkspaceContent: View {
                 generateContent
             } parse: {
                 parseContent
+            }
+        }
+        .onChange(of: entryGeneration) { generation in
+            if generation == 0 {
+                showsPassword = false
+                showsParsedPassword = false
             }
         }
     }

@@ -3,6 +3,7 @@ import SwiftUI
 import XToolsCore
 
 struct IndexEditableDiffMergeView: NSViewRepresentable {
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     /// 左右编辑器的角色标识，供 `DifferenceHunk` 的侧别查询与协调器的
     /// UI 标签共用。
     enum Side {
@@ -94,6 +95,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> NSView {
         let hostView = IndexEditableDiffScrollHostView()
+        hostView.isPageActive = entryGeneration > 0
         hostView.onNavigateDifference = { [weak coordinator = context.coordinator] forward in
             coordinator?.navigateDifference(forward: forward)
         }
@@ -133,6 +135,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         guard let hostView = view as? IndexEditableDiffScrollHostView else {
             return
         }
+        hostView.isPageActive = entryGeneration > 0
         context.coordinator.left = $left
         context.coordinator.right = $right
         context.coordinator.hostView = hostView
@@ -196,6 +199,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         private var currentSyntax: IndexDiffSyntax = .plain
         private var latestLeftDisplayText = ""
         private var latestRightDisplayText = ""
+        private var latestLeftSource = ""
+        private var latestRightSource = ""
 
         // Fold projection state: full canonical rows arrive from the binding;
         // the coordinator owns the per-region expansion set so an expand click
@@ -376,6 +381,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             currentSyntax = syntax
             latestLeftDisplayText = left
             latestRightDisplayText = right
+            latestLeftSource = self.left.wrappedValue
+            latestRightSource = self.right.wrappedValue
             render()
         }
 
@@ -776,6 +783,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
 
         private func applyLatestDisplay(to textView: NSTextView) {
             if textView === leftTextView {
+                guard JSONExactTextIdentity.isExactlyEqual(latestLeftSource, left.wrappedValue) else { return }
                 setText(
                     latestLeftDisplayText,
                     source: left.wrappedValue,
@@ -783,6 +791,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
                     allowActiveEditorOverride: true
                 )
             } else if textView === rightTextView {
+                guard JSONExactTextIdentity.isExactlyEqual(latestRightSource, right.wrappedValue) else { return }
                 setText(
                     latestRightDisplayText,
                     source: right.wrappedValue,

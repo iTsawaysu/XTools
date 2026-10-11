@@ -4,6 +4,7 @@ import SwiftUI
 final class DeviceInformationSession: ObservableObject {
     @Published private(set) var snapshot: DeviceInformationSnapshot
 
+    private var lastEntryGeneration: Int?
     private let capture: @MainActor () -> DeviceInformationSnapshot
 
     init(
@@ -13,6 +14,13 @@ final class DeviceInformationSession: ObservableObject {
     ) {
         self.capture = capture
         self.snapshot = capture()
+    }
+
+    func enterPage(generation: Int) {
+        guard generation > 0, generation != lastEntryGeneration else { return }
+        let isReentry = lastEntryGeneration != nil
+        lastEntryGeneration = generation
+        if isReentry { refresh() }
     }
 
     func refresh() {

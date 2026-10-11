@@ -18,6 +18,7 @@ import XToolsCore
 /// 替代 `(() -> AnyView)?` 擦除——每次 body 重建不再经 AnyView 丢类型身份；
 /// 「缺席」用对应泛型 == EmptyView 的约束扩展表达，各调用形态的 API 形状不变。
 struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputControl: View>: View {
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     let inputTitle: String
     let outputTitle: String
     @Binding var input: String
@@ -268,7 +269,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
                     IndexClearButton(isDisabled: clearDisabled, showsIcon: false, framed: true, action: onClear)
                     IndexCopyButton(text: output, title: "复制", showsIcon: false, framed: true)
                         .disabled(!isOutputFresh)
-                        .keyboardShortcut("c", modifiers: [.command, .shift])
+                        .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut("c", modifiers: [.command, .shift]) : nil)
                         .help("复制全部 (⇧⌘C)")
                     if showsOutputSave {
                         IndexSaveTextButton(text: output, fileName: outputFileName, showsIcon: false, framed: true)
@@ -342,7 +343,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
     private var formatButton: some View {
         if let onFormat {
             IndexPrimaryActionButton(title: actionTitle, hint: actionHint, help: "\(actionTitle)（⌘↩）", action: onFormat)
-                .keyboardShortcut(.return, modifiers: .command)
+                .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
                 .disabled(isRunning || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
