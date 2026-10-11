@@ -442,8 +442,11 @@ public enum CSSColorMath {
         let maxValue = max(rgb.x, max(rgb.y, rgb.z))
         let minValue = min(rgb.x, min(rgb.y, rgb.z))
         let lightness = (maxValue + minValue) / 2
-        guard maxValue != minValue else { return SIMD3(0, 0, lightness * 100) }
         let delta = maxValue - minValue
+        // XYZ matrix/gamma round trips can separate neutral channels by a few
+        // representable values. Absorb at most eight ULPs, not a color-scale epsilon.
+        let neutralNoise = 8 * max(maxValue.ulp, minValue.ulp)
+        guard delta > neutralNoise else { return SIMD3(0, 0, lightness * 100) }
         let saturation = lightness > 0.5 ? delta / (2 - maxValue - minValue) : delta / (maxValue + minValue)
         var hue: Double
         if maxValue == rgb.x { hue = (rgb.y - rgb.z) / delta + (rgb.y < rgb.z ? 6 : 0) }
@@ -485,7 +488,7 @@ public enum CSSColorMath {
         return pure * scale + SIMD3(repeating: white)
     }
 
-    private static func normalizedHue(_ value: Double) -> Double {
+    static func normalizedHue(_ value: Double) -> Double {
         let result = value.truncatingRemainder(dividingBy: 360)
         return result < 0 ? result + 360 : result
     }

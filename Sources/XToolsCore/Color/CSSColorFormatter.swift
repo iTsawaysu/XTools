@@ -103,7 +103,11 @@ public enum CSSColorFormatter {
 
     private static func hsl(_ mapped: CSSMappedSRGB) -> String {
         let components = CSSColorMath.hslFromSRGB(mapped.components)
-        return "hsl(\(decimal(components.x, digits: 4)) \(decimal(components.y, digits: 4))% \(decimal(components.z, digits: 4))%\(alphaSuffix(mapped.alpha)))"
+        return hsl(components: components, alpha: mapped.alpha)
+    }
+
+    static func hsl(components: SIMD3<Double>, alpha: Double) -> String {
+        "hsl(\(decimal(components.x, digits: 4)) \(decimal(components.y, digits: 4))% \(decimal(components.z, digits: 4))%\(alphaSuffix(alpha)))"
     }
 
     private static func hwb(_ mapped: CSSMappedSRGB) -> String {

@@ -2,6 +2,10 @@ import AppKit
 import SwiftUI
 import XToolsCore
 
+func colorSliderValueText(_ value: Double, suffix: String) -> String {
+    "\(Int(value.rounded()))\(suffix)"
+}
+
 @MainActor
 final class ColorToolWorkspaceModel: ObservableObject {
     static let key = ToolWorkspaceKey<ColorToolWorkspaceModel>(toolID: "color-picker") { _ in
@@ -229,8 +233,8 @@ private struct IndexColorWorkspaceContent: View {
                 .frame(width: 64, alignment: .leading)
             IndexSlider(value: value, range: range, step: 1, track: track)
                 .accessibilityLabel(accessibilityName)
-                .accessibilityValue("\(Int(value.wrappedValue))\(suffix)")
-            Text("\(Int(value.wrappedValue))\(suffix)")
+                .accessibilityValue(colorSliderValueText(value.wrappedValue, suffix: suffix))
+            Text(colorSliderValueText(value.wrappedValue, suffix: suffix))
                 .font(ToolTypography.monoLabel)
                 .foregroundStyle(ToolTheme.textPrimary)
                 .frame(width: 48, alignment: .trailing)
@@ -254,29 +258,31 @@ private struct IndexColorWorkspaceContent: View {
     }
 
     private var saturationTrack: LinearGradient {
-        let h = mappedHSL.x / 360
-        let l = mappedHSL.z
-        return LinearGradient(
-            colors: [
-                Color(hue: h, saturation: 0, brightness: l),
-                Color(hue: h, saturation: 1, brightness: l)
-            ],
+        LinearGradient(
+            colors: [0.0, 100.0].map {
+                hslTrackColor(hue: mappedHSL.x, saturation: $0, lightness: mappedHSL.z)
+            },
             startPoint: .leading,
             endPoint: .trailing
         )
     }
 
     private var brightnessTrack: LinearGradient {
-        let h = mappedHSL.x / 360
-        let s = mappedHSL.y
-        return LinearGradient(
-            colors: [
-                Color(hue: h, saturation: s, brightness: 0),
-                Color(hue: h, saturation: s, brightness: 1)
-            ],
+        LinearGradient(
+            colors: [0.0, 50.0, 100.0].map {
+                hslTrackColor(hue: mappedHSL.x, saturation: mappedHSL.y, lightness: $0)
+            },
             startPoint: .leading,
             endPoint: .trailing
         )
+    }
+
+    private func hslTrackColor(hue: Double, saturation: Double, lightness: Double) -> Color {
+        guard let color = try? CSSColor(
+            components: SIMD3(hue, saturation, lightness), space: .hsl, alpha: 1
+        ) else { return .clear }
+        let mapped = CSSColorGamutMapping.sRGB(for: color)
+        return Color(.sRGB, red: mapped.components.x, green: mapped.components.y, blue: mapped.components.z)
     }
 
     private var alphaTrackColor: Color {
