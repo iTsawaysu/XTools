@@ -20,10 +20,18 @@ class IconPackagingTests(unittest.TestCase):
         shutil.copy2(repository / "build.sh", fixture / "build.sh")
         binaries = fixture / "mock-bin"
         binaries.mkdir()
-        for name in ("pkill", "strip", "codesign", "swift"):
+        for name in ("pkill", "swift"):
             executable = binaries / name
             executable.write_text("#!/bin/sh\nexit 0\n")
             executable.chmod(0o755)
+        # Model the packaging contracts without invoking signing or changing
+        # any running app. The icon assertions below exercise the real script.
+        strip = binaries / "strip"
+        strip.write_text('#!/bin/sh\n[ "$1" = "-S" ] && [ "$2" = "-x" ] || exit 1\nprintf "bin\\n" > "$3"\n')
+        strip.chmod(0o755)
+        codesign = binaries / "codesign"
+        codesign.write_text('#!/bin/sh\nif [ "$1" = "-dv" ]; then\n  printf "Identifier=%s\\n" "$BUNDLE_ID" >&2\nfi\n')
+        codesign.chmod(0o755)
         register = binaries / "lsregister"
         register.write_text('#!/bin/sh\nprintf "registered\\n" >> "$REGISTER_LOG"\n')
         register.chmod(0o755)
@@ -36,12 +44,17 @@ class IconPackagingTests(unittest.TestCase):
         resources = product / "XTools_XToolsCore.bundle/Contents/Resources"
         resources.mkdir(parents=True)
         (resources / "Readability-0.6.0.js").write_text("// fixture\n")
+        compiler_bundle = product / "XTools_EmojiCatalogCompiler.bundle"
+        compiler_bundle.mkdir()
+        (compiler_bundle / "emoji-test.txt").write_text("compiler input only\n")
         source = fixture / "Assets/AppIcon/XTools.icns"
         source.parent.mkdir(parents=True)
         source.write_bytes(b"first-icon")
         log = fixture / "register.log"
         environment = dict(os.environ, PATH=f"{binaries}:{os.environ['PATH']}",
                            SWIFT_BIN=str(binaries / "swift"), LSREGISTER=str(register),
+                           BUNDLE_ID="com.sun.xtools.icon-test", KEEP_RUNNING_APP="1",
+                           OUTPUT_DIR=str(fixture / "build"),
                            REGISTER_LOG=str(log), LSREGISTER_EVERY_BUILD="0",
                            TRASH_DIR=str(fixture / "archive"))
 
@@ -54,8 +67,15 @@ class IconPackagingTests(unittest.TestCase):
         app = fixture / "build/XTools.app"
         packaged = app / "Contents/Resources/XTools.icns"
         self.assertEqual(packaged.read_bytes(), b"first-icon")
+        self.assertFalse((app / "Contents/Resources" / compiler_bundle.name).exists(),
+                         "Offline compiler inputs must not ship with the app")
+        stale_compiler = app / "Contents/Resources" / compiler_bundle.name
+        shutil.copytree(compiler_bundle, stale_compiler)
         source.write_bytes(b"replacement-icon")
         package()
+        self.assertFalse(stale_compiler.exists(),
+                         "Incremental packaging must archive old compiler bundles")
+        self.assertTrue(any((fixture / "archive").glob(f"{compiler_bundle.name}.*")))
         self.assertEqual(packaged.read_bytes(), b"replacement-icon",
                          "An existing app must receive changed icon content")
         metadata = plistlib.loads((app / "Contents/Info.plist").read_bytes())

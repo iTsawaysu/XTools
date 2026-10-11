@@ -175,11 +175,11 @@ copy_swiftpm_resource_bundles() {
 
   # The current SwiftPM accessor searches Bundle.main.resourceURL for packaged apps.
   # Resource bundles at the .app root are invalid macOS bundle contents and break signing.
-  # Never ship test-target bundles (e.g. XTools_XToolsTests.bundle).
+  # Test and offline compiler bundles can coexist in the shared build cache.
   while IFS= read -r -d '' resource_bundle; do
     bundle_name="$(basename "$resource_bundle")"
     case "$bundle_name" in
-      *LogicTests*.bundle|*Tests*.bundle)
+      *LogicTests*.bundle|*Tests*.bundle|XTools_EmojiCatalogCompiler.bundle)
         continue
         ;;
     esac
@@ -206,11 +206,11 @@ copy_swiftpm_resource_bundles() {
     /usr/bin/ditto "$promoted_lproj" "$APP_RESOURCES/$(basename "$promoted_lproj")"
   done
 
-  # Remove any stale test resource bundles left by older packaging runs.
+  # Archive non-runtime bundles left by older packaging runs.
   local stale_test_bundle
   while IFS= read -r -d '' stale_test_bundle; do
     archive_path "$stale_test_bundle" "$(basename "$stale_test_bundle").stale-test-bundle"
-  done < <(find "$APP_RESOURCES" -maxdepth 1 -type d \( -name '*LogicTests*.bundle' -o -name '*Tests*.bundle' \) -print0 2>/dev/null)
+  done < <(find "$APP_RESOURCES" -maxdepth 1 -type d \( -name '*LogicTests*.bundle' -o -name '*Tests*.bundle' -o -name 'XTools_EmojiCatalogCompiler.bundle' \) -print0 2>/dev/null)
 
   # Remove pre-rename product resource bundles (DevToolsMac* → XTools*).
   local stale_legacy_bundle

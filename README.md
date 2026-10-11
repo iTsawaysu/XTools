@@ -20,7 +20,7 @@ Developers constantly run into small, recurring tasks: formatting JSON, converti
 
 Opening browser tabs for routine transformations is tedious and can expose sensitive data (tokens, configs, keys) to third-party services. XTools keeps those transformations on the Mac and uses native macOS controls instead of a browser-based shell.
 
-XTools packs 34 developer utilities into a single native macOS application. Most tools work entirely offline. Network access is limited to actions you initiate from HTML → Markdown: fetching an HTTP(S) URL that passes the host safety policy or explicitly allowing remote images in the current preview. Use `Cmd + K` in the app to open any tool quickly.
+XTools packs 34 developer utilities into a single native macOS application. Most tools work entirely offline. HTML → Markdown can fetch an HTTP(S) URL that passes the host safety policy or load preview images when you explicitly allow them. Source Control Sync can also contact configured Git remotes during repository scanning and updates. Use `Cmd + K` in the app to open any tool quickly.
 
 ## Quick Start
 
@@ -50,7 +50,7 @@ Packaged builds are written to `build/XTools.app`.
 - **Keyboard-First**: Press `Cmd + K` in the app for fuzzy search across all tools. Use `Cmd + 1` through `Cmd + 7` to switch categories, and `Cmd + Return` to run primary actions.
 - **Clay Design System**: Shared workbench components provide consistent panels, controls, diagnostics, keyboard focus, and accessibility behavior.
 - **34 Built-in Utilities**: Curated essentials across conversions, cryptography, developer tools, Web debugging, image handling, time math, and system inspectors.
-- **Automated Coverage**: Core logic and UI contracts are backed by over 2,300 automated tests.
+- **Automated Regression Tests**: Core behavior and selected native UI paths have automated regression tests. A passing suite does not establish complete behavior or visual coverage.
 
 ## Tool Catalog
 
@@ -60,7 +60,7 @@ Packaged builds are written to `build/XTools.app`.
 | **Crypto & Generators (4)** | Hash Text (MD5, SHA-1/256/512, SHA-3), AES Text Encryption, String Obfuscator, Generators (Token / UUID / Password) |
 | **Development (9)** | Formatters (JSON / SQL / XML / YAML), Diff (Text / JSON), Regex Tester, Docker Run ↔ Compose, HTML → Markdown, Crontab Generator, Random Port, Chmod Calculator, Source Control Sync |
 | **Web (5)** | JWT Parser & Signer, Basic Auth Generator, HTTP Status Codes, User-Agent Parser, Keycode Inspector |
-| **Image & Color (3)** | Image Processing (Format Converter / Compressor / Grayscale / Favicon), Watermark, Color Converter (HEX, RGB, HSL) |
+| **Image & Color (2)** | Image Processing (Format Converter / Compressor / Grayscale / Watermark / Favicon), Color Converter (HEX, RGB, HSL) |
 | **Time & Date (4)** | Unix Timestamp Converter (s/ms), Timezone Viewer, Date Calculator, Chronometer & Stopwatch |
 | **Utilities (5)** | Device & Hardware Info, MIME File Type Detector, Math Evaluator, Text Statistics, Emoji & Symbol Catalog |
 
