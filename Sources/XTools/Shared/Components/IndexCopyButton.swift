@@ -11,10 +11,11 @@ private struct IndexCopyButtonHelp: ViewModifier {
     let iconOnly: Bool
     let copied: Bool
     let title: String
+    let help: String?
 
     func body(content: Content) -> some View {
-        if iconOnly {
-            content.help(copied ? "已复制" : title)
+        if iconOnly || help != nil {
+            content.help(copied ? "已复制" : (help ?? title))
         } else {
             content
         }
@@ -33,12 +34,15 @@ struct IndexCopyButton: View {
     var framed = false
     /// Overrides the canonical copied toast for batch actions (全部复制).
     var successToast: String? = nil
+    /// Optional action description, scoped to the native button's hit region.
+    var help: String? = nil
 
     @State private var feedback = IndexEphemeralActionFeedbackState()
     @Environment(\.toolToastCenter) private var toastCenter
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var copied: Bool { feedback.isPresented }
+    private var actionTitle: String { title.isEmpty ? "复制" : title }
 
     var body: some View {
         Group {
@@ -53,10 +57,6 @@ struct IndexCopyButton: View {
             }
         }
         .disabled(text.isEmpty)
-        // Labeled buttons show their own title; only icon-only slots need the
-        // tooltip to name the action.
-        .modifier(IndexCopyButtonHelp(iconOnly: iconOnly, copied: copied, title: title))
-        .accessibilityLabel(copied ? "已复制" : title)
         .task(id: feedback.generation) {
             let generation = feedback.generation
             guard feedback.isPresented else { return }
@@ -113,6 +113,8 @@ struct IndexCopyButton: View {
                 .font(ToolTypography.buttonSmall)
             }
         }
+        .modifier(IndexCopyButtonHelp(iconOnly: iconOnly || title.isEmpty, copied: copied, title: actionTitle, help: help))
+        .accessibilityLabel(copied ? "已复制" : actionTitle)
     }
 }
 

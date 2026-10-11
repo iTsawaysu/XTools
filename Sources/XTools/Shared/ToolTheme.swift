@@ -100,6 +100,8 @@ enum ToolTheme {
         static let wall = dynamicColor(light: 0xC7C0B4, dark: 0x101014)
         /// onAccent 变体（实心 accent 主按钮内）：onAccent 同色系顶面。
         static let onAccentSurface = dynamicColor(light: 0xFFF8F2, dark: 0x2A1D15, alpha: 0.95, darkAlpha: 0.95)
+        /// The keycap has its own surface; its glyph must contrast with that surface.
+        static let onAccentForeground = dynamicColor(light: 0x1A0F0A, dark: 0xFFF8F2)
         /// onAccent 变体侧壁：accent 上再深一档。
         static let onAccentWall = dynamicColor(light: 0x1A0F0A, dark: 0x0A0605, alpha: 0.35, darkAlpha: 0.45)
     }

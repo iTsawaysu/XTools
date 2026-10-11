@@ -82,6 +82,7 @@ struct IndexStepperInput: View {
             }
             .buttonStyle(IndexBareButtonStyle())
             .disabled(isDisabled)
+            .help(help)
             .accessibilityLabel(help)
             .onHover { hovering in
                 guard !isDisabled else { return }

@@ -7,6 +7,116 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct WorkbenchAccessibilityTests {
+    @Test(arguments: [false, true])
+    func actionHelpStaysWithItsButtonAndTracksCopyFeedback(_ dark: Bool) async throws {
+        let model = AccessibilityWorkbenchModel()
+        let payload = "SELECT 1;"
+        let hosting = NSHostingView(rootView:
+            VStack {
+                IndexFormatWorkbench(
+                    inputTitle: "SQL 输入", outputTitle: "输出", input: .constant(payload), output: payload,
+                    autoFocus: false, onFormat: { model.formatCount += 1 }, onClear: {},
+                    showsOutputSave: true
+                )
+                IndexPrimaryActionButton(title: "生成", hint: "⌘↩", help: "生成 UUID（⌘↩）") {
+                    model.formatCount += 1
+                }
+                IndexStepperInput(value: .constant(1), range: 0...2)
+                IndexCopyButton(text: payload, title: "")
+            }
+            .environment(\.accessibilityEnabled, true)
+            .environment(\.colorScheme, dark ? .dark : .light))
+        hosting.frame = NSRect(x: 0, y: 0, width: 1100, height: 600)
+        let window = NSWindow(contentRect: hosting.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        window.contentView = hosting
+        window.makeKeyAndOrderFront(nil)
+        defer { window.orderOut(nil); window.contentView = nil }
+
+        func wait(_ stage: String, until condition: () -> Bool) async throws {
+            try await waitUntil(hosting, stage: stage, diagnostics: {
+                accessibleElements(in: window).map { "\($0.label ?? ""): \($0.help ?? "nil")" }.joined(separator: " | ")
+            }, condition)
+        }
+        try await wait("toolbar help publication") {
+            findAction("格式化（⌘↩）", in: window)?.help == "格式化（⌘↩）"
+                && accessibleElements(in: window).contains {
+                    $0.role == NSAccessibility.Role.button.rawValue && $0.label == "复制" && $0.help == "复制全部 (⇧⌘C)"
+                }
+        }
+        let clear = try #require(findAction("清空", in: window))
+        #expect(clear.help != "复制全部 (⇧⌘C)")
+        #expect(findAction("保存输出", in: window)?.help == "保存输出")
+        #expect(findAction("生成 UUID（⌘↩）", in: window)?.help == "生成 UUID（⌘↩）")
+        #expect(findAction("减少", in: window)?.help == "减少")
+        #expect(findAction("增加", in: window)?.help == "增加")
+
+        let copy = try #require(accessibleElements(in: window).first {
+            $0.role == NSAccessibility.Role.button.rawValue && $0.label == "复制" && $0.help == "复制全部 (⇧⌘C)"
+        })
+        #expect(accessibleElements(in: window).contains {
+            $0.role == NSAccessibility.Role.button.rawValue && $0.label == "复制" && $0.help == "复制"
+        })
+        #expect(copy.isEnabled)
+        #expect(copy.press())
+        try await wait("successful copy feedback") {
+            NSPasteboard.general.string(forType: .string) == payload
+                && findAction("已复制", in: window)?.help == "已复制"
+        }
+        #expect(model.formatCount == 0)
+        #expect(findAction("格式化（⌘↩）", in: window)?.help == "格式化（⌘↩）")
+        #expect(findAction("保存输出", in: window)?.help == "保存输出")
+        try await wait("copy help restored after feedback") {
+            accessibleElements(in: window).contains {
+                $0.role == NSAccessibility.Role.button.rawValue && $0.label == "复制" && $0.help == "复制全部 (⇧⌘C)"
+            }
+        }
+        let format = try #require(findAction("格式化（⌘↩）", in: window))
+        #expect(format.press())
+        try await wait("format dispatch") { model.formatCount == 1 }
+        #expect(accessibleElements(in: window).contains {
+            $0.role == NSAccessibility.Role.button.rawValue && $0.label == "复制" && $0.help == "复制全部 (⇧⌘C)"
+        })
+    }
+
+    @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
+    func primaryKeycapPaletteHasReadableContrast(_ appearanceName: NSAppearance.Name) throws {
+        let appearance = try #require(NSAppearance(named: appearanceName))
+        var foreground: NSColor?
+        var surface: NSColor?
+        var accent: NSColor?
+        appearance.performAsCurrentDrawingAppearance {
+            foreground = NSColor(ToolTheme.Keycap.onAccentForeground).usingColorSpace(.sRGB)
+            surface = NSColor(ToolTheme.Keycap.onAccentSurface).usingColorSpace(.sRGB)
+            accent = NSColor(ToolTheme.accent).usingColorSpace(.sRGB)
+        }
+        let ink = try #require(foreground)
+        let top = try #require(surface)
+        let base = try #require(accent)
+        func luminance(_ channels: [CGFloat]) -> Double {
+            let linear = channels.map { value in
+                let value = Double(value)
+                return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+            }
+            return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722
+        }
+        let inkLuminance = luminance([ink.redComponent, ink.greenComponent, ink.blueComponent])
+        let blendedTop = zip(
+            [top.redComponent, top.greenComponent, top.blueComponent],
+            [base.redComponent, base.greenComponent, base.blueComponent]
+        ).map { $0 * top.alphaComponent + $1 * (1 - top.alphaComponent) }
+        // Check both the top and its white sheen extreme, independently of the
+        // SwiftUI renderer. Real-window visual acceptance remains separate.
+        let sheen: CGFloat = appearanceName == .aqua ? 0.5 : 0.08
+        for background in [blendedTop, blendedTop.map { $0 * (1 - sheen) + sheen }] {
+            let backgroundLuminance = luminance(background)
+            let contrast = (max(inkLuminance, backgroundLuminance) + 0.05)
+                / (min(inkLuminance, backgroundLuminance) + 0.05)
+            #expect(contrast >= 4.5)
+        }
+    }
+
     /// These are injected-environment and in-process accessibility contracts.
     /// They do not replace VoiceOver speech, visual contrast or keyboard Tab
     /// traversal acceptance on the user's configured system. The separately
@@ -176,6 +286,11 @@ private struct AccessibilityTestElement {
     var role: String? { dynamic.accessibilityRole?()?.rawValue ?? attribute("AXRole") as? String }
     var label: String? {
         dynamic.accessibilityLabel?() ?? attribute("AXDescription") as? String ?? attribute("AXTitle") as? String
+    }
+    var help: String? {
+        let selector = NSSelectorFromString("accessibilityHelp")
+        let help = object.responds(to: selector) ? object.perform(selector)?.takeUnretainedValue() : nil
+        return help as? String ?? attribute("AXHelp") as? String
     }
     var value: String? {
         // AppKit declares this selector with String, NSNumber and Any return

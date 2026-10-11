@@ -48,7 +48,7 @@ struct IndexKeycap: View {
             .foregroundStyle(
                 variant == .standard
                     ? ToolTheme.textPrimary
-                    : ToolTheme.onAccent.opacity(0.95)
+                    : ToolTheme.Keycap.onAccentForeground
             )
             .padding(.horizontal, 7)
             .padding(.vertical, 2.5)

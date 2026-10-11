@@ -241,6 +241,7 @@ struct IndexPrimaryActionButton: View {
             .fixedSize(horizontal: true, vertical: false)
         }
         .buttonStyle(IndexButtonStyle(primary: true))
+        .help(help)
         .accessibilityLabel(help)
     }
 }
