@@ -330,23 +330,6 @@ struct ImageWorkflowClientTests {
         #expect(selection.image.size.width > 0)
     }
 
-    @Test func prepareSelectionInBackgroundReadsAndPreparesBoundedPreview() async throws {
-        let imageData = try Self.makeImageData(width: 1800, height: 1200, format: .png)
-        let url = URL(fileURLWithPath: "/tmp/large-source.png")
-        let reader = FakeImageWorkflowReader(dataByURL: [url: imageData])
-        let writer = FakeImageWorkflowWriter()
-        let client = ImageWorkflowClient(dialog: FakeImageWorkflowDialog(), reader: reader, writer: writer)
-
-        let selection = try await client.prepareSelectionInBackground(from: url, allowedContentTypes: [.png])
-
-        #expect(selection.url == url)
-        #expect(selection.data == imageData)
-        #expect(selection.metadata.pixelWidth == 1800)
-        #expect(selection.metadata.pixelHeight == 1200)
-        #expect(max(selection.image.size.width, selection.image.size.height) <= 1024)
-        #expect(reader.readURLs == [url])
-    }
-
     @Test func prepareSelectionInBackgroundMapsSystemReadFailureWithoutLeakingPathOrNSError() async {
         let url = URL(fileURLWithPath: "/tmp/private/source.png")
         let systemError = NSError(

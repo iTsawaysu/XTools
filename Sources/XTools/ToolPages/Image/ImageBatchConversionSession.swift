@@ -74,6 +74,7 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
     @Published private(set) var error: String?
     @Published private(set) var isImporting = false
     @Published private(set) var isProcessing = false
+    @Published private(set) var isSaving = false
 
     let maximumItemCount: Int
 
@@ -246,6 +247,9 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
         guard !items.isEmpty, !isImporting else { return }
         error = nil
         for index in items.indices {
+            if case let .done(output) = items[index].state {
+                Self.removeSpooledFile(at: output.tempURL)
+            }
             items[index].state = .idle
         }
         isProcessing = true
@@ -330,7 +334,7 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
         filePanel: FileInputPanelClient,
         outputPanel: FileOutputPanelClient
     ) async -> ImageSaveOutcome {
-        guard !isImporting, !isProcessing else { return .cancelled }
+        guard !isImporting, !isProcessing, !isSaving else { return .cancelled }
         let completed = items.compactMap { item -> BatchConversionSaveCandidate? in
             guard case let .done(output) = item.state else { return nil }
             return BatchConversionSaveCandidate(
@@ -340,15 +344,15 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
             )
         }
         guard !completed.isEmpty else { return .blocked }
+        isSaving = true
+        defer { isSaving = false }
         let client = saveClientBuilder(filePanel, outputPanel)
 
         if completed.count == 1 {
             let candidate = completed[0]
             do {
-                // 落盘文件由本会话写出，读取不走输入预算的 reader 管线。
-                let data = try Data(contentsOf: candidate.tempURL)
                 guard try await client.saveConvertedImage(
-                    data: data,
+                    at: candidate.tempURL,
                     format: candidate.format,
                     defaultBasename: defaultBasename
                 ) else { return .cancelled }
@@ -446,7 +450,7 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
             let output = try render(input)
             try Task.checkCancellation()
             let tempURL = spoolDirectory.appendingPathComponent(
-                "\(itemID.uuidString).\(output.format.fileExtension)"
+                "\(itemID.uuidString)-\(UUID().uuidString).\(output.format.fileExtension)"
             )
             do {
                 try FileManager.default.createDirectory(at: spoolDirectory, withIntermediateDirectories: true)

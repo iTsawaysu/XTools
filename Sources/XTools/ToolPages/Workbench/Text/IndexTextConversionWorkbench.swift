@@ -32,7 +32,7 @@ protocol IndexTextConversionTextSaving {
 /// Sheet-based saver: selection suspends instead of running a synchronous
 /// modal event loop.
 @MainActor
-private struct AppKitIndexTextConversionTextSaver: IndexTextConversionTextSaving {
+struct AppKitIndexTextConversionTextSaver: IndexTextConversionTextSaving {
     func saveText(
         _ text: String,
         fileName: String,
@@ -51,9 +51,20 @@ private struct AppKitIndexTextConversionTextSaver: IndexTextConversionTextSaving
             return .cancelled
         }
 
-        do {
+        guard !Task.isCancelled else { return .cancelled }
+        let work = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
             try text.write(to: url, atomically: true, encoding: .utf8)
+        }
+        do {
+            try await withTaskCancellationHandler {
+                try await work.value
+            } onCancel: {
+                work.cancel()
+            }
             return .saved
+        } catch is CancellationError {
+            return .cancelled
         } catch {
             return .failed
         }

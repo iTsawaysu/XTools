@@ -37,7 +37,7 @@ struct ImageImportOverview: Sendable {
 }
 
 /// 批量保存的候选条目：转换输出已落盘临时目录，保存时按需读取后写入。
-struct BatchConversionSaveCandidate {
+struct BatchConversionSaveCandidate: Sendable {
     let basename: String
     let tempURL: URL
     let format: ImageFileFormat

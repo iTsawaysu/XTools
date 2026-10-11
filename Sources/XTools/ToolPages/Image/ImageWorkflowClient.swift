@@ -134,7 +134,7 @@ struct ImageWorkflowClient {
             throw ImageWorkflowFailure.blockedCompressionSave
         }
         return try await save(
-            data: output.data,
+            data: { output.data },
             defaultFilename: "\(defaultBasename).\(output.format.fileExtension)",
             allowedContentTypes: [Self.utType(for: output.format)]
         )
@@ -142,14 +142,14 @@ struct ImageWorkflowClient {
 
     func saveArtifact(_ artifact: FaviconArtifact) async throws -> Bool {
         try await save(
-            data: artifact.data,
+            data: { artifact.data },
             defaultFilename: artifact.filename,
             allowedContentTypes: [Self.contentType(for: artifact)]
         )
     }
 
     func saveArtifacts(_ artifacts: [FaviconArtifact]) async throws -> Bool {
-        try await saveAll(artifacts, prompt: "选择 Favicon 部署包保存目录") { artifact, _ in
+        try await saveAll(artifacts, prompt: "选择 Favicon 部署包保存目录") { artifact, _, _ in
             (artifact.data, artifact.filename)
         }
     }
@@ -162,39 +162,85 @@ struct ImageWorkflowClient {
         defaultBasename: String
     ) async throws -> Bool {
         try await save(
-            data: data,
+            data: { data },
             defaultFilename: "\(defaultBasename).\(format.fileExtension)",
             allowedContentTypes: [Self.utType(for: format)]
         )
     }
 
-    /// 批量保存转换结果：选目录后逐张读取落盘的临时文件并写入
+    func saveConvertedImage(
+        at tempURL: URL,
+        format: ImageFileFormat,
+        defaultBasename: String
+    ) async throws -> Bool {
+        // Capture the accepted single-file result before showing the panel,
+        // preserving save even if the workspace is reset while it is open.
+        guard !Task.isCancelled else { return false }
+        let snapshot = ConvertedImageSaveSnapshot(.init(
+            basename: defaultBasename, tempURL: tempURL, format: format
+        ))
+        let read = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            return try snapshot.readData()
+        }
+        let result: Result<Bool, Error>
+        do {
+            let data = try await withTaskCancellationHandler {
+                try await read.value
+            } onCancel: {
+                read.cancel()
+            }
+            result = .success(try await saveConvertedImage(data: data, format: format, defaultBasename: defaultBasename))
+        } catch is CancellationError {
+            result = .success(false)
+        } catch {
+            result = .failure(ImageWorkflowFailure.saveFailed)
+        }
+        await Task.detached { snapshot.close() }.value
+        return try result.get()
+    }
+
+    /// 批量保存转换结果：先固定临时文件，再选目录逐张读取并写入
     /// `原名(去扩展).目标扩展`，目录内同名冲突自动追加 " 2"、" 3"…（含本批
     /// 已写入的文件），不覆盖；读取与写入失败均按该张失败计，沿用
     /// partialSaveFailed 语义。临时文件由批量会话写出，不走输入预算的
     /// reader 管线（输出可能合理地超过输入预算）。
     func saveConvertedImages(_ candidates: [BatchConversionSaveCandidate]) async throws -> Bool {
-        var reservedFilenames: Set<String> = []
-        return try await saveAll(
-            candidates,
-            prompt: "保存",
-            message: "已转换的 \(candidates.count) 张图片将保存到所选文件夹"
-        ) { candidate, directory in
-            let data = try Data(contentsOf: candidate.tempURL)
-            let url = Self.uniqueConvertedImageURL(
-                in: directory,
-                basename: candidate.basename,
-                format: candidate.format,
-                reservedFilenames: reservedFilenames
-            )
-            reservedFilenames.insert(url.lastPathComponent)
-            return (data, url.lastPathComponent)
+        guard !Task.isCancelled else { return false }
+        // Pin session-owned local spool inodes before the first suspension:
+        // reset/re-conversion may unlink paths as soon as MainActor yields.
+        // Only descriptor opens happen here; image bytes stay on the worker.
+        let snapshots = candidates.map(ConvertedImageSaveSnapshot.init)
+
+        let result: Result<Bool, Error>
+        do {
+            result = .success(try await saveAll(
+                snapshots,
+                prompt: "保存",
+                message: "已转换的 \(candidates.count) 张图片将保存到所选文件夹"
+            ) { snapshot, directory, reservedFilenames in
+                let data = try snapshot.readData()
+                let url = Self.uniqueConvertedImageURL(
+                    in: directory,
+                    basename: snapshot.candidate.basename,
+                    format: snapshot.candidate.format,
+                    reservedFilenames: reservedFilenames
+                )
+                reservedFilenames.insert(url.lastPathComponent)
+                return (data, url.lastPathComponent)
+            })
+        } catch {
+            result = .failure(error)
         }
+        // Await cleanup even on panel cancellation or partial failure. Reads,
+        // writes and closes never overlap, and no output bytes remain resident.
+        await Task.detached { snapshots.forEach { $0.close() } }.value
+        return try result.get()
     }
 
     /// 查重含目录内既有文件与本批已占用的名字（写入可能经缓冲 seam，
     /// 不能假设上一张已落盘），冲突时追加 " 2"、" 3"…，不覆盖。
-    private static func uniqueConvertedImageURL(
+    nonisolated private static func uniqueConvertedImageURL(
         in directory: URL,
         basename: String,
         format: ImageFileFormat,
@@ -229,54 +275,112 @@ struct ImageWorkflowClient {
     /// 单文件保存的共享骨架：保存面板取消返回 false（静默取消），写入失败
     /// 统一抛 saveFailed。
     private func save(
-        data: Data,
+        data: @escaping @Sendable () throws -> Data,
         defaultFilename: String,
         allowedContentTypes: [UTType]
     ) async throws -> Bool {
-        guard let url = await dialog.selectSaveURL(
-            defaultFilename: defaultFilename,
-            allowedContentTypes: allowedContentTypes
-        ) else {
+        guard !Task.isCancelled,
+              let url = await dialog.selectSaveURL(
+                defaultFilename: defaultFilename,
+                allowedContentTypes: allowedContentTypes
+              ), !Task.isCancelled else {
             return false
         }
 
+        let writer = self.writer
+        let work = Task.detached(priority: .userInitiated) {
+            try Task.checkCancellation()
+            let bytes = try data()
+            try Task.checkCancellation()
+            try writer.write(bytes, to: url)
+        }
         do {
-            try writer.write(data, to: url)
+            try await withTaskCancellationHandler {
+                try await work.value
+            } onCancel: {
+                work.cancel()
+            }
             return true
+        } catch is CancellationError {
+            return false
         } catch {
             throw ImageWorkflowFailure.saveFailed
         }
     }
 
-    /// 批量目录保存的共享骨架：选目录后逐项写入；任一项的读取/命名/写入
-    /// 失败按该张失败计——已写入 N-1 张时抛 partialSaveFailed（保留部分
-    /// 进度事实），否则抛 saveFailed。
-    private func saveAll<Item>(
+    /// One serial background operation owns reads, collision names and writes;
+    /// partial failure reports the files actually written before it stopped.
+    private func saveAll<Item: Sendable>(
         _ items: [Item],
         prompt: String,
         message: String? = nil,
-        item: (Item, URL) throws -> (data: Data, filename: String)
+        item: @escaping @Sendable (Item, URL, inout Set<String>) throws -> (data: Data, filename: String)
     ) async throws -> Bool {
-        guard let directory = await dialog.selectDirectory(prompt: prompt, message: message) else {
+        guard !Task.isCancelled,
+              let directory = await dialog.selectDirectory(prompt: prompt, message: message),
+              !Task.isCancelled else {
             return false
         }
 
-        var savedCount = 0
+        let writer = self.writer
+        let work = Task.detached(priority: .userInitiated) {
+            var savedCount = 0
+            var reservedFilenames: Set<String> = []
+            do {
+                for element in items {
+                    try Task.checkCancellation()
+                    let (data, filename) = try item(element, directory, &reservedFilenames)
+                    try Task.checkCancellation()
+                    try writer.write(data, to: directory.appendingPathComponent(filename))
+                    savedCount += 1
+                }
+            } catch {
+                if savedCount > 0 {
+                    throw ImageWorkflowFailure.partialSaveFailed(savedCount: savedCount, totalCount: items.count)
+                }
+                if error is CancellationError { throw error }
+                throw ImageWorkflowFailure.saveFailed
+            }
+        }
         do {
-            for element in items {
-                let (data, filename) = try item(element, directory)
-                try writer.write(data, to: directory.appendingPathComponent(filename))
-                savedCount += 1
+            try await withTaskCancellationHandler {
+                try await work.value
+            } onCancel: {
+                work.cancel()
             }
             return true
-        } catch {
-            if savedCount > 0 {
-                throw ImageWorkflowFailure.partialSaveFailed(
-                    savedCount: savedCount,
-                    totalCount: items.count
-                )
-            }
-            throw ImageWorkflowFailure.saveFailed
+        } catch is CancellationError {
+            return false
         }
+    }
+}
+
+/// A read-only descriptor pins the accepted inode across atomic re-conversion
+/// and reset. At most one descriptor per candidate is held; bytes are read one
+/// image at a time. MainActor opens descriptors before suspension; ownership
+/// then moves to the serial worker and awaited cleanup, never concurrently.
+private final class ConvertedImageSaveSnapshot: @unchecked Sendable {
+    let candidate: BatchConversionSaveCandidate
+    private var handle: FileHandle?
+
+    init(_ candidate: BatchConversionSaveCandidate) {
+        self.candidate = candidate
+        // Keep a failed open in its original position: preceding valid images
+        // still save, then the existing partial-success contract reports it.
+        handle = try? FileHandle(forReadingFrom: candidate.tempURL)
+    }
+
+    func readData() throws -> Data {
+        guard let handle else { throw ImageWorkflowFailure.saveFailed }
+        return try handle.readToEnd() ?? Data()
+    }
+
+    func close() {
+        try? handle?.close()
+        handle = nil
+    }
+
+    deinit {
+        try? handle?.close()
     }
 }

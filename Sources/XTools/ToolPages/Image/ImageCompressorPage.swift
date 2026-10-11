@@ -264,6 +264,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
             allowedContentTypes: ImageWorkflowClient.standardImageContentTypes,
             operation: .compression,
             selectionPublisher: uploadInteractions.publishSelection,
+            renderProvider: compressorRenderer,
             render: compressorRenderer()
         )
     }
@@ -274,6 +275,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
             allowedContentTypes: ImageWorkflowClient.standardImageContentTypes,
             operation: .compression,
             selectionPublisher: uploadInteractions.publishSelection,
+            renderProvider: compressorRenderer,
             render: compressorRenderer()
         )
     }
@@ -285,6 +287,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
     }
 
     private func compress() {
+        guard session.source != nil else { return }
         session.renderInBackground(operation: .compression, compressorRenderer())
     }
 

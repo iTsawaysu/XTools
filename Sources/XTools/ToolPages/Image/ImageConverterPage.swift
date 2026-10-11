@@ -110,7 +110,11 @@ private struct IndexImageConverterWorkspaceContent: View {
     private var canConvert: Bool {
         !session.items.isEmpty
             && outputFormats.contains(targetFormat)
-            && (!requiresTransparencyFill || selectedTransparencyFill != nil)
+            && (!hasKnownTransparency || selectedTransparencyFill != nil)
+    }
+
+    private var hasKnownTransparency: Bool {
+        !targetFormat.preservesAlpha && session.items.contains { $0.metadata.transparency == .transparent }
     }
 
     private var requiresTransparencyFill: Bool {
@@ -314,7 +318,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                     .font(ToolTypography.buttonSmall)
             }
             .buttonStyle(IndexSmallButtonStyle())
-            .disabled(session.completedCount == 0 || session.isProcessing)
+            .disabled(session.completedCount == 0 || session.isProcessing || session.isSaving)
         }
     }
 
@@ -333,7 +337,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                         .font(ToolTypography.buttonSmall)
                 }
                 .buttonStyle(IndexSmallButtonStyle())
-                .disabled(session.completedCount == 0 || session.isProcessing)
+                .disabled(session.completedCount == 0 || session.isProcessing || session.isSaving)
             }
 
             ForEach(session.items) { item in
@@ -491,10 +495,11 @@ private struct IndexImageConverterWorkspaceContent: View {
 
     private func saveConverted() {
         Task { @MainActor in
+            let savedCount = session.completedCount
             let outcome = await session.saveAll(defaultBasename: "converted", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
             ImageSaveOutcomeToasts.presentCountedOutput(
                 outcome,
-                savedCount: session.completedCount,
+                savedCount: savedCount,
                 partialNoun: "张图片",
                 toastCenter: toastCenter
             )
