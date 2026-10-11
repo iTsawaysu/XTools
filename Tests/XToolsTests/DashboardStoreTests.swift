@@ -1,4 +1,6 @@
 import Foundation
+import AppKit
+import Combine
 import XCTest
 @testable import XTools
 
@@ -43,4 +45,46 @@ final class DashboardStoreTests: XCTestCase {
         XCTAssertEqual(store.recentTools.first?.lastOpenedAt, date)
     }
 
+    func testBackgroundWritesPreserveEveryAcceptedLaunchOnRelease() throws {
+        let defaults = DashboardRecordingDefaults(suiteName: "DashboardStoreTests.\(UUID())")!
+        var store: DashboardStore? = DashboardStore(defaults: defaults)
+        for index in 0..<200 {
+            store?.recordLaunch(toolID: ToolID(rawValue: "tool-\(index)"))
+        }
+        // Releasing the owner drains the latest coalesced snapshot before returning.
+        store = nil
+        let data = try XCTUnwrap(defaults.data(forKey: DashboardStore.persistenceKey))
+        let saved = try JSONDecoder().decode(DashboardPreferences.self, from: data)
+        XCTAssertEqual(saved.activity.map(\.toolID.rawValue), (0..<200).map { "tool-\($0)" })
+        XCTAssertFalse(defaults.writeThreads.isEmpty)
+        XCTAssertTrue(defaults.writeThreads.allSatisfy { !$0 }, "History writes must leave the main thread")
+    }
+
+    func testApplicationTerminationFlushesLatestHistoryAndLaunchPublishesOnce() throws {
+        let defaults = makeDefaults()
+        let store = DashboardStore(defaults: defaults)
+        var publications = 0
+        let observer = store.objectWillChange.sink { publications += 1 }
+        for index in 0..<25 {
+            store.recordLaunch(toolID: ToolID(rawValue: "tool-\(index)"))
+        }
+        XCTAssertEqual(publications, 25)
+        NotificationCenter.default.post(name: NSApplication.willTerminateNotification, object: nil)
+        let data = try XCTUnwrap(defaults.data(forKey: DashboardStore.persistenceKey))
+        let saved = try JSONDecoder().decode(DashboardPreferences.self, from: data)
+        XCTAssertEqual(saved.activity.map(\.toolID.rawValue), (0..<25).map { "tool-\($0)" })
+        withExtendedLifetime(observer) {}
+    }
+
+}
+
+private final class DashboardRecordingDefaults: UserDefaults {
+    private let lock = NSLock()
+    private var storedWriteThreads: [Bool] = []
+    var writeThreads: [Bool] { lock.withLock { storedWriteThreads } }
+
+    override func set(_ value: Any?, forKey defaultName: String) {
+        lock.withLock { storedWriteThreads.append(Thread.isMainThread) }
+        super.set(value, forKey: defaultName)
+    }
 }

@@ -227,6 +227,28 @@ struct ToolSearchEngineTests {
 
     // MARK: - Scoring sanity
 
+    @Test func strongestContiguousAliasControlsTheDeepLink() {
+        let record = ToolSearchRecord(title: "Zed", keywords: [], aliases: [
+            ToolAlias("xtoken", segment: "weak"),
+            ToolAlias("token", segment: "strong")
+        ])
+        let match = ToolSearchEngine.match(record: record, query: "token")
+        #expect(match?.tier == .keywordContains)
+        #expect(match?.aliasMatches.map(\.label) == ["token"])
+        #expect(match?.deepLinkSegment == "strong")
+    }
+
+    @Test func strongestFuzzyAliasControlsTheDeepLink() {
+        let record = ToolSearchRecord(title: "Zed", keywords: [], aliases: [
+            ToolAlias("a123b", segment: "weak"),
+            ToolAlias("a b", segment: "strong")
+        ])
+        let match = ToolSearchEngine.match(record: record, query: "ab")
+        #expect(match?.tier == .keywordSubsequence)
+        #expect(match?.aliasMatches.map(\.label) == ["a b"])
+        #expect(match?.deepLinkSegment == "strong")
+    }
+
     @Test func fuzzyAlignmentRewardsConsecutiveRunsOverScatteredOnes() {
         let text = ToolSearchText(foldedSource: "json formatter")
 

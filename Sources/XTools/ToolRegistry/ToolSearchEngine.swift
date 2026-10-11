@@ -457,7 +457,7 @@ enum ToolSearchEngine {
             .compactMap({ entry -> (entry: ToolSearchKeywordEntry, match: ContiguousMatch)? in
                 bestContiguous(token, in: entry.text).map { (entry, $0) }
             })
-            .max(by: { $0.match.score > $1.match.score })
+            .max(by: { $0.match.score < $1.match.score })
         {
             return TokenMatch(
                 tier: .keywordContains,
@@ -480,7 +480,7 @@ enum ToolSearchEngine {
             .compactMap({ entry -> (entry: ToolSearchKeywordEntry, alignment: Alignment)? in
                 fuzzyAlign(token, in: entry.text).map { (entry, $0) }
             })
-            .max(by: { $0.alignment.score > $1.alignment.score })
+            .max(by: { $0.alignment.score < $1.alignment.score })
         {
             return TokenMatch(
                 tier: .keywordSubsequence,

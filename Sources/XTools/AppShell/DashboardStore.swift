@@ -1,5 +1,6 @@
 import Combine
 import Foundation
+import AppKit
 
 struct DashboardActivityEvent: Codable, Equatable, Identifiable {
     let id: UUID
@@ -33,17 +34,25 @@ final class DashboardStore: ObservableObject {
     static let retentionDays = 90
 
     @Published private(set) var preferences: DashboardPreferences
-    private let defaults: UserDefaults
+    private let persistence: DashboardPersistence
+    private var terminationObserver: AnyCancellable?
     private let calendar: Calendar
     private let now: () -> Date
 
     init(defaults: UserDefaults = .standard, calendar: Calendar = .current, now: @escaping () -> Date = Date.init) {
-        self.defaults = defaults
+        let persistence = DashboardPersistence(defaults: defaults, key: Self.persistenceKey)
+        self.persistence = persistence
         self.calendar = calendar
         self.now = now
         let loaded = Self.load(from: defaults) ?? DashboardPreferences()
         self.preferences = loaded
-        trimActivity(reference: now())
+        if trimActivity(reference: now()) { persist() }
+        terminationObserver = NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)
+            .sink { _ in persistence.flush() }
+    }
+
+    deinit {
+        persistence.flush()
     }
 
     var recentTools: [DashboardRecentTool] {
@@ -74,20 +83,65 @@ final class DashboardStore: ObservableObject {
         recordLaunch(toolID: toolID, at: date)
     }
 
-    private func trimActivity(reference: Date) {
-        guard let cutoff = calendar.date(byAdding: .day, value: -(Self.retentionDays - 1), to: calendar.startOfDay(for: reference)) else { return }
-        let trimmed = preferences.activity.filter { $0.timestamp >= cutoff }
-        if trimmed.count != preferences.activity.count { preferences.activity = trimmed; persist() }
+    @discardableResult
+    private func trimActivity(reference: Date) -> Bool {
+        guard let cutoff = calendar.date(byAdding: .day, value: -(Self.retentionDays - 1), to: calendar.startOfDay(for: reference)),
+              preferences.activity.contains(where: { $0.timestamp < cutoff }) else { return false }
+        preferences.activity.removeAll { $0.timestamp < cutoff }
+        return true
     }
 
     private func persist() {
-        guard let data = try? JSONEncoder().encode(preferences) else { return }
-        defaults.set(data, forKey: Self.persistenceKey)
-        objectWillChange.send()
+        persistence.enqueue(preferences)
     }
 
     private static func load(from defaults: UserDefaults) -> DashboardPreferences? {
         guard let data = defaults.data(forKey: persistenceKey), let decoded = try? JSONDecoder().decode(DashboardPreferences.self, from: data), decoded.version == DashboardPreferences.currentVersion else { return nil }
         return decoded
+    }
+}
+
+/// 编码和 UserDefaults 写入串行执行；最多保留当前写入与最新待写两个快照。
+/// 锁保护队列交接，UserDefaults 写入仅发生在串行 writer 上。
+private final class DashboardPersistence: @unchecked Sendable {
+    private let defaults: UserDefaults
+    private let key: String
+    private let queue = DispatchQueue(label: "XTools.DashboardPersistence", qos: .utility)
+    private let lock = NSLock()
+    private var latest: DashboardPreferences?
+    private var isDraining = false
+
+    init(defaults: UserDefaults, key: String) {
+        self.defaults = defaults
+        self.key = key
+    }
+
+    func enqueue(_ preferences: DashboardPreferences) {
+        let shouldStart = lock.withLock {
+            latest = preferences
+            guard !isDraining else { return false }
+            isDraining = true
+            return true
+        }
+        if shouldStart { queue.async { self.drain() } }
+    }
+
+    func flush() {
+        queue.sync {}
+    }
+
+    private func drain() {
+        while let snapshot = lock.withLock({ () -> DashboardPreferences? in
+            guard let snapshot = latest else {
+                isDraining = false
+                return nil
+            }
+            latest = nil
+            return snapshot
+        }) {
+            if let data = try? JSONEncoder().encode(snapshot) {
+                defaults.set(data, forKey: key)
+            }
+        }
     }
 }
