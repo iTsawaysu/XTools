@@ -72,6 +72,7 @@ public enum HTMLToMarkdownConversionError: Error, Equatable, Sendable, Localized
 public enum HTMLToMarkdownWarning: Equatable, Sendable {
     case unsupportedElement(String)
     case flattenedTableSpan
+    case orderedListStartOutOfRange
     case droppedUnsafeElement(String)
     case emptyVisibleContent
     case completedInputExceedsThreshold(Int)

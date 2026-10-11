@@ -12,6 +12,7 @@ enum YAMLProcessingPreflight {
 
     struct Summary {
         var hasAliases = false
+        var hasAnchors = false
         var outputUpperBound = 0
     }
 
@@ -28,7 +29,7 @@ enum YAMLProcessingPreflight {
         var shape = Shape(height: 1)
     }
 
-    static func inspect(_ input: String, indent: Int = 2) throws -> Summary {
+    static func inspect(_ input: String, indent: Int = 2, constructsValues: Bool = false) throws -> Summary {
         try StructuredTextExecution.validateInput(input, format: "YAML")
         let data = Data(input.utf8)
         var parser = yaml_parser_t()
@@ -113,11 +114,21 @@ enum YAMLProcessingPreflight {
                 default:
                     break
                 }
+                if anchor != nil { summary.hasAnchors = true }
                 guard expandedTagBytes <= StructuredTextExecution.maximumOutputBytes else {
                     throw StructuredTextResourceError(format: "YAML", reason: "标签展开成本超过处理容量上限")
                 }
                 summary.outputUpperBound += 16 + (stack.count + 1) * max(2, min(indent, 9))
                 if let completed {
+                    // Node-only consumers retain shared value aliases. Yams.load
+                    // constructs Any recursively, so its entire expanded tree
+                    // (including ignored x- fields) needs a separate cost gate.
+                    if constructsValues {
+                        guard completed.nodes <= maximumKeyNodes,
+                              completed.hashBytes <= maximumKeyBytes else {
+                            throw StructuredTextResourceError(format: "YAML", reason: "值展开成本超过处理容量上限")
+                        }
+                    }
                     guard completed.height + stack.count <= maximumDepth else { throw depthError() }
                     if let anchor { anchors[anchor] = completed }
                     if !stack.isEmpty {

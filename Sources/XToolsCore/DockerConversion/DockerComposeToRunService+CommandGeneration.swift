@@ -224,8 +224,13 @@ extension DockerComposeToRunService {
         if let stopSignal = scalarString(service["stop_signal"]) {
             flag(stopSignal, "--stop-signal")
         }
-        if let stopGrace = scalarString(service["stop_grace_period"]) {
-            flag(stopGrace, "--stop-timeout")
+        if service["stop_grace_period"] != nil {
+            if let stopGrace = scalarString(service["stop_grace_period"]),
+               let seconds = stopTimeoutSeconds(stopGrace) {
+                flag(seconds, "--stop-timeout")
+            } else {
+                skipped.append("stop_grace_period(无法无损转换为整数秒)")
+            }
         }
         if service["init"] as? Bool == true {
             args.append("--init")
@@ -860,6 +865,63 @@ extension DockerComposeToRunService {
     }
 
     // MARK: - Shell tokenization
+
+    /// Compose uses Go-style durations; Docker --stop-timeout takes integer
+    /// seconds. Integer nanoseconds prevent rounding away a fractional timeout.
+    private static func stopTimeoutSeconds(_ value: String) -> String? {
+        if value == "0" { return "0" }
+        guard !value.isEmpty else { return nil }
+        let source = value as NSString
+        let units: [String: Int64] = [
+            "ns": 1, "us": 1_000, "µs": 1_000, "μs": 1_000,
+            "ms": 1_000_000, "s": 1_000_000_000,
+            "m": 60_000_000_000, "h": 3_600_000_000_000
+        ]
+        var cursor = value.hasPrefix("+") ? 1 : 0
+        var total: Int64 = 0
+        var valid = cursor < source.length
+        durationComponent.enumerateMatches(in: value, range: NSRange(location: cursor, length: source.length - cursor)) { match, _, stop in
+            guard let match, match.range.location == cursor,
+                  let unit = units[source.substring(with: match.range(at: 2))],
+                  let amount = durationNanoseconds(source.substring(with: match.range(at: 1)), unit: unit) else {
+                valid = false; stop.pointee = true; return
+            }
+            let sum = total.addingReportingOverflow(amount)
+            guard !sum.overflow else { valid = false; stop.pointee = true; return }
+            total = sum.partialValue
+            cursor = NSMaxRange(match.range)
+        }
+        guard valid, cursor == source.length, total.isMultiple(of: 1_000_000_000) else { return nil }
+        return String(total / 1_000_000_000)
+    }
+
+    private static func durationNanoseconds(_ number: String, unit: Int64) -> Int64? {
+        let parts = number.split(separator: ".", omittingEmptySubsequences: false)
+        guard let whole = Int64(parts[0].isEmpty ? "0" : String(parts[0])) else { return nil }
+        let integral = whole.multipliedReportingOverflow(by: unit)
+        guard !integral.overflow else { return nil }
+        guard parts.count == 2 else { return integral.partialValue }
+        var fraction = parts[1]
+        while fraction.last == "0" { fraction = fraction.dropLast() }
+        guard !fraction.isEmpty else { return integral.partialValue }
+        // No supported unit has enough decimal factors for a longer fraction
+        // to represent an exact nanosecond once trailing zeros are removed.
+        guard fraction.count <= 18, let numerator = Int64(fraction) else { return nil }
+        var denominator: Int64 = 1
+        for _ in fraction { denominator *= 10 }
+        var a = unit, b = denominator
+        while b != 0 { let remainder = a % b; a = b; b = remainder }
+        let reducedDenominator = denominator / a
+        guard numerator.isMultiple(of: reducedDenominator) else { return nil }
+        let fractional = (numerator / reducedDenominator).multipliedReportingOverflow(by: unit / a)
+        guard !fractional.overflow else { return nil }
+        let total = integral.partialValue.addingReportingOverflow(fractional.partialValue)
+        return total.overflow ? nil : total.partialValue
+    }
+
+    private static let durationComponent = try! NSRegularExpression(
+        pattern: #"([0-9]+(?:\.[0-9]*)?|\.[0-9]+)(ns|us|µs|μs|ms|s|m|h)"#
+    )
 
     /// 可以安全裸写进 shell 的字符：字母、数字，以及不会触发分词、通配、重定向或
     /// 变量展开的标点。

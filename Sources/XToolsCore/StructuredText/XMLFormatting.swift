@@ -80,21 +80,15 @@ public enum XMLFormatting {
                         if !output.text.isEmpty { try output.append("\n") }
                     }
                     if child.kind == .element {
-                        if minify {
-                            try output.append(try render(child, level: 0, indentWidth: 0, minify: true))
-                        } else {
-                            try output.append(try render(child, level: 0, indentWidth: max(0, indentWidth), minify: false))
-                        }
+                        let rendered = try render(child, level: 0, indentWidth: minify ? 0 : max(0, indentWidth), minify: minify)
+                        try output.append(try escapeSerializedAttributeWhitespace(rendered))
                     } else if child.kind == .comment || child.kind == .processingInstruction {
                         try output.append(child.xmlString(options: []))
                     }
                 }
             } else {
-                if minify {
-                    try output.append(try render(root, level: 0, indentWidth: 0, minify: true))
-                } else {
-                    try output.append(try render(root, level: 0, indentWidth: max(0, indentWidth), minify: false))
-                }
+                let rendered = try render(root, level: 0, indentWidth: minify ? 0 : max(0, indentWidth), minify: minify)
+                try output.append(try escapeSerializedAttributeWhitespace(rendered))
             }
             return output.text
         } catch is CancellationError {
@@ -116,6 +110,54 @@ public enum XMLFormatting {
 
     public static func minify(_ input: String) throws -> String {
         try format(input, indentWidth: 0, minify: true)
+    }
+
+    /// Foundation emits decoded attribute TAB/LF/CR literally, which XML parsers
+    /// normalize to spaces. Escape those values once after rendering the root;
+    /// text, CDATA, comments, processing instructions and the preamble stay intact.
+    private static func escapeSerializedAttributeWhitespace(_ xml: String) throws -> String {
+        let bytes = xml.utf8
+        var index = bytes.startIndex
+        var segmentStart = index
+        var inTag = false
+        var quote: UInt8?
+        var output = StructuredTextOutput(format: "XML")
+        var scanned = 0
+        while index < bytes.endIndex {
+            try StructuredTextExecution.checkpoint(scanned)
+            scanned += 1
+            let byte = bytes[index]
+            let next = bytes.index(after: index)
+            if let activeQuote = quote {
+                if byte == activeQuote {
+                    quote = nil
+                } else if byte == 9 || byte == 10 || byte == 13 {
+                    try output.append(String(decoding: bytes[segmentStart..<index], as: UTF8.self))
+                    try output.append("&#\(byte);")
+                    segmentStart = next
+                }
+            } else if inTag {
+                if byte == 34 || byte == 39 { quote = byte }
+                if byte == 62 { inTag = false }
+            } else if byte == 60 {
+                let suffix = xml[index...]
+                let terminator: String?
+                if suffix.hasPrefix("<!--") { terminator = "-->" }
+                else if suffix.hasPrefix("<![CDATA[") { terminator = "]]>" }
+                else if suffix.hasPrefix("<?") { terminator = "?>" }
+                else { terminator = nil }
+                if let terminator,
+                   let end = xml.range(of: terminator, range: index..<xml.endIndex)?.upperBound {
+                    index = end
+                    continue
+                }
+                inTag = true
+            }
+            index = next
+        }
+        guard segmentStart != bytes.startIndex else { return xml }
+        try output.append(String(decoding: bytes[segmentStart...], as: UTF8.self))
+        return output.text
     }
 
     private static func syntaxDiagnostic(

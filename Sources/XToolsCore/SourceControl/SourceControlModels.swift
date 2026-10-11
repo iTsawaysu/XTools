@@ -280,14 +280,9 @@ public struct SourceControlDiagnostic: Error, Codable, Equatable, Hashable, Send
                 recovery: "请手动解决冲突后重试。"
             )
         }
-        let firstLine = standardError
-            .split(whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .first { !$0.isEmpty }
-        let suffix = firstLine.map { "（\($0.prefix(160))）" } ?? ""
         return SourceControlDiagnostic(
             code: "pull-failed",
-            summary: "拉取未完成\(suffix)。",
+            summary: "拉取未完成。",
             recovery: "请检查仓库状态和远端配置后重试。"
         )
     }

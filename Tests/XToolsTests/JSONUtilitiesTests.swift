@@ -609,8 +609,7 @@ struct JSONFormattingTests {
     @Test func escapesJSONStringProperly() throws {
         let minified = #"{"name":"XTools","tags":["a","b"]}"#
         let escaped = try JSONFormatting.escapeJSONChecked(minified)
-        #expect(escaped == #""{\"name\":\"XTools\",\"tags\":[\"a\",\"b\"]\}""# || escaped.contains(#"\"name\""#))
-        #expect(escaped.hasPrefix("\"") && escaped.hasSuffix("\""))
+        #expect(escaped == #""{\"name\":\"XTools\",\"tags\":[\"a\",\"b\"]}""#)
 
         let unescaped = try JSONFormatting.unescapeJSONChecked(escaped)
         #expect(unescaped == minified)

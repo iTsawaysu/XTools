@@ -148,9 +148,10 @@ public enum YAMLPrettifier {
             return ""
         }
 
-        // 两个检测共享一次行拆分与遍历（各自维护独立的块标量状态机，
-        // 判定逻辑与分开扫描时逐行等价）。
-        let (hasAnchorOrAlias, hasStructuralComment) = try anchorAndCommentPresence(in: input)
+        // The already completed libyaml event preflight knows actual anchors;
+        // only comments need the source-preserving scan.
+        let hasAnchorOrAlias = preflight.hasAnchors || preflight.hasAliases
+        let hasStructuralComment = try containsStructuralComment(in: input)
 
         if options.sortKeys, hasStructuralComment {
             throw ValidationError.unsupportedCommentPreservingSort(
@@ -291,58 +292,72 @@ public enum YAMLPrettifier {
         try StructuredTextExecution.validateIndent(indentWidth, format: "YAML")
         guard indentWidth > 0 else { return lines }
 
-        let unit = try detectedIndentUnit(in: lines)
-        guard unit > 0, unit != indentWidth, hasConsistentIndentation(lines, unit: unit) else {
-            return lines
-        }
+        guard let indents = try structuralIndents(in: lines),
+              let unit = indents.min(), unit > 0, unit != indentWidth,
+              indents.allSatisfy({ $0 % unit == 0 }) else { return lines }
 
         var result: [String] = []
         var budget = StructuredTextOutput(format: "YAML")
         var activeBlockScalar: BlockScalarState?
+        var blockIndentDelta = 0
 
         for line in lines {
             try StructuredTextExecution.checkCancellation()
             if var blockScalar = activeBlockScalar {
-                let stillInside = blockScalar.contains(line)
-                result.append(line)
-                activeBlockScalar = stillInside ? blockScalar : nil
-                continue
+                if blockScalar.contains(line) {
+                    activeBlockScalar = blockScalar
+                    let leading = line.prefix { $0 == " " }.count
+                    // Move the whole scalar with its header. Relative whitespace,
+                    // explicit indentation indicators and chomping stay intact.
+                    let padding = max(0, leading + blockIndentDelta)
+                    try budget.reserve(padding + line.utf8.count - leading + 1)
+                    result.append(String(repeating: " ", count: padding) + line.dropFirst(leading))
+                    continue
+                }
+                activeBlockScalar = nil
+                // The first sibling after a scalar still needs normal indentation.
             }
 
             let leading = line.prefix { $0 == " " }.count
-            if !line.isEmpty {
-                let level = leading / unit
-                let padding = level * indentWidth
-                try budget.reserve(padding + line.utf8.count - leading + 1)
-                result.append(String(repeating: " ", count: padding) + line.dropFirst(leading))
-            } else {
-                result.append(line)
-            }
-
+            let padding = line.isEmpty ? 0 : (leading / unit) * indentWidth
+            try budget.reserve(padding + line.utf8.count - leading + 1)
+            result.append(String(repeating: " ", count: padding) + line.dropFirst(leading))
             if let header = try blockScalarHeader(in: line) {
                 activeBlockScalar = BlockScalarState(header: header)
+                blockIndentDelta = padding - leading
             }
         }
-
         return result
     }
 
-    private static func detectedIndentUnit(in lines: [String]) throws -> Int {
-        var unit = 0
+    private static func structuralIndents(in lines: [String]) throws -> Set<Int>? {
+        var indents: Set<Int> = []
+        var blockScalar: BlockScalarState?
         for line in lines {
             try StructuredTextExecution.checkCancellation()
+            if var active = blockScalar {
+                if active.contains(line) {
+                    blockScalar = active
+                    continue
+                }
+                blockScalar = nil
+            }
             let leading = line.prefix { $0 == " " }.count
-            guard leading > 0, !line.dropFirst(leading).isEmpty else { continue }
-            unit = unit == 0 ? leading : min(unit, leading)
+            let content = line.dropFirst(leading)
+            if content.hasPrefix("- "),
+               try firstMappingDelimiterIndex(in: String(content.dropFirst(2))) != nil {
+                // An inline sequence mapping starts two columns after its dash.
+                // Scaling only leading spaces moves its siblings to a different
+                // mapping (or into a block scalar). Retain this document's indent
+                // until a structure-aware comment-preserving emitter is available.
+                return nil
+            }
+            if leading > 0, !content.isEmpty { indents.insert(leading) }
+            if let header = try blockScalarHeader(in: line) {
+                blockScalar = BlockScalarState(header: header)
+            }
         }
-        return unit
-    }
-
-    private static func hasConsistentIndentation(_ lines: [String], unit: Int) -> Bool {
-        lines.allSatisfy { line in
-            let leading = line.prefix { $0 == " " }.count
-            return leading == 0 || leading % unit == 0
-        }
+        return indents
     }
 
     private static func formatLine(_ line: String) throws -> String {
@@ -524,120 +539,24 @@ public enum YAMLPrettifier {
         return BlockScalarIndicator(explicitIndent: explicitIndent)
     }
 
-    /// 单次遍历同时检测锚点/别名与结构性注释。两个检测原先各自拆行全量
-    /// 扫描；合并后共享一次拆分，但各自维持独立的块标量/引号状态机，
-    /// 逐行判定（含块标量内跳过）与分开扫描完全一致。
-    private static func anchorAndCommentPresence(in input: String) throws -> (hasAnchorOrAlias: Bool, hasStructuralComment: Bool) {
-        let lines = input.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        var anchorBlockScalar: BlockScalarState?
-        var commentBlockScalar: BlockScalarState?
+    private static func containsStructuralComment(in input: String) throws -> Bool {
+        var blockScalar: BlockScalarState?
         var quoteState = CommentQuoteState()
-        var hasAnchorOrAlias = false
-        var hasStructuralComment = false
-
-        for line in lines {
-            if !hasAnchorOrAlias {
-                var anchorSkipsLine = false
-                if var blockScalar = anchorBlockScalar {
-                    if blockScalar.contains(line) {
-                        anchorBlockScalar = blockScalar
-                        anchorSkipsLine = true
-                    } else {
-                        anchorBlockScalar = nil
-                    }
+        for lineSlice in input.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = String(lineSlice)
+            if var active = blockScalar {
+                if active.contains(line) {
+                    blockScalar = active
+                    continue
                 }
-                if !anchorSkipsLine {
-                    if try lineContainsAnchorOrAliasToken(line) {
-                        hasAnchorOrAlias = true
-                    } else if let header = try blockScalarHeader(in: line) {
-                        anchorBlockScalar = BlockScalarState(header: header)
-                    }
-                }
+                blockScalar = nil
             }
-
-            if !hasStructuralComment {
-                var commentSkipsLine = false
-                if var blockScalar = commentBlockScalar {
-                    if blockScalar.contains(line) {
-                        commentBlockScalar = blockScalar
-                        commentSkipsLine = true
-                    } else {
-                        commentBlockScalar = nil
-                    }
-                }
-                if !commentSkipsLine {
-                    if try quoteState.containsCommentToken(in: line) {
-                        hasStructuralComment = true
-                    } else if !quoteState.isInsideQuotedScalar,
-                              let header = try blockScalarHeader(in: line) {
-                        commentBlockScalar = BlockScalarState(header: header)
-                    }
-                }
+            if try quoteState.containsCommentToken(in: line) { return true }
+            if !quoteState.isInsideQuotedScalar, let header = try blockScalarHeader(in: line) {
+                blockScalar = BlockScalarState(header: header)
             }
-
-            if hasAnchorOrAlias, hasStructuralComment {
-                return (true, true)
-            }
-        }
-
-        return (hasAnchorOrAlias, hasStructuralComment)
-    }
-
-    /// 只有 token 起始位置的 `&`/`*` 才可能是锚点/别名（前一字符是行首、空白
-    /// 或 flow 分隔符）。`a*b`、`echo *`、`"&x"`、注释里的 `*x` 都不算，避免
-    /// 把普通标量误判成锚点而白白放弃序列化路径。
-    private static func lineContainsAnchorOrAliasToken(_ line: String) throws -> Bool {
-        var inSingleQuote = false
-        var inDoubleQuote = false
-        var previous: Character?
-
-        var index = line.startIndex
-        var scanSteps = 0
-        while index < line.endIndex {
-            try StructuredTextExecution.checkpoint(scanSteps)
-            scanSteps += 1
-            let character = line[index]
-
-            if inSingleQuote {
-                if character == "'" {
-                    // 单引号标量里 '' 是转义的单引号，不是引号结束。
-                    let next = line.index(after: index)
-                    if next < line.endIndex, line[next] == "'" {
-                        index = next
-                    } else {
-                        inSingleQuote = false
-                    }
-                }
-            } else if inDoubleQuote {
-                if character == "\\" {
-                    index = line.index(after: index)
-                } else if character == "\"" {
-                    inDoubleQuote = false
-                }
-            } else if character == "'" {
-                inSingleQuote = true
-            } else if character == "\"" {
-                inDoubleQuote = true
-            } else if character == "#", previous == nil || previous == " " || previous == "\t" {
-                // 行内注释从此开始，注释内容里的 &/* 不算。
-                return false
-            } else if character == "&" || character == "*" {
-                let isTokenStart = previous == nil || previous == " " || previous == "\t"
-                    || previous == "[" || previous == "{" || previous == ","
-                let next = line.index(after: index)
-                if isTokenStart, next < line.endIndex, isAnchorNameCharacter(line[next]) {
-                    return true
-                }
-            }
-
-            previous = character
-            index = line.index(after: index)
         }
         return false
-    }
-
-    private static func isAnchorNameCharacter(_ character: Character) -> Bool {
-        character.isLetter || character.isNumber || character == "_" || character == "-"
     }
 
     private struct CommentQuoteState {

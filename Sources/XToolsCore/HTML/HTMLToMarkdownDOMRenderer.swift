@@ -275,13 +275,22 @@ final class HTMLToMarkdownDOMRenderer {
 
     private func renderList(_ list: Element, ordered: Bool) throws -> String {
         try cancellation.check()
-        let start = ordered ? max(Int(attribute("start", for: list)) ?? 1, 1) : 1
+        let rawStart = attribute("start", for: list)
+        let requestedStart = Int(rawStart)
+        let maximumMarker = 999_999_999 // CommonMark ordered markers allow 1–9 digits.
+        let oversizedStart = (requestedStart ?? 1) > maximumMarker
+            || (requestedStart == nil && rawStart.utf8.count > 9 && rawStart.utf8.allSatisfy { (48...57).contains($0) })
+        if ordered, oversizedStart { appendWarning(.orderedListStartOutOfRange) }
+        let start = ordered && !oversizedStart ? max(requestedStart ?? 1, 1) : 1
         let items = list.getChildNodes().compactMap { $0 as? Element }.filter { $0.tagNameNormal() == "li" }
         var lines: [String] = []
 
         for (offset, item) in items.enumerated() {
             try cancellation.check()
-            let marker = ordered ? "\(start + offset). " : "+ "
+            // Later marker numbers do not set the rendered list's ordinal;
+            // reuse the valid start when incrementing would exceed Markdown's limit.
+            let number = offset <= maximumMarker - start ? start + offset : start
+            let marker = ordered ? "\(number). " : "+ "
             let renderedItem = try renderListItem(item, marker: marker)
             if !renderedItem.isEmpty {
                 lines.append(renderedItem)

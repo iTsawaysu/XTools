@@ -1,9 +1,8 @@
 import Foundation
 
-/// JWT 分段 JSON 的统一解析入口：先用宽容扫描器检测对象成员名重复，
-/// 再交给 `JSONSerialization` 取值。
+/// JWT 分段 JSON 的统一解析入口：先验证 JSON，再检测对象成员名重复。
 ///
-/// 背景：`JSONSerialization` 对重复键按后者覆盖前者处理，而 JWT 的
+/// 背景：`JSONSerialization` 不拒绝重复键，而 JWT 的
 /// header 决定验证算法——重复的 `alg` 成员会让"取哪个算法"变得含糊，
 /// 属于经典的算法混淆攻击面（RFC 7519 §4.1.1 要求成员名唯一）。
 /// 扫描是正向检测：只有"确认发现重复"才抛错，任何看不懂的结构都
@@ -29,13 +28,12 @@ enum JWTJSONObjectParser {
         try scanner.scan()
     }
 
-    /// 单遍标量扫描。深度超过上限等极端输入静默放行——这里的职责
-    /// 只有一件事：在合法 JSON 里抓重复成员名。
+    /// 单遍迭代扫描，深度沿用 Foundation 已验证的 JSON 上限；不能在
+    /// 深层字段处静默退出，否则后续同级成员的重复键会漏检。
     private struct DuplicateKeyScanner {
         private let scalars: String.UnicodeScalarView
         private var index: String.UnicodeScalarView.Index
         private var stack: [Frame] = []
-        private static let maximumDepth = 256
 
         private struct Frame {
             var isObject: Bool
@@ -127,10 +125,8 @@ enum JWTJSONObjectParser {
                         decodedKeyUnits = []
                     }
                 case "{":
-                    guard stack.count < Self.maximumDepth else { return }
                     stack.append(Frame(isObject: true, keys: [], awaitingKey: true))
                 case "[":
-                    guard stack.count < Self.maximumDepth else { return }
                     stack.append(Frame(isObject: false, keys: [], awaitingKey: false))
                 case "}":
                     guard stack.last?.isObject == true else { return }

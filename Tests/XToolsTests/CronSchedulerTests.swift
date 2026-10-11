@@ -168,10 +168,8 @@ struct CronSchedulerTests {
         #expect(CronScheduler.dayMatchingExplanation("invalid") == nil)
     }
 
-    /// Vixie cron 以字段**首字符是否为 `*`** 判定是否受限，因此 `*/2` 属于不受限：
-    /// `0 0 */2 * MON` 只应在星期一触发。早先只把字面量 `*` 视为通配，
-    /// 会把 `*/2` 当成受限字段，从而在非星期一的日子也触发。
-    @Test func stepFieldsCountAsUnrestrictedForOrSemantics() {
+    /// A leading star selects AND instead of OR; stepping still restricts its set.
+    @Test func stepFieldsUseAndSemanticsWithoutLosingTheirDayConstraint() {
         #expect(CronScheduler.dayMatchingExplanation("0 0 */2 * MON") == nil)
 
         let calendar = gregorianUTC()
@@ -190,6 +188,7 @@ struct CronSchedulerTests {
         for date in mondays {
             let weekday = calendar.component(.weekday, from: date)
             #expect(weekday == 2, Comment(rawValue: "\(date) 不是星期一"))
+            #expect(calendar.component(.day, from: date) % 2 == 1)
         }
 
         // 不以 `*` 开头的步长写法仍是受限字段，维持「或」语义。
@@ -499,8 +498,8 @@ struct CronSchedulerTests {
         #expect(CronScheduler.expressionSummary("@daily") == "每天 00:00 运行")
         // 步长月份展开为可枚举集合时如实列举；与 vixie 通配语义一致。
         #expect(CronScheduler.expressionSummary("0 0 1 */3 *") == "1、4、7、10 月的 1 号 00:00 运行")
-        // */2 日字段按 vixie DOM_STAR 语义视为不受限。
-        #expect(CronScheduler.expressionSummary("0 0 */2 * *") == "每天 00:00 运行")
+        // DOM_STAR selects AND; */2 still restricts days, so avoid a false daily summary.
+        #expect(CronScheduler.expressionSummary("0 0 */2 * *") == nil)
         #expect(CronScheduler.expressionSummary("0 0 1 */2 *") == nil) // 步长月份展开超枚举上限
         #expect(CronScheduler.expressionSummary("0 0 1 1,3,5,7,9,11 *") == nil) // 超长月份列表
         #expect(CronScheduler.expressionSummary("* 9,10,11,12,13,14 * * *") == nil) // 超长小时列表

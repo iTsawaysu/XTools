@@ -190,11 +190,18 @@ final class SourceControlCoreTests: XCTestCase {
         )
     }
 
-    func testPullFailureFallbackCarriesFirstStderrLine() {
-        let diagnostic = SourceControlDiagnostic.pullFailure(standardError: "\nfatal: weird failure\nsecond line")
-        XCTAssertEqual(diagnostic.code, "pull-failed")
-        XCTAssertTrue(diagnostic.summary.contains("fatal: weird failure"))
-        XCTAssertFalse(diagnostic.summary.contains("second line"))
+    func testPullFailureFallbackDoesNotExposeProcessOutput() {
+        for stderr in [
+            "\nfatal: weird failure\nsecond line",
+            "fatal: repository 'https://audit-user:audit-secret@example.invalid/private.git/' not found",
+            "fatal: cannot change to '/Users/audit-user/private-project': unknown failure",
+            ""
+        ] {
+            let diagnostic = SourceControlDiagnostic.pullFailure(standardError: stderr)
+            XCTAssertEqual(diagnostic.code, "pull-failed")
+            XCTAssertEqual(diagnostic.summary, "拉取未完成。")
+            XCTAssertEqual(diagnostic.recovery, "请检查仓库状态和远端配置后重试。")
+        }
     }
 
     func testExecutorSurfacesClassifiedPullFailureDiagnostic() async {

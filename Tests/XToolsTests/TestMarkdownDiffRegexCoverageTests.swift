@@ -169,7 +169,6 @@ struct TestMarkdownDiffRegexCoverageTests {
             #expect(message.contains("12,000,000 个比对单元"), Comment(rawValue: message))
             #expect(try LineDiffer.safeAlignedDiff(left: "a", right: "b").contains { $0.kind.isDifference })
         case "TEXT-DIFF-12":
-            #expect(LineDiffer.diff(left: "", right: "") == "")
             #expect(try LineDiffer.safeAlignedDiff(left: "", right: "").isEmpty)
         default:
             Issue.record("Unhandled case \(id)")

@@ -130,7 +130,7 @@ public enum CronScheduler {
         }
 
         for component in value.split(separator: ",") {
-            let base = component.split(separator: "/", maxSplits: 1)[0]
+            let base = component.split(separator: "/", maxSplits: 1, omittingEmptySubsequences: false)[0]
             let bounds = base.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
             if bounds.count == 2,
                let lower = Int(bounds[0]),
@@ -191,12 +191,9 @@ public enum CronScheduler {
             let dayMatches: Bool
             if !domWild && !dowWild {
                 dayMatches = fields.daysOfMonth.contains(day) || normalizedWeekdays.contains(weekday)
-            } else if !domWild {
-                dayMatches = fields.daysOfMonth.contains(day)
-            } else if !dowWild {
-                dayMatches = normalizedWeekdays.contains(weekday)
             } else {
-                dayMatches = true
+                // A star prefix chooses AND semantics; */n still limits its field.
+                dayMatches = fields.daysOfMonth.contains(day) && normalizedWeekdays.contains(weekday)
             }
 
             if !fields.months.contains(month) || !dayMatches {
@@ -414,14 +411,20 @@ public enum CronScheduler {
             return nil
         }
 
+        // A stepped star is not an unrestricted day set. Keep the detailed
+        // field explanations when this compact summary cannot express the AND.
+        if (domWildcard && !domCoverAll) || (dowWildcard && !dowCoverAll) {
+            return nil
+        }
+
         // 「每年 1 月 1 号」是同时约束月与日的常见特例，直接拼成整句。
         if let m = fields.months.first, fields.months.count == 1,
            dowWildcard, let d = fields.daysOfMonth.first, fields.daysOfMonth.count == 1 {
             return String(format: "每年 %d 月 %d 号 %@%@运行", m, d, time, time.contains(":") ? " " : "")
         }
 
-        // 日匹配语义与 nextRuns 的 vixie 规则一致：通配字段被忽略；
-        // 受限字段全覆盖（1-31 / 0-7）时每一天都命中。
+        // With full wildcard sets, the remaining field determines the day;
+        // two restricted fields use OR semantics, including full-range sets.
         let day: String
         if domWildcard && dowWildcard {
             day = "每天"

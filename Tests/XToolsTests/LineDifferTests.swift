@@ -3,70 +3,70 @@ import Testing
 @testable import XToolsCore
 
 struct LineDifferTests {
-    @Test func emptyInputs() {
-        let result = LineDiffer.diff(left: "", right: "")
-        #expect(result == "")
+    @Test func emptyInputs() throws {
+        let rows = try LineDiffer.safeAlignedDiff(left: "", right: "")
+        #expect(rows.map(\.kind) == [])
+        #expect(rows.map { $0.left?.text } == [])
+        #expect(rows.map { $0.right?.text } == [])
     }
 
-    @Test func identicalInputs() {
-        let text = "line1\nline2\nline3"
-        let result = LineDiffer.diff(left: text, right: text)
-        #expect(result.contains("共 0 行不同"))
-        #expect(result.contains("  line1"))
-        #expect(result.contains("  line2"))
-        #expect(result.contains("  line3"))
+    @Test func identicalInputs() throws {
+        let rows = try LineDiffer.safeAlignedDiff(left: "line1\nline2\nline3", right: "line1\nline2\nline3")
+        #expect(rows.map(\.kind) == [.unchanged, .unchanged, .unchanged])
+        #expect(rows.map { $0.left?.text } == ["line1", "line2", "line3"])
+        #expect(rows.map { $0.right?.text } == ["line1", "line2", "line3"])
     }
 
-    @Test func addedLines() {
-        let left = "line1\nline2"
-        let right = "line1\nline2\nline3"
-        let result = LineDiffer.diff(left: left, right: right)
-        #expect(result.contains("共 1 行不同"))
-        #expect(result.contains("  line1"))
-        #expect(result.contains("  line2"))
-        #expect(result.contains("+ line3"))
+    @Test func addedLines() throws {
+        let rows = try LineDiffer.safeAlignedDiff(left: "line1\nline2", right: "line1\nline2\nline3")
+        #expect(rows.map(\.kind) == [.unchanged, .unchanged, .added])
+        #expect(rows.map { $0.left?.text } == ["line1", "line2", nil])
+        #expect(rows.map { $0.right?.text } == ["line1", "line2", "line3"])
     }
 
-    @Test func removedLines() {
-        let left = "line1\nline2\nline3"
-        let right = "line1\nline3"
-        let result = LineDiffer.diff(left: left, right: right)
-
-        // The differ shows both lines as changed since left[1]="line2" != right[1]="line3"
-        #expect(result.contains("共 2 行不同"))
-        #expect(result.contains("  line1"))
-        #expect(result.contains("− line2"))
-        #expect(result.contains("+ line3"))
+    @Test func removedLines() throws {
+        let rows = try LineDiffer.safeAlignedDiff(left: "line1\nline2\nline3", right: "line1\nline3")
+        #expect(rows.map(\.kind) == [.unchanged, .removed, .unchanged])
+        #expect(rows.map { $0.left?.text } == ["line1", "line2", "line3"])
+        #expect(rows.map { $0.right?.text } == ["line1", nil, "line3"])
     }
 
-    @Test func mixedChanges() {
-        let left = "unchanged\nold line\nanother unchanged"
-        let right = "unchanged\nnew line\nanother unchanged"
-        let result = LineDiffer.diff(left: left, right: right)
-        #expect(result.contains("共 1 行不同"))
-        #expect(result.contains("  unchanged"))
-        #expect(result.contains("− old line"))
-        #expect(result.contains("+ new line"))
-        #expect(result.contains("  another unchanged"))
+    @Test func mixedChanges() throws {
+        let rows = try LineDiffer.safeAlignedDiff(left: "unchanged\nold line\nanother unchanged", right: "unchanged\nnew line\nanother unchanged")
+        #expect(rows.map(\.kind) == [.unchanged, .changed, .unchanged])
+        #expect(rows.map { $0.left?.text } == ["unchanged", "old line", "another unchanged"])
+        #expect(rows.map { $0.right?.text } == ["unchanged", "new line", "another unchanged"])
     }
 
-    @Test func singleLineChange() {
-        let left = "hello"
-        let right = "world"
-        let result = LineDiffer.diff(left: left, right: right)
-        #expect(result.contains("共 1 行不同"))
-        #expect(result.contains("− hello"))
-        #expect(result.contains("+ world"))
+    @Test func singleLineChange() throws {
+        let rows = try LineDiffer.safeAlignedDiff(left: "hello", right: "world")
+        #expect(rows.map(\.kind) == [.changed])
+        #expect(rows.map { $0.left?.text } == ["hello"])
+        #expect(rows.map { $0.right?.text } == ["world"])
     }
 
-    @Test func emptyLineHandling() {
-        let left = "line1\n\nline3"
-        let right = "line1\n\nline3"
-        let result = LineDiffer.diff(left: left, right: right)
-        #expect(result.contains("共 0 行不同"))
-        #expect(result.contains("  line1"))
-        #expect(result.contains("  "))
-        #expect(result.contains("  line3"))
+    @Test func emptyLineHandling() throws {
+        let rows = try LineDiffer.safeAlignedDiff(left: "line1\n\nline3", right: "line1\n\nline3")
+        #expect(rows.map(\.kind) == [.unchanged, .unchanged, .unchanged])
+        #expect(rows.map { $0.left?.text } == ["line1", "", "line3"])
+        #expect(rows.map { $0.right?.text } == ["line1", "", "line3"])
+    }
+
+    @Test func CRLFScanCannotSkipCancellationThresholds() {
+        var checks = 0
+        var lines = 0
+        #expect(throws: CancellationError.self) {
+            try DiffSourceText.forEachLine(
+                in: "x" + String(repeating: "\r\n", count: 10_000),
+                checkpoint: {
+                    checks += 1
+                    if checks == 2 { throw CancellationError() }
+                },
+                body: { _, _ in lines += 1 }
+            )
+        }
+        #expect(checks == 2)
+        #expect(lines == 2_048)
     }
 
     @Test func displayDiffMarksInsertedLinesWithLineNumbers() {

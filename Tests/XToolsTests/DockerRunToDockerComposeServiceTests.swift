@@ -356,17 +356,52 @@ struct DockerRunToDockerComposeServiceTests {
         }
     }
 
-    @Test func concatenatedCommandsThrow() throws {
-        // Two commands pasted with NO separator: `sh` and `docker` fuse into the
-        // single token `shdocker`, so detection must scan the raw string rather
-        // than rely on a standalone `docker` token.
-        #expect {
-            _ = try DockerRunToDockerComposeService.convert(
-                "docker run --rm -it alpine shdocker run --rm -it alpine sh"
-            )
-        } throws: { error in
-            guard case DockerRunToDockerComposeError.multipleCommands = error else { return false }
-            return true
+    @Test func dockerRunSubstringInOrdinaryCommandArgumentsIsAllowed() throws {
+        let cases: [(String, [String])] = [
+            ("mydocker run", ["echo", "mydocker", "run"]),
+            ("shdocker run --rm -it alpine sh", ["echo", "shdocker", "run", "--rm", "-it", "alpine", "sh"]),
+            (#"a\ docker run"#, ["echo", "a docker", "run"]),
+            (#"''docker run"#, ["echo", "docker", "run"]),
+            (#""prefix"docker run"#, ["echo", "prefixdocker", "run"]),
+            (#"docker run"suffix""#, ["echo", "docker", "runsuffix"]),
+            (#"docker\ run"#, ["echo", "docker run"]),
+            ("my" + #"\"# + "\n" + "docker run", ["echo", "mydocker", "run"])
+        ]
+        for (arguments, expected) in cases {
+            let command = "docker run alpine echo " + arguments
+            #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: command) == 1)
+            #expect(Array(try DockerRunToDockerComposeService.tokenize(command).dropFirst(3)) == expected)
+            let result = try DockerRunToDockerComposeService.convert(command)
+            #expect(result.yaml.contains("image: alpine"))
+            let commandLines = try #require(result.yaml.components(separatedBy: "    command:\n").last)
+            let emitted = commandLines.components(separatedBy: "\n")
+            #expect(emitted.count == expected.count)
+            for (line, value) in zip(emitted, expected) {
+                let scalar = value.contains(" ") ? "\"" + value + "\"" : value
+                #expect(line == "      - " + scalar)
+            }
+            #expect(result.warnings.isEmpty)
+            #expect(result.unknownFlags.isEmpty)
+        }
+    }
+
+    @Test func secondUnquotedDockerRunRemainsRejectedAcrossSeparatorsAndContinuation() {
+        let commands = [
+            "docker run alpine echo docker run alpine",
+            "docker run alpine sh;docker run alpine",
+            "docker run alpine sh|docker run alpine",
+            "docker run alpine sh&&docker run alpine",
+            "docker run alpine echo docker " + #"\"# + "\n" + "run alpine",
+            "docker run alpine echo doc" + #"\"# + "\n" + "ker run alpine"
+        ]
+        for command in commands {
+            #expect(DockerRunToDockerComposeService.dockerRunOccurrences(in: command) == 2)
+            #expect {
+                _ = try DockerRunToDockerComposeService.convert(command)
+            } throws: { error in
+                guard case DockerRunToDockerComposeError.multipleCommands = error else { return false }
+                return true
+            }
         }
     }
 

@@ -70,10 +70,10 @@ struct RegexMatcherTests {
         #expect(match.index == 0)
         #expect(match.end == 7)
         #expect(match.captures == [
-            RegexMatcher.Capture(name: "1", value: "item", start: 0, end: 4),
-            RegexMatcher.Capture(name: "2", value: "42", start: 5, end: 7)
+            RegexMatcher.Capture(name: "1", value: "item", start: 0, end: 4, utf16Range: NSRange(location: 0, length: 4)),
+            RegexMatcher.Capture(name: "2", value: "42", start: 5, end: 7, utf16Range: NSRange(location: 5, length: 2))
         ])
-        #expect(match.groups == [RegexMatcher.Capture(name: "word", value: "item", start: 0, end: 4)])
+        #expect(match.groups == [RegexMatcher.Capture(name: "word", value: "item", start: 0, end: 4, utf16Range: NSRange(location: 0, length: 4))])
         #expect(report.statistics.captureCount == 2)
         #expect(report.statistics.namedGroupCount == 1)
     }
@@ -96,7 +96,7 @@ struct RegexMatcherTests {
         #expect(match.value == "测试")
         #expect(match.index == 1)
         #expect(match.end == 3)
-        #expect(match.groups == [RegexMatcher.Capture(name: "word", value: "测试", start: 1, end: 3)])
+        #expect(match.groups == [RegexMatcher.Capture(name: "word", value: "测试", start: 1, end: 3, utf16Range: NSRange(location: 2, length: 2))])
     }
 
     /// 高匹配数 × 非 ASCII：锁定 UTF16BoundaryTable 换算路径的字符偏移正确性。

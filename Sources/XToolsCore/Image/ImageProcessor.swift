@@ -9,9 +9,8 @@ public enum ImageProcessor {
     public static let highFidelityEncodingQuality: Double = 1.0
     public static let watermarkFallbackLossyQuality: Double = 0.92
 
-    /// Longest edge used when probing transparency during `inspect` only.
-    /// Full-resolution classification remains available via `transparencyState(for:)`
-    /// on convert/compress paths that already decode the working image.
+    /// Longest edge of bounded transparency thumbnails. Images with no more
+    /// than this squared pixel count are scanned at their original dimensions.
     public static let inspectTransparencyProbeMaxPixelLength = 2_048
 
     public static func inspect(data: Data, filenameExtension: String?) throws -> ImageMetadata {
@@ -33,16 +32,17 @@ public enum ImageProcessor {
             )
         }
 
-        // When alpha may be present, probe transparency without always decoding
-        // the full-resolution bitmap. Convert/compress still classify at full res.
-        let longestEdge = max(properties.width, properties.height)
-        let probeLimit: Int? =
-            longestEdge > inspectTransparencyProbeMaxPixelLength
-            ? inspectTransparencyProbeMaxPixelLength
-            : nil
-        let decodedImage = try makeImage(from: source, maxPixelLength: probeLimit).image
-        let hasAlpha = properties.hasAlpha ?? decodedImage.hasAlpha
-        let transparency = try transparencyState(for: decodedImage)
+        // A long, narrow image can fit the pixel budget without downsampling.
+        // A thumbnail can reveal transparency, but quantization can hide a tiny
+        // transparent region, so it cannot prove the original is fully opaque.
+        let fullScanPixelLimit = inspectTransparencyProbeMaxPixelLength * inspectTransparencyProbeMaxPixelLength
+        let pixelCount = properties.width * properties.height // validated above
+        let probeLimit = pixelCount > fullScanPixelLimit ? inspectTransparencyProbeMaxPixelLength : nil
+        let decoded = try makeImage(from: source, maxPixelLength: probeLimit)
+        let hasAlpha = properties.hasAlpha ?? decoded.image.hasAlpha
+        let sampledTransparency = try transparencyState(for: decoded.image)
+        let transparency: ImageTransparencyState = decoded.wasResized && sampledTransparency == .opaque
+            ? .unknown : sampledTransparency
 
         return ImageMetadata(
             format: detectedFormat(source: source, filenameExtension: filenameExtension),

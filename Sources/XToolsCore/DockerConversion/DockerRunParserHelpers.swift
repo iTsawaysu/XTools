@@ -1,26 +1,34 @@
 import Foundation
 
 extension DockerRunToDockerComposeService {
+    /// 仅识别相邻、未引用的完整 docker/run 词元；不猜测普通参数中的子串。
+    /// 扫描保留 tokenizer 的引号/反斜杠规则，续行不形成词元边界。
     static func dockerRunOccurrences(in command: String) -> Int {
-        let chars = Array(command)
+        let chars = Array(command.unicodeScalars)
         var count = 0
-        var quote: Character?
+        var quote: Unicode.Scalar?
         var index = 0
+        var word = ""
+        var isPlain = true
+        var previousDocker = false
+
+        func finishWord() {
+            if previousDocker && isPlain && word == "run" { count += 1 }
+            previousDocker = isPlain && word == "docker"
+            word = ""
+            isPlain = true
+        }
 
         while index < chars.count {
             let character = chars[index]
-
             if let activeQuote = quote {
                 if activeQuote == "\"", character == "\\", index + 1 < chars.count {
                     let next = chars[index + 1]
-                    // Match tokenize's double-quoted escapes; an escaped quote
-                    // cannot expose a `docker run` phrase inside this argument.
                     if next == "$" || next == "`" || next == "\"" || next == "\\" || next == "\n" {
                         index += 2
                         continue
                     }
                 }
-                // Backslashes are literal inside single quotes.
                 if character == activeQuote { quote = nil }
                 index += 1
                 continue
@@ -28,55 +36,33 @@ extension DockerRunToDockerComposeService {
 
             if character == "\\", index + 1 < chars.count {
                 let next = chars[index + 1]
-                // Outside quotes, tokenize consumes a backslash before quote
-                // delimiters, backslashes, whitespace and continued newlines.
-                if next == "\"" || next == "'" || next == "\\" || next.isWhitespace {
+                if next == "\n" {
+                    index += 2
+                    continue
+                }
+                // 与粘贴输入 tokenizer 相同：普通 Windows 路径保留反斜杠。
+                if next == "\"" || next == "'" || next == "\\" || next == "$" || next == "`" || Character(next).isWhitespace {
+                    isPlain = false
                     index += 2
                     continue
                 }
             }
-
             if character == "\"" || character == "'" {
+                isPlain = false
                 quote = character
-                index += 1
-                continue
+            } else if Character(character).isWhitespace {
+                if !word.isEmpty || !isPlain { finishWord() }
+            } else if character == ";" || character == "|" || character == "&" {
+                // 保留无空格 shell 连接符后的第二条命令拒绝，不把两边合成参数。
+                if !word.isEmpty || !isPlain { finishWord() }
+                previousDocker = false
+            } else {
+                word.unicodeScalars.append(character)
             }
-
-            if matchesDockerRun(chars, at: index) {
-                count += 1
-                index += "docker".count
-                continue
-            }
-
             index += 1
         }
-
+        if !word.isEmpty || !isPlain { finishWord() }
         return count
-    }
-
-    private static func matchesDockerRun(_ chars: [Character], at start: Int) -> Bool {
-        let docker = Array("docker")
-        let run = Array("run")
-
-        guard start + docker.count <= chars.count else { return false }
-        for offset in 0..<docker.count where chars[start + offset] != docker[offset] {
-            return false
-        }
-
-        var cursor = start + docker.count
-        var sawWhitespace = false
-        while cursor < chars.count, chars[cursor].isWhitespace {
-            sawWhitespace = true
-            cursor += 1
-        }
-        guard sawWhitespace else { return false }
-
-        guard cursor + run.count <= chars.count else { return false }
-        for offset in 0..<run.count where chars[cursor + offset] != run[offset] {
-            return false
-        }
-        let afterRun = cursor + run.count
-        return afterRun == chars.count || chars[afterRun].isWhitespace
     }
 
     static func requireValue(after option: String, in tokens: [String], index: inout Int) throws -> String {

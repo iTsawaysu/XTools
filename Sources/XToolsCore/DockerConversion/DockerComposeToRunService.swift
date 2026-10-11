@@ -38,7 +38,7 @@ public enum DockerComposeToRunDiagnostics {
     private static let collapsedFieldPreviewCount = 5
 
     static func safeFieldName(_ field: String) -> String {
-        let suffixes = ["(结构无法映射)", "(exec-form 无法等价映射)", "(无法映射空命令)", "(值冲突)"]
+        let suffixes = ["(结构无法映射)", "(exec-form 无法等价映射)", "(无法映射空命令)", "(值冲突)", "(无法无损转换为整数秒)"]
         let suffix = suffixes.first(where: field.hasSuffix) ?? ""
         let path = suffix.isEmpty ? field : String(field.dropLast(suffix.count))
         guard path.utf8.count <= 96,
@@ -169,6 +169,7 @@ public enum DockerComposeToRunDiagnostics {
 /// network details without a Docker CLI representation produce warnings instead of failing.
 public enum DockerComposeToRunService {
     public static func convert(_ yamlText: String) throws -> DockerComposeToRunResult {
+        _ = try YAMLProcessingPreflight.inspect(yamlText, constructsValues: true)
         let document: Any?
         do {
             document = try Yams.load(yaml: yamlText)
@@ -181,6 +182,7 @@ public enum DockerComposeToRunService {
             )
         }
 
+        try StructuredTextExecution.checkCancellation()
         guard let root = document as? [String: Any] else {
             throw DockerComposeToRunError.missingServicesSection
         }

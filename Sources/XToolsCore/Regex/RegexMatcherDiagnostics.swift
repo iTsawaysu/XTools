@@ -449,9 +449,10 @@ extension RegexMatcher {
         return false
     }
 
-    /// 提取命名分组名;与上面的判定共用同一个扫描光标。
+    /// ICU 的语法边界是 scalar；例如 `>` 后的组合符不能吞掉组名结束符。
+    /// 仍复用光标的转义/字符组规则，但每个元素只含一个 scalar。
     static func namedCaptureNames(in pattern: String) -> [String] {
-        let characters = Array(pattern)
+        let characters = pattern.unicodeScalars.map { Character(String($0)) }
         var names: [String] = []
         var cursor = PatternCursor(characters)
 

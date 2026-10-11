@@ -63,41 +63,61 @@ public struct DiffEditorDecorations: Equatable, Sendable {
 
 public enum DiffSourceText {
     public static func sourceLines(in text: String) -> [String] {
-        text.isEmpty ? [] : text.components(separatedBy: .newlines)
+        var lines: [String] = []
+        forEachLine(in: text, checkpoint: {}) { range, _ in lines.append(String(text[range])) }
+        return lines
     }
 
     public static func lineRanges(in text: String) -> [NSRange] {
-        let nsText = text as NSString
-
-        guard nsText.length > 0 else {
-            return [NSRange(location: 0, length: 0)]
-        }
-
+        guard !text.isEmpty else { return [NSRange(location: 0, length: 0)] }
         var ranges: [NSRange] = []
-        var location = 0
-
-        while location < nsText.length {
-            let lineRange = nsText.lineRange(for: NSRange(location: location, length: 0))
-            var contentRange = lineRange
-
-            while contentRange.length > 0 {
-                let last = nsText.character(at: NSMaxRange(contentRange) - 1)
-                if last == 10 || last == 13 {
-                    contentRange.length -= 1
-                } else {
-                    break
-                }
-            }
-
-            ranges.append(contentRange)
-            location = NSMaxRange(lineRange)
+        var offset = 0
+        forEachLine(in: text, checkpoint: {}) { range, terminatorLength in
+            let length = text[range].utf16.count
+            ranges.append(NSRange(location: offset, length: length))
+            offset += length + terminatorLength
         }
-
-        if text.hasSuffix("\n") || text.hasSuffix("\r") {
-            ranges.append(NSRange(location: nsText.length, length: 0))
-        }
-
         return ranges
+    }
+
+    /// Shared logical lines for the algorithm and editor decorations. Only CR,
+    /// LF and CRLF delimit lines; Unicode separators remain literal content.
+    /// Yields before allocating line strings so callers can enforce budgets.
+    static func forEachLine(
+        in text: String,
+        checkpoint: () throws -> Void = {},
+        body: (Range<String.Index>, Int) throws -> Void
+    ) rethrows {
+        guard !text.isEmpty else { return }
+        let utf8 = text.utf8
+        var start = utf8.startIndex
+        var cursor = start
+        var scanned = 0
+        var nextCheckpoint = 0
+        while cursor < utf8.endIndex {
+            if scanned >= nextCheckpoint {
+                try checkpoint()
+                nextCheckpoint = scanned + 4_096
+            }
+            let byte = utf8[cursor]
+            guard byte == 0x0A || byte == 0x0D else {
+                cursor = utf8.index(after: cursor)
+                scanned += 1
+                continue
+            }
+            var next = utf8.index(after: cursor)
+            var terminatorLength = 1
+            if byte == 0x0D, next < utf8.endIndex, utf8[next] == 0x0A {
+                next = utf8.index(after: next)
+                terminatorLength = 2
+            }
+            try body(start..<cursor, terminatorLength)
+            scanned += terminatorLength
+            cursor = next
+            start = next
+        }
+        try body(start..<utf8.endIndex, 0)
+        try checkpoint()
     }
 }
 

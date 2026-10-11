@@ -63,6 +63,7 @@ struct JWTJSONObjectParserTests {
         for malformed in [#"{"a":1"#, #"{"a" 1}"#, #"{["x","x"]}"#, #"not json"#, ""] {
             do {
                 _ = try JWTJSONObjectParser.parse(Self.data(malformed))
+                Issue.record("畸形 JSON 不应被接受：\(malformed)")
             } catch let failure as JWTJSONObjectParser.ParseFailure {
                 Issue.record("畸形输入不应报重复键：\(malformed) → \(failure)")
             } catch {

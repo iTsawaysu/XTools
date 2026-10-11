@@ -61,16 +61,15 @@ struct TestMarkdownRegressionSuiteTests {
         #expect(output.contains("quoted_number: \"00123\""))
     }
 
-    @Test func textDiffLongChineseSampleDetectsChangedLine() {
+    @Test func textDiffLongChineseSampleDetectsChangedLine() throws {
         let left = "开发者工具应优先给出清晰、可恢复、可理解的错误信息。格式化工具尤其不能在输入非法时伪造成功结果，因为这会让用户把错误数据复制到生产配置中。对于较长文本，差异视图需要保持滚动同步、行号稳定，并且不要因为一行很长就破坏整体布局。"
         let right = "开发者工具应优先给出清晰、可恢复、可理解的错误信息。格式化工具不能在输入非法时伪造成功结果，因为这会让用户把错误数据复制到生产配置中。对于较长文本，差异视图需要保持滚动同步、行号稳定，并且不要因为某一行特别长就破坏整体布局。"
 
-        let diff = LineDiffer.diff(left: left, right: right)
+        let rows = try LineDiffer.safeAlignedDiff(left: left, right: right)
 
-        #expect(diff.contains("共 1 行不同"))
-        #expect(diff.contains("格式化工具尤其不能"))
-        #expect(diff.contains("格式化工具不能"))
-        #expect(diff.contains("某一行特别长"))
+        #expect(rows.map(\.kind) == [.changed])
+        #expect(rows.map { $0.left?.text } == [left])
+        #expect(rows.map { $0.right?.text } == [right])
     }
 
     @Test func regexUnicodeUFlagBoundaryIsExplicit() {
@@ -178,12 +177,12 @@ struct TestMarkdownRegressionSuiteTests {
         #expect(yaml.contains(#"html: "<p>Hello <strong>world</strong></p>""#))
         #expect(yaml.contains(#"regex: "\\b\\w+@example\\.com\\b""#))
 
-        let textDiff = LineDiffer.diff(
+        let textDiff = try LineDiffer.safeAlignedDiff(
             left: "SQL:\nselect * from users where id = 1;",
             right: "SQL:\nselect * from users where id = 2;"
         )
-        #expect(textDiff.contains("共 1 行不同"))
-        #expect(textDiff.contains("id = 1"))
-        #expect(textDiff.contains("id = 2"))
+        #expect(textDiff.map(\.kind) == [.unchanged, .changed])
+        #expect(textDiff.map { $0.left?.text } == ["SQL:", "select * from users where id = 1;"])
+        #expect(textDiff.map { $0.right?.text } == ["SQL:", "select * from users where id = 2;"])
     }
 }

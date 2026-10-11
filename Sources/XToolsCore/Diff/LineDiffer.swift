@@ -502,56 +502,18 @@ public enum LineDiffer {
         cancellation: DiffCancellationChecker,
         lineCreated: (@Sendable () -> Void)?
     ) throws -> [String] {
-        guard !text.isEmpty else { return [] }
-
-        let utf8 = text.utf8
         var lines: [String] = []
-        var lineStart = utf8.startIndex
-        var cursor = lineStart
-        var scannedByteCount = 0
-
-        func inputTooLarge(lineCount: Int) -> LineDiffError {
-            LineDiffError.inputTooLarge(
-                leftLineCount: lineCount,
-                rightLineCount: lineCount,
-                maximumLCSCells: maximumLCSCells
-            )
-        }
-
-        while cursor < utf8.endIndex {
-            if scannedByteCount.isMultiple(of: 4_096) {
-                try cancellation.check()
-            }
-
-            let byte = utf8[cursor]
-            guard byte == 0x0A || byte == 0x0D else {
-                cursor = utf8.index(after: cursor)
-                scannedByteCount += 1
-                continue
-            }
-
+        try DiffSourceText.forEachLine(in: text, checkpoint: { try cancellation.check() }) { range, _ in
             guard lines.count < maximumLineCount else {
-                throw inputTooLarge(lineCount: lines.count + 1)
+                throw LineDiffError.inputTooLarge(
+                    leftLineCount: lines.count + 1,
+                    rightLineCount: lines.count + 1,
+                    maximumLCSCells: maximumLCSCells
+                )
             }
-            lines.append(String(decoding: utf8[lineStart..<cursor], as: UTF8.self))
+            lines.append(String(text[range]))
             lineCreated?()
-
-            var next = utf8.index(after: cursor)
-            scannedByteCount += 1
-            if byte == 0x0D, next < utf8.endIndex, utf8[next] == 0x0A {
-                next = utf8.index(after: next)
-                scannedByteCount += 1
-            }
-            cursor = next
-            lineStart = next
         }
-
-        guard lines.count < maximumLineCount else {
-            throw inputTooLarge(lineCount: lines.count + 1)
-        }
-        lines.append(String(decoding: utf8[lineStart..<utf8.endIndex], as: UTF8.self))
-        lineCreated?()
-        try cancellation.check()
         return lines
     }
 }

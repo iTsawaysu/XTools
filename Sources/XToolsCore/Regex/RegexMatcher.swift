@@ -66,12 +66,54 @@ public enum RegexMatcher {
         public let statistics: Statistics
     }
 
+    /// Presentation units stay in Characters unless an engine endpoint splits a grapheme.
+    public struct DisplayRange: Equatable, Sendable {
+        public let start: Int
+        public let end: Int
+        public let usesUTF16: Bool
+
+        public var unitSuffix: String { usesUTF16 ? " UTF-16" : "" }
+        public var label: String { "[\(start), \(end))\(unitSuffix)" }
+
+        fileprivate init(start: Int, end: Int, utf16Range: NSRange?, hasPartialCharacterBoundary: Bool) {
+            if hasPartialCharacterBoundary, let utf16Range {
+                self.start = utf16Range.location
+                self.end = NSMaxRange(utf16Range)
+                usesUTF16 = true
+            } else {
+                self.start = start
+                self.end = end
+                usesUTF16 = false
+            }
+        }
+    }
+
     public struct Match: Equatable, Sendable {
         public let value: String
         public let index: Int
         public let end: Int
         public let captures: [Capture]
         public let groups: [Capture]
+        /// Exact engine range, including scalar boundaries inside a grapheme.
+        public let utf16Range: NSRange?
+        /// True when a real engine endpoint lies inside a Swift Character.
+        public let hasPartialCharacterBoundary: Bool
+
+        public var displayRange: DisplayRange {
+            DisplayRange(start: index, end: end, utf16Range: utf16Range,
+                         hasPartialCharacterBoundary: hasPartialCharacterBoundary)
+        }
+
+        init(value: String, index: Int, end: Int, captures: [Capture], groups: [Capture],
+             utf16Range: NSRange? = nil, hasPartialCharacterBoundary: Bool = false) {
+            self.value = value
+            self.index = index
+            self.end = end
+            self.captures = captures
+            self.groups = groups
+            self.utf16Range = utf16Range
+            self.hasPartialCharacterBoundary = hasPartialCharacterBoundary
+        }
     }
 
     public struct Capture: Equatable, Sendable {
@@ -79,12 +121,22 @@ public enum RegexMatcher {
         public let value: String
         public let start: Int
         public let end: Int
+        public let utf16Range: NSRange?
+        public let hasPartialCharacterBoundary: Bool
 
-        public init(name: String, value: String, start: Int, end: Int) {
+        public var displayRange: DisplayRange {
+            DisplayRange(start: start, end: end, utf16Range: utf16Range,
+                         hasPartialCharacterBoundary: hasPartialCharacterBoundary)
+        }
+
+        public init(name: String, value: String, start: Int, end: Int, utf16Range: NSRange? = nil,
+                    hasPartialCharacterBoundary: Bool = false) {
             self.name = name
             self.value = value
             self.start = start
             self.end = end
+            self.utf16Range = utf16Range
+            self.hasPartialCharacterBoundary = hasPartialCharacterBoundary
         }
     }
 
@@ -230,14 +282,14 @@ public enum RegexMatcher {
 
         var lines = ["匹配到 \(report.statistics.matchCount) 处", ""]
         for (index, match) in report.matches.enumerated() {
-            lines.append("匹配 #\(index + 1)：范围 [\(match.index), \(match.end))；文本 \(match.value)")
+            lines.append("匹配 #\(index + 1)：范围 \(match.displayRange.label)；文本 \(match.value)")
 
             for capture in match.captures {
-                lines.append("  捕获 \(capture.name)：范围 [\(capture.start), \(capture.end))；文本 \(capture.value)")
+                lines.append("  捕获 \(capture.name)：范围 \(capture.displayRange.label)；文本 \(capture.value)")
             }
 
             for group in match.groups {
-                lines.append("  命名组 \(group.name)：范围 [\(group.start), \(group.end))；文本 \(group.value)")
+                lines.append("  命名组 \(group.name)：范围 \(group.displayRange.label)；文本 \(group.value)")
             }
         }
 
@@ -348,9 +400,9 @@ public enum RegexMatcher {
 
                 var matchContext = ICURegexMatchContext(totalStepLimit: budget.matchTimeLimit)
                 // 非 ASCII 文本：一次线性建表，后续每个捕获组的偏移换算走二分。
-                let boundaries = text.utf8.first { $0 > 0x7F } == nil
-                    ? nil
-                    : UTF16BoundaryTable(of: text)
+                let boundaries = textUTF16.contains { $0 > 0x7F || $0 == 0x0D }
+                    ? UTF16BoundaryTable(of: text)
+                    : nil
                 return try withUnsafeMutablePointer(to: &matchContext) { context in
                     defer {
                         uregex_close(expression)
@@ -412,7 +464,7 @@ public enum RegexMatcher {
                             name: "0",
                             groupNumber: 0,
                             expression: expression,
-                            in: text,
+                            in: textUTF16,
                             boundaries: boundaries
                         ) else {
                             throw MatcherError.internalFailure
@@ -427,7 +479,7 @@ public enum RegexMatcher {
                                     name: "\(index)",
                                     groupNumber: Int32(index),
                                     expression: expression,
-                                    in: text,
+                                    in: textUTF16,
                                     boundaries: boundaries
                                 ) {
                                     try accountForResult(capture, isCapture: true)
@@ -443,7 +495,7 @@ public enum RegexMatcher {
                                 name: name,
                                 groupNumber: groupNumber,
                                 expression: expression,
-                                in: text,
+                                in: textUTF16,
                                 boundaries: boundaries
                             ) {
                                 try accountForResult(capture, isCapture: true)
@@ -457,7 +509,9 @@ public enum RegexMatcher {
                                 index: fullMatch.start,
                                 end: fullMatch.end,
                                 captures: captures,
-                                groups: groups
+                                groups: groups,
+                                utf16Range: fullMatch.utf16Range,
+                                hasPartialCharacterBoundary: fullMatch.hasPartialCharacterBoundary
                             )
                         )
 
@@ -472,44 +526,31 @@ public enum RegexMatcher {
         }
     }
 
-    /// UTF-16 偏移 → 字符边界换算表。非 ASCII 文本上 `Range(NSRange, in:)`
-    /// 与 `distance(from:)` 都是 O(offset)，高匹配数模式会放大成 O(n×m)；
-    /// 一次线性建表把每次换算降为二分。表内恰好包含全部字符边界
-    /// （含末尾哨兵），未命中即偏移落在字符内部，与 Range 转换失败等价。
+    /// Display offsets retain Swift Character-distance semantics: an interior
+    /// scalar boundary projects to the preceding grapheme boundary. Exact text
+    /// and native highlighting use the separate UTF-16 range, never this table.
+    /// One linear scan plus binary search avoids O(text × capture count) work.
     private struct UTF16BoundaryTable {
         let utf16Offsets: [Int]
-        let indices: [String.Index]
 
         init(of text: String) {
-            var utf16Offsets: [Int] = []
-            var indices: [String.Index] = []
-            let count = text.count
-            utf16Offsets.reserveCapacity(count + 1)
-            indices.reserveCapacity(count + 1)
-            var utf16Offset = 0
-            var index = text.startIndex
-            for _ in 0..<count {
-                utf16Offsets.append(utf16Offset)
-                indices.append(index)
-                utf16Offset += text[index].utf16.count
-                index = text.index(after: index)
+            var offsets = [0]
+            var offset = 0
+            for character in text {
+                offset += character.utf16.count
+                offsets.append(offset)
             }
-            utf16Offsets.append(utf16Offset)
-            indices.append(index)
-            self.utf16Offsets = utf16Offsets
-            self.indices = indices
+            utf16Offsets = offsets
         }
 
-        func characterOffset(atUTF16Offset offset: Int) -> Int? {
+        func characterOffset(atUTF16Offset offset: Int) -> Int {
             var low = 0
-            var high = utf16Offsets.count - 1
-            while low <= high {
-                let mid = (low + high) / 2
-                let value = utf16Offsets[mid]
-                if value == offset { return mid }
-                if value < offset { low = mid + 1 } else { high = mid - 1 }
+            var high = utf16Offsets.count
+            while low < high {
+                let mid = low + (high - low) / 2
+                if utf16Offsets[mid] <= offset { low = mid + 1 } else { high = mid }
             }
-            return nil
+            return low - 1
         }
     }
 
@@ -517,42 +558,41 @@ public enum RegexMatcher {
         name: String,
         groupNumber: Int32,
         expression: OpaquePointer,
-        in text: String,
+        in textUTF16: [UInt16],
         boundaries: UTF16BoundaryTable?
     ) throws -> Capture? {
         var status = U_ZERO_ERROR
-        let start = uregex_start(expression, groupNumber, &status)
-        let end = uregex_end(expression, groupNumber, &status)
+        let start = Int(uregex_start(expression, groupNumber, &status))
+        let end = Int(uregex_end(expression, groupNumber, &status))
         guard !isICUFailure(status) else {
             throw matcherError(for: status, pattern: "")
         }
-        guard start >= 0, end >= start else {
-            return nil
-        }
-
-        if let boundaries {
-            guard let characterStart = boundaries.characterOffset(atUTF16Offset: Int(start)),
-                  let characterEnd = boundaries.characterOffset(atUTF16Offset: Int(end)) else {
+        guard start >= 0, end >= start else { return nil }
+        guard end <= textUTF16.count else { throw MatcherError.internalFailure }
+        // Preserve Range(NSRange, in:) rejection of a split surrogate pair.
+        for offset in [start, end] where offset > 0 && offset < textUTF16.count {
+            if (0xD800...0xDBFF).contains(textUTF16[offset - 1]),
+               (0xDC00...0xDFFF).contains(textUTF16[offset]) {
                 throw MatcherError.internalFailure
             }
-            return Capture(
-                name: name,
-                value: String(text[boundaries.indices[characterStart]..<boundaries.indices[characterEnd]]),
-                start: characterStart,
-                end: characterEnd
-            )
         }
-
-        let range = NSRange(location: Int(start), length: Int(end - start))
-        guard let stringRange = Range(range, in: text) else {
-            throw MatcherError.internalFailure
+        let characterStart = boundaries?.characterOffset(atUTF16Offset: start) ?? start
+        let characterEnd = boundaries?.characterOffset(atUTF16Offset: end) ?? end
+        // Reuse the two projected indices: exact endpoint checks require no new scan or search.
+        let hasPartialCharacterBoundary: Bool
+        if let boundaries {
+            hasPartialCharacterBoundary = boundaries.utf16Offsets[characterStart] != start
+                || boundaries.utf16Offsets[characterEnd] != end
+        } else {
+            hasPartialCharacterBoundary = false
         }
-
         return Capture(
             name: name,
-            value: String(text[stringRange]),
-            start: text.distance(from: text.startIndex, to: stringRange.lowerBound),
-            end: text.distance(from: text.startIndex, to: stringRange.upperBound)
+            value: String(decoding: textUTF16[start..<end], as: UTF16.self),
+            start: characterStart,
+            end: characterEnd,
+            utf16Range: NSRange(location: start, length: end - start),
+            hasPartialCharacterBoundary: hasPartialCharacterBoundary
         )
     }
 

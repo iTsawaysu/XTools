@@ -12,7 +12,7 @@ public enum HTMLToMarkdownDiagnostics {
             switch warning {
             case .unsupportedElement, .droppedUnsafeElement:
                 return true
-            case .flattenedTableSpan, .emptyVisibleContent, .completedInputExceedsThreshold:
+            case .flattenedTableSpan, .orderedListStartOutOfRange, .emptyVisibleContent, .completedInputExceedsThreshold:
                 return false
             }
         }
@@ -22,6 +22,10 @@ public enum HTMLToMarkdownDiagnostics {
 
         if warnings.contains(.flattenedTableSpan) {
             return warningText(for: .flattenedTableSpan)
+        }
+
+        if warnings.contains(.orderedListStartOutOfRange) {
+            return warningText(for: .orderedListStartOutOfRange)
         }
 
         let largestInputLimit = warnings.compactMap { warning -> Int? in
@@ -48,7 +52,7 @@ public enum HTMLToMarkdownDiagnostics {
                 detail = "\(safeElementName(element))：已移除，未写入 Markdown。"
             case .flattenedTableSpan:
                 detail = "表格合并单元格已展开，rowspan / colspan 布局未保留。"
-            case .emptyVisibleContent, .completedInputExceedsThreshold:
+            case .orderedListStartOutOfRange, .emptyVisibleContent, .completedInputExceedsThreshold:
                 detail = warningText(for: warning)
             }
             if seen.insert(detail).inserted { details.append(detail) }
@@ -75,6 +79,8 @@ public enum HTMLToMarkdownDiagnostics {
             return "部分 HTML 内容无法完整转换。"
         case .flattenedTableSpan:
             return "复杂表格无法完整转换。"
+        case .orderedListStartOutOfRange:
+            return "有序列表起始编号超过 Markdown 的 9 位上限，已从 1 重新编号。"
         case .droppedUnsafeElement:
             return "部分 HTML 内容无法完整转换。"
         case .emptyVisibleContent:
