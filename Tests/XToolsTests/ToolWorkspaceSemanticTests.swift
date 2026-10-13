@@ -387,6 +387,20 @@ struct ToolWorkspaceSemanticTests {
         #expect(explicitNaturalTextArea.growsWithContent)
     }
 
+    @Test @MainActor func indexPageArrivalScrollerSuppressorEnforcesAutomaticPolicyAndParkedHiding() {
+        let cases: [(Int, Int, ScrollIndicatorVisibility)] = [
+            (0, 0, .hidden), (0, 1, .hidden),
+            (1, 0, .hidden), (1, 1, .automatic),
+            (2, 1, .hidden), (2, 0, .hidden), (2, 2, .automatic)
+        ]
+        for (entry, settled, expected) in cases {
+            #expect(IndexPageArrivalScrollerSuppressor.indicatorVisibility(
+                entryGeneration: entry, settledGeneration: settled
+            ) == expected)
+        }
+        #expect(IndexPageArrivalScrollerSuppressor.settleDelay >= ToolMotion.Duration.arrival)
+    }
+
     private func assertContract(
         _ semantic: IndexWorkspaceSemantic,
         inputExpandsWithContent: Bool,

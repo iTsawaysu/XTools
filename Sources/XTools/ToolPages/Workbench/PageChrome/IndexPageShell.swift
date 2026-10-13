@@ -7,23 +7,36 @@ import SwiftUI
 /// makes AppKit perform an animated correction scroll that explicitly flashes
 /// the overlay scroller knobs (`_scrollTo:animateScroll:flashScrollerKnobs:`),
 /// which reads as a one-off scrollbar flash on the right edge of every tool
-/// switch. The indicators return once the inset scroll has finished; scrolling
-/// afterwards shows them as usual.
-private struct IndexPageArrivalScrollerSuppressor: ViewModifier {
+/// switch. The indicators return to `.automatic` once the arrival has finished;
+/// scrolling afterwards shows them as usual according to system conventions.
+struct IndexPageArrivalScrollerSuppressor: ViewModifier {
     let title: String
-    @State private var hasSettled = false
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
+    @State private var settledGeneration: Int = 0
 
     /// The inset correction rides the page-arrival animation (~0.2s); keep the
     /// indicators hidden slightly past it.
-    private static let settleDelay: TimeInterval = ToolMotion.Duration.arrival + 0.15
+    static let settleDelay: TimeInterval = ToolMotion.Duration.arrival + 0.15
+
+    nonisolated static func indicatorVisibility(entryGeneration: Int, settledGeneration: Int) -> ScrollIndicatorVisibility {
+        guard entryGeneration > 0, settledGeneration == entryGeneration else {
+            return .hidden
+        }
+        return .automatic
+    }
 
     func body(content: Content) -> some View {
         content
-            .scrollIndicators(hasSettled ? .visible : .hidden)
-            .task(id: title) {
-                guard !hasSettled else { return }
+            .scrollIndicators(Self.indicatorVisibility(entryGeneration: entryGeneration, settledGeneration: settledGeneration))
+            .task(id: "\(title)\u{1}\(entryGeneration)") {
+                guard entryGeneration > 0 else {
+                    settledGeneration = 0
+                    return
+                }
+                settledGeneration = 0
                 try? await Task.sleep(nanoseconds: UInt64(Self.settleDelay * 1_000_000_000))
-                hasSettled = true
+                guard !Task.isCancelled else { return }
+                settledGeneration = entryGeneration
             }
     }
 }
@@ -261,6 +274,8 @@ struct IndexPage<Content: View, HeaderAccessory: View>: View {
     let subtitle: String
     var layout: IndexPageLayout = .fill
     var chrome: IndexPageChrome = .standard
+    // 原始 layout 构造保留铺满视口的行为；语义构造按工作区类型选择。
+    private var fillsScrollViewport = true
     private let headerAccessory: HeaderAccessory
     private let hasHeaderAccessory: Bool
     private let content: Content
@@ -334,6 +349,7 @@ struct IndexPage<Content: View, HeaderAccessory: View>: View {
             chrome: shell.chrome,
             content: content
         )
+        fillsScrollViewport = workspaceSemantic == .imagePreviewStage
     }
 
     init(
@@ -352,6 +368,7 @@ struct IndexPage<Content: View, HeaderAccessory: View>: View {
             headerAccessory: headerAccessory,
             content: content
         )
+        fillsScrollViewport = workspaceSemantic == .imagePreviewStage
     }
 
     @ViewBuilder
@@ -389,7 +406,7 @@ struct IndexPage<Content: View, HeaderAccessory: View>: View {
                         .padding(.horizontal, chrome.horizontalPadding)
                         .padding(.top, chrome.topPadding)
                         .padding(.bottom, chrome.bottomPadding)
-                        .frame(maxWidth: .infinity, minHeight: proxy.size.height, alignment: .topLeading)
+                        .frame(maxWidth: .infinity, minHeight: fillsScrollViewport ? proxy.size.height : nil, alignment: .topLeading)
                     }
                     .modifier(IndexPageArrivalScrollerSuppressor(title: title))
                     // v3 header-rhythm unification: the window safe area already
