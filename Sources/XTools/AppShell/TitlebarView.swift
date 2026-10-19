@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 /// Native window toolbar content. The scene owns the toolbar chrome; this
 /// value only projects the current shell state into stable toolbar slots.

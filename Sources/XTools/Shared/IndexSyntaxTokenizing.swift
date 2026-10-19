@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import XToolsDesign
 
 /// Per-line syntax token shared by the read-only code viewer. Offsets count
 /// `String` characters (grapheme clusters), matching `JSONHighlightToken`;

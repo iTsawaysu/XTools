@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 struct CommandPaletteVisibilityGeometry: Equatable {
     let opacity: Double

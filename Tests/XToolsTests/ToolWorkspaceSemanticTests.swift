@@ -1,6 +1,7 @@
 @testable import XTools
 import SwiftUI
 import Testing
+import XToolsDesign
 
 struct ToolWorkspaceSemanticTests {
     /// 语义目录 → 坍缩后的四布尔行为契约（生产实际读取的维度）。

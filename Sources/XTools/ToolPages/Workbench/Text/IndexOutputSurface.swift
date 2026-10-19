@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 struct IndexOutputSurface: View {
     let text: String

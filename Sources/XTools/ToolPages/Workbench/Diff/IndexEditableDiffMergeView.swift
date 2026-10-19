@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 struct IndexEditableDiffMergeView: NSViewRepresentable {
     @Environment(\.toolPageEntryGeneration) private var entryGeneration

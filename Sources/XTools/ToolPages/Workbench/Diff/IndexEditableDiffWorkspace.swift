@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 /// A toolbar/keyboard request to jump to the previous or next difference.
 struct DiffDifferenceNavigationRequest: Equatable {

@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 @testable import XTools
 import Testing
+import XToolsDesign
 
 @Suite(.serialized)
 struct CommandPalettePresentationTests {

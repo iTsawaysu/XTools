@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 struct RootView: View {
     @StateObject private var viewModel: RootViewModel
@@ -271,19 +272,19 @@ struct RootView: View {
     /// Palette open/close uses one explicit transaction shared by the stable
     /// presentation shell; AppKit field/session replacement stays inside it.
     private func toggleCommandPaletteAnimated() {
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: reduceMotion) {
             navigationActions.toggleCommandPalette()
         }
     }
 
     private func openCommandPaletteAnimated() {
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: reduceMotion) {
             navigationActions.openCommandPalette()
         }
     }
 
     private func closeCommandPaletteAnimated() {
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: reduceMotion) {
             navigationActions.closeCommandPalette()
         }
     }

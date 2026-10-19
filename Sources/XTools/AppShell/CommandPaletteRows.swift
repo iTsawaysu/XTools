@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 /// Raycast/Linear-style section header: left-aligned group label with the
 /// section's row count, aligned to the row icon column.

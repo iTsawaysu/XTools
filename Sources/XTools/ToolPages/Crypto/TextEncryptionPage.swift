@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 struct TextEncryptionRequest: Sendable {
     let input: String

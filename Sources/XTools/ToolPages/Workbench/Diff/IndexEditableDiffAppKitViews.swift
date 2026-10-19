@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 enum IndexDiffEditorMetrics {
     static let rulerWidth: CGFloat = 44

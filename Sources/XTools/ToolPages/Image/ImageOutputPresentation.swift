@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 enum ImageOutputPresentation {
     static func sourceSummary(_ metadata: ImageMetadata) -> String {

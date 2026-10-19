@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 /// Quiet square button for the sidebar toggle: transparent at rest, filled on
 /// hover/press.

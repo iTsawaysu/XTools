@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 /// 工具页列的动作出口。动作经一个生命周期与视图一致的对象转发，而不是
 /// 每次 body 重估都生成新闭包：SwiftUI 按值比较子视图输入，新闭包必然

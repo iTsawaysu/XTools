@@ -1,6 +1,7 @@
 import AppKit
 import QuartzCore
 import SwiftUI
+import XToolsDesign
 
 /// Shared press acknowledgement for controls across the shell.
 ///

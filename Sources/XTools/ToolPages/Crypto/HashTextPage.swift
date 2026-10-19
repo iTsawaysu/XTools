@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 struct IndexHashTextPage: View {
     var body: some View {
@@ -83,7 +84,7 @@ private struct IndexHashTextWorkspaceContent: View {
             .withoutDiagnosticStatusSlot()
             // 八行摘要属于短派生结果，自然展开并按可用宽度换行。
             IndexPanel("摘要结果") {
-                IndexShortResultCardList(items: resultItems, emptyText: emptyResultText)
+                IndexResultSurface(content: .list(resultItems), emptyText: emptyResultText)
             } accessory: {
                 resultPanelAccessory
             }

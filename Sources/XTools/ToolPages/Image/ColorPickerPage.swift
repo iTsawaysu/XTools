@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 func colorSliderValueText(_ value: Double, suffix: String) -> String {
     "\(Int(value.rounded()))\(suffix)"

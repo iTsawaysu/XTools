@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 struct IndexReadOnlyTextSurface: View {
     let text: String

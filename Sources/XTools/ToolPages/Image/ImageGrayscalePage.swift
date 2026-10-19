@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 struct IndexImageGrayscaleSegment: View {
     var body: some View {

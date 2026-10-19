@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import XToolsCore
+import XToolsDesign
 
 /// Window-scoped clipboard observer behind the shell's smart-paste suggestion.
 ///

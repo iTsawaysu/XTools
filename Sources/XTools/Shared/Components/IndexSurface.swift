@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 /// Unified surface treatment for cards, fields, panels, and floating layers.
 ///

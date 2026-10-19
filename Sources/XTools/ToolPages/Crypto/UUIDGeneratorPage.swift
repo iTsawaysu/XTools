@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 @MainActor
 final class UUIDGeneratorToolWorkspaceModel: ObservableObject {
@@ -69,25 +70,26 @@ private struct IndexUUIDWorkspaceContent: View {
     }()
 
     var body: some View {
-        VStack(spacing: ToolMetrics.Spacing.md) {
-            parameterBar
-
-            IndexGeneratedValueRowList(
-                rows: resultRows,
-                emptyText: IndexEmptyStateCopy.noResults,
-                motionGeneration: motionGeneration
-            )
-            .indexSurface(.card, fill: ToolTheme.panelBackground)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        IndexGeneratorWorkbench(
+            metaText: workspace.lastGeneratedAt.map { "上次生成 " + Self.generatedTimeFormatter.string(from: $0) },
+            copyText: allValuesText,
+            copySuccessToast: ToolFeedbackCopy.copiedAll(noun: "UUID"),
+            rows: resultRows,
+            emptyText: IndexEmptyStateCopy.noResults,
+            motionGeneration: motionGeneration,
+            wrapsValues: false,
+            generateHelp: "生成 UUID（⌘↩）",
+            shortcutEnabled: entryGeneration > 0,
+            generate: generate
+        ) {
+            parameters
         }
         .onAppear {
-            if workspace.values.isEmpty {
-                generate()
-            }
+            if workspace.values.isEmpty { generate() }
         }
     }
 
-    private var parameterBar: some View {
+    private var parameters: some View {
         HStack(spacing: 10) {
             IndexOptionLabel("数量")
             IndexStepperInput(value: $workspace.quantity, range: Self.quantityRange)
@@ -99,37 +101,7 @@ private struct IndexUUIDWorkspaceContent: View {
                 selection: versionSelection
             )
             .onChange(of: workspace.version) { _ in generate() }
-
-            Spacer(minLength: ToolMetrics.Spacing.md)
-
-            if let lastGeneratedAt = workspace.lastGeneratedAt {
-                Text("上次生成 " + Self.generatedTimeFormatter.string(from: lastGeneratedAt))
-                    .font(ToolTypography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(ToolTheme.textTertiary)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-
-            IndexCopyButton(
-                text: allValuesText,
-                title: "全部复制",
-                showsIcon: false,
-                successToast: ToolFeedbackCopy.copiedAll(noun: "UUID")
-            )
-
-            IndexPrimaryActionButton(
-                title: "生成",
-                hint: "⌘↩",
-                help: "生成 UUID（⌘↩）",
-                action: generate
-            )
-            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .indexSurface(.card, fill: ToolTheme.panelBackground)
     }
 
     private var allValuesText: String {

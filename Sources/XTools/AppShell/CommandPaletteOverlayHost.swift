@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 /// Stable lightweight observer for presentation-only state. The first open
 /// creates one retained palette tree; later sessions reset its local model while

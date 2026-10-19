@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import XToolsCore
+import XToolsDesign
 
 /// Prototype v3 (Clay 收敛 + 轻量过渡) structured formatter workbench.
 ///
@@ -179,16 +180,10 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
                     )
                 }
             }
-            HStack(spacing: ToolMetrics.Spacing.sm) {
-                inputPaneWithHeader
-                    .toolPaneHoverChrome()
-                outputPane
-                    .toolPaneHoverChrome()
-                    .toolOutputBreath(generation: outputBreathGeneration)
-            }
-            .padding(.horizontal, ToolMetrics.Spacing.md)
-            .padding(.bottom, ToolMetrics.Spacing.md)
-            .padding(.top, ToolMetrics.Spacing.sm)
+            paneRow
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.bottom, ToolMetrics.Spacing.md)
+                .padding(.top, ToolMetrics.Spacing.sm)
             .onChange(of: isOutputFresh) { isFresh in
                 guard isFresh, onFormat != nil, !output.isEmpty, diagnosticTone != .error else {
                     return
@@ -219,7 +214,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         // and the actions right-align inside the output half.
         HStack(spacing: 0) {
             HStack(spacing: 6) {
-                IndexBadge("STDIN", tone: .accent, isCapsule: true)
+                IndexBadge("STDIN", tone: .neutral, isCapsule: true)
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(10)
                 Text(inputTitle)
@@ -247,7 +242,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
             .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 6) {
-                IndexBadge("STDOUT", tone: .accent, isCapsule: true)
+                IndexBadge("STDOUT", tone: .neutral, isCapsule: true)
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(10)
                 Text(outputTitle)
@@ -349,6 +344,46 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
 
     // MARK: Panes
 
+    /// Structured formatters render both panes inside one editor surface split
+    /// by a single hairline. This removes the two nested rounded field boxes
+    /// while keeping the code/line-number surface continuous.
+    private var usesSharedPaneSurface: Bool {
+        inputHeader == nil && outputPresentation == .standard
+    }
+
+    @ViewBuilder
+    private var paneRow: some View {
+        if usesSharedPaneSurface {
+            HStack(spacing: 0) {
+                inputPaneWithHeader
+                    .toolPaneHoverChrome()
+                Rectangle()
+                    .fill(ToolTheme.border)
+                    .frame(width: 0.5)
+                outputPane
+                    .toolPaneHoverChrome()
+                    .toolOutputBreath(generation: outputBreathGeneration)
+            }
+            .background(
+                ToolTheme.editorBackground,
+                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                    .strokeBorder(ToolTheme.border, lineWidth: 0.5)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+        } else {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
+                inputPaneWithHeader
+                    .toolPaneHoverChrome()
+                outputPane
+                    .toolPaneHoverChrome()
+                    .toolOutputBreath(generation: outputBreathGeneration)
+            }
+        }
+    }
+
     @ViewBuilder
     private var inputPaneWithHeader: some View {
         Group {
@@ -405,7 +440,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
             caretPlacementRequestToken: inputCaretPlacementRequestToken,
             diagnosticMarker: hasDiagnostic ? diagnosticMarker : nil,
             diagnosticNavigationToken: diagnosticNavigationToken,
-            embedsFlat: inputHeader != nil,
+            embedsFlat: usesSharedPaneSurface || inputHeader != nil,
             lineNumbers: inputLineNumbers,
             onFileDrop: { content in
                 input = content
@@ -438,7 +473,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
                     lineNumbers: outputLineNumbers,
                     syntax: outputSyntax,
                     fillsHeight: true,
-                    embedsFlat: false
+                    embedsFlat: usesSharedPaneSurface
                 )
                 .accessibilityLabel(hasStaleResult ? "\(outputTitle)，结果已过期" : outputTitle)
             case .nativeReadOnlyText:

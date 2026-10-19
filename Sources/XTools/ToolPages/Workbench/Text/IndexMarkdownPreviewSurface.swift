@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 /// Rendered Markdown preview backed by the in-house GFM renderer
 /// (swift-cmark parsing + IndexMarkdownPreviewContent Clay views). This is the

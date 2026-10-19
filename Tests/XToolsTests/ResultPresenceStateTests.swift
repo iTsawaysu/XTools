@@ -1,5 +1,6 @@
 @testable import XTools
 import Testing
+import XToolsDesign
 
 struct ResultPresenceStateTests {
     @Test func completionUsesActionSpecificDurationsAndExitIsShorter() {

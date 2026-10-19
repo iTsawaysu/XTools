@@ -1,5 +1,6 @@
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 /// 单图工作流页面的共享上传装配。
 ///

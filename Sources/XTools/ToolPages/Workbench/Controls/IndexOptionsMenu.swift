@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 // MARK: - IndexOptionsMenu
 
@@ -100,7 +101,7 @@ struct IndexOptionsMenu: View {
                     Text("\(enabledOptions.count)")
                         .font(ToolTypography.buttonSmall.monospacedDigit())
                         .foregroundStyle(ToolTheme.accent)
-                        .transition(.opacity.combined(with: .offset(x: -2)))
+                        .toolTransition(ToolMotion.Transition.labelCountSwap, reduceMotion: reduceMotion)
                 }
 
                 Image(systemName: "chevron.down")

@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 @MainActor
 final class PasswordGeneratorToolWorkspaceModel: ObservableObject {
@@ -106,76 +107,45 @@ private struct IndexPasswordGeneratorWorkspaceContent: View {
     @State private var motionGeneration = 0
 
     var body: some View {
-        VStack(spacing: ToolMetrics.Spacing.md) {
-            parameterCard
-
-            IndexGeneratedValueRowList(
-                rows: passwordResultRows,
-                emptyText: workspace.error ?? resultEmptyText,
-                motionGeneration: motionGeneration,
-                wrapsValues: true
-            )
-            .indexSurface(.card, fill: ToolTheme.panelBackground)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        IndexGeneratorWorkbench(
+            copyText: allPasswordsText,
+            copySuccessToast: ToolFeedbackCopy.copiedAll(noun: "密码"),
+            rows: passwordResultRows,
+            emptyText: workspace.error ?? resultEmptyText,
+            motionGeneration: motionGeneration,
+            wrapsValues: true,
+            generateHelp: "生成密码（⌘↩）",
+            shortcutEnabled: entryGeneration > 0,
+            generate: generate
+        ) {
+            parameters
         }
         .onAppear {
             if !workspace.hasAttemptedGeneration { generate() }
         }
     }
 
-    private var parameterCard: some View {
-        HStack(alignment: .top, spacing: ToolMetrics.Spacing.base) {
-            IndexFlowLayout(spacing: ToolMetrics.Spacing.sm, lineSpacing: ToolMetrics.Spacing.sm) {
-                IndexOptionLabel("长度")
-                IndexNumberInput(value: $workspace.length, range: 8...128)
-                    .onChange(of: workspace.length) { _ in generate() }
+    private var parameters: some View {
+        IndexFlowLayout(spacing: ToolMetrics.Spacing.sm, lineSpacing: ToolMetrics.Spacing.sm) {
+            IndexOptionLabel("长度")
+            IndexNumberInput(value: $workspace.length, range: 8...128)
+                .onChange(of: workspace.length) { _ in generate() }
 
-                IndexOptionLabel("数量")
-                IndexStepperInput(value: $workspace.quantity, range: 1...20)
-                    .onChange(of: workspace.quantity) { _ in generate() }
+            IndexOptionLabel("数量")
+            IndexStepperInput(value: $workspace.quantity, range: 1...20)
+                .onChange(of: workspace.quantity) { _ in generate() }
 
-                IndexOptionSwitch(title: "a-z", isOn: $workspace.lower)
-                    .onChange(of: workspace.lower) { _ in generate() }
-                IndexOptionSwitch(title: "A-Z", isOn: $workspace.upper)
-                    .onChange(of: workspace.upper) { _ in generate() }
-                IndexOptionSwitch(title: "0-9", isOn: $workspace.numbers)
-                    .onChange(of: workspace.numbers) { _ in generate() }
-                IndexOptionSwitch(title: "符号", isOn: $workspace.symbols)
-                    .onChange(of: workspace.symbols) { _ in generate() }
-                IndexOptionSwitch(title: "排除易混淆", isOn: $workspace.excludeAmbiguous)
-                    .onChange(of: workspace.excludeAmbiguous) { _ in generate() }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            generationActions
+            IndexOptionSwitch(title: "a-z", isOn: $workspace.lower)
+                .onChange(of: workspace.lower) { _ in generate() }
+            IndexOptionSwitch(title: "A-Z", isOn: $workspace.upper)
+                .onChange(of: workspace.upper) { _ in generate() }
+            IndexOptionSwitch(title: "0-9", isOn: $workspace.numbers)
+                .onChange(of: workspace.numbers) { _ in generate() }
+            IndexOptionSwitch(title: "符号", isOn: $workspace.symbols)
+                .onChange(of: workspace.symbols) { _ in generate() }
+            IndexOptionSwitch(title: "排除易混淆", isOn: $workspace.excludeAmbiguous)
+                .onChange(of: workspace.excludeAmbiguous) { _ in generate() }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .indexSurface(.card, fill: ToolTheme.panelBackground)
-    }
-
-    /// Shares the parameter row's 30pt height so the actions center against
-    /// the controls instead of riding the wrapped flow's full height.
-    private var generationActions: some View {
-        HStack(spacing: 6) {
-            IndexCopyButton(
-                text: allPasswordsText,
-                title: "全部复制",
-                showsIcon: false,
-                framed: true,
-                successToast: ToolFeedbackCopy.copiedAll(noun: "密码")
-            )
-
-            IndexPrimaryActionButton(
-                title: "生成",
-                hint: "⌘↩",
-                help: "生成密码（⌘↩）",
-                action: generate
-            )
-            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
-        }
-        .frame(height: 30, alignment: .center)
     }
 
     private var allPasswordsText: String {

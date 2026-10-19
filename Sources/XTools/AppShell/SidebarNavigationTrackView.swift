@@ -1,4 +1,5 @@
 import AppKit
+import XToolsDesign
 
 #if DEBUG
 struct SidebarNavigationTrackDebugState: Equatable {

@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 enum IndexBadgeTone: Sendable {
     case neutral

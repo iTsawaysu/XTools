@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 /// Bounded empty/result presence host: one clipped height track that reveals
 /// natural-height results and collapses back to the empty state.

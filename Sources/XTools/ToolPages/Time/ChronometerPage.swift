@@ -1,6 +1,7 @@
 import XToolsCore
 import Foundation
 import SwiftUI
+import XToolsDesign
 
 @MainActor
 final class ChronometerToolWorkspaceModel: ObservableObject {

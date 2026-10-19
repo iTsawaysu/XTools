@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 enum SidebarTogglePresentation: Equatable {
     case show
@@ -37,11 +38,12 @@ struct SidebarMenuCommands: Commands {
 
 struct CommandPaletteMenuCommands: Commands {
     @FocusedObject private var viewModel: RootViewModel?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some Commands {
         CommandGroup(after: .sidebar) {
             Button("命令面板…") {
-                withToolAnimation(ToolMotion.Preset.modal) {
+                withToolAnimation(ToolMotion.Preset.modal, reduceMotion: reduceMotion) {
                     viewModel?.toggleCommandPalette()
                 }
             }

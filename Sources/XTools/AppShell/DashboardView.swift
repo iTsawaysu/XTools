@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 @MainActor
 struct DashboardView: View {

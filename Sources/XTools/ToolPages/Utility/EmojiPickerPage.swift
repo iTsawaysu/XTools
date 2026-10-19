@@ -1,6 +1,7 @@
 import AppKit
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 @MainActor
 final class EmojiToolWorkspaceModel: ObservableObject {

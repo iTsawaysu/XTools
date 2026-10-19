@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 /// Joined `− value +` quantity stepper (prototype v3 parameter rows).
 ///

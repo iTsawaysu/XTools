@@ -1,5 +1,6 @@
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 struct IndexFileTypeDetectorPage: View {
     var body: some View {

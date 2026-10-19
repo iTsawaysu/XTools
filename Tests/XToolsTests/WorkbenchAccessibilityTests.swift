@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Testing
+import XToolsDesign
 @testable import XTools
 @testable import XToolsCore
 
@@ -106,15 +107,12 @@ struct WorkbenchAccessibilityTests {
             [top.redComponent, top.greenComponent, top.blueComponent],
             [base.redComponent, base.greenComponent, base.blueComponent]
         ).map { $0 * top.alphaComponent + $1 * (1 - top.alphaComponent) }
-        // Check both the top and its white sheen extreme, independently of the
-        // SwiftUI renderer. Real-window visual acceptance remains separate.
-        let sheen: CGFloat = appearanceName == .aqua ? 0.5 : 0.08
-        for background in [blendedTop, blendedTop.map { $0 * (1 - sheen) + sheen }] {
-            let backgroundLuminance = luminance(background)
-            let contrast = (max(inkLuminance, backgroundLuminance) + 0.05)
-                / (min(inkLuminance, backgroundLuminance) + 0.05)
-            #expect(contrast >= 4.5)
-        }
+        // The flat keycap has no sheen or sidewall layer: one bed color is the
+        // whole surface. Real-window visual acceptance remains separate.
+        let backgroundLuminance = luminance(blendedTop)
+        let contrast = (max(inkLuminance, backgroundLuminance) + 0.05)
+            / (min(inkLuminance, backgroundLuminance) + 0.05)
+        #expect(contrast >= 4.5)
     }
 
     /// These are injected-environment and in-process accessibility contracts.

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 /// SwiftUI diffing must distinguish canonically equivalent formatter output
 /// when its Unicode bytes differ, so the native viewer can copy exact output.
@@ -150,9 +151,7 @@ struct IndexCodeViewerSurface: View {
                         // Wave 2 empty-arrival: the editor placeholder rises in
                         // softly when content empties (IndexEmptyState owns the
                         // staged beats for whole-panel empty states).
-                        .transition(
-                            .opacity.combined(with: .offset(y: ToolMotion.EmptyArrival.textRiseDistance))
-                        )
+                        .toolTransition(ToolMotion.Transition.emptyArrivalText, reduceMotion: reduceMotion)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

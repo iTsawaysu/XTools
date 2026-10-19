@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import XToolsCore
+import XToolsDesign
 
 struct IndexSourceControlPage: View {
     var body: some View {
@@ -289,7 +290,9 @@ private struct SourceControlWorkspaceContent: View {
                         .onChange(of: workspace.activeUpdatePath) { activePath in
                             // 串行更新时把正在拉取的行滚入视野。
                             guard let activePath else { return }
-                            withAnimation { proxy.scrollTo(activePath, anchor: .top) }
+                            withToolAnimation(ToolMotion.Preset.orderedContent, reduceMotion: nil) {
+                                proxy.scrollTo(activePath, anchor: .top)
+                            }
                         }
                     }
                 }

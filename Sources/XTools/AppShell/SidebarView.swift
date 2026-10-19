@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 struct SidebarView: View {
     static let idealWidth: CGFloat = 220

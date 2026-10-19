@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 enum IndexActionSymbol {
     static let clear = "xmark.circle"

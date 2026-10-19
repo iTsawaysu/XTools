@@ -1,6 +1,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import XToolsCore
+import XToolsDesign
 
 enum IndexTextConversionOutputPresentation: Equatable, Sendable {
     case standard

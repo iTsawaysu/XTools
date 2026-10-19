@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 typealias MathBackgroundEvaluation = @Sendable (
     _ expression: String,

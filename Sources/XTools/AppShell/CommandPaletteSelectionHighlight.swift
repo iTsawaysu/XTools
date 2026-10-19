@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 /// Command-palette selection highlight, matched to mature launchers
 /// (Raycast / Spotlight): the active row carries one neutral floating fill

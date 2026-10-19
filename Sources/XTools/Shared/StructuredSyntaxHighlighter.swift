@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 /// Stateless per-line tokenizers for YAML / SQL / XML plus the
 /// `AttributedString` projections used by SwiftUI `Text` output paths.

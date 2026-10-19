@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 @MainActor
 final class RootViewModel: ObservableObject {

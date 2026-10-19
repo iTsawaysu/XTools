@@ -1,4 +1,5 @@
 import AppKit
+import XToolsDesign
 
 /// Self-drawn thin scroll indicator for the sidebar.
 ///

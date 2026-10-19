@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "XTools",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .executable(name: "XTools", targets: ["XTools"])
@@ -34,10 +34,18 @@ let package = Package(
                 .linkedLibrary("icucore")
             ]
         ),
+        .target(
+            name: "XToolsDesign",
+            path: "Sources/XToolsDesign",
+            swiftSettings: [
+                .enableUpcomingFeature("StrictConcurrency")
+            ]
+        ),
         .executableTarget(
             name: "XTools",
             dependencies: [
                 "XToolsCore",
+                "XToolsDesign",
                 .product(name: "cmark-gfm", package: "swift-cmark"),
                 .product(name: "cmark-gfm-extensions", package: "swift-cmark")
             ],
@@ -63,7 +71,7 @@ let package = Package(
         ),
         .testTarget(
             name: "XToolsTests",
-            dependencies: ["XToolsCore", "XTools", "EmojiCatalogCompiler"],
+            dependencies: ["XToolsCore", "XToolsDesign", "XTools", "EmojiCatalogCompiler"],
             path: "Tests/XToolsTests",
             resources: [
                 .copy("Fixtures/test.md")

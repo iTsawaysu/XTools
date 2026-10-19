@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 enum IndexGenerateParseMode: String, CaseIterable, Identifiable {
     case generate

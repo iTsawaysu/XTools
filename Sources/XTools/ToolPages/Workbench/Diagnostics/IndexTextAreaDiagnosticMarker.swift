@@ -1,5 +1,6 @@
 import AppKit
 import XToolsCore
+import XToolsDesign
 
 /// Prepared once for a completed request, never inferred from a parser's
 /// unspecified column unit. The source snapshot guards native edits and IME.

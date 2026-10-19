@@ -1,4 +1,5 @@
 import Foundation
+import XToolsDesign
 
 struct ToolRegistryCategoryGroup: Hashable {
     let category: ToolCategory

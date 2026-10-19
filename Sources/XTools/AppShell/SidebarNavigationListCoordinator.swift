@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 typealias SidebarNavigationPointerLocationProvider = @MainActor (SidebarNavigationDocumentView) -> CGPoint?
 

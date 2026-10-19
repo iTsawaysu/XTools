@@ -1,6 +1,7 @@
 @testable import XTools
 import SwiftUI
 import Testing
+import XToolsDesign
 
 struct ToolRoutingSourceTests {
     @Test func defaultRegistryHasConsistentRegistrations() {

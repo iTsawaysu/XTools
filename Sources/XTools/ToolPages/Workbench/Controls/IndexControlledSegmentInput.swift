@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 struct IndexControlledDateInput<TrailingAccessory: View>: View {
     @Binding private var input: ControlledDateInput

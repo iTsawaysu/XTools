@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 private enum Base64FileLayout {
     static let primaryContentMinHeight: CGFloat = 136

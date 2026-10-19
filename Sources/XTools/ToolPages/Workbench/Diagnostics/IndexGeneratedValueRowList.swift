@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 /// One generated value slot (prototype v3 result rows).
 ///

@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 enum IndexHeroStatTone: Sendable {
     case accent

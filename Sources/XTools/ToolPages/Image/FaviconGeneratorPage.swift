@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 struct IndexImageFaviconSegment: View {
     var body: some View {

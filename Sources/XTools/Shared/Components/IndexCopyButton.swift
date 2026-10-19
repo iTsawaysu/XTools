@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 /// Shared copy action (F3 归位): the shared layer's hero stat and code viewer
 /// surfaces consume this button, so it lives in Shared/Components rather than

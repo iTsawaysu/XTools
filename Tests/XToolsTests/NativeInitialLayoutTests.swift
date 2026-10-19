@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Testing
+import XToolsDesign
 @testable import XTools
 @testable import XToolsCore
 

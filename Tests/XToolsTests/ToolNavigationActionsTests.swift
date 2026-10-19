@@ -2,6 +2,7 @@
 import Foundation
 import SwiftUI
 import Testing
+import XToolsDesign
 
 struct ToolNavigationActionsTests {
     @MainActor

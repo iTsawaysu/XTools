@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 /// Non-displacing smart-paste suggestion. Floats over the top of the workspace
 /// instead of participating in page layout, so appearing and disappearing never

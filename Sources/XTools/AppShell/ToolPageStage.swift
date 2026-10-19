@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 /// Whole-page identity for the 01 景深沉降 transition: a tool page, the
 /// personal dashboard, or the empty selection state. The stage treats every

@@ -1,5 +1,6 @@
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 /// Summary and bounded safe details deliberately exclude source excerpts.
 /// The same projection backs the visible detail view and its copy action.

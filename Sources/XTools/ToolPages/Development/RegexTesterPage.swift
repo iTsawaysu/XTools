@@ -1,5 +1,6 @@
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 @MainActor
 final class RegexToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicting {

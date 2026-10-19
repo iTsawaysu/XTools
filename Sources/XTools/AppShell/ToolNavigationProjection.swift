@@ -1,4 +1,5 @@
 import Foundation
+import XToolsDesign
 
 enum ToolNavigationSection: Equatable, Hashable {
     case favorites

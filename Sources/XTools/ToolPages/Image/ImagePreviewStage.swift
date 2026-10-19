@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 enum IndexImagePreviewReplacementMotion {
     case animated

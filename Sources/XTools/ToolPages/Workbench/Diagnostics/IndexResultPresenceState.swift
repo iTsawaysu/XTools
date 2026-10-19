@@ -1,5 +1,6 @@
 import XToolsCore
 import Foundation
+import XToolsDesign
 
 typealias IndexResultPresenceMotionPolicy = ResultPresenceMotionPolicy
 typealias IndexResultPresenceFirstAppearancePolicy = ResultPresenceFirstAppearancePolicy

@@ -1,6 +1,7 @@
 import SwiftUI
 @testable import XTools
 import Testing
+import XToolsDesign
 
 struct ToolMotionTests {
     @Test func motionDurationTokensStayInWorkingUiRange() {

@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 struct ToolDivider: View {
     var body: some View {

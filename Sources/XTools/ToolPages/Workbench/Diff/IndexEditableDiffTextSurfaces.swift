@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 final class IndexDiffTextView: IndexCaretWideningTextView, IndexAsymmetricTextContainerSurface, IndexDiffIndexedTextSurface {
     lazy var diffTextIndex = IndexDiffTextIndex(storage: textStorage)

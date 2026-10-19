@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 @MainActor
 final class TokenGeneratorToolWorkspaceModel: ObservableObject {
@@ -109,88 +110,57 @@ private struct IndexTokenWorkspaceContent: View {
     @State private var motionGeneration = 0
 
     var body: some View {
-        VStack(spacing: ToolMetrics.Spacing.md) {
-            parameterCard
-
-            IndexGeneratedValueRowList(
-                rows: resultRows,
-                emptyText: workspace.error ?? resultEmptyText,
-                motionGeneration: motionGeneration,
-                wrapsValues: true
-            )
-            .indexSurface(.card, fill: ToolTheme.panelBackground)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        IndexGeneratorWorkbench(
+            copyText: allTokensText,
+            copySuccessToast: ToolFeedbackCopy.copiedAll(noun: "Token"),
+            rows: resultRows,
+            emptyText: workspace.error ?? resultEmptyText,
+            motionGeneration: motionGeneration,
+            wrapsValues: true,
+            generateHelp: "生成 Token（⌘↩）",
+            shortcutEnabled: entryGeneration > 0,
+            generate: generate
+        ) {
+            parameters
         }
         .onAppear {
             if !workspace.hasAttemptedGeneration { generate() }
         }
     }
 
-    private var parameterCard: some View {
-        HStack(alignment: .top, spacing: ToolMetrics.Spacing.base) {
-            IndexFlowLayout(spacing: ToolMetrics.Spacing.sm, lineSpacing: ToolMetrics.Spacing.sm) {
-                IndexOptionLabel("格式")
-                IndexSegmentedControl(
-                    items: [
-                        (TokenGenerationMode.characterSet.rawValue, "字符集"),
-                        (TokenGenerationMode.base64URL.rawValue, "Base64url"),
-                        (TokenGenerationMode.hex.rawValue, "Hex")
-                    ],
-                    selection: modeBinding
-                )
-                .onChange(of: workspace.mode) { _ in generate() }
+    private var parameters: some View {
+        IndexFlowLayout(spacing: ToolMetrics.Spacing.sm, lineSpacing: ToolMetrics.Spacing.sm) {
+            IndexOptionLabel("格式")
+            IndexSegmentedControl(
+                items: [
+                    (TokenGenerationMode.characterSet.rawValue, "字符集"),
+                    (TokenGenerationMode.base64URL.rawValue, "Base64url"),
+                    (TokenGenerationMode.hex.rawValue, "Hex")
+                ],
+                selection: modeBinding
+            )
+            .onChange(of: workspace.mode) { _ in generate() }
 
-                IndexOptionLabel(workspace.mode == .characterSet ? "长度" : "字节数")
-                IndexNumberInput(value: $workspace.length, range: 1...512)
-                    .onChange(of: workspace.length) { _ in generate() }
+            IndexOptionLabel(workspace.mode == .characterSet ? "长度" : "字节数")
+            IndexNumberInput(value: $workspace.length, range: 1...512)
+                .onChange(of: workspace.length) { _ in generate() }
 
-                IndexOptionLabel("数量")
-                IndexStepperInput(value: $workspace.quantity, range: 1...20)
-                    .onChange(of: workspace.quantity) { _ in generate() }
+            IndexOptionLabel("数量")
+            IndexStepperInput(value: $workspace.quantity, range: 1...20)
+                .onChange(of: workspace.quantity) { _ in generate() }
 
-                if workspace.mode == .characterSet {
-                    IndexOptionSwitch(title: "a-z", isOn: $workspace.lower)
-                        .onChange(of: workspace.lower) { _ in generate() }
-                    IndexOptionSwitch(title: "A-Z", isOn: $workspace.upper)
-                        .onChange(of: workspace.upper) { _ in generate() }
-                    IndexOptionSwitch(title: "0-9", isOn: $workspace.numbers)
-                        .onChange(of: workspace.numbers) { _ in generate() }
-                    IndexOptionSwitch(title: "符号", isOn: $workspace.symbols)
-                        .onChange(of: workspace.symbols) { _ in generate() }
-                }
+            if workspace.mode == .characterSet {
+                IndexOptionSwitch(title: "a-z", isOn: $workspace.lower)
+                    .onChange(of: workspace.lower) { _ in generate() }
+                IndexOptionSwitch(title: "A-Z", isOn: $workspace.upper)
+                    .onChange(of: workspace.upper) { _ in generate() }
+                IndexOptionSwitch(title: "0-9", isOn: $workspace.numbers)
+                    .onChange(of: workspace.numbers) { _ in generate() }
+                IndexOptionSwitch(title: "符号", isOn: $workspace.symbols)
+                    .onChange(of: workspace.symbols) { _ in generate() }
             }
-            .toolAnimation(ToolMotion.Preset.orderedContent, value: workspace.mode)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            generationActions
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .indexSurface(.card, fill: ToolTheme.panelBackground)
-    }
-
-    /// Shares the parameter row's 30pt height so the actions center against
-    /// the controls instead of riding the wrapped flow's full height.
-    private var generationActions: some View {
-        HStack(spacing: 6) {
-            IndexCopyButton(
-                text: allTokensText,
-                title: "全部复制",
-                showsIcon: false,
-                framed: true,
-                successToast: ToolFeedbackCopy.copiedAll(noun: "Token")
-            )
-
-            IndexPrimaryActionButton(
-                title: "生成",
-                hint: "⌘↩",
-                help: "生成 Token（⌘↩）",
-                action: generate
-            )
-            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
-        }
-        .frame(height: 30, alignment: .center)
+        .toolAnimation(ToolMotion.Preset.orderedContent, value: workspace.mode)
     }
 
     private var modeBinding: Binding<String> {

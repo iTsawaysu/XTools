@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 @MainActor
 final class RandomPortToolWorkspaceModel: ObservableObject {

@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 /// The header stays at the call site; this view only owns the expandable body.
 struct ToolDisclosureBody<Content: View>: View {

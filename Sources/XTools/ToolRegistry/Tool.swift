@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 typealias ToolPageFactory = @MainActor () -> AnyView
 

@@ -2,6 +2,7 @@ import AppKit
 import XToolsCore
 import QuartzCore
 import SwiftUI
+import XToolsDesign
 
 struct IndexEmojiCollectionSnapshot: Equatable {
     struct Item: Equatable, Identifiable {

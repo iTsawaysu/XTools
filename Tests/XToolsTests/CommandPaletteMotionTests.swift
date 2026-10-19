@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 @testable import XTools
 import Testing
+import XToolsDesign
 
 /// 2026-10 审计：真实窗口插值采样段（首挂载全弧、20/50/100ms 三档反转循环、
 /// 进度 ≥0.999/≤0.001 边界轮询、定时 toggle 爆发）已整体移出留档至

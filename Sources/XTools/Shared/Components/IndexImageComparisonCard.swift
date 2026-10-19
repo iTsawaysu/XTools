@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 struct IndexImageComparisonCard<Footer: View>: View {
  let title: String

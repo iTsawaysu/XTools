@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 enum IndexEmptyStateDensity: Sendable {
     case panel // Large, used for whole panels

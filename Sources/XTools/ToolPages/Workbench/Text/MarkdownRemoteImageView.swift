@@ -1,5 +1,6 @@
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 /// Display only: the Core authorization session owns networking, decoding and
 /// shared resource costs for block and inline images alike.

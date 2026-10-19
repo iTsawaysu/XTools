@@ -10,6 +10,7 @@
 // - 标题不再设置 `.id`（上游用 kebab-case id 支持锚点跳转，本预览不消费）。
 
 import SwiftUI
+import XToolsDesign
 
 /// 渲染入口：文档块列表 + 两个受控图片出口。
 struct IndexMarkdownPreviewContent: View {

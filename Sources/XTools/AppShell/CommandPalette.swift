@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 private enum CommandPaletteMetrics {
     static let searchHeaderSpacing: CGFloat = 9

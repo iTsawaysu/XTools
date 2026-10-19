@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 enum ToolFeedbackTone: Equatable {
     case success
