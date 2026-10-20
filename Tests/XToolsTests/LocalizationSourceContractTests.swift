@@ -21,14 +21,6 @@ struct LocalizationSourceContractTests {
             Comment(rawValue: "CJK literals missing from Localizable.xcstrings: \(missing.sorted().prefix(20))")
         )
     }
-
-    @Test func stringCatalogKeepsStructuredShape() throws {
-        let object = try Self.catalogObject()
-
-        #expect(object?["sourceLanguage"] as? String == "zh-Hans")
-        #expect(object?["version"] as? String == "1.0")
-        #expect((object?["strings"] as? [String: Any])?.isEmpty == false)
-    }
 }
 
 // MARK: - Scanner

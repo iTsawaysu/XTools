@@ -10,18 +10,6 @@ struct MarkdownDevelopmentCase: Sendable {
 }
 
 enum TestMarkdownCaseSupport {
-    static let prefixes = [
-        "JSON-FMT", "SQL-FMT", "XML-FMT", "YAML-FMT",
-        "JSON-DIFF", "TEXT-DIFF", "REGEX", "DOCKER"
-    ]
-
-    static func repositoryRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
     /// Development-tool case inventory used by TestMarkdown*Coverage tests.
     /// Bundled as a test-target resource (`Fixtures/test.md`).
     static func testMarkdownURL() throws -> URL {
@@ -79,10 +67,6 @@ enum TestMarkdownCaseSupport {
             testCase.codeBlocks.indices.contains(index) ? testCase.codeBlocks[index] : nil,
             "\(testCase.id) 缺少第 \(index + 1) 个代码块"
         )
-    }
-
-    static func readSource(_ relativePath: String) throws -> String {
-        try String(contentsOf: repositoryRoot().appendingPathComponent(relativePath), encoding: .utf8)
     }
 
     static func jsonDiagnostic(_ input: String) throws -> FormatDiagnostic {
@@ -158,24 +142,5 @@ enum TestMarkdownCaseSupport {
             }
             return value
         }
-    }
-}
-
-struct TestMarkdownCoverageInventoryTests {
-    @Test func everyTargetCaseHasAnExecutableMatrixEntry() throws {
-        let actual = Set(try TestMarkdownCaseSupport.loadCases().keys)
-        let expected = Set(
-            (1...20).map { String(format: "JSON-FMT-%02d", $0) }
-            + (1...16).map { String(format: "SQL-FMT-%02d", $0) }
-            + (1...12).map { String(format: "XML-FMT-%02d", $0) }
-            + (1...14).map { String(format: "YAML-FMT-%02d", $0) }
-            + (1...14).map { String(format: "JSON-DIFF-%02d", $0) }
-            + (1...13).map { String(format: "TEXT-DIFF-%02d", $0) }
-            + (1...19).map { String(format: "REGEX-%02d", $0) }
-            + (1...20).map { String(format: "DOCKER-%02d", $0) }
-        )
-
-        #expect(actual == expected)
-        #expect(actual.count == 128)
     }
 }

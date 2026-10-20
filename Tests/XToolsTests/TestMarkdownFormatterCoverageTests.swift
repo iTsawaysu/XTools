@@ -266,6 +266,9 @@ struct TestMarkdownFormatterCoverageTests {
             #expect(output.contains("defaults: &defaults"))
             #expect(output.contains("<<: *defaults"))
             #expect(output.contains("release_notes: |"))
+            #expect(output.contains("第一行保持原样。"))
+            #expect(output.contains(#"JSON 示例：{"id":1,"ok":true}"#))
+            #expect(output.contains(#"quoted_number: "00123""#))
             #expect(output.contains("folded_text: >"))
             try YAMLPrettifier.validate(output)
         case "YAML-FMT-03":

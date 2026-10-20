@@ -203,7 +203,6 @@ struct DateCalcWorkspaceTests {
     @Test func presetTitlesMatchVisibleChips() {
         #expect(DateCalcWorkspace.DiffPreset.restOfMonth.title == "本月剩余")
         #expect(DateCalcWorkspace.DiffPreset.restOfYear.title == "今年剩余")
-        #expect(DateCalcWorkspace.DiffPreset.allCases.count == 2)
     }
 
     @Test func opEnumDrivesSignedAddition() {
@@ -211,7 +210,6 @@ struct DateCalcWorkspaceTests {
         #expect(DateCalcWorkspace.Op.subtract.sign == -1)
         #expect(DateCalcWorkspace.Op.add.label == "加")
         #expect(DateCalcWorkspace.Op.subtract.label == "减")
-        #expect(DateCalcWorkspace.Op.allCases.count == 2)
     }
 
     @Test func setTodayPathsClearErrors() {

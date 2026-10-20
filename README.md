@@ -9,7 +9,7 @@
     <a href="https://github.com/iTsawaysu/XTools/releases"><img src="https://img.shields.io/github/v/release/iTsawaysu/XTools?style=flat-square&color=black" alt="Release"></a>
     <a href="https://github.com/iTsawaysu/XTools/stargazers"><img src="https://img.shields.io/github/stars/iTsawaysu/XTools?style=flat-square&color=orange" alt="Stars"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
-    <img src="https://img.shields.io/badge/macOS-13.0%2B-orange?style=flat-square" alt="macOS 13+">
+    <img src="https://img.shields.io/badge/macOS-14.0%2B-orange?style=flat-square" alt="macOS 14+">
     <img src="https://img.shields.io/badge/Swift-6.0-F05138?style=flat-square&logo=swift&logoColor=white" alt="Swift 6">
   </p>
 </div>
@@ -26,19 +26,20 @@ XTools packs 34 developer utilities into a single native macOS application. Most
 
 ### 1. Download DMG (Recommended)
 
-Download the latest DMG from [GitHub Releases](https://github.com/iTsawaysu/XTools/releases/latest), open it, and drag XTools into `Applications`. Requires macOS 13.0+ on Apple Silicon or Intel; packaged builds target the current architecture.
+Download the latest DMG from [GitHub Releases](https://github.com/iTsawaysu/XTools/releases/latest), open it, and drag XTools into `Applications`. Requires macOS 14.0+ on Apple Silicon or Intel; packaged builds target the current architecture.
 
 ### 2. Build from Source
 
-Requires macOS 13+ and Xcode 16+.
+Requires macOS 14+ and Xcode 16+.
 
 ```bash
 git clone https://github.com/iTsawaysu/XTools.git
 cd XTools
-./build.sh           # Release build, package, and open the app
-./build.sh dev       # Debug build for fast iteration
-./build.sh build     # Release build and package without opening
-swift test           # Run the complete automated test suite
+./build.sh           # Debug build, package, and open (fast iteration)
+./build.sh build-dev # Debug build and package without opening
+./build.sh release   # Optimized release build and package without opening
+swift test           # Run the Swift automated test suite
+python3 -m unittest discover -s Tests/BuildScriptTests -v  # Packaging script tests
 ```
 
 Packaged builds are written to `build/XTools.app`.

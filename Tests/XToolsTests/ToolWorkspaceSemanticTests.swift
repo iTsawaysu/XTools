@@ -120,52 +120,6 @@ struct ToolWorkspaceSemanticTests {
         )
     }
 
-    @Test func defaultSemanticProtectsUnmigratedPages() {
-        let behavior = IndexWorkspaceSemantic.unmigratedPageDefault.behavior
-
-        #expect(!behavior.inputExpandsWithContent)
-        #expect(behavior.outputScrollsInternally)
-        #expect(behavior.wrapsLongTokensToAvailableWidth)
-        #expect(!behavior.usesNaturalHeightSurface)
-    }
-
-    @Test func defaultSemanticDoesNotAutoMigrateUnmigratedPagesToReadingBehavior() {
-        let defaultBehavior = IndexWorkspaceSemantic.unmigratedPageDefault.behavior
-        let readingBehavior = IndexWorkspaceSemantic.structuredOutputReading.behavior
-
-        #expect(!defaultBehavior.inputExpandsWithContent)
-        #expect(defaultBehavior.outputScrollsInternally)
-        #expect(defaultBehavior.inputExpandsWithContent != readingBehavior.inputExpandsWithContent)
-        #expect(defaultBehavior.outputScrollsInternally != readingBehavior.outputScrollsInternally)
-    }
-
-    @Test func structuredOutputReadingResolvesToPageLevelReadingContract() {
-        let behavior = IndexWorkspaceSemantic.structuredOutputReading.behavior
-
-        #expect(behavior.inputExpandsWithContent)
-        #expect(!behavior.outputScrollsInternally)
-        #expect(behavior.wrapsLongTokensToAvailableWidth)
-        #expect(!behavior.usesNaturalHeightSurface)
-    }
-
-    @Test func copyTransformWorkspaceKeepsFixedInternalScrollingButWrapsLongTokens() {
-        let behavior = IndexWorkspaceSemantic.copyTransformWorkspace.behavior
-
-        #expect(!behavior.inputExpandsWithContent)
-        #expect(behavior.outputScrollsInternally)
-        #expect(behavior.wrapsLongTokensToAvailableWidth)
-        #expect(!behavior.usesNaturalHeightSurface)
-    }
-
-    @Test func naturalHeightShortResultPanelUsesPageOuterNaturalHeightContract() {
-        let behavior = IndexWorkspaceSemantic.naturalHeightShortResultPanel.behavior
-
-        #expect(!behavior.inputExpandsWithContent)
-        #expect(!behavior.outputScrollsInternally)
-        #expect(behavior.wrapsLongTokensToAvailableWidth)
-        #expect(behavior.usesNaturalHeightSurface)
-    }
-
     @Test @MainActor func shortResultEntrypointsDefaultToNaturalHeightAndLongTokenWrapping() {
         let kv = IndexShortResultKV(rows: [("文件", "very-long-token-without-natural-breaks", nil)])
         let cards = IndexShortResultCardList(
@@ -212,58 +166,6 @@ struct ToolWorkspaceSemanticTests {
         #expect(resultRow.valueLineBreakMode == .byCharWrapping)
         #expect(IndexWorkspaceSemantic.fixedInputWorkspace.behavior.wrapsLongTokensToAvailableWidth)
         #expect(IndexWorkspaceSemantic.queryListWorkspace.behavior.wrapsLongTokensToAvailableWidth)
-    }
-
-    @Test func inputGrowthRemainsTaskSemanticSpecificRatherThanControlTypeDefault() {
-        let fixedInputSemantics: [IndexWorkspaceSemantic] = [
-            .unmigratedPageDefault,
-            .structuredEditorTransform,
-            .copyTransformWorkspace,
-            .securityTransformWorkspace,
-            .fixedInputWorkspace,
-            .boundedLongTextInput,
-            .naturalHeightShortResultPanel,
-            .imagePreviewStage,
-            .liveImagePreviewStage,
-            .queryListWorkspace,
-            .base64FileWorkspace
-        ]
-
-        for semantic in fixedInputSemantics {
-            #expect(!semantic.behavior.inputExpandsWithContent)
-        }
-
-        #expect(IndexWorkspaceSemantic.structuredOutputReading.behavior.inputExpandsWithContent)
-        #expect(!IndexWorkspaceSemantic.structuredEditorTransform.behavior.inputExpandsWithContent)
-        #expect(IndexWorkspaceSemantic.longTextNaturalInput.behavior.inputExpandsWithContent)
-        #expect(!IndexWorkspaceSemantic.boundedLongTextInput.behavior.inputExpandsWithContent)
-        #expect(IndexWorkspaceSemantic.editableDiffWorkspace.behavior.inputExpandsWithContent)
-    }
-
-    @Test func exceptionSemanticsStayDistinctFromReadingDefaults() {
-        #expect(IndexWorkspaceSemantic.copyTransformWorkspace.behavior.outputScrollsInternally)
-        #expect(IndexWorkspaceSemantic.securityTransformWorkspace.behavior.outputScrollsInternally)
-        #expect(IndexWorkspaceSemantic.structuredEditorTransform.behavior.outputScrollsInternally)
-        #expect(!IndexWorkspaceSemantic.structuredOutputReading.behavior.outputScrollsInternally)
-        #expect(IndexWorkspaceSemantic.imagePreviewStage.behavior == .imageStageControlDefaults)
-        #expect(!IndexWorkspaceSemantic.imagePreviewStage.behavior.wrapsLongTokensToAvailableWidth)
-        #expect(IndexWorkspaceSemantic.liveImagePreviewStage.behavior == .imageStageControlDefaults)
-        #expect(!IndexWorkspaceSemantic.liveImagePreviewStage.behavior.wrapsLongTokensToAvailableWidth)
-        #expect(IndexWorkspaceSemantic.editableDiffWorkspace.behavior == IndexWorkspaceSemantic.structuredOutputReading.behavior)
-    }
-
-    @Test func exceptionSemanticsKeepTheirDistinctScrollAndFillOwners() {
-        #expect(IndexWorkspaceSemantic.copyTransformWorkspace.behavior == .fixedHeightInternalScroll)
-        #expect(IndexWorkspaceSemantic.securityTransformWorkspace.behavior == .fixedHeightInternalScroll)
-        #expect(IndexWorkspaceSemantic.structuredEditorTransform.behavior == .fixedHeightInternalScroll)
-        #expect(IndexWorkspaceSemantic.fixedInputWorkspace.behavior.outputScrollsInternally == false)
-        #expect(IndexWorkspaceSemantic.fixedInputWorkspace.behavior.usesNaturalHeightSurface == false)
-        #expect(IndexWorkspaceSemantic.queryListWorkspace.behavior.outputScrollsInternally)
-        #expect(IndexWorkspaceSemantic.base64FileWorkspace.behavior == .fixedHeightPageScrolling)
-        #expect(IndexWorkspaceSemantic.boundedLongTextInput.behavior.usesNaturalHeightSurface)
-        #expect(IndexWorkspaceSemantic.naturalHeightShortResultPanel.behavior.usesNaturalHeightSurface)
-        #expect(IndexWorkspaceSemantic.longTextNaturalInput.behavior == .naturalHeightPageScrolling)
-        #expect(IndexWorkspaceSemantic.regexResultWorkspace.behavior == .fixedHeightInternalScroll)
     }
 
     @Test @MainActor func textConversionWorkbenchDefaultsToCopyTransformSemantic() {

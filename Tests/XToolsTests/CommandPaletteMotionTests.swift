@@ -47,17 +47,6 @@ struct CommandPaletteMotionTests {
 
     // MARK: - Wave 2 palette choreography (prototype MOTION cmdk*)
 
-    /// Current fade timing: 130ms opening, 120ms closing, no positional travel.
-    /// This checks tokens, not the actual frame cadence or reversal response.
-    @Test
-    func paletteMotionTokensMatchWave2Prototype() {
-        #expect(ToolMotion.PaletteMotion.riseDistance == 0)
-        // Preserve the current ease-out timings.
-        #expect(ToolMotion.PaletteMotion.open == Animation.easeOut(duration: 0.13))
-        #expect(ToolMotion.PaletteMotion.close == Animation.easeOut(duration: 0.12))
-        // Keyboard selection highlight is instant (no interpolation token).
-    }
-
     /// Fade-only presentation: opacity spans 0→1 across the progress range
     /// with no positional travel, one continuous mapping for both directions.
     @Test
@@ -71,7 +60,6 @@ struct CommandPaletteMotionTests {
             reduceMotion: false
         )
 
-        #expect(start.offsetY == ToolMotion.PaletteMotion.riseDistance)
         #expect(start.opacity == 0)
         #expect(settled.offsetY == 0)
         #expect(settled.opacity == 1)

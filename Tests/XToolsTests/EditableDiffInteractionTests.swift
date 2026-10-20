@@ -935,6 +935,48 @@ struct EditableDiffInteractionTests {
         #expect(!hasTemporaryBackground(in: rightTextView))
     }
 
+    @Test func longSingleLineDiffEditorsWrapInsteadOfScrollingHorizontally() throws {
+        let left = "token=" + String(repeating: "a", count: 180)
+        let right = "token=" + String(repeating: "a", count: 170) + "b" + String(repeating: "a", count: 9)
+        let leftValue = MutableStringValue(left)
+        let rightValue = MutableStringValue(right)
+        let rows = try LineDiffer.safeAlignedDiff(left: left, right: right)
+        let mergeView = IndexEditableDiffMergeView(
+            left: binding(to: leftValue),
+            right: binding(to: rightValue),
+            leftPlaceholder: "Left",
+            rightPlaceholder: "Right",
+            leftAccessibilityLabel: "Wrap Left",
+            rightAccessibilityLabel: "Wrap Right",
+            leftDisplayText: nil,
+            rightDisplayText: nil,
+            rows: rows,
+            syntax: .plain,
+            foldUnchanged: false
+        )
+        let hostingView = NSHostingView(rootView: mergeView.environment(\.toolPageEntryGeneration, 1))
+        hostingView.frame = NSRect(x: 0, y: 0, width: 900, height: 240)
+        let window = NSWindow(
+            contentRect: hostingView.frame,
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        window.contentView = hostingView
+        defer {
+            window.orderOut(nil)
+            window.contentView = nil
+        }
+        hostingView.layoutSubtreeIfNeeded()
+
+        for label in ["Wrap Left", "Wrap Right"] {
+            let editor = try #require(textView(in: hostingView, accessibilityLabel: label))
+            #expect(!editor.isHorizontallyResizable)
+            #expect(editor.textContainer?.lineBreakMode == .byCharWrapping)
+        }
+    }
+
     private func comparableRows(left: String, right: String) throws -> [DiffAlignedRow] {
         let decision = JSONStructuralDiff.alignedDiff(
             left: left,

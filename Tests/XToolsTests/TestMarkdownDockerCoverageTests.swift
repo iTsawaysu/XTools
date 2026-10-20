@@ -6,7 +6,7 @@ struct TestMarkdownDockerCoverageTests {
         "DOCKER-01", "DOCKER-02", "DOCKER-03", "DOCKER-04", "DOCKER-05",
         "DOCKER-06", "DOCKER-07", "DOCKER-08", "DOCKER-09", "DOCKER-10",
         "DOCKER-11", "DOCKER-12", "DOCKER-13", "DOCKER-14", "DOCKER-15",
-        "DOCKER-16", "DOCKER-17", "DOCKER-18", "DOCKER-19", "DOCKER-20"
+        "DOCKER-16", "DOCKER-19", "DOCKER-20"
     ])
     func dockerCase(_ id: String) throws {
         let testCase = try TestMarkdownCaseSupport.testCase(id)
@@ -115,16 +115,6 @@ struct TestMarkdownDockerCoverageTests {
             for result in warningCases {
                 #expect(DockerRunToDockerComposeDiagnostics.warningMessage(for: result.warnings) != nil)
             }
-        case "DOCKER-17":
-            let source = try pageSource()
-            #expect(source.contains("maxInputCharacters = 200_000"))
-            #expect(source.contains("guard trimmed.count <= maxInputCharacters"))
-            #expect(source.contains("DockerRunToDockerComposeDiagnostics.inputTooLongMessage"))
-        case "DOCKER-18":
-            let source = try pageSource()
-            #expect(source.contains("guard !trimmed.isEmpty else"))
-            #expect(source.contains("return FormatBinding()"))
-            #expect(source.contains("execution.schedule"))
         case "DOCKER-19":
             let result = try convert(testCase)
             #expect(result.yaml.contains("platform: linux/amd64"))
@@ -163,9 +153,5 @@ struct TestMarkdownDockerCoverageTests {
 
     private func block(_ testCase: MarkdownDevelopmentCase, _ index: Int) throws -> String {
         try TestMarkdownCaseSupport.block(testCase, index)
-    }
-
-    private func pageSource() throws -> String {
-        try TestMarkdownCaseSupport.readSource("Sources/XTools/ToolPages/Development/DockerRunToComposePage.swift")
     }
 }

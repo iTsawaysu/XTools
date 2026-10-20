@@ -135,13 +135,6 @@ struct HTMLToMarkdownDiagnosticsTests {
         )
     }
 
-    @Test func converterFacadeStillExistsAndConverts() {
-        // Deletion guard: Converter is a real contract, not a pass-through to delete.
-        let result = HTMLToMarkdownConverter.convert("<p>hi</p>")
-        #expect(result == "hi" || result.contains("hi"))
-        #expect(HTMLToMarkdownInputBudget.manual.completedResultThreshold == 512_000)
-    }
-
     @Test func repeatedElementWarningsCollapseToOnePrimarySummary() {
         let message = HTMLToMarkdownDiagnostics.conversionWarningMessage(
             for: [

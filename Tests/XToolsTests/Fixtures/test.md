@@ -2135,6 +2135,8 @@ docker run --env WIN=C:\Temp\new --env "CTRL=line	break" --label note="A # B: C"
 
 类型：压力 / 安全
 
+自动化：`DockerRunToComposeDiagnosticsTests.inputBeyondPageBudgetStopsBeforeConversionAndRecoversWhenShortened`。
+
 构造 trim 后长度 > `200_000` 的输入（页面常量 `maxInputCharacters`）。
 
 预期：
@@ -2151,6 +2153,8 @@ docker run --env WIN=C:\Temp\new --env "CTRL=line	break" --label note="A # B: C"
 ### DOCKER-18 · 空输入
 
 类型：边界
+
+自动化：`DockerRunToComposeDiagnosticsTests.whitespaceOnlyInputReturnsQuietEmptyBinding`。
 
 空或纯空白：安静，清空输出与 warning/error。
 
