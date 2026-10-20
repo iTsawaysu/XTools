@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import XToolsCore
 
-enum IndexTextConversionOutputPresentation: Equatable, Sendable {
+enum IndexTextConversionOutputPresentation: Hashable, Sendable {
     case standard
     case nativeReadOnlyText
     case markdownPreview

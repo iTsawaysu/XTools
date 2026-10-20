@@ -232,6 +232,7 @@ private struct IndexRegexWorkspaceContent: View {
                 )
                 .verticallyFilling()
             })
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .onAppear {
             displayedReport = report

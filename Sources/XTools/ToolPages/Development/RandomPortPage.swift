@@ -45,7 +45,17 @@ private struct IndexPortWorkspaceContent: View {
             workspaceSemantic: .naturalHeightShortResultPanel
         ) {
             IndexPanel("结果") {
-                IndexHeroStat(value: workspace.output ?? "尚未生成", tone: workspace.output == nil ? .primary : .accent, copyable: workspace.output != nil, design: .rounded)
+                if let output = workspace.output {
+                    IndexHeroStat(value: output, design: .rounded)
+                } else {
+                    IndexEmptyState(
+                        title: "等待生成",
+                        systemImage: "number",
+                        message: "点击重新生成获取随机端口。",
+                        density: .list
+                    )
+                    .frame(minHeight: 96)
+                }
             } accessory: {
                 Button { workspace.generate() } label: {
                     Label("重新生成", systemImage: IndexActionSymbol.refresh)

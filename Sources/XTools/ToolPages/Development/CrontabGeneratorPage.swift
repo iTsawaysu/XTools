@@ -56,7 +56,7 @@ private struct IndexCrontabWorkspaceContent: View {
         IndexPage("Crontab 生成", subtitle: "用预设拼出 cron 表达式并给出说明。", workspaceSemantic: .naturalHeightShortResultPanel) {
             IndexPanel("Cron 表达式") {
                 VStack(alignment: .leading, spacing: 14) {
-                    IndexTextInput(placeholder: "*/5 * * * *", text: $workspace.expression, height: 44, alignment: .center)
+                    IndexTextInput(placeholder: "*/5 * * * *", text: $workspace.expression, height: ToolMetrics.ControlHeight.field, alignment: .center)
                         .font(ToolTypography.valueMedium)
                         .onChange(of: workspace.expression) { _ in
                             workspace.debouncer.schedule(IndexDebouncer.keystrokeDebounce) { validate() }

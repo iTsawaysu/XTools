@@ -430,31 +430,35 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                 .accessibilityLabel(outputTitle)
         } else {
-            switch outputPresentation {
-            case .standard:
-                IndexCodeViewerSurface(
-                    text: output,
-                    placeholder: outputPlaceholder,
-                    lineNumbers: outputLineNumbers,
-                    syntax: outputSyntax,
-                    fillsHeight: true,
-                    embedsFlat: false
-                )
-                .accessibilityLabel(hasStaleResult ? "\(outputTitle)，结果已过期" : outputTitle)
-            case .nativeReadOnlyText:
-                IndexReadOnlyTextSurface(
-                    text: output,
-                    placeholder: outputPlaceholder,
-                    fillsHeight: true
-                )
-                .accessibilityLabel(hasStaleResult ? "\(outputTitle)，结果已过期" : outputTitle)
-            case .markdownPreview:
-                IndexMarkdownPreviewSurface(
-                    text: output,
-                    placeholder: outputPlaceholder,
-                    fillsHeight: true,
-                    accessibilityTitle: outputTitle
-                )
+            // 输出呈现（源码/预览/只读文本）是结构性切换：旧表面先退场，
+            // 新表面再进入，避免两种文本表面在同一位置交叉叠影。
+            IndexModeContent(id: outputPresentation, fillsHeight: true) { presentation in
+                switch presentation {
+                case .standard:
+                    IndexCodeViewerSurface(
+                        text: output,
+                        placeholder: outputPlaceholder,
+                        lineNumbers: outputLineNumbers,
+                        syntax: outputSyntax,
+                        fillsHeight: true,
+                        embedsFlat: false
+                    )
+                    .accessibilityLabel(hasStaleResult ? "\(outputTitle)，结果已过期" : outputTitle)
+                case .nativeReadOnlyText:
+                    IndexReadOnlyTextSurface(
+                        text: output,
+                        placeholder: outputPlaceholder,
+                        fillsHeight: true
+                    )
+                    .accessibilityLabel(hasStaleResult ? "\(outputTitle)，结果已过期" : outputTitle)
+                case .markdownPreview:
+                    IndexMarkdownPreviewSurface(
+                        text: output,
+                        placeholder: outputPlaceholder,
+                        fillsHeight: true,
+                        accessibilityTitle: outputTitle
+                    )
+                }
             }
         }
     }

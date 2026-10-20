@@ -120,7 +120,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
             IndexTextInput(
                 placeholder: "URL...",
                 text: $session.urlText,
-                height: 26,
+                height: ToolMetrics.ControlHeight.small,
                 trailingInset: session.urlText.isEmpty ? 11 : 28,
                 embedsFlat: true,
                 onSubmit: session.fetchURL,

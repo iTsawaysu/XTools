@@ -67,7 +67,7 @@ private struct IndexChmodWorkspaceContent: View {
     var body: some View {
         IndexPage("Chmod 计算器", subtitle: "在八进制与 rwx（含特殊权限位）之间双向换算。", workspaceSemantic: .naturalHeightShortResultPanel) {
             IndexPanel("八进制权限") {
-                IndexTextInput(placeholder: "644 或 4755", text: octalBinding, height: 44, alignment: .center)
+                IndexTextInput(placeholder: "644 或 4755", text: octalBinding, height: ToolMetrics.ControlHeight.field, alignment: .center)
                     .font(ToolTypography.valueMedium)
                     .accessibilityLabel("Chmod 八进制权限")
                     .accessibilityHint("输入三位 rwx 权限或四位特殊权限模式")

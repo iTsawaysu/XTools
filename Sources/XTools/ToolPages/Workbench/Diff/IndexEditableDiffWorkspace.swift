@@ -363,7 +363,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(height: 44)
+        .frame(height: ToolMetrics.ControlHeight.row)
         .padding(.horizontal, 12)
         .overlay(alignment: .bottom) {
             Rectangle()
