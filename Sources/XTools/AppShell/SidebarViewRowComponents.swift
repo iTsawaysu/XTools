@@ -56,15 +56,6 @@ struct SidebarGroupHeader: View {
                     .truncationMode(.tail)
 
                 Spacer(minLength: 0)
-
-                // Arc Spaces 式分类身份点：低饱和渐变，仅非收藏分组。
-                if !isFavorites, case .category(let categoryID) = section {
-                    Circle()
-                        .fill(ToolTheme.categoryGradient(categoryID))
-                        .frame(width: 7, height: 7)
-                        .opacity(isActiveSection ? 1.0 : (isExpanded ? 0.95 : 0.55))
-                        .accessibilityHidden(true)
-                }
             }
             .padding(.horizontal, 8)
             .frame(height: SidebarMetrics.groupHeaderHeight)

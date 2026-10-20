@@ -157,30 +157,6 @@ public enum ToolTheme {
 
     /// Arc Spaces 式分类身份徽章用。亮度/饱和度保持同档，仅色相微移，
     /// 与 Clay 橙和谐共处而不是各自争艳。
-    public static func categoryGradient(_ id: ToolCategoryID) -> LinearGradient {
-        let (from, to) = Self.categoryGradientStops(id)
-        return LinearGradient(
-            colors: [Self.dynamicColor(light: from.0, dark: from.1),
-                     Self.dynamicColor(light: to.0, dark: to.1)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
-    private static func categoryGradientStops(_ id: ToolCategoryID) -> ((UInt32, UInt32), (UInt32, UInt32)) {
-        switch id.rawValue {
-        case "converter": return ((0xD97757, 0xE0875F), (0xE0A15E, 0xE7B268))   // 橙→金
-        case "crypto": return ((0xD97757, 0xE0875F), (0xC96E8E, 0xD0819B))     // 橙→玫瑰
-        case "development": return ((0xD97757, 0xE0875F), (0x9E6B4F, 0xA97B5C)) // 橙→赭
-        case "web": return ((0xD97757, 0xE0875F), (0x8FA3B8, 0x9BB0C3))        // 橙→雾蓝
-        case "text": return ((0xD97757, 0xE0875F), (0xC9B08A, 0xD2BC9A))       // 橙→砂
-        case "image": return ((0xD97757, 0xE0875F), (0xA87BA0, 0xB489AC))      // 橙→藕紫
-        case "time": return ((0xD97757, 0xE0875F), (0x7FA5A0, 0x8DB2AD))       // 橙→青瓷
-        case "utility": return ((0xD97757, 0xE0875F), (0xA3B08A, 0xAFBC96))    // 橙→苔绿
-        default: return ((0xD97757, 0xE0875F), (0x9A938A, 0xA6A097))           // 橙→暖灰
-        }
-    }
-
     // MARK: - Syntax highlight (§7.2 — 暖中性主调 + 柔蓝做唯一冷 pop)
 
     public static let synKey = dynamicColor(light: 0x8A6D4A, dark: 0xD8C4B0)    // key：暖米
