@@ -58,8 +58,7 @@ struct ToolRoutingSourceTests {
             "HTML → Markdown",
             "Crontab 生成",
             "随机端口",
-            "Chmod 计算器",
-            "源码管理"
+            "Chmod 计算器"
         ])
         #expect(try #require(groups.first { $0.category.id == .web }?.tools).map(\.title) == [
             "JWT",

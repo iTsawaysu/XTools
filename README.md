@@ -20,7 +20,7 @@ Developers constantly run into small, recurring tasks: formatting JSON, converti
 
 Opening browser tabs for routine transformations is tedious and can expose sensitive data (tokens, configs, keys) to third-party services. XTools keeps those transformations on the Mac and uses native macOS controls instead of a browser-based shell.
 
-XTools packs 34 developer utilities into a single native macOS application. Most tools work entirely offline. HTML → Markdown can fetch an HTTP(S) URL that passes the host safety policy or load preview images when you explicitly allow them. Source Control Sync can also contact configured Git remotes during repository scanning and updates. Use `Cmd + K` in the app to open any tool quickly.
+XTools packs 33 developer utilities into a single native macOS application. Most tools work entirely offline. HTML → Markdown can fetch an HTTP(S) URL that passes the host safety policy or load preview images when you explicitly allow them. Use `Cmd + K` in the app to open any tool quickly.
 
 ## Quick Start
 
@@ -58,7 +58,7 @@ Packaged builds are written to `build/XTools.app`.
 | :--- | :--- |
 | **Converters (5)** | Base64 File, Text Encoding (Base64 / URL / ASCII & Binary / Unicode), Base Converter, Roman Numerals, Case Converter |
 | **Crypto & Generators (4)** | Hash Text (MD5, SHA-1/256/512, SHA-3), AES Text Encryption, String Obfuscator, Generators (Token / UUID / Password) |
-| **Development (9)** | Formatters (JSON / SQL / XML / YAML), Diff (Text / JSON), Regex Tester, Docker Run ↔ Compose, HTML → Markdown, Crontab Generator, Random Port, Chmod Calculator, Source Control Sync |
+| **Development (8)** | Formatters (JSON / SQL / XML / YAML), Diff (Text / JSON), Regex Tester, Docker Run ↔ Compose, HTML → Markdown, Crontab Generator, Random Port, Chmod Calculator |
 | **Web (5)** | JWT Parser & Signer, Basic Auth Generator, HTTP Status Codes, User-Agent Parser, Keycode Inspector |
 | **Image & Color (2)** | Image Processing (Format Converter / Compressor / Grayscale / Watermark / Favicon), Color Converter (HEX, RGB, HSL) |
 | **Time & Date (4)** | Unix Timestamp Converter (s/ms), Timezone Viewer, Date Calculator, Chronometer & Stopwatch |
@@ -68,7 +68,7 @@ Packaged builds are written to `build/XTools.app`.
 
 | Shortcut | Action | Description |
 | :--- | :--- | :--- |
-| `Cmd + K` | **Command Palette** | Global search across all 34 tools and commands |
+| `Cmd + K` | **Command Palette** | Global search across all 33 tools and commands |
 | `Cmd + 0` | **Workbench** | Return to dashboard with recent and favorite tools |
 | `Cmd + 1` – `Cmd + 7` | **Switch Category** | Jump directly to any tool category |
 | `Cmd + F` | **Filter Sidebar** | Focus the sidebar search filter |

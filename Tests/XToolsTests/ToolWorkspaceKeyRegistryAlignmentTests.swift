@@ -40,7 +40,6 @@ struct ToolWorkspaceKeyRegistryAlignmentTests {
             ("CrontabToolWorkspaceModel.key", CrontabToolWorkspaceModel.key.toolID),
             ("ChmodToolWorkspaceModel.key", ChmodToolWorkspaceModel.key.toolID),
             ("RandomPortToolWorkspaceModel.key", RandomPortToolWorkspaceModel.key.toolID),
-            ("SourceControlWorkspaceModel.key", SourceControlWorkspaceModel.key.toolID),
             // 加密与生成
             ("GeneratorHubWorkspaceModel.key", GeneratorHubWorkspaceModel.key.toolID),
             ("TokenGeneratorToolWorkspaceModel.key", TokenGeneratorToolWorkspaceModel.key.toolID),

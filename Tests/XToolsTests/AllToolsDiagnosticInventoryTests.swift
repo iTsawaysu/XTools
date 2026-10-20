@@ -33,8 +33,8 @@ struct AllToolsDiagnosticInventoryTests {
         let actual = registeredGroups.mapValues { $0[0].categoryID.rawValue }
         let expected = inventoryGroups.mapValues { $0[0].category }
 
-        #expect(actual.count == 34)
-        #expect(Self.inventory.count == 34)
+        #expect(actual.count == 33)
+        #expect(Self.inventory.count == 33)
         #expect(actual == expected)
     }
 
@@ -86,7 +86,6 @@ struct AllToolsDiagnosticInventoryTests {
         entry("crontab-generator", "development", .inputValidation, "Development/CrontabGeneratorPage.swift"),
         entry("random-port-generator", "development", .none, "Development/RandomPortPage.swift", "随机生成端口候选值，不执行本机 socket 探测，也没有可达的运行时失败状态。"),
         entry("chmod-calculator", "development", .inputValidation, "Development/ChmodCalculatorPage.swift"),
-        entry("source-control", "development", .externalIO, "Development/SourceControlPage.swift"),
 
         entry("jwt-parser", "web", .errorAndWarning, "Web/JWTParserPage.swift"),
         entry("basic-auth-generator", "web", .securityValidation, "Web/BasicAuthGeneratorPage.swift"),

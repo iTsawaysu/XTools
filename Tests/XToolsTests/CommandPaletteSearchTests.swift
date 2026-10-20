@@ -643,12 +643,12 @@ struct CommandPaletteSearchTests {
         #expect(empty.rows == [.empty])
     }
 
-    @Test func paletteProjectionRanksExactGitKeywordAboveFuzzyTools() {
+    @Test func paletteProjectionRanksExactCronKeywordAboveFuzzyTools() {
         let projection = ToolNavigationCommandProjection(
             registry: ToolRegistry.default,
-            query: "git"
+            query: "cron"
         )
-        #expect(projection.entries.first?.toolID == "source-control")
+        #expect(projection.entries.first?.toolID == "crontab-generator")
     }
 
     @Test func commandActionMatchingUsesTitleAndKeywords() {

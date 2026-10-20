@@ -10,7 +10,7 @@ import SwiftUI
 /// derived by intent into a matching warm-neutral set, not a naive invert, and
 /// is verified in-app.
 ///
-/// Existing semantic token *names* are kept so all 34 tools restyle by value;
+/// Existing semantic token *names* are kept so all 33 tools restyle by value;
 /// SPEC §7.1's suggested names are noted in comments for cross-reference.
 enum ToolTheme {
     /// V3 workbench aliases. The home layout has its own geometry, while its
