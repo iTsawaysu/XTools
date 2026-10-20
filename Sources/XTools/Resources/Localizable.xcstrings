@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "水印设置" : {
+      "extractionState" : "manual"
+    },
     "上次打开" : {
       "extractionState" : "manual"
     },

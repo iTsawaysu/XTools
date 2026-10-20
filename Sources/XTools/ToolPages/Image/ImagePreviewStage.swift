@@ -69,18 +69,41 @@ struct IndexImagePreviewStage<Footer: View>: View {
         return .image(ObjectIdentifier(image))
     }
 
-    var body: some View {
-        VStack(spacing: spacing) {
-            if let image {
+    /// fillsHeight 时图片可用的高度由 stage 内的实际剩余空间决定，
+    /// 不能只依赖调用方的 480pt 上限：纸内还有动作行与源信息时，
+    /// 固定上限会把图片和状态页脚顶出纸外。GeometryReader 只包裹
+    /// 图片区，页脚仍单独占据固定高度。
+    @ViewBuilder
+    private func imageContent(_ image: NSImage) -> some View {
+        if fillsHeight {
+            GeometryReader { proxy in
                 IndexImagePreviewImage(
                     image: image,
                     accessibilityLabel: accessibilityLabel,
                     accessibilityValue: accessibilityValue,
                     maxDisplayWidth: maxDisplayWidth,
-                    maxDisplayHeight: maxDisplayHeight
+                    maxDisplayHeight: min(maxDisplayHeight, proxy.size.height)
                 )
-                .frame(maxWidth: .infinity, alignment: .center)
-                .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            }
+            .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
+        } else {
+            IndexImagePreviewImage(
+                image: image,
+                accessibilityLabel: accessibilityLabel,
+                accessibilityValue: accessibilityValue,
+                maxDisplayWidth: maxDisplayWidth,
+                maxDisplayHeight: maxDisplayHeight
+            )
+            .frame(maxWidth: .infinity, alignment: .center)
+            .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: spacing) {
+            if let image {
+                imageContent(image)
             } else if !placeholder.isEmpty {
                 Text(placeholder)
                     .font(ToolTypography.bodyPlain)
