@@ -48,6 +48,16 @@ struct ToolNavigationActions {
     }
 
     @discardableResult
+    func moveFavorite(_ toolID: ToolID, by offset: Int) -> Bool {
+        guard registry.tool(for: toolID) != nil,
+              favorites.isFavorite(toolID),
+              favorites.move(toolID, by: offset)
+        else { return false }
+        sidebarSections.expand(ToolNavigationSection.favorites.groupID)
+        return true
+    }
+
+    @discardableResult
     func toggleFavorite(_ toolID: ToolID) -> Bool? {
         guard let tool = registry.tool(for: toolID) else { return nil }
 
@@ -71,6 +81,14 @@ struct ToolNavigationActions {
             return false
         }
         return selectTool(firstTool.id)
+    }
+
+    @discardableResult
+    func selectCategory(_ categoryID: ToolCategoryID) -> Bool {
+        guard let index = registry.categoryGroups().firstIndex(where: {
+            $0.category.id == categoryID
+        }) else { return false }
+        return selectCategory(at: index)
     }
 
     func isSectionExpanded(_ section: ToolNavigationSection) -> Bool {

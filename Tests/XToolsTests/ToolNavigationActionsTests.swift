@@ -89,6 +89,24 @@ struct ToolNavigationActionsTests {
     }
 
     @MainActor
+    @Test func moveFavoriteReordersWithinFavoritesAndExpandsTheSection() {
+        let fixture = Self.fixture()
+        fixture.favorites.toggle(.json)
+        fixture.favorites.toggle(.regex)
+        fixture.favorites.toggle(.jwt)
+        let favorites = ToolNavigationSection.favorites
+        fixture.sidebarSections.toggle(favorites.groupID)
+
+        #expect(fixture.actions.moveFavorite(.json, by: 1))
+        #expect(fixture.favorites.favoriteIDs == [.regex, .json, .jwt])
+        #expect(fixture.sidebarSections.isExpanded(favorites.groupID))
+
+        #expect(!fixture.actions.moveFavorite(.regex, by: -1))
+        #expect(!fixture.actions.moveFavorite(.jwt, by: 1))
+        #expect(fixture.favorites.favoriteIDs == [.regex, .json, .jwt])
+    }
+
+    @MainActor
     @Test func unknownToolIDDoesNotMutateNavigationState() {
         let fixture = Self.fixture()
         fixture.viewModel.selectedToolID = .json
@@ -149,6 +167,26 @@ struct ToolNavigationActionsTests {
         #expect(favorites.favoriteIDs == [.jwt, .json])
         #expect(favorites.isFavorite(.jwt))
         #expect(!favorites.isFavorite(.missing))
+    }
+
+    @MainActor
+    @Test func favoritesMoveClampsAtEdgesAndPersistsTheNewOrder() {
+        let defaults = Self.defaults()
+        let favorites = FavoritesStore(
+            defaults: defaults,
+            validToolIDs: [.json, .regex, .jwt]
+        )
+        favorites.toggle(.json)
+        favorites.toggle(.regex)
+        favorites.toggle(.jwt)
+
+        #expect(favorites.move(.json, by: 1))
+        #expect(favorites.favoriteIDs == [.regex, .json, .jwt])
+        #expect(defaults.array(forKey: "tools.favorites.v1") as? [String] == ["regex", "json", "jwt"])
+
+        #expect(!favorites.move(.regex, by: -1))
+        #expect(!favorites.move(.jwt, by: 1))
+        #expect(favorites.favoriteIDs == [.regex, .json, .jwt])
     }
 
     @MainActor

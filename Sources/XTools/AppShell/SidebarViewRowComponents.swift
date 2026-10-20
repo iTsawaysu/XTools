@@ -5,7 +5,6 @@ struct SidebarGroupHeader: View {
     let title: String
     let systemImage: String
     let isFavorites: Bool
-    let section: ToolNavigationSection
     let isExpanded: Bool
     var isActiveSection: Bool = false
     let isSearchActive: Bool
@@ -55,15 +54,6 @@ struct SidebarGroupHeader: View {
                     .truncationMode(.tail)
 
                 Spacer(minLength: 0)
-
-                // Arc Spaces 式分类身份点：低饱和渐变，仅非收藏分组。
-                if !isFavorites, case .category(let categoryID) = section {
-                    Circle()
-                        .fill(ToolTheme.categoryGradient(categoryID))
-                        .frame(width: 7, height: 7)
-                        .opacity(isActiveSection ? 1.0 : (isExpanded ? 0.95 : 0.55))
-                        .accessibilityHidden(true)
-                }
             }
             .padding(.horizontal, 8)
             .frame(height: SidebarMetrics.groupHeaderHeight)
@@ -157,8 +147,12 @@ struct SidebarToolRow: View {
     let isSelected: Bool
     let isInActiveSection: Bool
     let isFavorite: Bool
+    let isFavoriteSection: Bool
+    let favoriteIndex: Int?
+    let favoriteCount: Int
     @ObservedObject var hoverState: SidebarNavigationTrackHoverState
     let onToggleFavorite: () -> Void
+    let onMoveFavorite: ((Int) -> Void)?
     let action: () -> Void
 
     private var shouldHighlight: Bool {
@@ -205,7 +199,7 @@ struct SidebarToolRow: View {
             Button(action: onToggleFavorite) {
                 Image(systemName: isFavorite ? "star.fill" : "star")
                     .font(.system(size: ToolMetrics.IconSize.micro))
-                    .foregroundStyle(isFavorite ? ToolTheme.accent : ToolTheme.textSecondary)
+                    .foregroundStyle(isFavorite ? (shouldHighlight ? ToolTheme.accent : ToolTheme.textTertiary) : ToolTheme.textSecondary)
                     .frame(width: 14, height: 14)
                     .toolMotionIconSwap(id: isFavorite)
             }
@@ -233,6 +227,13 @@ struct SidebarToolRow: View {
         .contentShape(RoundedRectangle(cornerRadius: SidebarMetrics.rowCornerRadius, style: .continuous))
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: hoverState.isHovered)
         .contextMenu {
+            if isFavoriteSection, let favoriteIndex, let onMoveFavorite {
+                Button("上移收藏") { onMoveFavorite(-1) }
+                    .disabled(favoriteIndex == 0)
+                Button("下移收藏") { onMoveFavorite(1) }
+                    .disabled(favoriteIndex == favoriteCount - 1)
+                Divider()
+            }
             Button(isFavorite ? "取消收藏" : "加入收藏", action: onToggleFavorite)
         }
     }

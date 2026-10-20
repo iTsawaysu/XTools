@@ -135,6 +135,45 @@ struct SidebarNavigationListTests {
         #expect(coordinator.debugTrackState(for: "tool.list-beta")?.isHovered == false)
     }
 
+    @Test @MainActor func favoriteReducedMotionLandsFinalFramesAndClearsFade() async throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = coordinator.makeScrollView()
+        let beforeEntries = Self.entries(groups: [
+            Self.group(section: .favorites, items: [Self.favoriteBeta]),
+            Self.group(section: .category(.development), items: [Self.alpha]),
+        ])
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: beforeEntries,
+                favoriteOrder: [.beta],
+                reduceMotion: true
+            )
+        )
+
+        let afterEntries = Self.entries(groups: [
+            Self.group(section: .favorites, items: [Self.favoriteBeta, Self.favoriteAlpha])
+        ])
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: afterEntries,
+                favoriteOrder: [.beta, .alpha],
+                reduceMotion: true
+            )
+        )
+
+        let expected = Self.frame(of: "tool.list-alpha", in: afterEntries)
+        let alphaTrack = try #require(
+            coordinator.documentView.subviews.first {
+                ($0 as? SidebarNavigationTrackView)?.trackID == "tool.list-alpha"
+            } as? SidebarNavigationTrackView
+        )
+        #expect(alphaTrack.frame == expected)
+        try await Task.sleep(for: .milliseconds(180))
+        #expect(coordinator.debugTrackAlpha(for: "tool.list-alpha") == 1)
+    }
+
     @Test @MainActor func favoriteAnimationCompletionReconcilesStationaryPointerAtFinalFrame() async throws {
         let pointer = SidebarPointerLocationBox()
         let coordinator = SidebarNavigationListCoordinator(

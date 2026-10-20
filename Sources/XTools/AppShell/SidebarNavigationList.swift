@@ -23,6 +23,7 @@ struct SidebarNavigationListConfiguration {
     let onToggleFavorite: (ToolID) -> Void
     let onToggleSection: (ToolNavigationSection) -> Void
     var onToggleSectionExclusive: ((ToolNavigationSection) -> Void)? = nil
+    var onMoveFavorite: ((ToolID, Int) -> Void)? = nil
 }
 
 struct SidebarNavigationTrackRoot: View {
@@ -37,6 +38,9 @@ struct SidebarNavigationTrackRoot: View {
     let onSelectTool: (ToolID) -> Void
     let onToggleFavorite: (ToolID) -> Void
     let onToggleSection: (ToolNavigationSection) -> Void
+    let favoriteIndex: Int?
+    let favoriteCount: Int
+    let onMoveFavorite: ((ToolID, Int) -> Void)?
 
     var body: some View {
         content
@@ -62,7 +66,6 @@ struct SidebarNavigationTrackRoot: View {
                 title: group.title,
                 systemImage: group.systemImage,
                 isFavorites: group.section == .favorites,
-                section: group.section,
                 isExpanded: isExpanded,
                 isActiveSection: selectedSection == group.section,
                 isSearchActive: isSearchActive,
@@ -79,8 +82,14 @@ struct SidebarNavigationTrackRoot: View {
                 isSelected: selectedToolID == item.id,
                 isInActiveSection: selectedSection == section,
                 isFavorite: item.isFavorite,
+                isFavoriteSection: section == .favorites,
+                favoriteIndex: favoriteIndex,
+                favoriteCount: favoriteCount,
                 hoverState: hoverState,
                 onToggleFavorite: { onToggleFavorite(item.id) },
+                onMoveFavorite: onMoveFavorite.map { move in
+                    { offset in move(item.id, offset) }
+                },
                 action: { onSelectTool(item.id) }
             )
             .accessibilityIdentifier("sidebar.tool.\(item.id.rawValue)")

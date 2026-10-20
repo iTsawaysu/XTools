@@ -83,6 +83,9 @@ struct RootView: View {
                     onSelectTool: { _ = navigationActions.selectTool($0) },
                     onOpenDashboard: { navigationActions.openDashboard() },
                     onToggleFavorite: { toggleFavorite($0, showsToast: false) },
+                    onMoveFavorite: { toolID, offset in
+                        _ = navigationActions.moveFavorite(toolID, by: offset)
+                    },
                     isSectionExpanded: { navigationActions.isSectionExpanded($0) },
                     onToggleSection: { navigationActions.toggleSection($0) },
                     onToggleSectionExclusive: { navigationActions.toggleSection($0, exclusive: true) },
@@ -174,12 +177,16 @@ struct RootView: View {
     }
 
     private var detailColumn: some View {
-        detailRouting.update(actions: navigationActions)
+        detailRouting.update(
+            actions: navigationActions,
+            onOpenCommandPalette: openCommandPaletteAnimated
+        )
         return VStack(spacing: 0) {
             ToolDetailHostView(
                 registry: registry,
                 selectedToolID: viewModel.selectedToolID,
                 dashboardStore: dashboardStore,
+                favorites: favorites,
                 routing: detailRouting
             )
         }
@@ -460,12 +467,25 @@ private final class SidebarProjectionCache {
 @MainActor
 private final class DetailActionRoutingBox: DetailActionRouting {
     private var actions: ToolNavigationActions?
+    private var onOpenCommandPalette: (() -> Void)?
 
-    func update(actions: ToolNavigationActions) {
+    func update(
+        actions: ToolNavigationActions,
+        onOpenCommandPalette: @escaping () -> Void
+    ) {
         self.actions = actions
+        self.onOpenCommandPalette = onOpenCommandPalette
     }
 
     func selectTool(_ toolID: ToolID) {
         _ = actions?.selectTool(toolID)
+    }
+
+    func selectCategory(_ categoryID: ToolCategoryID) {
+        _ = actions?.selectCategory(categoryID)
+    }
+
+    func openCommandPalette() {
+        onOpenCommandPalette?()
     }
 }

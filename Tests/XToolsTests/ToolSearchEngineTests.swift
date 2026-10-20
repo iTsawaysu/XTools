@@ -111,6 +111,11 @@ struct ToolSearchEngineTests {
         #expect(matches.map(\.id).contains("docker-run-to-docker-compose-converter"))
     }
 
+    @Test func exactKeywordGitOutranksFuzzyToolMatches() {
+        let matches = ToolRegistry.default.matchingTools(query: "git")
+        #expect(matches.first?.id == "source-control")
+    }
+
     @Test func pinyinInitialsAndSyllablesMatchChineseTitles() {
         let defaultRegistry = ToolRegistry.default
 

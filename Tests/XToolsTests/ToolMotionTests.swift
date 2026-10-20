@@ -9,10 +9,9 @@ struct ToolMotionTests {
         #expect(ToolMotion.Duration.arrival == 0.24)
         #expect(ToolMotion.Duration.fast == 0.25)
         #expect(ToolMotion.Duration.medium == 0.35)
-        // 01 景深沉降 (PAGE-TRANSITIONS t-1): 300ms in / 220ms out / 480ms letters.
+        // 01 景深沉降 (PAGE-TRANSITIONS t-1): 300ms in / 220ms out.
         #expect(ToolMotion.Duration.pageSinkEnter == 0.30)
         #expect(ToolMotion.Duration.pageSinkExit == 0.22)
-        #expect(ToolMotion.Duration.letter == 0.48)
     }
 
     @Test func pageArrivalStaysAHostOwnedWhitelistedPreset() {
@@ -62,6 +61,12 @@ struct ToolMotionTests {
         case .some:
             break
         }
+    }
+
+    @Test func emptyStateArrivalIsOneTimeline() {
+        #expect(ToolMotion.EmptyArrival.riseDistance == 4)
+        #expect(ToolMotion.EmptyArrival.elementArrival == ToolMotion.EmptyArrival.arrive)
+        #expect(ToolMotion.EmptyArrival.arrive == ToolMotion.Curve.smoothOut(duration: ToolMotion.Duration.arrival))
     }
 
     @Test func legacyToolMetricsAnimationDurationsForwardToToolMotion() {

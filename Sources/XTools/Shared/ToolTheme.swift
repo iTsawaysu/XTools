@@ -30,10 +30,10 @@ enum ToolTheme {
 
     // MARK: - Accent (Claude 黏土橙)
 
-    static let accent = dynamicColor(light: 0xC15F3C, dark: 0xD97757)          // §7.1 accent · Clay
-    static let accentHover = dynamicColor(light: 0xA84F30, dark: 0xE38A6D)
-    static let accentSoft = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)  // §7.1 accentSoft
-    static let accentBorder = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.34, darkAlpha: 0.36) // §7.1 accentBorder
+    static let accent = dynamicColor(light: 0xB4532F, dark: 0xD97757)          // §7.1 accent · Clay（浅色压深以过 AA）
+    static let accentHover = dynamicColor(light: 0x9E4628, dark: 0xE38A6D)
+    static let accentSoft = dynamicColor(light: 0xB4532F, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)  // §7.1 accentSoft
+    static let accentBorder = dynamicColor(light: 0xB4532F, dark: 0xD97757, alpha: 0.34, darkAlpha: 0.36) // §7.1 accentBorder
     /// Foreground that sits *on top of* an accent fill (status mode block, brand mark).
     /// Light accent is mid-dark → white text reads; dark accent is bright → deep-brown text reads.
     static let onAccent = dynamicColor(light: 0xFFF8F2, dark: 0x1A0F0A)        // §7.1 onAccent
@@ -60,8 +60,8 @@ enum ToolTheme {
     // MARK: - Text (暖白 / 次要 / 弱)
 
     static let textPrimary = dynamicColor(light: 0x2A2520, dark: 0xE4E2DC)     // §7.1 textPrimary · 暖白
-    static let textSecondary = dynamicColor(light: 0x6B645C, dark: 0x8A847C)   // §7.1 textSecondary
-    static let textTertiary = dynamicColor(light: 0x9A938A, dark: 0x6E6862)    // §7.1 textTertiary(深色提亮以满足对比度)
+    static let textSecondary = dynamicColor(light: 0x6B645C, dark: 0x928C84)   // §7.1 textSecondary
+    static let textTertiary = dynamicColor(light: 0x7A736A, dark: 0x7E7870)    // §7.1 textTertiary（满足元数据可读性）
 
     // MARK: - Lines & fills
 
@@ -69,9 +69,9 @@ enum ToolTheme {
     static let strongBorder = dynamicColor(light: 0x000000, dark: 0xFFFFFF, alpha: 0.13, darkAlpha: 0.11)  // §7.1 border2
     static let hoverFill = dynamicColor(light: 0x000000, dark: 0xFFFFFF, alpha: 0.045, darkAlpha: 0.045)   // §7.1 hover
     static let activeFill = dynamicColor(light: 0x000000, dark: 0xFFFFFF, alpha: 0.07, darkAlpha: 0.07)
-    static let selectionFill = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)     // §7.1 selection
-    static let selectionStroke = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.22, darkAlpha: 0.30)   // §7.1 selectionBorder
-    static let focusRing = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.30, darkAlpha: 0.50)
+    static let selectionFill = dynamicColor(light: 0xB4532F, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)     // §7.1 selection
+    static let selectionStroke = dynamicColor(light: 0xB4532F, dark: 0xD97757, alpha: 0.22, darkAlpha: 0.30)   // §7.1 selectionBorder
+    static let focusRing = dynamicColor(light: 0xB4532F, dark: 0xD97757, alpha: 0.30, darkAlpha: 0.50)
     static let subtleShadow = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.18, darkAlpha: 0.55)
     static let panelShadow = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.05, darkAlpha: 0.32)
     /// Persistent cards sit one step above the workspace. Keep the lift
@@ -137,17 +137,17 @@ enum ToolTheme {
     // MARK: - Status (红黄绿灯 / 状态)
 
     static let info = accent
-    static let success = dynamicColor(light: 0x4F7A4F, dark: 0x8FBC8F)   // §7.1 statusGreen · 柔橄榄绿
+    static let success = dynamicColor(light: 0x477247, dark: 0x8FBC8F)   // §7.1 statusGreen · 柔橄榄绿
     static let warning = dynamicColor(light: 0xB58105, dark: 0xD8B156)   // §7.1 statusAmber
-    static let error = dynamicColor(light: 0xC4362E, dark: 0xE5635C)     // §7.1 statusRed
-    static let successSoft = dynamicColor(light: 0x4F7A4F, dark: 0x8FBC8F, alpha: 0.12, darkAlpha: 0.14)
+    static let error = dynamicColor(light: 0xBC3029, dark: 0xE5635C)     // §7.1 statusRed
+    static let successSoft = dynamicColor(light: 0x477247, dark: 0x8FBC8F, alpha: 0.12, darkAlpha: 0.14)
     static let warningSoft = dynamicColor(light: 0xB58105, dark: 0xD8B156, alpha: 0.11, darkAlpha: 0.13)
-    static let errorSoft = dynamicColor(light: 0xC4362E, dark: 0xE5635C, alpha: 0.11, darkAlpha: 0.13)
+    static let errorSoft = dynamicColor(light: 0xBC3029, dark: 0xE5635C, alpha: 0.11, darkAlpha: 0.13)
 
     // MARK: - Diff 行内片段强调(三层差异标记的片段层,比 soft 强一档)
 
-    static let successFragment = dynamicColor(light: 0x4F7A4F, dark: 0x8FBC8F, alpha: 0.27, darkAlpha: 0.30)
-    static let errorFragment = dynamicColor(light: 0xC4362E, dark: 0xE5635C, alpha: 0.25, darkAlpha: 0.30)
+    static let successFragment = dynamicColor(light: 0x477247, dark: 0x8FBC8F, alpha: 0.27, darkAlpha: 0.30)
+    static let errorFragment = dynamicColor(light: 0xBC3029, dark: 0xE5635C, alpha: 0.25, darkAlpha: 0.30)
 
     // MARK: - Category identity gradients（135°，Clay 派生的低饱和暖色对）
 
@@ -179,20 +179,20 @@ enum ToolTheme {
 
     // MARK: - Syntax highlight (§7.2 — 暖中性主调 + 柔蓝做唯一冷 pop)
 
-    static let synKey = dynamicColor(light: 0x8A6D4A, dark: 0xD8C4B0)    // key：暖米
-    static let synString = dynamicColor(light: 0x4F7A4F, dark: 0x8FBC8F) // string：柔橄榄绿
+    static let synKey = dynamicColor(light: 0x7D5F3E, dark: 0xD8C4B0)    // key：暖米
+    static let synString = dynamicColor(light: 0x477247, dark: 0x8FBC8F) // string：柔橄榄绿
     static let synNumber = dynamicColor(light: 0x2563A8, dark: 0x6FB8E0) // number：柔蓝（避让橙 accent）
-    static let synBool = dynamicColor(light: 0x9A6B3A, dark: 0xC99A6B)   // bool/null：暖棕
-    static let synPunctuation = dynamicColor(light: 0x9A938A, dark: 0x5A554F) // 标点：暖灰压暗
+    static let synBool = dynamicColor(light: 0x875B2E, dark: 0xC99A6B)   // bool/null：暖棕
+    static let synPunctuation = dynamicColor(light: 0x6F6961, dark: 0x827C73) // 标点：暖灰压暗
 
     enum SynNSColor {
-        static let key = dynamicNSColor(light: 0x8A6D4A, dark: 0xD8C4B0)
-        static let string = dynamicNSColor(light: 0x4F7A4F, dark: 0x8FBC8F)
+        static let key = dynamicNSColor(light: 0x7D5F3E, dark: 0xD8C4B0)
+        static let string = dynamicNSColor(light: 0x477247, dark: 0x8FBC8F)
         static let number = dynamicNSColor(light: 0x2563A8, dark: 0x6FB8E0)
-        static let bool = dynamicNSColor(light: 0x9A6B3A, dark: 0xC99A6B)
-        static let punctuation = dynamicNSColor(light: 0x9A938A, dark: 0x5A554F)
+        static let bool = dynamicNSColor(light: 0x875B2E, dark: 0xC99A6B)
+        static let punctuation = dynamicNSColor(light: 0x6F6961, dark: 0x827C73)
         static let textPrimary = dynamicNSColor(light: 0x2A2520, dark: 0xE4E2DC)
-        static let textSecondary = dynamicNSColor(light: 0x6B645C, dark: 0x8A847C)
+        static let textSecondary = dynamicNSColor(light: 0x6B645C, dark: 0x928C84)
     }
 
     /// AppKit twin of the sidebar selection tokens for the flat navigation
@@ -201,8 +201,8 @@ enum ToolTheme {
     /// be wrapped back into appearance-tracking `NSColor` without duplicating
     /// the provider, mirroring the SynNSColor convention above.
     enum SelectionNSColor {
-        static let fill = dynamicNSColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)
-        static let rail = dynamicNSColor(light: 0xC15F3C, dark: 0xD97757)
+        static let fill = dynamicNSColor(light: 0xB4532F, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)
+        static let rail = dynamicNSColor(light: 0xB4532F, dark: 0xD97757)
     }
 
     /// AppKit token for the sidebar's permanent thin scroll knob (see

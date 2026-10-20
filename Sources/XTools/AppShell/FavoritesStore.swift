@@ -45,6 +45,21 @@ final class FavoritesStore: ObservableObject {
         return true
     }
 
+    /// Moves one favorite by a single slot. The set membership never changes;
+    /// callers own boundary disabling so a no-op does not persist.
+    @discardableResult
+    func move(_ id: ToolID, by offset: Int) -> Bool {
+        guard offset != 0,
+              let index = favoriteIDs.firstIndex(of: id)
+        else { return false }
+        let target = index + offset
+        guard favoriteIDs.indices.contains(target) else { return false }
+        favoriteIDs.remove(at: index)
+        favoriteIDs.insert(id, at: target)
+        persist()
+        return true
+    }
+
     private func persist() {
         defaults.set(favoriteIDs.map(\.rawValue), forKey: Self.storageKey)
     }

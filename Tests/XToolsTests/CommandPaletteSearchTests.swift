@@ -448,7 +448,7 @@ struct CommandPaletteSearchTests {
         #expect(state.activeToolID(in: emptySnapshot) == nil)
     }
 
-    @Test func rowSnapshotPrecomputesSelectionWithoutChangingDisplayOrder() {
+    @Test func rowSnapshotPrecomputesSelectionWithToolsBeforeActions() {
         let action = CommandActionEntry(
             id: .openPreferences,
             title: "打开设置",
@@ -464,16 +464,16 @@ struct CommandPaletteSearchTests {
         )
 
         #expect(snapshot.rows.map(\.id) == [
-            "title.动作",
-            "command.\(CommandActionID.openPreferences.rawValue)",
             "title.工具",
             "tool.json",
-            "tool.jwt"
+            "tool.jwt",
+            "title.动作",
+            "command.\(CommandActionID.openPreferences.rawValue)"
         ])
         #expect(snapshot.selectableCount == 3)
         #expect(snapshot.selectableIndex(of: snapshot.rows[0]) == nil)
         #expect(snapshot.selectableIndex(of: snapshot.rows[1]) == 0)
-        #expect(snapshot.selectableIndex(of: snapshot.rows[3]) == 1)
+        #expect(snapshot.selectableIndex(of: snapshot.rows[2]) == 1)
         #expect(snapshot.selectableIndex(of: snapshot.rows[4]) == 2)
     }
 
@@ -615,7 +615,7 @@ struct CommandPaletteSearchTests {
 
     // MARK: - Command system rows (v3)
 
-    @Test func rowsInterleaveCommandActionsBeforeTools() {
+    @Test func rowsPrioritizeToolsOverActionsWhenToolsMatch() {
         let toolEntry = Self.entry(.json, title: "JSON 格式化")
         let action = CommandActionEntry(
             id: .openPreferences,
@@ -626,18 +626,29 @@ struct CommandPaletteSearchTests {
 
         let both = CommandPaletteNavigationState.snapshot(for: [toolEntry], actions: [action])
         #expect(both.rows.count == 4)
-        #expect(both.rows[0] == .sectionTitle("动作"))
-        #expect(both.rows[1] == .command(action))
-        #expect(both.rows[2] == .sectionTitle("工具"))
-        #expect(both.rows[3] == .tool(toolEntry))
-        #expect(both.rows[1].commandID == .openPreferences)
-        #expect(both.rows[1].isSelectable)
+        #expect(both.rows[0] == .sectionTitle("工具"))
+        #expect(both.rows[1] == .tool(toolEntry))
+        #expect(both.rows[2] == .sectionTitle("动作"))
+        #expect(both.rows[3] == .command(action))
+        #expect(both.rows[3].commandID == .openPreferences)
+        #expect(both.rows[3].isSelectable)
+
+        let actionOnly = CommandPaletteNavigationState.snapshot(for: [], actions: [action])
+        #expect(actionOnly.rows == [.sectionTitle("动作"), .command(action)])
 
         let toolOnly = CommandPaletteNavigationState.snapshot(for: [toolEntry])
         #expect(toolOnly.rows == [.sectionTitle("工具"), .tool(toolEntry)])
 
         let empty = CommandPaletteNavigationState.snapshot(for: [])
         #expect(empty.rows == [.empty])
+    }
+
+    @Test func paletteProjectionRanksExactGitKeywordAboveFuzzyTools() {
+        let projection = ToolNavigationCommandProjection(
+            registry: ToolRegistry.default,
+            query: "git"
+        )
+        #expect(projection.entries.first?.toolID == "source-control")
     }
 
     @Test func commandActionMatchingUsesTitleAndKeywords() {

@@ -46,6 +46,9 @@ MIN_SYSTEM_VERSION="13.0"
 
 # Share the default SwiftPM cache with `swift build` / `swift test`.
 BUILD_DIR="$PROJECT_DIR/.build"
+# Last successful `swift build` configuration; `package` reads it instead of
+# guessing from binary mtimes (a resource-only rebuild may not relink the binary).
+BUILD_STATE_FILE="$BUILD_DIR/.last-build-configuration"
 LEGACY_SCRATCH_DIR="$PROJECT_DIR/.swiftpm-build"
 # 隔离验证打包：OUTPUT_DIR=/some/dir ./build.sh build 可把 .app 装到别处，
 # 配合 KEEP_RUNNING_APP=1 在不终止用户运行中窗口的前提下产出验证包
@@ -80,7 +83,18 @@ warn() { printf "%b\n" "${YELLOW}WARN${NC} $1"; }
 error() { printf "%b\n" "${RED}ERR${NC} $1"; }
 
 usage() {
-  sed -n '3,34p' "$0"
+  cat <<'EOF'
+Usage:
+  ./build.sh              release build + package + open (daily default)
+  ./build.sh dev          debug build + package + open (fast iteration)
+  ./build.sh build-dev    debug build + package, do not open
+  ./build.sh build        release build + package, do not open (CI / scripts)
+  ./build.sh release      same as build
+  ./build.sh rebuild      clean caches, then release build + package
+  ./build.sh clean        archive build caches and packaged output
+  ./build.sh package [debug|release]  package last built product (newest by default)
+  ./build.sh help         show this help
+EOF
 }
 
 timestamp() {
@@ -131,10 +145,13 @@ swift_build() {
     --configuration "$configuration" \
     --product "$PRODUCT_NAME" \
     --arch "$ARCH"
+  printf '%s\n' "$configuration" >"$BUILD_STATE_FILE"
   info "Compile done ($(elapsed "$t0")ms)"
 }
 
-bin_path_for() {
+# Print an already-built product directory without starting a second SwiftPM
+# process. Supports the current `out/Products` layout and older caches.
+find_built_product() {
   local configuration="${1:-debug}"
   local configuration_directory
 
@@ -144,7 +161,6 @@ bin_path_for() {
     *) configuration_directory="$configuration" ;;
   esac
 
-  # Prefer already-built product paths (no second swift process).
   local candidate
   for candidate in \
     "$BUILD_DIR/out/Products/$configuration_directory" \
@@ -159,6 +175,18 @@ bin_path_for() {
       return 0
     fi
   done
+
+  return 1
+}
+
+bin_path_for() {
+  local configuration="${1:-debug}"
+  local built_product
+
+  if built_product="$(find_built_product "$configuration")"; then
+    printf "%s\n" "$built_product"
+    return 0
+  fi
 
   # Cold layout only.
   "$SWIFT_BIN" build \
@@ -188,8 +216,13 @@ copy_swiftpm_resource_bundles() {
     destination="$APP_RESOURCES/$bundle_name"
     # ditto 是合并语义：目标 bundle 中不再被产物包含的残留文件（例如从 Core
     # 资源移除的 emoji-test.txt）会永久存活。内容不一致时先归档旧 bundle 再
-    # 整体复制，保证包内 bundle 与构建产物逐字节一致。
-    if [[ -e "$destination" ]] && ! diff -rq "$resource_bundle" "$destination" >/dev/null 2>&1; then
+    # 整体复制，保证包内 bundle 与构建产物逐字节一致；内容相同则跳过复制，
+    # 避免每次打包重写数百 KB 资源。
+    if [[ -e "$destination" ]]; then
+      if diff -rq "$resource_bundle" "$destination" >/dev/null 2>&1; then
+        copied_bundle=1
+        continue
+      fi
       archive_path "$destination" "$bundle_name.replaced-bundle"
     fi
     /usr/bin/ditto "$resource_bundle" "$destination"
@@ -200,11 +233,30 @@ copy_swiftpm_resource_bundles() {
   # Sources/XTools/Resources/Localizable.xcstrings) to the .app Resources root
   # so SwiftUI Text(LocalizedStringKey) lookups through Bundle.main find them
   # without reaching into the nested SwiftPM bundle.
-  local promoted_lproj
-  for promoted_lproj in "$APP_RESOURCES/XTools_XTools.bundle/Contents/Resources/"*.lproj; do
+  local promoted_lproj promoted_destination
+  local promoted_source_dir="$APP_RESOURCES/XTools_XTools.bundle/Contents/Resources"
+  for promoted_lproj in "$promoted_source_dir/"*.lproj; do
     [[ -e "$promoted_lproj" ]] || continue
-    /usr/bin/ditto "$promoted_lproj" "$APP_RESOURCES/$(basename "$promoted_lproj")"
+    promoted_destination="$APP_RESOURCES/$(basename "$promoted_lproj")"
+    if [[ -e "$promoted_destination" ]]; then
+      if diff -rq "$promoted_lproj" "$promoted_destination" >/dev/null 2>&1; then
+        continue
+      fi
+      archive_path "$promoted_destination" "$(basename "$promoted_lproj").replaced-lproj"
+    fi
+    /usr/bin/ditto "$promoted_lproj" "$promoted_destination"
   done
+
+  # 从 Localizable.xcstrings 移除的语言不得滞留在 Resources 根继续供旧文案。
+  local root_lproj
+  if [[ -d "$promoted_source_dir" ]]; then
+    for root_lproj in "$APP_RESOURCES/"*.lproj; do
+      [[ -e "$root_lproj" ]] || continue
+      if [[ ! -e "$promoted_source_dir/$(basename "$root_lproj")" ]]; then
+        archive_path "$root_lproj" "$(basename "$root_lproj").stale-lproj"
+      fi
+    done
+  fi
 
   # Archive non-runtime bundles left by older packaging runs.
   local stale_test_bundle
@@ -284,16 +336,24 @@ write_info_plist_if_needed() {
     /usr/libexec/PlistBuddy -c "Set :NSAppTransportSecurity:NSAllowsArbitraryLoads true" "$INFO_PLIST" 2>/dev/null || true
   }
   if [[ -f "$INFO_PLIST" ]]; then
-    local current_bundle_id
+    local current_bundle_id current_min_version
+    current_min_version="$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$INFO_PLIST" 2>/dev/null || true)"
     if current_bundle_id="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$INFO_PLIST" 2>/dev/null)"; then
-      # Keep the hot path byte-for-byte stable when the requested identity is unchanged.
-      if [[ "$current_bundle_id" == "$BUNDLE_ID" ]]; then
+      # Keep the hot path byte-for-byte stable when identity and minimum OS match.
+      if [[ "$current_bundle_id" == "$BUNDLE_ID" && "$current_min_version" == "$MIN_SYSTEM_VERSION" ]]; then
         ensure_ats_exception
         return 0
       fi
-      /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$INFO_PLIST"
+      if [[ "$current_bundle_id" != "$BUNDLE_ID" ]]; then
+        /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$INFO_PLIST"
+      fi
     else
       /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $BUNDLE_ID" "$INFO_PLIST"
+    fi
+    if [[ -n "$current_min_version" ]]; then
+      /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion $MIN_SYSTEM_VERSION" "$INFO_PLIST"
+    else
+      /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string $MIN_SYSTEM_VERSION" "$INFO_PLIST"
     fi
     ensure_ats_exception
     return 0
@@ -422,6 +482,16 @@ package_app() {
   info "Packaged $APP_PATH (app: $app_size, binary: $binary_size, configuration: $configuration, stripped: -S -x, $(elapsed "$t0")ms)"
 }
 
+# Build and package without opening; `configuration` is debug or release.
+build_and_package() {
+  local configuration="$1"
+  local t0
+  t0="$(now_ms)"
+  swift_build "$configuration"
+  package_app "$configuration"
+  info "Total $(elapsed "$t0")ms"
+}
+
 # Build, package, and open. `configuration` is debug or release; the daily
 # default (no argument) uses release, `dev` is the fast-iteration debug path.
 build_and_launch() {
@@ -444,6 +514,58 @@ release_build_and_package() {
   info "Total $(elapsed "$t0")ms"
 }
 
+# Package the last built product. Picks the configuration from the build state
+# file when present, otherwise falls back to the newest binary on disk.
+package_last_built() {
+  local requested="${1:-}"
+  local debug_product="" release_product="" last_config="" last_product=""
+
+  debug_product="$(find_built_product debug 2>/dev/null || true)"
+  release_product="$(find_built_product release 2>/dev/null || true)"
+
+  case "$requested" in
+    debug|release)
+      package_app "$requested"
+      return
+      ;;
+    "")
+      ;;
+    *)
+      error "Unknown package configuration: $requested"
+      usage
+      exit 1
+      ;;
+  esac
+
+  if [[ -f "$BUILD_STATE_FILE" ]]; then
+    IFS= read -r last_config <"$BUILD_STATE_FILE" || true
+  fi
+  case "$last_config" in
+    debug) last_product="$debug_product" ;;
+    release) last_product="$release_product" ;;
+  esac
+  if [[ -n "$last_product" ]]; then
+    package_app "$last_config"
+    return
+  fi
+
+  if [[ -n "$debug_product" && -z "$release_product" ]]; then
+    package_app debug
+  elif [[ -n "$release_product" && -z "$debug_product" ]]; then
+    package_app release
+  elif [[ -n "$debug_product" && -n "$release_product" ]]; then
+    # No state marker (manual/legacy build): fall back to the newest binary.
+    if [[ "$debug_product/$PRODUCT_NAME" -nt "$release_product/$PRODUCT_NAME" ]]; then
+      package_app debug
+    else
+      package_app release
+    fi
+  else
+    error "No built product found; run ./build.sh build-dev or ./build.sh build first"
+    exit 1
+  fi
+}
+
 rebuild_and_package() {
   clean
   release_build_and_package
@@ -458,23 +580,22 @@ case "${1:-}" in
     # 快速迭代兜底：debug 编译更快，完整符号留在 .build 产物里
     build_and_launch debug
     ;;
+  build-dev)
+    # Debug package without open (verification / CI)
+    build_and_package debug
+    ;;
   build)
     # Release package without open (CI / scripts)
-    release_build_and_package
+    build_and_package release
     ;;
   release)
-    release_build_and_package
+    build_and_package release
     ;;
   rebuild)
     rebuild_and_package
     ;;
   package)
-    # Prefer the most recently touched product.
-    if [[ -x "$BUILD_DIR/out/Products/Debug/$PRODUCT_NAME" || -x "$BUILD_DIR/debug/$PRODUCT_NAME" || -x "$BUILD_DIR/arm64-apple-macosx/debug/$PRODUCT_NAME" ]]; then
-      package_app debug
-    else
-      package_app release
-    fi
+    package_last_built "${2:-}"
     ;;
   clean)
     clean

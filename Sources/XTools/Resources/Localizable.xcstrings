@@ -1,6 +1,75 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "保存优化后的图片" : {
+      "extractionState" : "manual"
+    },
+    "保存生成的灰度图" : {
+      "extractionState" : "manual"
+    },
+    "保存中…" : {
+      "extractionState" : "manual"
+    },
+    "正在保存" : {
+      "extractionState" : "manual"
+    },
+    "正在保存图片" : {
+      "extractionState" : "manual"
+    },
+    "保存转换结果" : {
+      "extractionState" : "manual"
+    },
+    "正在转换图片" : {
+      "extractionState" : "manual"
+    },
+    "正在保存全部 Favicon 部署文件" : {
+      "extractionState" : "manual"
+    },
+    "没有权限写入所选位置，请选择其他文件夹。" : {
+      "extractionState" : "manual"
+    },
+    "磁盘空间不足，无法保存图片。" : {
+      "extractionState" : "manual"
+    },
+    "上移收藏" : {
+      "extractionState" : "manual"
+    },
+    "下移收藏" : {
+      "extractionState" : "manual"
+    },
+    "刚刚" : {
+      "extractionState" : "manual"
+    },
+    "暂无收藏" : {
+      "extractionState" : "manual"
+    },
+    "分类" : {
+      "extractionState" : "manual"
+    },
+    "命令" : {
+      "extractionState" : "manual"
+    },
+    "置顶工具" : {
+      "extractionState" : "manual"
+    },
+    "在侧栏点星标收藏工具。" : {
+      "extractionState" : "manual"
+    },
+    "打开该分类的第一个工具" : {
+      "extractionState" : "manual"
+    },
+    "打开命令面板（⌘K）" : {
+      "extractionState" : "manual"
+    },
+    "搜索工具、命令或操作…" : {
+      "extractionState" : "manual"
+    },
+    "搜索工具、命令或操作" : {
+      "extractionState" : "manual"
+    },
+    "搜索、最近与收藏——任何工具两步内到达。" : {
+      "extractionState" : "manual"
+    },
     "工作日9点" : {
       "extractionState" : "manual"
     },
@@ -1468,6 +1537,9 @@
     "搜索工具…" : {
       "extractionState" : "manual"
     },
+    "筛选工具…" : {
+      "extractionState" : "manual"
+    },
     "搜索工具或命令…" : {
       "extractionState" : "manual"
     },
@@ -2747,6 +2819,9 @@
       "extractionState" : "manual"
     },
     "输入数值…" : {
+      "extractionState" : "manual"
+    },
+    "输入数字或罗马数字后自动转换。" : {
       "extractionState" : "manual"
     },
     "输入数学表达式即时求值。" : {

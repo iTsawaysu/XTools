@@ -239,8 +239,11 @@ struct CommandPaletteNavigationState: Equatable {
         )
     }
 
-    /// Ranked-results convenience: commands under one shared 动作 section,
-    /// tools under one shared 工具 section.
+    /// Ranked-results convenience under one shared 工具 section and one
+    /// shared 动作 section. A typed query with any tool hit keeps tools above
+    /// commands so an exact tool match can never be hijacked by a fuzzy shell
+    /// action; only an action-only result puts 动作 first. Blank-query landing
+    /// sections are composed by `CommandPaletteSessionModel`, not here.
     static func snapshot(
         for entries: [ToolNavigationCommandEntry],
         actions: [CommandActionEntry] = [],
@@ -248,17 +251,19 @@ struct CommandPaletteNavigationState: Equatable {
         subtitleAnnotationsByID: [String: CommandPaletteSubtitleAnnotation] = [:],
         deepLinkSegmentsByID: [String: String] = [:]
     ) -> CommandPaletteRowSnapshot {
-        snapshot(
-            sections: [
-                CommandPaletteSection(
-                    title: "动作",
-                    rows: actions.map(CommandPaletteRowProjection.command)
-                ),
-                CommandPaletteSection(
-                    title: "工具",
-                    rows: entries.map(CommandPaletteRowProjection.tool)
-                ),
-            ],
+        let toolSection = CommandPaletteSection(
+            title: "工具",
+            rows: entries.map(CommandPaletteRowProjection.tool)
+        )
+        let actionSection = CommandPaletteSection(
+            title: "动作",
+            rows: actions.map(CommandPaletteRowProjection.command)
+        )
+        let sections = entries.isEmpty
+            ? [actionSection, toolSection]
+            : [toolSection, actionSection]
+        return snapshot(
+            sections: sections,
             titleHighlightRangesByID: titleHighlightRangesByID,
             subtitleAnnotationsByID: subtitleAnnotationsByID,
             deepLinkSegmentsByID: deepLinkSegmentsByID

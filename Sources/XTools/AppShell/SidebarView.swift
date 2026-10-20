@@ -12,6 +12,7 @@ struct SidebarView: View {
     let onSelectTool: (ToolID) -> Void
     let onOpenDashboard: () -> Void
     let onToggleFavorite: (ToolID) -> Void
+    let onMoveFavorite: (ToolID, Int) -> Void
     let isSectionExpanded: (ToolNavigationSection) -> Bool
     let onToggleSection: (ToolNavigationSection) -> Void
     var onToggleSectionExclusive: ((ToolNavigationSection) -> Void)? = nil
@@ -106,7 +107,7 @@ struct SidebarView: View {
     private var searchField: some View {
         ZStack {
             SidebarSearchTextField(
-                placeholder: "搜索工具…",
+                placeholder: "筛选工具…",
                 text: $searchText,
                 focusToken: searchFocusToken,
                 contentInsets: IndexTextFieldContentInsets(
@@ -191,7 +192,8 @@ struct SidebarView: View {
             onToggleSectionExclusive: { section in
                 guard !isSearchActive else { return }
                 onToggleSectionExclusive?(section)
-            }
+            },
+            onMoveFavorite: onMoveFavorite
         ))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .layoutPriority(1)

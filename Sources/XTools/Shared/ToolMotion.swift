@@ -20,13 +20,6 @@ enum ToolMotion {
         /// 01 景深沉降: outgoing page leaves over 220ms on productiveExit —
         /// faster than the arrival so the exit never lags the new page.
         static let pageSinkExit: TimeInterval = 0.22
-        /// Page-header letter arrival: one character's rise arc on smoothOut
-        /// (prototype .lt 480ms); delay comes from `letterStagger`.
-        static let letter: TimeInterval = 0.48
-        /// Page-header letter arrival: delay added per title character.
-        static let letterStagger: TimeInterval = 0.032
-        /// Subtitle follow-up beat after the letter choreography starts.
-        static let headerFollowDelay: TimeInterval = 0.16
         /// Indeterminate hairline sweep: one back-and-forth traversal of the
         /// rail. Loops sit outside the one-shot feedback envelope because the
         /// steady rhythm itself is the liveness cue — a shorter sweep reads
@@ -53,15 +46,20 @@ enum ToolMotion {
     }
 
     enum Distance {
+        /// Explicit mode switches hand the content off with a short fade
+        /// through; old content exits first instead of double-exposing two
+        /// dense control bars at partial opacity.
+        static let modeContentRise: CGFloat = 3
+        /// Hero readout hand-off clears the glyph height: at display sizes a
+        /// 3pt shift still lets old/new strings sit on top of each other.
+        static let valueSwapRise: CGFloat = 8
         static let micro: CGFloat = 3
         static let small: CGFloat = 6
         static let base: CGFloat = 8
         static let medium: CGFloat = 12
         static let large: CGFloat = 18
-        /// Page-header arrival rise (≈0.6em of the 18pt page title)
-        /// and the subtitle follow-up offset.
-        static let letterRise: CGFloat = 11
-        static let headerFollow: CGFloat = 4
+        /// Page-header arrival rise: one whole-header fade/4pt move.
+        static let headerRise: CGFloat = 4
         /// 01 景深沉降: incoming page rises 10pt while settling (prototype
         /// translateY(10px)).
         static let pageSinkRise: CGFloat = 10
@@ -179,6 +177,11 @@ enum ToolMotion {
     enum Preset {
         static let controlFeedback = Curve.inOut(duration: Duration.micro)
         static let textSwap = Curve.inOut(duration: Duration.quick)
+        /// Prominent readout value: the old value leaves on the fast beat,
+        /// then the new one rises after a short hand-off beat. Staggering
+        /// keeps two different-length strings from blending into a jumble.
+        static let valueSwapExit = Curve.smoothOut(duration: Duration.micro)
+        static let valueSwapEnter = Curve.smoothOut(duration: Duration.arrival).delay(0.06)
         static let iconSwap = Curve.inOut(duration: Duration.quick)
         static let orderedContent = Curve.smoothOut(duration: Duration.fast)
         static let tabs = Curve.smoothOut(duration: Duration.fast)
@@ -195,19 +198,10 @@ enum ToolMotion {
         /// 01 景深沉降: outgoing page exit timing — 220ms productiveExit so
         /// leaving content accelerates away while the arrival still settles.
         static let pageDeparture = Curve.productiveExit(duration: Duration.pageSinkExit)
-        /// Page-header letter choreography: each title character rises on the
-        /// shared 480ms smoothOut arc (prototype .lt), one stagger step apart.
-        /// Consumed by `IndexPageHeader` only; tool pages never apply it
-        /// themselves.
-        static func letterArrival(index: Int) -> Animation {
-            Curve.smoothOut(duration: Duration.letter).delay(letterArrivalDelay(index: index))
-        }
-
-        static func letterArrivalDelay(index: Int) -> TimeInterval {
-            Double(index) * Duration.letterStagger
-        }
-        /// Subtitle follow-up beat after the letter choreography starts.
-        static let headerFollow = Curve.smoothOut(duration: Duration.arrival)
+        /// Page-header arrival: one whole-header fade + 4pt rise on the shared
+        /// 240ms smoothOut arc. Consumed by `IndexPageHeader` only; no
+        /// per-character stagger.
+        static let pageHeader = Curve.smoothOut(duration: Duration.arrival)
         static let resultPresenceAppearance = Curve.smoothOut(duration: ResultPresence.appearanceDuration)
         static let resultPresenceExit = Curve.productiveExit(duration: ResultPresence.exitDuration)
         static let diagnostic = Curve.inOut(duration: Duration.quick)
@@ -264,17 +258,15 @@ enum ToolMotion {
         static let tintOut = Curve.smoothOut(duration: Duration.errorTintOut)
     }
 
-    /// Wave 2 empty-state arrival (prototype MOTION d/x.empty*): the icon
-    /// rises on a slight-overshoot spring, then the caption and message
-    /// follow one beat apart (fade-dominant). Reduce Motion shows directly.
+    /// Empty-state arrival (P3 single beat): the whole group fades in with one
+    /// 4pt rise; icon, title, and message never stage separately. Reduce
+    /// Motion shows the final layout directly.
     enum EmptyArrival {
-        static let iconRise = Animation.spring(response: 0.3, dampingFraction: 0.71)
-        static let textFollow = Curve.smoothOut(duration: 0.3).delay(0.06)
-        static let messageFollow = Curve.smoothOut(duration: 0.3).delay(0.12)
-        static let iconRiseDistance: CGFloat = 6
-        static let textRiseDistance: CGFloat = 4
-        /// Single-element variant (editor placeholder swap): no beat delay.
-        static let elementArrival = Curve.smoothOut(duration: 0.3)
+        static let arrive = Curve.smoothOut(duration: Duration.arrival)
+        static let riseDistance: CGFloat = 4
+        /// Single-element variant (editor placeholder swap): same timeline,
+        /// no beat delay.
+        static let elementArrival = arrive
     }
 
     /// Wave 2 command-palette choreography (prototype MOTION d/x/s.cmdk*):
@@ -354,6 +346,16 @@ enum ToolMotion {
         static let labelXfade = Curve.smoothOut(duration: Duration.labelXfade)
     }
 
+    /// Structural content hand-off used by segmented mode switches: fade the
+    /// old content out, swap while hidden, then fade the new content in. This
+    /// is deliberately not a cross-fade — two opaque workbenches at 50%
+    /// opacity read as a double-exposure, not a transition.
+    enum ModeContent {
+        static let exit = Curve.smoothOut(duration: 0.08)
+        static let enter = Curve.smoothOut(duration: 0.14)
+        static let handoffDelay: TimeInterval = 0.06
+    }
+
     /// Wave 2 difference-block locating wash (prototype MOTION d.diffPulse /
     /// d.diffWashPeak): when a difference jump lands, the target block's
     /// background sweeps one soft accent wash — opacity 0 → 10% → 0 across a
@@ -419,6 +421,41 @@ enum ToolMotion {
                     Float(points.y1),
                     Float(points.x2),
                     Float(points.y2)
+                )
+            )
+        }
+
+        /// Favorite reorder: 320ms shared arc for adjacent favorite moves.
+        /// CASpringAnimation cannot drive NSView frame animations through an
+        /// NSAnimationContext, so the row and the selection chrome share this
+        /// damping-0.90-like curve instead of two competing timelines.
+        static var favoriteReorder: AppKitMotion {
+            AppKitMotion(
+                duration: 0.32,
+                timingFunction: CAMediaTimingFunction(
+                    controlPoints: 0.18, 0.89, 0.32, 1.0
+                )
+            )
+        }
+
+        /// Reduce Motion structural favorite change: alpha-only, never a
+        /// frame animation. 130ms stays inside the 120–150ms contract.
+        static var favoriteReducedMotion: AppKitMotion {
+            AppKitMotion(
+                duration: 0.13,
+                timingFunction: CAMediaTimingFunction(
+                    controlPoints: 0.2, 0.0, 0.2, 1.0
+                )
+            )
+        }
+
+        /// Cross-section favorite toggle: short fade/reflow, never a flight
+        /// across groups.
+        static var favoriteToggle: AppKitMotion {
+            AppKitMotion(
+                duration: 0.22,
+                timingFunction: CAMediaTimingFunction(
+                    controlPoints: 0.2, 0.0, 0.2, 1.0
                 )
             )
         }

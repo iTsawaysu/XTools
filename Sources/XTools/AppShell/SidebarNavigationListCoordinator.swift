@@ -10,7 +10,14 @@ final class SidebarNavigationListCoordinator {
     private enum UpdateMode {
         case immediate
         case animated
+        case favoriteToggle
+        case favoriteReorder
+        case favoriteReducedMotion
         case contentOnly
+
+        var landsImmediately: Bool {
+            self == .immediate || self == .favoriteReducedMotion
+        }
     }
 
     private struct HostedContentKey: Equatable {
@@ -26,6 +33,8 @@ final class SidebarNavigationListCoordinator {
         let interaction: SidebarNavigationTrackInteraction
         let colorScheme: ColorScheme
         let reduceMotion: Bool
+        let favoriteIndex: Int?
+        let favoriteCount: Int
     }
 
     private var tracksByID: [String: SidebarNavigationTrackView] = [:]
@@ -138,6 +147,8 @@ final class SidebarNavigationListCoordinator {
         let mode = updateMode(configuration: configuration, plan: plan)
         let previousActiveIDs = Set(currentPlan?.targets.map(\.id) ?? [])
         let previousSelectedToolID = currentConfiguration?.selectedToolID
+        let previousFavoriteOrder = Set(currentConfiguration?.favoriteOrder ?? [])
+        let previousPlan = currentPlan
 
         if mode != .contentOnly {
             beginScrollAnchorIfNeeded(configuration: configuration, plan: plan)
@@ -159,7 +170,29 @@ final class SidebarNavigationListCoordinator {
             // exclusion zone (CONTEXT.md 动效禁区).
             applyImmediate(plan: plan, configuration: configuration)
         case .animated:
-            applyAnimated(plan: plan, configuration: configuration)
+            applyAnimated(
+                plan: plan,
+                configuration: configuration,
+                motion: ToolMotion.AppKitPreset.accordion
+            )
+        case .favoriteReorder:
+            applyAnimated(
+                plan: plan,
+                configuration: configuration,
+                motion: ToolMotion.AppKitPreset.favoriteReorder
+            )
+        case .favoriteToggle:
+            applyFavoriteToggle(
+                plan: plan,
+                configuration: configuration,
+                previousFavoriteOrder: previousFavoriteOrder
+            )
+        case .favoriteReducedMotion:
+            applyFavoriteReducedMotion(
+                plan: plan,
+                configuration: configuration,
+                previousPlan: previousPlan
+            )
         case .contentOnly:
             applyWidth(plan: plan)
             currentPlan = plan
@@ -244,6 +277,11 @@ final class SidebarNavigationListCoordinator {
         tracksByID[trackID]?.debugState
     }
 
+    /// Test-support: track alpha for Reduce Motion fade assertions.
+    func debugTrackAlpha(for trackID: String) -> CGFloat? {
+        tracksByID[trackID]?.alphaValue
+    }
+
     /// Test-support: resolved sliding-selection chrome state, mirroring
     /// `debugTrackState` for the indicator lane.
     var debugSelectionIndicatorState: (frame: CGRect, isVisible: Bool) {
@@ -290,17 +328,24 @@ final class SidebarNavigationListCoordinator {
         guard target != currentTarget else {
             return .contentOnly
         }
+        let previousFavorites = Set(currentConfiguration.favoriteOrder)
+        let nextFavorites = Set(configuration.favoriteOrder)
+        let favoritesChanged = previousFavorites != nextFavorites
+            || currentConfiguration.favoriteOrder != configuration.favoriteOrder
         if configuration.reduceMotion {
-            return .immediate
+            return favoritesChanged ? .favoriteReducedMotion : .immediate
+        }
+        if previousFavorites != nextFavorites {
+            return .favoriteToggle
+        }
+        if currentConfiguration.favoriteOrder != configuration.favoriteOrder {
+            return .favoriteReorder
         }
 
         let expansionChanged = expansionState(in: configuration.entries)
             != expansionState(in: currentConfiguration.entries)
-        let favoriteOrderChanged = configuration.favoriteOrder != currentConfiguration.favoriteOrder
         let identityOrderChanged = plan.targets.map(\.id) != currentPlan.targets.map(\.id)
-        return expansionChanged || favoriteOrderChanged || identityOrderChanged
-            ? .animated
-            : .immediate
+        return expansionChanged || identityOrderChanged ? .animated : .immediate
     }
 
     private func reconcileTracks(
@@ -335,9 +380,9 @@ final class SidebarNavigationListCoordinator {
                     x: target.frame.minX,
                     y: target.frame.minY,
                     width: target.frame.width,
-                    height: mode == .immediate ? target.frame.height : 0
+                    height: mode.landsImmediately ? target.frame.height : 0
                 )
-                track.alphaValue = mode == .immediate
+                track.alphaValue = mode.landsImmediately
                     ? (target.kind == .header || target.frame.height > 0 ? 1.0 : 0.0)
                     : (target.kind == .header ? 1.0 : 0.0)
                 documentView.addSubview(track)
@@ -472,6 +517,7 @@ final class SidebarNavigationListCoordinator {
             entry: entry,
             selectedSection: configuration.selectedSection
         )
+        let favoriteIndex = Self.favoriteIndex(for: entry, favoriteOrder: configuration.favoriteOrder)
         let key = HostedContentKey(
             entry: entry,
             isRowSelected: isRowSelected,
@@ -483,7 +529,9 @@ final class SidebarNavigationListCoordinator {
             isSearchActive: configuration.isSearchActive,
             interaction: track.interaction,
             colorScheme: configuration.colorScheme,
-            reduceMotion: configuration.reduceMotion
+            reduceMotion: configuration.reduceMotion,
+            favoriteIndex: favoriteIndex,
+            favoriteCount: configuration.favoriteOrder.count
         )
         if hostedContentKeysByTrackID[track.trackID] == key {
             return false
@@ -516,8 +564,22 @@ final class SidebarNavigationListCoordinator {
             reduceMotion: configuration.reduceMotion,
             onSelectTool: configuration.onSelectTool,
             onToggleFavorite: configuration.onToggleFavorite,
-            onToggleSection: configuration.onToggleSection
+            onToggleSection: configuration.onToggleSection,
+            favoriteIndex: Self.favoriteIndex(
+                for: entry,
+                favoriteOrder: configuration.favoriteOrder
+            ),
+            favoriteCount: configuration.favoriteOrder.count,
+            onMoveFavorite: configuration.onMoveFavorite
         )
+    }
+
+    private static func favoriteIndex(
+        for entry: SidebarNavigationEntry,
+        favoriteOrder: [ToolID]
+    ) -> Int? {
+        guard case .item(let item, _) = entry.content else { return nil }
+        return favoriteOrder.firstIndex(of: item.id)
     }
 
     private static func isRowSelected(
@@ -581,9 +643,9 @@ final class SidebarNavigationListCoordinator {
         case .tool:
             let targetExpanded = target.frame.height > 0
             switch mode {
-            case .immediate:
+            case .immediate, .favoriteReducedMotion:
                 return .finalized(targetExpanded: targetExpanded)
-            case .animated:
+            case .animated, .favoriteToggle, .favoriteReorder:
                 if !targetExpanded || !wasActive || !track.interaction.isInteractionEnabled {
                     return .preparing(targetExpanded: targetExpanded)
                 }
@@ -674,9 +736,14 @@ final class SidebarNavigationListCoordinator {
         reconcilePointerLocation()
     }
 
-    private func applyAnimated(
+    /// Cross-section favorite toggle: the moved row lands at its new slot
+    /// with a short fade-in while the remaining rows reflow; no track flies
+    /// across groups. The selection chrome snaps to the new slot instead of
+    /// sliding, matching the "cross-group = fade" rule.
+    private func applyFavoriteToggle(
         plan: SidebarNavigationLayoutPlan,
-        configuration: SidebarNavigationListConfiguration
+        configuration: SidebarNavigationListConfiguration,
+        previousFavoriteOrder: Set<ToolID>
     ) {
         let token = animationGate.request(
             target: SidebarNavigationAnimationTarget(plan: plan)
@@ -686,7 +753,141 @@ final class SidebarNavigationListCoordinator {
         let retiringTracks = tracksByID.values.filter {
             $0.superview === documentView && !activeIDs.contains($0.trackID)
         }
-        let motion = ToolMotion.AppKitPreset.accordion
+        let nextFavorites = Set(configuration.favoriteOrder)
+        let movedFavorites = previousFavoriteOrder.symmetricDifference(nextFavorites)
+        let motion = ToolMotion.AppKitPreset.favoriteToggle
+
+        let targetOriginY: CGFloat? = {
+            guard let scrollView, let scrollAnchor else { return nil }
+            return scrollAnchor.resolvedOriginY(
+                documentHeight: plan.documentHeight,
+                viewportHeight: scrollView.contentView.bounds.height
+            )
+        }()
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = motion.duration
+            context.timingFunction = motion.timingFunction
+
+            for target in plan.targets {
+                guard let track = tracksByID[target.id] else { continue }
+                let isMovedFavorite = {
+                    guard case .tool(let toolID) = target.kind else { return false }
+                    return movedFavorites.contains(toolID)
+                }()
+                if isMovedFavorite {
+                    // Land at the destination immediately and fade the row
+                    // in; the previous location is removed by the reflow.
+                    track.layer?.removeAllAnimations()
+                    track.frame = target.frame
+                    track.alphaValue = 0
+                    track.animator().alphaValue = target.frame.height > 0 ? 1.0 : 0.0
+                } else {
+                    track.animator().frame = target.frame
+                    if target.kind != .header {
+                        track.animator().alphaValue = target.frame.height > 0 ? 1.0 : 0.0
+                    }
+                }
+            }
+
+            for track in retiringTracks {
+                var frame = track.frame
+                frame.size.height = 0
+                track.animator().frame = frame
+                track.animator().alphaValue = 0.0
+            }
+
+            selectionIndicator.updateColors()
+            sidebarScrollView?.sidebarScrollIndicator.updateColors()
+            selectionIndicator.prepareForStructuralMotion()
+            if let frame = selectionIndicatorFrame(configuration: configuration, plan: plan) {
+                let selectedMoved = configuration.selectedToolID.map {
+                    movedFavorites.contains($0)
+                } ?? false
+                if selectedMoved {
+                    selectionIndicator.alphaValue = 0
+                    selectionIndicator.frame = frame
+                    selectionIndicator.layoutSubtreeIfNeeded()
+                    selectionIndicator.animator().alphaValue = 1
+                } else if selectionIndicator.alphaValue < 0.01 {
+                    selectionIndicator.frame = frame
+                    selectionIndicator.layoutSubtreeIfNeeded()
+                    selectionIndicator.alphaValue = 1
+                } else {
+                    selectionIndicator.animator().frame = frame
+                }
+            } else {
+                selectionIndicator.animator().alphaValue = 0
+            }
+
+            documentView.animator().frame = documentFrame(
+                width: resolvedDocumentWidth(for: scrollView),
+                height: plan.documentHeight
+            )
+            if let targetOriginY, let scrollView {
+                let clipView = scrollView.contentView
+                if abs(clipView.bounds.origin.y - targetOriginY) > 0.25 {
+                    clipView.animator().bounds = NSRect(
+                        origin: NSPoint(x: clipView.bounds.origin.x, y: targetOriginY),
+                        size: clipView.bounds.size
+                    )
+                }
+            }
+        } completionHandler: { [weak self] in
+            Task { @MainActor in
+                self?.completeAnimation(token: token, activeIDs: activeIDs)
+            }
+        }
+        currentPlan = plan
+        reconcilePointerLocation()
+    }
+
+    /// Reduce Motion favorite structure change: land all frames immediately
+    /// (no positional interpolation) and fade only the tool tracks whose
+    /// geometry changed. The selection chrome keeps its direct landing from
+    /// `applyImmediate`; no second spring is introduced.
+    private func applyFavoriteReducedMotion(
+        plan: SidebarNavigationLayoutPlan,
+        configuration: SidebarNavigationListConfiguration,
+        previousPlan: SidebarNavigationLayoutPlan?
+    ) {
+        let previousFrames = Dictionary(
+            uniqueKeysWithValues: (previousPlan?.targets ?? []).map { ($0.id, $0.frame) }
+        )
+        let changedTrackIDs = plan.targets.compactMap { target -> String? in
+            guard case .tool = target.kind else { return nil }
+            guard let oldFrame = previousFrames[target.id], oldFrame != target.frame else { return nil }
+            return target.id
+        }
+
+        applyImmediate(plan: plan, configuration: configuration)
+        guard !changedTrackIDs.isEmpty else { return }
+
+        let motion = ToolMotion.AppKitPreset.favoriteReducedMotion
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = motion.duration
+            context.timingFunction = motion.timingFunction
+            for trackID in changedTrackIDs {
+                guard let track = tracksByID[trackID] else { continue }
+                track.alphaValue = 0
+                track.animator().alphaValue = 1
+            }
+        }
+    }
+
+    private func applyAnimated(
+        plan: SidebarNavigationLayoutPlan,
+        configuration: SidebarNavigationListConfiguration,
+        motion: ToolMotion.AppKitMotion
+    ) {
+        let token = animationGate.request(
+            target: SidebarNavigationAnimationTarget(plan: plan)
+        )
+        activeAnimationToken = token
+        let activeIDs = Set(plan.targets.map(\.id))
+        let retiringTracks = tracksByID.values.filter {
+            $0.superview === documentView && !activeIDs.contains($0.trackID)
+        }
 
         let targetOriginY: CGFloat? = {
             guard let scrollView, let scrollAnchor else { return nil }
