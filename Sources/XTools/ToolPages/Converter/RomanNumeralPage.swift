@@ -21,7 +21,6 @@ struct IndexRomanPage: View {
 }
 
 private struct IndexRomanWorkspaceContent: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var workspace: RomanNumeralToolWorkspaceModel
 
     private var output: String {
@@ -48,24 +47,20 @@ private struct IndexRomanWorkspaceContent: View {
                 }
             }
             IndexPanel("结果") {
-                if output == IndexEmptyStateCopy.notAvailable {
-                    IndexEmptyState(
-                        title: "等待输入",
-                        systemImage: "arrow.left.arrow.right",
-                        message: "输入数字或罗马数字后自动转换。",
-                        density: .list
-                    )
-                    .frame(minHeight: 96)
-                    .transition(ToolMotion.Transition.modeContent)
-                } else {
-                    IndexHeroStat(value: output, copyable: true)
-                        .transition(ToolMotion.Transition.modeContent)
+                IndexModeContent(id: output == IndexEmptyStateCopy.notAvailable) { isEmpty in
+                    if isEmpty {
+                        IndexEmptyState(
+                            title: "等待输入",
+                            systemImage: "arrow.left.arrow.right",
+                            message: "输入数字或罗马数字后自动转换。",
+                            density: .list
+                        )
+                        .frame(minHeight: 96)
+                    } else {
+                        IndexHeroStat(value: output, copyable: true)
+                    }
                 }
             }
-            .animation(
-                ToolMotion.animation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion),
-                value: output == IndexEmptyStateCopy.notAvailable
-            )
         }
     }
 

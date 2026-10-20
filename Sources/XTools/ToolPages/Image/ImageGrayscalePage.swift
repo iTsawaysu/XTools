@@ -23,13 +23,11 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
     }
 
     var body: some View {
-        Group {
-            if session.source == nil {
+        IndexModeContent(id: session.source == nil, fillsHeight: true) { isEmpty in
+            if isEmpty {
                 emptyUploadPanel
-                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
             } else {
                 comparisonWorkspacePanel
-                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
             }
         }
     }

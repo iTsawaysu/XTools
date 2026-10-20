@@ -82,17 +82,17 @@ private struct IndexResponsivePairLayout: Layout {
         }
 
         let width = resolvedWidth(proposal.width)
-        let paneHeight = fillsHeight ? verticalPaneHeight(for: proposal.height) : nil
-        let paneProposal = ProposedViewSize(width: width, height: paneHeight)
-        let leadingSize = subviews[0].sizeThatFits(paneProposal)
-        let trailingSize = subviews[1].sizeThatFits(paneProposal)
-        let naturalHeight = leadingSize.height + spacing + trailingSize.height
-
         if fillsHeight, let proposedHeight = proposal.height, proposedHeight.isFinite {
-            return CGSize(width: width, height: max(proposedHeight, naturalHeight))
+            let leadingNatural = subviews[0]
+                .sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+            let heights = verticalPaneHeights(available: proposedHeight, leadingNatural: leadingNatural)
+            return CGSize(width: width, height: max(proposedHeight, heights.leading + spacing + heights.trailing))
         }
 
-        return CGSize(width: width, height: naturalHeight)
+        let paneProposal = ProposedViewSize(width: width, height: nil)
+        let leadingSize = subviews[0].sizeThatFits(paneProposal)
+        let trailingSize = subviews[1].sizeThatFits(paneProposal)
+        return CGSize(width: width, height: leadingSize.height + spacing + trailingSize.height)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) {
@@ -129,8 +129,29 @@ private struct IndexResponsivePairLayout: Layout {
             return
         }
 
-        let paneHeight = fillsHeight ? verticalPaneHeight(for: bounds.height) : nil
-        let paneProposal = ProposedViewSize(width: bounds.width, height: paneHeight)
+        if fillsHeight, bounds.height.isFinite {
+            // Stacked narrow window: the leading pane keeps its compact
+            // natural height (regex controls), the trailing pane takes the
+            // rest so the test text stays the largest surface. Splitting the
+            // height in half instead leaves the controls padded with empty
+            // space and shrinks the editor.
+            let leadingNatural = subviews[0]
+                .sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height
+            let heights = verticalPaneHeights(available: bounds.height, leadingNatural: leadingNatural)
+            subviews[0].place(
+                at: CGPoint(x: bounds.minX, y: bounds.minY),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: bounds.width, height: heights.leading)
+            )
+            subviews[1].place(
+                at: CGPoint(x: bounds.minX, y: bounds.minY + heights.leading + spacing),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: bounds.width, height: heights.trailing)
+            )
+            return
+        }
+
+        let paneProposal = ProposedViewSize(width: bounds.width, height: nil)
         let leadingHeight = subviews[0].sizeThatFits(paneProposal).height
         subviews[0].place(
             at: CGPoint(x: bounds.minX, y: bounds.minY),
@@ -138,7 +159,7 @@ private struct IndexResponsivePairLayout: Layout {
             proposal: paneProposal
         )
         subviews[1].place(
-            at: CGPoint(x: bounds.minX, y: bounds.minY + (paneHeight ?? leadingHeight) + spacing),
+            at: CGPoint(x: bounds.minX, y: bounds.minY + leadingHeight + spacing),
             anchor: .topLeading,
             proposal: paneProposal
         )
@@ -158,8 +179,17 @@ private struct IndexResponsivePairLayout: Layout {
         return proposedWidth
     }
 
-    private func verticalPaneHeight(for height: CGFloat?) -> CGFloat? {
-        guard let height, height.isFinite else { return nil }
-        return max(0, (height - spacing) / 2)
+    private func verticalPaneHeights(available: CGFloat, leadingNatural: CGFloat) -> (leading: CGFloat, trailing: CGFloat) {
+        let minLeading: CGFloat = 132
+        let minTrailing: CGFloat = 148
+        let maxLeading = max(minLeading, available * 0.55)
+
+        var leading = min(max(leadingNatural, minLeading), maxLeading)
+        var trailing = available - leading - spacing
+        if trailing < minTrailing {
+            trailing = minTrailing
+            leading = max(minLeading, available - trailing - spacing)
+        }
+        return (leading, trailing)
     }
 }

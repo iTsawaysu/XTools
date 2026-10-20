@@ -46,10 +46,10 @@ enum ToolMotion {
     }
 
     enum Distance {
-        /// Explicit mode switches hand the content off with a short fade
-        /// through; old content exits first instead of double-exposing two
-        /// dense control bars at partial opacity.
-        static let modeContentRise: CGFloat = 3
+        /// Structural content hand-off: outgoing rises, incoming rises in
+        /// behind it. A 6pt offset keeps the brief overlap spatially separated
+        /// so dense control bars never read as a double exposure.
+        static let modeContentRise: CGFloat = 6
         /// Hero readout hand-off clears the glyph height: at display sizes a
         /// 3pt shift still lets old/new strings sit on top of each other.
         static let valueSwapRise: CGFloat = 8
@@ -177,9 +177,10 @@ enum ToolMotion {
     enum Preset {
         static let controlFeedback = Curve.inOut(duration: Duration.micro)
         static let textSwap = Curve.inOut(duration: Duration.quick)
-        /// Prominent readout value: the old value leaves on the fast beat,
-        /// then the new one rises after a short hand-off beat. Staggering
-        /// keeps two different-length strings from blending into a jumble.
+        /// Prominent readout and structural content hand-off: the outgoing
+        /// layer leaves on the fast beat, the incoming layer rises after a
+        /// short beat. Staggering keeps differently sized content from
+        /// blanking the pane (flicker) or blending into a jumble.
         static let valueSwapExit = Curve.smoothOut(duration: Duration.micro)
         static let valueSwapEnter = Curve.smoothOut(duration: Duration.arrival).delay(0.06)
         static let iconSwap = Curve.inOut(duration: Duration.quick)
@@ -344,16 +345,6 @@ enum ToolMotion {
         static let stretchPeak: CGFloat = 1.10
         /// Active-label color/state cross-fade (d.labelXfade, smoothOut).
         static let labelXfade = Curve.smoothOut(duration: Duration.labelXfade)
-    }
-
-    /// Structural content hand-off used by segmented mode switches: fade the
-    /// old content out, swap while hidden, then fade the new content in. This
-    /// is deliberately not a cross-fade — two opaque workbenches at 50%
-    /// opacity read as a double-exposure, not a transition.
-    enum ModeContent {
-        static let exit = Curve.smoothOut(duration: 0.08)
-        static let enter = Curve.smoothOut(duration: 0.14)
-        static let handoffDelay: TimeInterval = 0.06
     }
 
     /// Wave 2 difference-block locating wash (prototype MOTION d.diffPulse /

@@ -319,18 +319,22 @@ private struct IndexSegmentedCursorLayer<Value: Hashable>: View {
 
 /// Structural content ownership for a segmented mode switch.
 ///
-/// The old content fades out, swaps while hidden, then the new content fades
-/// in with a 3pt rise. A plain cross-fade would overlap two dense control
-/// bars at partial opacity and read as a double-exposure. Intra-mode value
-/// updates do not change `id`, so they stay immediate (or use their own
-/// value/text transition).
+/// Old and new content run one staggered hand-off instead of a fade-through:
+/// the outgoing layer leaves on the fast beat while the incoming layer rises
+/// in after a short beat. A hidden hand-off is perceived as a flicker (the
+/// whole pane blanks for a beat); a same-position cross-fade double-exposes
+/// two dense control bars. Staggering plus a small vertical offset keeps the
+/// overlap short and spatially separated, so Hub segments, Base64 direction,
+/// output presentation, and Diff modes all share one motion.
 struct IndexModeContent<ID: Hashable, Content: View>: View {
     let id: ID
     var fillsHeight = false
     private let content: (ID) -> Content
     @State private var displayedID: ID
-    @State private var isVisible = true
-    @State private var handoffTask: Task<Void, Never>?
+    @State private var outgoingID: ID?
+    @State private var enterProgress: CGFloat = 1
+    @State private var exitProgress: CGFloat = 1
+    @State private var cleanupTask: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
@@ -345,46 +349,68 @@ struct IndexModeContent<ID: Hashable, Content: View>: View {
     }
 
     var body: some View {
-        content(displayedID)
-            .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible ? 0 : ToolMotion.Distance.modeContentRise)
-            .frame(
-                maxWidth: fillsHeight ? .infinity : nil,
-                maxHeight: fillsHeight ? .infinity : nil,
-                alignment: .topLeading
-            )
-            .onChange(of: id) { newID in
-                guard newID != displayedID else { return }
-                handoffTask?.cancel()
-
-                guard !reduceMotion else {
-                    displayedID = newID
-                    isVisible = true
-                    return
-                }
-
-                withAnimation(ToolMotion.ModeContent.exit) {
-                    isVisible = false
-                }
-                handoffTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: UInt64(ToolMotion.ModeContent.handoffDelay * 1_000_000_000))
-                    guard !Task.isCancelled else { return }
-
-                    let transaction = ToolMotion.disabledTransaction
-                    withTransaction(transaction) {
-                        displayedID = newID
-                        isVisible = false
-                    }
-
-                    await Task.yield()
-                    guard !Task.isCancelled else { return }
-                    withAnimation(ToolMotion.ModeContent.enter) {
-                        isVisible = true
-                    }
-                }
+        ZStack(alignment: .topLeading) {
+            if let outgoingID {
+                content(outgoingID)
+                    .opacity(1 - exitProgress)
+                    .offset(y: -ToolMotion.Distance.modeContentRise * exitProgress)
+                    .frame(
+                        maxWidth: fillsHeight ? .infinity : nil,
+                        maxHeight: fillsHeight ? .infinity : nil,
+                        alignment: .topLeading
+                    )
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
-            .onDisappear {
-                handoffTask?.cancel()
+            content(displayedID)
+                .opacity(enterProgress)
+                .offset(y: ToolMotion.Distance.modeContentRise * (1 - enterProgress))
+                .frame(
+                    maxWidth: fillsHeight ? .infinity : nil,
+                    maxHeight: fillsHeight ? .infinity : nil,
+                    alignment: .topLeading
+                )
+        }
+        .animation(
+            ToolMotion.animation(ToolMotion.Preset.valueSwapExit, reduceMotion: reduceMotion),
+            value: exitProgress
+        )
+        .animation(
+            ToolMotion.animation(ToolMotion.Preset.valueSwapEnter, reduceMotion: reduceMotion),
+            value: enterProgress
+        )
+        .onChange(of: id) { newID in
+            guard newID != displayedID else { return }
+            cleanupTask?.cancel()
+
+            guard !reduceMotion else {
+                displayedID = newID
+                outgoingID = nil
+                enterProgress = 1
+                exitProgress = 1
+                return
             }
+
+            outgoingID = displayedID
+            displayedID = newID
+            withTransaction(ToolMotion.disabledTransaction) {
+                enterProgress = 0
+                exitProgress = 0
+            }
+            withAnimation(ToolMotion.Preset.valueSwapExit) {
+                exitProgress = 1
+            }
+            withAnimation(ToolMotion.Preset.valueSwapEnter) {
+                enterProgress = 1
+            }
+            cleanupTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 360_000_000)
+                guard !Task.isCancelled else { return }
+                outgoingID = nil
+            }
+        }
+        .onDisappear {
+            cleanupTask?.cancel()
+        }
     }
 }

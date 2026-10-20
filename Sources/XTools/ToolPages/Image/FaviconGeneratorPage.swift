@@ -20,9 +20,10 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
 
     var body: some View {
         IndexPanel("上传图片", fillsHeight: session.sourceImage == nil) {
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                if let image = session.sourceImage {
-                    imageSelectionActions
+            IndexModeContent(id: session.sourceImage != nil) { hasSource in
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+                    if hasSource, let image = session.sourceImage {
+                        imageSelectionActions
 
                     HStack(alignment: .center, spacing: ToolMetrics.Spacing.base) {
                         IndexImagePreviewStage(
@@ -70,12 +71,12 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                 onFile: receiveImageURL,
                 onMultipleFiles: rejectMultipleImageDrop
             )
+            }
         }
 
-        Group {
-            if session.sourceImage != nil {
+        IndexModeContent(id: session.sourceImage != nil, fillsHeight: true) { hasSource in
+            if hasSource {
                 faviconOutputPanel
-                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
             }
         }
     }

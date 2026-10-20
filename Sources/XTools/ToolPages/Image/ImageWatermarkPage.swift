@@ -308,8 +308,8 @@ private struct IndexImageWatermarkWorkspaceContent: View {
             )
         }
 
-        Group {
-            if session.source != nil {
+        IndexModeContent(id: session.source != nil, fillsHeight: true) { hasSource in
+            if hasSource {
                 IndexPanel("水印成品") {
                     VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
                         IndexImagePreviewStage(
@@ -354,7 +354,6 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                     }
                 }
                 .verticallyFilling()
-                .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
             }
         }
     }
