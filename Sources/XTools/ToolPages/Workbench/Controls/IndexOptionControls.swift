@@ -30,10 +30,10 @@ private struct IndexSwitchTrack: View {
     var body: some View {
         ZStack(alignment: isOn ? .trailing : .leading) {
             Capsule(style: .continuous)
-                .fill(isOn ? ToolTheme.accentSoft : offBackground)
+                .fill(isOn ? ToolTheme.editorBackground : offBackground)
                 .overlay {
                     Capsule(style: .continuous)
-                        .strokeBorder(isOn ? ToolTheme.accentBorder : offBorder, lineWidth: 1)
+                        .strokeBorder(isOn ? ToolTheme.strongBorder : offBorder, lineWidth: 1)
                 }
 
             Circle()
@@ -175,7 +175,7 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
                 .padding(.horizontal, 4)
                 .frame(height: 28)
                 .background(
-                    configuration.isOn ? ToolTheme.selectionFill : Color.clear,
+                    Color.clear,
                     in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
                 )
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))

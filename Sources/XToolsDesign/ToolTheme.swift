@@ -38,37 +38,39 @@ public enum ToolTheme {
     /// Light accent is mid-dark → white text reads; dark accent is bright → deep-brown text reads.
     public static let onAccent = dynamicColor(light: 0xFFF8F2, dark: 0x1A0F0A)        // §7.1 onAccent
 
-    // MARK: - Surfaces (暖近黑底层级，锚定 #151517)
+    // MARK: - Surfaces (v5 暖中性阶梯，锚定陶土橙)
     //
-    // Clay Warmth 层级（figure-ground）：浅色 = 暖灰底 + 白卡片；深色 = 亮度阶梯
-    // （editor 最沉 < workspace < panel < utility/popover）。
+    // v5：色相不变（clay accent），把中性色从冷灰改成暖炭/暖纸，并拉开
+    // editor < workspace < panel < utility 的明度差；表面靠色阶分层，
+    // 不引入玻璃、噪点或渐变材质。
+    // 浅色 = 暖纸底 + 近白卡片；深色 = 暖炭阶梯。
 
-    public static let windowBackground = dynamicColor(light: 0xE8E4DC, dark: 0x0E0F11)     // §7.1 surfaceWindow
-    public static let workspaceBackground = dynamicColor(light: 0xF4F1EB, dark: 0x151517)  // §7.1 surfaceWorkspace ← 用户指定
-    public static let sidebarBackground = dynamicColor(light: 0xEAE6DE, dark: 0x121214)    // §7.1 surfaceSidebar
-    public static let panelBackground = dynamicColor(light: 0xFDFCFA, dark: 0x1E1E22)      // §7.1 surfacePanel
-    public static let utilityBackground = dynamicColor(light: 0xF5F2EC, dark: 0x242429)    // §7.1 surfacePanel2
-    public static let editorBackground = dynamicColor(light: 0xF5F2EC, dark: 0x0F0F11)     // §7.1 surfaceField
+    public static let windowBackground = dynamicColor(light: 0xE7E0D4, dark: 0x0D0B09)     // §7.1 surfaceWindow
+    public static let workspaceBackground = dynamicColor(light: 0xF6F1E7, dark: 0x17130F)  // §7.1 surfaceWorkspace
+    public static let sidebarBackground = dynamicColor(light: 0xEDE6D9, dark: 0x110E0B)    // §7.1 surfaceSidebar
+    public static let panelBackground = dynamicColor(light: 0xFFFDF9, dark: 0x211C16)      // §7.1 surfacePanel
+    public static let utilityBackground = dynamicColor(light: 0xF3ECDF, dark: 0x2A231B)    // §7.1 surfacePanel2
+    public static let editorBackground = dynamicColor(light: 0xF7F2E8, dark: 0x100E0B)     // §7.1 surfaceField
     /// 顶栏 ⌘K 触发按钮的 chip 底。浅色比 `editorBackground` 深一档：统一键帽
     /// `IndexKeycap` 的白色顶面落在过浅的 chip 上会白对白糊成一团，需要约 8%
     /// 明度差才能读出 figure-ground 层次（见 `Keycap` 注释的实测锚）；深色沿用
     /// editorBackground 的近黑——亮灰键帽在近黑上已有足够分离。
-    public static let commandTriggerChip = dynamicColor(light: 0xEAE6DE, dark: 0x0F0F11)
-    public static let elevatedBackground = dynamicColor(light: 0xFDFCFA, dark: 0x242429)
-    public static let popoverBackground = dynamicColor(light: 0xFDFCFA, dark: 0x242429, alpha: 0.96, darkAlpha: 0.97)
+    public static let commandTriggerChip = dynamicColor(light: 0xEDE6D9, dark: 0x100E0B)
+    public static let elevatedBackground = dynamicColor(light: 0xFFFDF9, dark: 0x2A231B)
+    public static let popoverBackground = dynamicColor(light: 0xFFFDF9, dark: 0x2A231B, alpha: 0.97, darkAlpha: 0.98)
 
     // MARK: - Text (暖白 / 次要 / 弱)
 
-    public static let textPrimary = dynamicColor(light: 0x2A2520, dark: 0xE4E2DC)     // §7.1 textPrimary · 暖白
-    public static let textSecondary = dynamicColor(light: 0x6B645C, dark: 0x8A847C)   // §7.1 textSecondary
-    public static let textTertiary = dynamicColor(light: 0x9A938A, dark: 0x6E6862)    // §7.1 textTertiary(深色提亮以满足对比度)
+    public static let textPrimary = dynamicColor(light: 0x2B241C, dark: 0xEDE6DC)     // §7.1 textPrimary · 暖白
+    public static let textSecondary = dynamicColor(light: 0x6C6358, dark: 0xA79D90)   // §7.1 textSecondary
+    public static let textTertiary = dynamicColor(light: 0x9B9184, dark: 0x7A7064)    // §7.1 textTertiary(深色提亮以满足对比度)
 
     // MARK: - Lines & fills
 
-    public static let border = dynamicColor(light: 0x000000, dark: 0xFFFFFF, alpha: 0.08, darkAlpha: 0.07)        // §7.1 border
-    public static let strongBorder = dynamicColor(light: 0x000000, dark: 0xFFFFFF, alpha: 0.13, darkAlpha: 0.11)  // §7.1 border2
-    public static let hoverFill = dynamicColor(light: 0x000000, dark: 0xFFFFFF, alpha: 0.045, darkAlpha: 0.045)   // §7.1 hover
-    public static let activeFill = dynamicColor(light: 0x000000, dark: 0xFFFFFF, alpha: 0.07, darkAlpha: 0.07)
+    public static let border = dynamicColor(light: 0x3A2A1B, dark: 0xFFE7D2, alpha: 0.09, darkAlpha: 0.075)        // §7.1 border
+    public static let strongBorder = dynamicColor(light: 0x3A2A1B, dark: 0xFFE7D2, alpha: 0.14, darkAlpha: 0.115)  // §7.1 border2
+    public static let hoverFill = dynamicColor(light: 0x3A2A1B, dark: 0xFFE7D2, alpha: 0.05, darkAlpha: 0.05)      // §7.1 hover
+    public static let activeFill = dynamicColor(light: 0x3A2A1B, dark: 0xFFE7D2, alpha: 0.075, darkAlpha: 0.075)
     public static let selectionFill = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)     // §7.1 selection
     public static let selectionStroke = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.22, darkAlpha: 0.30)   // §7.1 selectionBorder
     public static let focusRing = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.30, darkAlpha: 0.50)

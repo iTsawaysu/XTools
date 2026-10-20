@@ -41,12 +41,17 @@ struct HubSegmentPage<Segment: HubSegmentIdentifier, Content: View>: View {
     }
 
     var body: some View {
-        IndexPage(title, subtitle: segment.subtitle, workspaceSemantic: workspaceSemantic) {
+        IndexPage(
+            title,
+            subtitle: segment.subtitle,
+            workspaceSemantic: workspaceSemantic
+        ) {
             IndexSegmentedControl(
                 items: Segment.allCases.map { ($0.id, $0.label) },
                 selection: segmentSelection,
                 density: .regular
             )
+        } content: {
             content(segment)
         }
         .onAppear { consumeEntryHintIfNeeded() }
