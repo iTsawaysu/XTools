@@ -2,11 +2,8 @@
   "counts": {
     "frame_literal": {
       "Sources/XTools/ToolPages/Converter/Base64FilePage.swift": 6,
-      "Sources/XTools/ToolPages/Converter/IntegerBaseConverterPage.swift": 1,
-      "Sources/XTools/ToolPages/Crypto/PasswordGeneratorPage.swift": 1,
       "Sources/XTools/ToolPages/Crypto/StringObfuscatorPage.swift": 1,
       "Sources/XTools/ToolPages/Crypto/TextEncryptionPage.swift": 4,
-      "Sources/XTools/ToolPages/Crypto/TokenGeneratorPage.swift": 1,
       "Sources/XTools/ToolPages/Development/ChmodCalculatorPage.swift": 1,
       "Sources/XTools/ToolPages/Development/RegexTesterComponents.swift": 2,
       "Sources/XTools/ToolPages/Development/SourceControlPage.swift": 5,
@@ -26,9 +23,6 @@
     },
     "padding_literal": {
       "Sources/XTools/ToolPages/Converter/Base64FilePage.swift": 5,
-      "Sources/XTools/ToolPages/Crypto/PasswordGeneratorPage.swift": 2,
-      "Sources/XTools/ToolPages/Crypto/TokenGeneratorPage.swift": 2,
-      "Sources/XTools/ToolPages/Crypto/UUIDGeneratorPage.swift": 2,
       "Sources/XTools/ToolPages/Development/CrontabGeneratorPage.swift": 2,
       "Sources/XTools/ToolPages/Development/HTMLToMarkdownPage.swift": 1,
       "Sources/XTools/ToolPages/Development/RegexTesterComponents.swift": 3,
@@ -42,12 +36,10 @@
       "Sources/XTools/ToolPages/Web/KeycodeInfoPage.swift": 1
     },
     "spacing_literal": {
-      "Sources/XTools/ToolPages/Converter/Base64FilePage.swift": 18,
-      "Sources/XTools/ToolPages/Crypto/HashTextPage.swift": 2,
-      "Sources/XTools/ToolPages/Crypto/PasswordGeneratorPage.swift": 1,
+      "Sources/XTools/ToolPages/Converter/Base64FilePage.swift": 13,
+      "Sources/XTools/ToolPages/Crypto/HashTextPage.swift": 1,
       "Sources/XTools/ToolPages/Crypto/StringObfuscatorPage.swift": 3,
       "Sources/XTools/ToolPages/Crypto/TextEncryptionPage.swift": 5,
-      "Sources/XTools/ToolPages/Crypto/TokenGeneratorPage.swift": 1,
       "Sources/XTools/ToolPages/Crypto/UUIDGeneratorPage.swift": 1,
       "Sources/XTools/ToolPages/Development/ChmodCalculatorPage.swift": 4,
       "Sources/XTools/ToolPages/Development/CrontabGeneratorPage.swift": 12,
@@ -59,8 +51,8 @@
       "Sources/XTools/ToolPages/Development/SQLPrettifyPage.swift": 1,
       "Sources/XTools/ToolPages/Development/SourceControlPage.swift": 20,
       "Sources/XTools/ToolPages/Development/TextDiffPage.swift": 1,
-      "Sources/XTools/ToolPages/Image/ColorPickerPage.swift": 4,
-      "Sources/XTools/ToolPages/Image/FaviconGeneratorPage.swift": 7,
+      "Sources/XTools/ToolPages/Image/ColorPickerPage.swift": 2,
+      "Sources/XTools/ToolPages/Image/FaviconGeneratorPage.swift": 6,
       "Sources/XTools/ToolPages/Image/ImageCompressorPage.swift": 1,
       "Sources/XTools/ToolPages/Image/ImageConverterPage.swift": 1,
       "Sources/XTools/ToolPages/Image/ImageWatermarkPage.swift": 5,

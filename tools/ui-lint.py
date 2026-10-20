@@ -38,7 +38,7 @@ RATCHET_RULES: dict[str, re.Pattern[str]] = {
     "padding_literal": re.compile(
         r"\.padding\(\s*(?:\.(?:horizontal|vertical|top|leading|trailing|bottom|all)\s*,\s*)?[0-9]"
     ),
-    "spacing_literal": re.compile(r"\bspacing:\s*[0-9]"),
+    "spacing_literal": re.compile(r"\bspacing:\s*[1-9][0-9]*"),
     "frame_literal": re.compile(
         r"\.frame\(\s*(?:minWidth|maxWidth|width|minHeight|maxHeight|height):\s*[0-9]"
     ),

@@ -1,6 +1,30 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "搜索" : {
+      "extractionState" : "manual"
+    },
+    "复制结果" : {
+      "extractionState" : "manual"
+    },
+    "请求头" : {
+      "extractionState" : "manual"
+    },
+    "按键捕获" : {
+      "extractionState" : "manual"
+    },
+    "点击重新生成" : {
+      "extractionState" : "manual"
+    },
+    "输入 User-Agent 后自动解析" : {
+      "extractionState" : "manual"
+    },
+    "输入表达式后显示结果" : {
+      "extractionState" : "manual"
+    },
+    "输入数字后显示结果" : {
+      "extractionState" : "manual"
+    },
     "工作日9点" : {
       "extractionState" : "manual"
     },
