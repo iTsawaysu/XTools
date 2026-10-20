@@ -78,3 +78,4 @@ struct HubSegmentPage<Segment: HubSegmentIdentifier, Content: View>: View {
         segment = newSegment
     }
 }
+

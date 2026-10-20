@@ -121,6 +121,27 @@ enum IndexPageChrome: Equatable {
     var headerRailWidth: CGFloat { ToolMetrics.Spacing.xs / 2 }
 }
 
+/// Page-header composition rule, kept separate from the view so the threshold
+/// can be exercised without hosting SwiftUI.
+enum IndexPageHeaderLayout {
+    /// Below this content width the accessory moves under the title: the title
+    /// keeps its reading measure instead of being squeezed by the control.
+    static let inlineAccessoryMinimumWidth: CGFloat = 760
+
+    /// A zero width means the measurement has not landed yet; keep the inline
+    /// arrangement for the first frame so wide windows do not flash a stack.
+    static func stacksAccessory(forContentWidth width: CGFloat) -> Bool {
+        width > 0 && width < inlineAccessoryMinimumWidth
+    }
+}
+
+private struct IndexPageHeaderWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 /// Shared identity rail used by tool pages and the personal dashboard.
 /// Keeping this header separate lets dashboard content own its single
 /// ScrollView without recreating a second page shell or toolbar.
@@ -128,6 +149,7 @@ struct IndexPageHeader<Accessory: View>: View {
     let title: String
     let subtitle: String
     let chrome: IndexPageChrome
+    let contentWidth: CGFloat
     @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
     private let accessory: Accessory
     private let hasAccessory: Bool
@@ -136,20 +158,27 @@ struct IndexPageHeader<Accessory: View>: View {
         _ title: String,
         subtitle: String,
         chrome: IndexPageChrome = .standard,
+        contentWidth: CGFloat = 0,
         @ViewBuilder accessory: () -> Accessory
     ) {
         self.title = title
         self.subtitle = subtitle
         self.chrome = chrome
+        self.contentWidth = contentWidth
         self.accessory = accessory()
         self.hasAccessory = true
     }
 
-    init(_ title: String, subtitle: String, chrome: IndexPageChrome = .standard)
-    where Accessory == EmptyView {
+    init(
+        _ title: String,
+        subtitle: String,
+        chrome: IndexPageChrome = .standard,
+        contentWidth: CGFloat = 0
+    ) where Accessory == EmptyView {
         self.title = title
         self.subtitle = subtitle
         self.chrome = chrome
+        self.contentWidth = contentWidth
         self.accessory = EmptyView()
         self.hasAccessory = false
     }
@@ -171,9 +200,16 @@ struct IndexPageHeader<Accessory: View>: View {
     var body: some View {
         Group {
             if hasAccessory {
-                HStack(alignment: .top, spacing: ToolMetrics.Spacing.md) {
-                    headerText
-                    accessory.fixedSize(horizontal: true, vertical: true)
+                if IndexPageHeaderLayout.stacksAccessory(forContentWidth: contentWidth) {
+                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+                        headerText
+                        accessory.fixedSize(horizontal: true, vertical: true)
+                    }
+                } else {
+                    HStack(alignment: .top, spacing: ToolMetrics.Spacing.md) {
+                        headerText
+                        accessory.fixedSize(horizontal: true, vertical: true)
+                    }
                 }
             } else {
                 headerText
@@ -372,16 +408,26 @@ struct IndexPage<Content: View, HeaderAccessory: View>: View {
         fillsScrollViewport = workspaceSemantic == .imagePreviewStage
     }
 
-    @ViewBuilder
-    private var header: some View {
-        if hasHeaderAccessory {
-            IndexPageHeader(title, subtitle: subtitle, chrome: chrome) { headerAccessory }
-        } else {
-            IndexPageHeader(title, subtitle: subtitle, chrome: chrome)
+    private func framedHeader(availableWidth: CGFloat) -> some View {
+        let contentWidth = max(0, availableWidth - chrome.horizontalPadding * 2)
+        return Group {
+            if hasHeaderAccessory {
+                IndexPageHeader(
+                    title,
+                    subtitle: subtitle,
+                    chrome: chrome,
+                    contentWidth: contentWidth
+                ) { headerAccessory }
+            } else {
+                IndexPageHeader(
+                    title,
+                    subtitle: subtitle,
+                    chrome: chrome,
+                    contentWidth: contentWidth
+                )
+            }
         }
     }
-
-    private var framedHeader: some View { header }
 
     var body: some View {
         GeometryReader { proxy in
@@ -391,7 +437,7 @@ struct IndexPage<Content: View, HeaderAccessory: View>: View {
                     // 无外层 ScrollView：标题固定，content 里声明 maxHeight:.infinity
                     // 的主面板吃掉剩余高度。SwiftUI 实测剩余空间，不再用 chrome 估算。
                     VStack(alignment: .leading, spacing: chrome.sectionSpacing) {
-                        framedHeader
+                        framedHeader(availableWidth: proxy.size.width)
                         content
                     }
                     .padding(.horizontal, chrome.horizontalPadding)
@@ -401,7 +447,7 @@ struct IndexPage<Content: View, HeaderAccessory: View>: View {
                 case .scroll:
                     ScrollView {
                         VStack(alignment: .leading, spacing: chrome.sectionSpacing) {
-                            framedHeader
+                            framedHeader(availableWidth: proxy.size.width)
                             content
                         }
                         .padding(.horizontal, chrome.horizontalPadding)
