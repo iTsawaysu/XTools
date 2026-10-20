@@ -159,7 +159,6 @@ private struct IndexTokenWorkspaceContent: View {
                         .onChange(of: workspace.symbols) { _ in generate() }
                 }
             }
-            .toolAnimation(ToolMotion.Preset.orderedContent, value: workspace.mode)
             .frame(maxWidth: .infinity, alignment: .leading)
 
             generationActions

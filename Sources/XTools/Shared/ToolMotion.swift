@@ -46,10 +46,6 @@ enum ToolMotion {
     }
 
     enum Distance {
-        /// Structural content hand-off: outgoing rises, incoming rises in
-        /// behind it. A 6pt offset keeps the brief overlap spatially separated
-        /// so dense control bars never read as a double exposure.
-        static let modeContentRise: CGFloat = 6
         /// Hero readout hand-off clears the glyph height: at display sizes a
         /// 3pt shift still lets old/new strings sit on top of each other.
         static let valueSwapRise: CGFloat = 8
@@ -185,6 +181,11 @@ enum ToolMotion {
         static let valueSwapEnter = Curve.smoothOut(duration: Duration.arrival).delay(0.06)
         static let iconSwap = Curve.inOut(duration: Duration.quick)
         static let orderedContent = Curve.smoothOut(duration: Duration.fast)
+        /// Atomic structural swap settle (Hub segments, output presentation,
+        /// image state surfaces): the new branch mounts immediately; only a
+        /// 94%→100% opacity settle remains so dense toolbars never blank,
+        /// ghost, or mix old/new labels.
+        static let contentSettle = Curve.smoothOut(duration: Duration.micro)
         static let tabs = Curve.smoothOut(duration: Duration.fast)
         static let accordion = Curve.smoothOut(duration: Duration.medium)
         static let shellResize = Curve.smoothOut(duration: Duration.fast)

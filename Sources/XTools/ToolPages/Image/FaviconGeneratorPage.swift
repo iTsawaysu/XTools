@@ -81,6 +81,11 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
         }
     }
 
+    private var faviconOutputState: Int {
+        if session.isProcessing { return 0 }
+        return session.package == nil ? 2 : 1
+    }
+
     private var faviconSourceSummary: String {
         guard let metadata = session.source?.metadata else { return "" }
         return ImageOutputPresentation.sourceSummary(metadata)
@@ -109,23 +114,23 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     private var faviconOutputPanel: some View {
         IndexPanel("Favicon 部署包") {
             VStack(spacing: ToolMetrics.Spacing.md) {
-                if session.isProcessing {
-                    IndexProgressLabel(message: "正在生成部署包…", layout: .centered)
-                        .accessibilityLabel("正在生成 Favicon 部署包")
-                        .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
-                } else if let package = session.package {
-                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
-                        if let warning = session.sourceWarning {
-                            faviconReviewWarning(warning)
-                        }
+                IndexModeContent(id: faviconOutputState) { state in
+                    if state == 0 {
+                        IndexProgressLabel(message: "正在生成部署包…", layout: .centered)
+                            .accessibilityLabel("正在生成 Favicon 部署包")
+                    } else if state == 1, let package = session.package {
+                        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+                            if let warning = session.sourceWarning {
+                                faviconReviewWarning(warning)
+                            }
 
-                        artifactGroup(.browser, package: package)
-                        artifactGroup(.apple, package: package)
-                        artifactGroup(.pwa, package: package)
-                        artifactGroup(.configuration, package: package)
-                        configurationGroup(package)
+                            artifactGroup(.browser, package: package)
+                            artifactGroup(.apple, package: package)
+                            artifactGroup(.pwa, package: package)
+                            artifactGroup(.configuration, package: package)
+                            configurationGroup(package)
+                        }
                     }
-                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
                 }
             }
             .indexWorkspaceDiagnostic(session.error)

@@ -71,11 +71,13 @@ private struct IndexDateCalcWorkspaceContent: View {
                 selection: $mode
             )
 
-            switch mode {
-            case .interval:
-                intervalPanel
-            case .offset:
-                offsetPanel
+            IndexModeContent(id: mode) { currentMode in
+                switch currentMode {
+                case .interval:
+                    intervalPanel
+                case .offset:
+                    offsetPanel
+                }
             }
         }
     }

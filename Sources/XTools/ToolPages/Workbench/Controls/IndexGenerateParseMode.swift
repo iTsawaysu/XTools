@@ -71,8 +71,6 @@ struct IndexGenerateParseModeContent<GenerateContent: View, ParseContent: View>:
     private let generateContent: GenerateContent
     private let parseContent: ParseContent
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     init(
         mode: IndexGenerateParseMode,
         @ViewBuilder generate: () -> GenerateContent,
@@ -84,29 +82,15 @@ struct IndexGenerateParseModeContent<GenerateContent: View, ParseContent: View>:
     }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            if mode == .generate {
-                // Generate sits before parse in the mode order, so it enters
-                // from the leading edge (backward) when the user steps back to it.
-                modeBranch(generateContent, direction: .backward)
-            } else {
-                // Parse follows generate, so it enters from the trailing edge
-                // (forward) when the user advances to it.
-                modeBranch(parseContent, direction: .forward)
+        IndexModeContent(id: mode) { currentMode in
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+                if currentMode == .generate {
+                    generateContent
+                } else {
+                    parseContent
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .animation(
-            ToolMotion.animation(ToolMotion.Preset.orderedContent, reduceMotion: reduceMotion),
-            value: mode
-        )
-    }
-
-    private func modeBranch<Content: View>(_ content: Content, direction: ToolMotion.OrderedDirection) -> some View {
-        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
-            content
-        }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .toolTransition(ToolMotion.Transition.orderedContent(direction), reduceMotion: reduceMotion)
     }
 }

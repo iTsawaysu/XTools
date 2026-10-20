@@ -279,17 +279,19 @@ private struct IndexJWTWorkspaceContent: View {
 
     @ViewBuilder
     private var decodedPayloadContent: some View {
-        if payloadPresentation == "claims" {
-            registeredClaimsView
-        } else {
-            IndexWorkspaceOutputSurface(
-                text: session.parsedPayload,
-                placeholder: IndexEmptyStateCopy.notAvailable,
-                fillsHeight: true,
-                lineNumbers: true,
-                colorize: jsonColorize(for: session.parsedPayload),
-                workspaceSemantic: .structuredOutputReading
-            )
+        IndexModeContent(id: payloadPresentation == "claims", fillsHeight: true) { showsClaims in
+            if showsClaims {
+                registeredClaimsView
+            } else {
+                IndexWorkspaceOutputSurface(
+                    text: session.parsedPayload,
+                    placeholder: IndexEmptyStateCopy.notAvailable,
+                    fillsHeight: true,
+                    lineNumbers: true,
+                    colorize: jsonColorize(for: session.parsedPayload),
+                    workspaceSemantic: .structuredOutputReading
+                )
+            }
         }
     }
 
