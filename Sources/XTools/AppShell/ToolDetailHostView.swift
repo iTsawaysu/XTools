@@ -14,17 +14,20 @@ protocol DetailActionRouting: AnyObject {
 struct ToolDetailHostView: View {
     let registry: ToolRegistry
     let selectedToolID: ToolID?
+    let transitionIntent: ToolPageTransitionIntent
     let dashboardStore: DashboardStore?
     let routing: any DetailActionRouting
 
     init(
         registry: ToolRegistry,
         selectedToolID: ToolID?,
+        transitionIntent: ToolPageTransitionIntent = .depth,
         dashboardStore: DashboardStore? = nil,
         routing: any DetailActionRouting
     ) {
         self.registry = registry
         self.selectedToolID = selectedToolID
+        self.transitionIntent = transitionIntent
         self.dashboardStore = dashboardStore
         self.routing = routing
     }
@@ -33,7 +36,7 @@ struct ToolDetailHostView: View {
         // 01 景深沉降: every navigation path lands here as one `target` key,
         // so tool pages, the dashboard, and the empty state share the same
         // page swap choreography (see `ToolPageStage`).
-        ToolPageStage(target: pageKey) { key in
+        ToolPageStage(target: pageKey, intent: transitionIntent) { key in
             ToolPageHostedItem(
                 key: key,
                 registry: registry,

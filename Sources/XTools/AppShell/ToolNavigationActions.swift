@@ -30,11 +30,20 @@ struct ToolNavigationActions {
     }
 
     @discardableResult
-    func selectTool(_ toolID: ToolID, dismissCommandPalette: Bool = false) -> Bool {
+    func selectTool(
+        _ toolID: ToolID,
+        dismissCommandPalette: Bool = false,
+        intent: ToolPageTransitionIntent? = nil
+    ) -> Bool {
         guard let tool = registry.tool(for: toolID),
               let section = section(for: toolID) else { return false }
 
         let previousToolID = viewModel.selectedToolID
+        let previousCategory = previousToolID.flatMap { registry.tool(for: $0)?.categoryID }
+        viewModel.pageTransitionIntent = intent ?? .resolved(
+            previousCategory: previousCategory,
+            nextCategory: tool.categoryID
+        )
         ToolPageEntryTrace.toolSelected(tool)
         viewModel.selectedToolID = toolID
         dashboardStore?.recordLaunchIfChanged(toolID: toolID, previousToolID: previousToolID)

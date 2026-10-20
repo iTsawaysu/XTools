@@ -20,6 +20,10 @@ public enum ToolMotion {
         /// 01 景深沉降: outgoing page leaves over 220ms on productiveExit —
         /// faster than the arrival so the exit never lags the new page.
         public static let pageSinkExit: TimeInterval = 0.22
+        public static let pageSharedAxisEnter: TimeInterval = 0.32
+        public static let pageSharedAxisExit: TimeInterval = 0.26
+        public static let pageBloomEnter: TimeInterval = 0.42
+        public static let pageBloomExit: TimeInterval = 0.20
         /// Page-header letter arrival: one character's rise arc on smoothOut
         /// (prototype .lt 480ms); delay comes from `letterStagger`.
         public static let letter: TimeInterval = 0.48
@@ -65,6 +69,9 @@ public enum ToolMotion {
         /// 01 景深沉降: incoming page rises 10pt while settling (prototype
         /// translateY(10px)).
         public static let pageSinkRise: CGFloat = 10
+        public static let pageSharedAxisRise: CGFloat = 18
+        public static let pageSharedAxisDrop: CGFloat = 12
+        public static let pageBloomDrop: CGFloat = 6
     }
 
     public enum Scale {
@@ -77,6 +84,9 @@ public enum ToolMotion {
         /// 01 景深沉降: outgoing pages sink to 99.2% while fading — depth on
         /// the exit without a readable zoom.
         public static let pageDepartureSink: CGFloat = 0.992
+        public static let pageSharedAxisArrival: CGFloat = 1.04
+        public static let pageSharedAxisDeparture: CGFloat = 0.96
+        public static let pageBloomArrival: CGFloat = 0.94
     }
 
     public enum ResultPresence {
@@ -195,6 +205,10 @@ public enum ToolMotion {
         /// 01 景深沉降: outgoing page exit timing — 220ms productiveExit so
         /// leaving content accelerates away while the arrival still settles.
         public static let pageDeparture = Curve.productiveExit(duration: Duration.pageSinkExit)
+        public static let pageSharedAxisArrival = Curve.smoothOut(duration: Duration.pageSharedAxisEnter)
+        public static let pageSharedAxisDeparture = Curve.smoothOut(duration: Duration.pageSharedAxisExit)
+        public static let pageBloomArrival = Curve.smoothOut(duration: Duration.pageBloomEnter)
+        public static let pageBloomDeparture = Curve.productiveExit(duration: Duration.pageBloomExit)
         /// Page-header letter choreography: each title character rises on the
         /// shared 480ms smoothOut arc (prototype .lt), one stagger step apart.
         /// Consumed by `IndexPageHeader` only; tool pages never apply it

@@ -15,6 +15,9 @@ final class RootViewModel: ObservableObject {
         }
     }
     @Published var searchText = ""
+    /// Set by navigation actions right before the selection changes; the page
+    /// stage reads it once per arrival.
+    @Published var pageTransitionIntent: ToolPageTransitionIntent = .depth
     @Published var autoResumeLastTool: Bool {
         didSet { preferences?.set(autoResumeLastTool, for: AppShellPreferenceKeys.autoResumeLastTool) }
     }

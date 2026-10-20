@@ -180,6 +180,7 @@ struct RootView: View {
             ToolDetailHostView(
                 registry: registry,
                 selectedToolID: viewModel.selectedToolID,
+                transitionIntent: viewModel.pageTransitionIntent,
                 dashboardStore: dashboardStore,
                 routing: detailRouting
             )
@@ -263,7 +264,7 @@ struct RootView: View {
             )
         }
         paletteRecents.recordLaunch(toolID)
-        _ = navigationActions.selectTool(toolID)
+        _ = navigationActions.selectTool(toolID, intent: .originBloom)
         closeCommandPaletteAnimated()
     }
 
