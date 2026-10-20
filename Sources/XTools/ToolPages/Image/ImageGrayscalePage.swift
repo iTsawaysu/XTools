@@ -17,99 +17,40 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
     @Environment(\.toolToastCenter) private var toastCenter
 
     @ObservedObject var session: ImageProcessedOutputSession
-    @State private var isImageDropTargeted = false
 
     private var grayscaleAssessment: ImageOutputAssessment? {
         session.assessment(for: .grayscale)
     }
 
     var body: some View {
-        Group {
-            if session.source == nil {
-                emptyUploadPanel
-                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
-            } else {
-                comparisonWorkspacePanel
-                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
-            }
-        }
-    }
-
-    private var emptyUploadPanel: some View {
-        ImageUploadEmptyPanel(
-            isDropTargeted: $isImageDropTargeted,
+        IndexImageCompareWorkbench(
+            panelTitle: "灰阶工作区",
+            resultTitle: "灰度图",
+            emptyTitle: "选择图片开始生成灰度图",
+            placeholder: "等待灰度图结果",
+            selectLabel: "选择要生成灰度图的图片",
+            replaceLabel: "更换要生成灰度图的图片",
+            clearLabel: "清除当前灰阶图片",
+            sourceImage: session.sourceImage,
+            resultImage: session.outputImage,
             isProcessing: session.isProcessing,
             diagnostic: session.error,
-            emptyStateTitle: "选择图片开始生成灰度图",
+            canSave: session.output != nil && !session.isProcessing,
+            saveLabel: saveButtonTitle,
             onSelect: selectImage,
-            onDropFile: receiveImageURL,
-            onDropMultipleFiles: rejectMultipleImageDrop
-        )
-    }
-
-    private var comparisonWorkspacePanel: some View {
-        IndexPanel("灰阶工作区") {
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                imageSelectionActions
-
-                IndexPairLayout(collapseWidth: 0) {
-                    IndexImageComparisonCard(
-                        title: "原图",
-                        image: session.sourceImage,
-                        accessibilityLabel: "灰阶转换原图预览",
-                        accessibilityValue: sourcePreviewAccessibilityValue,
-                        placeholder: "等待原图预览"
-                    ) {
-                        sourceCardFacts
-                    }
-                } trailing: {
-                    IndexImageComparisonCard(
-                        title: "灰度图",
-                        image: session.outputImage,
-                        accessibilityLabel: "灰阶转换结果预览",
-                        accessibilityValue: resultPreviewAccessibilityValue,
-                        placeholder: "等待灰度图结果",
-                        isProcessing: session.isProcessing
-                    ) {
-                        resultCardFacts
-                    }
-                }
-            }
-            .indexWorkspaceDiagnostic(session.error)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .indexDropZone(
-                isTargeted: $isImageDropTargeted,
-                onFile: receiveImageURL,
-                onMultipleFiles: rejectMultipleImageDrop
-            )
-        } accessory: {
-            if session.output != nil && !session.isProcessing {
-                Button {
-                    saveImage()
-                } label: {
-                    Label(saveButtonTitle, systemImage: IndexActionSymbol.save)
-                        .font(ToolTypography.buttonSmall)
-                }
-                .buttonStyle(IndexSmallButtonStyle())
-                .accessibilityLabel("保存灰度图")
-            }
-        }
-        .verticallyFilling()
-    }
-
-    private var imageSelectionActions: ImageSelectionActionRow {
-        ImageSelectionActionRow(
-            hasSource: session.source != nil,
-            selectAccessibilityLabel: "选择要生成灰度图的图片",
-            replaceAccessibilityLabel: "更换要生成灰度图的图片",
-            clearAccessibilityLabel: "清除当前灰阶图片",
-            onSelect: selectImage,
+            onDropURL: receiveImageURL,
+            onDropMultiple: rejectMultipleImageDrop,
             onClear: {
                 withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
                     session.reset()
                 }
-            }
-        )
+            },
+            onSave: saveImage
+        ) {
+            sourceCardFacts
+        } resultFacts: {
+            resultCardFacts
+        }
     }
 
     private var sourceCardFacts: some View {

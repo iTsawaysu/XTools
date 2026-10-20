@@ -57,7 +57,6 @@ private struct IndexImageCompressorWorkspaceContent: View {
     @Binding var compressionPreference: ImageCompressionPreference
     @Binding var limitsDimensions: Bool
     @Binding var maxPixelLength: Int
-    @State private var isImageDropTargeted = false
 
     private var canSaveCompressed: Bool {
         compressedAssessment?.canSave == true
@@ -79,6 +78,42 @@ private struct IndexImageCompressorWorkspaceContent: View {
     }
 
     var body: some View {
+        VStack(spacing: ToolMetrics.Spacing.md) {
+            parametersBar
+            IndexImageCompareWorkbench(
+                panelTitle: "优化工作区",
+                resultTitle: "优化结果",
+                emptyTitle: "选择图片开始优化",
+                placeholder: previewPlaceholder,
+                selectLabel: "选择要优化的图片",
+                replaceLabel: "更换要优化的图片",
+                clearLabel: "清除当前优化图片",
+                badgeText: compressionChangeText,
+                badgeTone: .neutral,
+                sourceImage: session.sourceImage,
+                resultImage: optimizedPreviewImage,
+                isProcessing: session.isProcessing,
+                diagnostic: session.error,
+                canSave: canSaveCompressed,
+                saveLabel: "保存",
+                onSelect: selectImage,
+                onDropURL: receiveImageURL,
+                onDropMultiple: rejectMultipleImageDrop,
+                onClear: {
+                    withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
+                        session.reset()
+                    }
+                },
+                onSave: saveImage
+            ) {
+                sourceCardFacts
+            } resultFacts: {
+                resultCardFacts
+            }
+        }
+    }
+
+    private var parametersBar: some View {
         IndexActionBar {
             IndexOptionGroup {
                 IndexOptionLabel("优化偏好")
@@ -106,95 +141,6 @@ private struct IndexImageCompressorWorkspaceContent: View {
                 }
             }
         }
-
-        Group {
-            if session.source == nil {
-                emptyUploadPanel
-                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
-            } else {
-                comparisonWorkspacePanel
-                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
-            }
-        }
-    }
-
-    private var emptyUploadPanel: some View {
-        ImageUploadEmptyPanel(
-            isDropTargeted: $isImageDropTargeted,
-            isProcessing: session.isProcessing,
-            diagnostic: session.error,
-            emptyStateTitle: "选择图片开始优化",
-            onSelect: selectImage,
-            onDropFile: receiveImageURL,
-            onDropMultipleFiles: rejectMultipleImageDrop
-        )
-    }
-
-    private var comparisonWorkspacePanel: some View {
-        IndexPanel("优化工作区") {
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                imageSelectionActions
-
-                IndexPairLayout(collapseWidth: 0) {
-                    IndexImageComparisonCard(
-                        title: "原图",
-                        image: session.sourceImage,
-                        accessibilityLabel: "图片优化原图预览",
-                        accessibilityValue: sourcePreviewAccessibilityValue,
-                        placeholder: "等待原图预览"
-                    ) {
-                        sourceCardFacts
-                    }
-                } trailing: {
-                    IndexImageComparisonCard(
-                        title: "优化结果",
-                        badgeText: compressionChangeText,
-                        badgeTone: .neutral,
-                        image: optimizedPreviewImage,
-                        accessibilityLabel: "图片优化结果预览",
-                        accessibilityValue: resultPreviewAccessibilityValue,
-                        placeholder: previewPlaceholder,
-                        isProcessing: session.isProcessing
-                    ) {
-                        resultCardFacts
-                    }
-                }
-            }
-            .indexWorkspaceDiagnostic(session.error)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .indexDropZone(
-                isTargeted: $isImageDropTargeted,
-                onFile: receiveImageURL,
-                onMultipleFiles: rejectMultipleImageDrop
-            )
-        } accessory: {
-            if canSaveCompressed {
-                Button {
-                    saveImage()
-                } label: {
-                    Label("保存", systemImage: IndexActionSymbol.save)
-                        .font(ToolTypography.buttonSmall)
-                }
-                .buttonStyle(IndexSmallButtonStyle())
-                .accessibilityLabel("保存优化图片")
-            }
-        }
-        .verticallyFilling()
-    }
-
-    private var imageSelectionActions: ImageSelectionActionRow {
-        ImageSelectionActionRow(
-            hasSource: session.source != nil,
-            selectAccessibilityLabel: "选择要优化的图片",
-            replaceAccessibilityLabel: "更换要优化的图片",
-            clearAccessibilityLabel: "清除当前优化图片",
-            onSelect: selectImage,
-            onClear: {
-                withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
-                    session.reset()
-                }
-            }
-        )
     }
 
     private var sourceCardFacts: some View {
