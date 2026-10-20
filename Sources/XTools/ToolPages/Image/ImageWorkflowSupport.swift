@@ -162,6 +162,28 @@ struct ImageUploadInteractions {
     }
 }
 
+/// 图片页保存按钮的统一忙碌标签：写入期间显示受控 spinner + 文案，
+/// 不新增裸 ProgressView；按钮本身仍由页面的 accessibilityLabel 命名。
+struct ImageSaveButtonLabel: View {
+    let isSaving: Bool
+    let title: String
+    var font: Font = ToolTypography.buttonSmall
+
+    var body: some View {
+        if isSaving {
+            HStack(spacing: 6) {
+                IndexProgressSpinner()
+                    .accessibilityLabel("正在保存")
+                Text("保存中…")
+                    .font(font)
+            }
+        } else {
+            Label(title, systemImage: IndexActionSymbol.save)
+                .font(font)
+        }
+    }
+}
+
 /// 保存结果的共享 toast 映射：成功只在确认保存后提示；写盘失败报
 /// error；取消/阻止静默；单输出页对不可能出现的部分结果同样静默（部分
 /// 成功的批量语义由计数映射降级为 warning）。

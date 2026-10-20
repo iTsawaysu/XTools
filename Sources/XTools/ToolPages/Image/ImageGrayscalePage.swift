@@ -86,11 +86,12 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
                 Button {
                     saveImage()
                 } label: {
-                    Label(saveButtonTitle, systemImage: IndexActionSymbol.save)
-                        .font(ToolTypography.buttonSmall)
+                    ImageSaveButtonLabel(isSaving: session.isSaving, title: saveButtonTitle)
                 }
                 .buttonStyle(IndexSmallButtonStyle())
-                .accessibilityLabel("保存灰度图")
+                .disabled(session.isSaving)
+                .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存灰度图")
+                .help("保存生成的灰度图")
             }
         }
         .verticallyFilling()

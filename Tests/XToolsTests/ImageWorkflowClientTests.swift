@@ -2,6 +2,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 import ImageIO
+import os
 import Testing
 import UniformTypeIdentifiers
 @testable import XTools
@@ -16,6 +17,8 @@ struct ImageWorkflowClientTests {
             .unsupportedInputType,
             .readFailed,
             .saveFailed,
+            .savePermissionDenied,
+            .saveDiskFull,
             .partialSaveFailed(savedCount: 2, totalCount: 8),
             .processingFailed(.conversion),
             .processingFailed(.compression),
@@ -31,7 +34,36 @@ struct ImageWorkflowClientTests {
 
         #expect(
             ImageWorkflowFailure.partialSaveFailed(savedCount: 2, totalCount: 8).errorDescription
-                == "已保存 2/8 个图标。"
+                == "已保存 2/8 个文件。"
+        )
+    }
+
+    @Test func saveFailureNormalizationMapsPermissionAndDiskErrors() {
+        #expect(
+            ImageWorkflowFailure.normalizedSaveFailure(CocoaError(.fileWriteNoPermission))
+                == .savePermissionDenied
+        )
+        #expect(
+            ImageWorkflowFailure.normalizedSaveFailure(CocoaError(.fileWriteVolumeReadOnly))
+                == .savePermissionDenied
+        )
+        #expect(
+            ImageWorkflowFailure.normalizedSaveFailure(CocoaError(.fileWriteOutOfSpace))
+                == .saveDiskFull
+        )
+        #expect(
+            ImageWorkflowFailure.normalizedSaveFailure(
+                NSError(domain: NSPOSIXErrorDomain, code: Int(ENOSPC))
+            ) == .saveDiskFull
+        )
+        #expect(
+            ImageWorkflowFailure.normalizedSaveFailure(
+                NSError(domain: NSPOSIXErrorDomain, code: Int(EACCES))
+            ) == .savePermissionDenied
+        )
+        #expect(
+            ImageWorkflowFailure.normalizedSaveFailure(ImageSessionTestError.writeFailed)
+                == .saveFailed
         )
     }
 
@@ -711,6 +743,217 @@ struct ImageWorkflowClientTests {
         await #expect(throws: ImageWorkflowFailure.saveFailed) {
             try await failingClient.saveConvertedImage(data: data, format: .png, defaultBasename: "converted")
         }
+    }
+
+    @Test func saveConvertedImagePreservesPermissionAndDiskClassification() async throws {
+        let saveURL = URL(fileURLWithPath: "/tmp/classified-save.png")
+        let data = Data([1, 2, 3])
+
+        let cases: [(writeError: Error, expected: ImageWorkflowFailure)] = [
+            (CocoaError(.fileWriteNoPermission), .savePermissionDenied),
+            (CocoaError(.fileWriteOutOfSpace), .saveDiskFull),
+            (NSError(domain: NSPOSIXErrorDomain, code: Int(ENOSPC)), .saveDiskFull)
+        ]
+        for (writeError, expected) in cases {
+            let client = ImageWorkflowClient(
+                dialog: FakeImageWorkflowDialog(saveURL: saveURL),
+                reader: FakeImageWorkflowReader(),
+                writer: FakeImageWorkflowWriter(error: writeError)
+            )
+            await #expect(throws: expected) {
+                _ = try await client.saveConvertedImage(
+                    data: data,
+                    format: .png,
+                    defaultBasename: "classified"
+                )
+            }
+        }
+    }
+
+    @Test func batchSavePreservesDiskClassificationWhenNoFileWasWritten() async throws {
+        let directory = URL(fileURLWithPath: "/tmp/classified-batch", isDirectory: true)
+        let client = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(directoryURL: directory),
+            reader: FakeImageWorkflowReader(),
+            writer: FakeImageWorkflowWriter(
+                error: NSError(domain: NSPOSIXErrorDomain, code: Int(ENOSPC))
+            )
+        )
+        let artifact = Self.artifact(.faviconICO, data: Data([1]))
+
+        await #expect(throws: ImageWorkflowFailure.saveDiskFull) {
+            _ = try await client.saveArtifacts([artifact])
+        }
+    }
+
+    @Test func processedOutputSessionRejectsConcurrentSaveAndClearsSaving() async throws {
+        let sourceData = try Self.makeImageData(width: 12, height: 8, format: .png)
+        let sourceURL = URL(fileURLWithPath: "/tmp/saving-source.png")
+        let loadClient = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(),
+            reader: FakeImageWorkflowReader(dataByURL: [sourceURL: sourceData]),
+            writer: FakeImageWorkflowWriter()
+        )
+        let output = Self.processedImage(
+            data: try Self.makeImageData(width: 10, height: 6, format: .png),
+            originalByteCount: sourceData.count,
+            format: .png
+        )
+        let session = ImageProcessedOutputSession()
+        session.receiveImageURL(
+            sourceURL,
+            allowedContentTypes: [.png],
+            client: loadClient,
+            operation: .conversion,
+            render: { _ in output }
+        )
+        try await Self.waitForOutput(in: session, matching: output)
+
+        let saveURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("saving-\(UUID().uuidString).png")
+        let gate = DispatchSemaphore(value: 0)
+        let entered = OSAllocatedUnfairLock(initialState: false)
+        let writer = ImageWorkflowFileWriter { data, url in
+            entered.withLock { $0 = true }
+            guard gate.wait(timeout: .now() + 10) == .success else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            try data.write(to: url)
+        }
+        let saveClient = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(saveURL: saveURL),
+            reader: FakeImageWorkflowReader(),
+            writer: writer
+        )
+        let first = Task {
+            await session.save(
+                workflow: .conversion,
+                defaultBasename: "output",
+                filePanel: .unavailable,
+                outputPanel: .unavailable,
+                client: saveClient
+            )
+        }
+        try await waitUntil { entered.withLock { $0 } }
+        #expect(session.isSaving)
+        #expect(await session.save(
+            workflow: .conversion,
+            defaultBasename: "output",
+            filePanel: .unavailable,
+            outputPanel: .unavailable,
+            client: saveClient
+        ) == .cancelled)
+        gate.signal()
+        #expect(await first.value == .saved)
+        #expect(!session.isSaving)
+        #expect(try Data(contentsOf: saveURL) == output.data)
+    }
+
+    @Test func faviconPackageSaveRejectsConcurrentSaveAndClearsSaving() async throws {
+        let sourceData = try Self.makeImageData(width: 12, height: 8, format: .png)
+        let sourceURL = URL(fileURLWithPath: "/tmp/favicon-saving-source.png")
+        let loadClient = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(),
+            reader: FakeImageWorkflowReader(dataByURL: [sourceURL: sourceData]),
+            writer: FakeImageWorkflowWriter()
+        )
+        let specs = FaviconOutputSetSession.defaultOutputSpecs
+        let icons = specs.map {
+            GeneratedIcon(
+                size: $0.size,
+                data: Data([UInt8($0.size % 251)]),
+                pixelWidth: $0.size,
+                pixelHeight: $0.size,
+                format: .png
+            )
+        }
+        let session = FaviconOutputSetSession()
+        session.receiveImageURL(sourceURL, client: loadClient, generator: { _, _ in icons })
+        try await waitUntil { session.package != nil }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("favicon-saving-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let gate = DispatchSemaphore(value: 0)
+        let entered = OSAllocatedUnfairLock(initialState: false)
+        let writeCalls = OSAllocatedUnfairLock(initialState: 0)
+        let writer = ImageWorkflowFileWriter { data, url in
+            let call = writeCalls.withLock { value in
+                value += 1
+                return value
+            }
+            if call == 1 {
+                entered.withLock { $0 = true }
+                guard gate.wait(timeout: .now() + 10) == .success else {
+                    throw CocoaError(.fileWriteUnknown)
+                }
+            }
+            try data.write(to: url)
+        }
+        let saveClient = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(directoryURL: directory),
+            reader: FakeImageWorkflowReader(),
+            writer: writer
+        )
+        let first = Task {
+            await session.savePackage(
+                filePanel: .unavailable,
+                outputPanel: .unavailable,
+                client: saveClient
+            )
+        }
+        try await waitUntil { entered.withLock { $0 } }
+        #expect(session.isSaving)
+        #expect(await session.savePackage(
+            filePanel: .unavailable,
+            outputPanel: .unavailable,
+            client: saveClient
+        ) == .cancelled)
+        gate.signal()
+        #expect(await first.value == .saved)
+        #expect(!session.isSaving)
+        #expect(!(try FileManager.default.contentsOfDirectory(atPath: directory.path)).isEmpty)
+    }
+
+    @Test func processedOutputSessionSurfacesPermissionFailureAsActionableMessage() async throws {
+        let sourceData = try Self.makeImageData(width: 12, height: 8, format: .png)
+        let sourceURL = URL(fileURLWithPath: "/tmp/classified-output-source.png")
+        let loadClient = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(),
+            reader: FakeImageWorkflowReader(dataByURL: [sourceURL: sourceData]),
+            writer: FakeImageWorkflowWriter()
+        )
+        let output = Self.processedImage(
+            data: try Self.makeImageData(width: 10, height: 6, format: .png),
+            originalByteCount: sourceData.count,
+            format: .png
+        )
+        let session = ImageProcessedOutputSession()
+        session.receiveImageURL(
+            sourceURL,
+            allowedContentTypes: [.png],
+            client: loadClient,
+            operation: .conversion,
+            render: { _ in output }
+        )
+        try await Self.waitForOutput(in: session, matching: output)
+
+        let saveURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("permission-output.png")
+        let saveClient = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(saveURL: saveURL),
+            reader: FakeImageWorkflowReader(),
+            writer: FakeImageWorkflowWriter(error: CocoaError(.fileWriteNoPermission))
+        )
+        #expect(await session.save(
+            workflow: .conversion,
+            defaultBasename: "output",
+            filePanel: .unavailable,
+            outputPanel: .unavailable,
+            client: saveClient
+        ) == .failed("没有权限写入所选位置，请选择其他文件夹。"))
+        #expect(session.error == nil)
+        #expect(!session.isSaving)
     }
 
     @Test func processedOutputSessionReceivesImageURLAndRendersInBackground() async throws {

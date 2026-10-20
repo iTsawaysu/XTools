@@ -297,6 +297,7 @@ private struct IndexImageConverterWorkspaceContent: View {
 
             if case .converting = item.state {
                 IndexProgressSpinner()
+                    .accessibilityLabel("正在转换图片")
             }
 
             if case let .done(output) = item.state {
@@ -314,11 +315,12 @@ private struct IndexImageConverterWorkspaceContent: View {
             Button {
                 saveConverted()
             } label: {
-                Label(saveButtonTitle, systemImage: IndexActionSymbol.save)
-                    .font(ToolTypography.buttonSmall)
+                ImageSaveButtonLabel(isSaving: session.isSaving, title: saveButtonTitle)
             }
             .buttonStyle(IndexSmallButtonStyle())
             .disabled(session.completedCount == 0 || session.isProcessing || session.isSaving)
+            .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存转换结果")
+            .help("保存转换结果")
         }
     }
 
@@ -333,11 +335,12 @@ private struct IndexImageConverterWorkspaceContent: View {
                 Button {
                     saveConverted()
                 } label: {
-                    Label(saveButtonTitle, systemImage: IndexActionSymbol.save)
-                        .font(ToolTypography.buttonSmall)
+                    ImageSaveButtonLabel(isSaving: session.isSaving, title: saveButtonTitle)
                 }
                 .buttonStyle(IndexSmallButtonStyle())
                 .disabled(session.completedCount == 0 || session.isProcessing || session.isSaving)
+                .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存转换结果")
+                .help("保存转换结果")
             }
 
             ForEach(session.items) { item in
@@ -557,6 +560,7 @@ private struct BatchConversionRow: View {
                 .foregroundStyle(ToolTheme.textSecondary)
         case .converting:
             IndexProgressSpinner()
+                .accessibilityLabel("正在转换图片")
         case let .done(output):
             Text(output.summaryText)
                 .font(ToolTypography.caption)

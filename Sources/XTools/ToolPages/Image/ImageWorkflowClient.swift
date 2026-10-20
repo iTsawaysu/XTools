@@ -194,7 +194,7 @@ struct ImageWorkflowClient {
         } catch is CancellationError {
             result = .success(false)
         } catch {
-            result = .failure(ImageWorkflowFailure.saveFailed)
+            result = .failure(ImageWorkflowFailure.normalizedSaveFailure(error))
         }
         await Task.detached { snapshot.close() }.value
         return try result.get()
@@ -304,7 +304,7 @@ struct ImageWorkflowClient {
         } catch is CancellationError {
             return false
         } catch {
-            throw ImageWorkflowFailure.saveFailed
+            throw ImageWorkflowFailure.normalizedSaveFailure(error)
         }
     }
 
@@ -339,7 +339,7 @@ struct ImageWorkflowClient {
                     throw ImageWorkflowFailure.partialSaveFailed(savedCount: savedCount, totalCount: items.count)
                 }
                 if error is CancellationError { throw error }
-                throw ImageWorkflowFailure.saveFailed
+                throw ImageWorkflowFailure.normalizedSaveFailure(error)
             }
         }
         do {

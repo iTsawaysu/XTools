@@ -29,6 +29,7 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
     @Published private(set) var package: FaviconPackage?
     @Published private(set) var error: String?
     @Published private(set) var isProcessing = false
+    @Published private(set) var isSaving = false
 
     let outputSpecs: [FaviconOutputSpec]
 
@@ -221,9 +222,13 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
     func saveArtifact(
         _ id: FaviconArtifactID,
         filePanel: FileInputPanelClient,
-        outputPanel: FileOutputPanelClient
+        outputPanel: FileOutputPanelClient,
+        client: ImageWorkflowClient? = nil
     ) async -> ImageSaveOutcome {
-        let client = ImageWorkflowClient.sheet(filePanel: filePanel, outputPanel: outputPanel)
+        guard !isSaving else { return .cancelled }
+        isSaving = true
+        defer { isSaving = false }
+        let client = client ?? ImageWorkflowClient.sheet(filePanel: filePanel, outputPanel: outputPanel)
         guard let artifact = package?.artifact(id) else { return .blocked }
         do {
             guard try await client.saveArtifact(artifact) else { return .cancelled }
@@ -238,10 +243,14 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
     @discardableResult
     func savePackage(
         filePanel: FileInputPanelClient,
-        outputPanel: FileOutputPanelClient
+        outputPanel: FileOutputPanelClient,
+        client: ImageWorkflowClient? = nil
     ) async -> ImageSaveOutcome {
+        guard !isSaving else { return .cancelled }
+        isSaving = true
+        defer { isSaving = false }
         guard let package else { return .blocked }
-        let client = ImageWorkflowClient.sheet(filePanel: filePanel, outputPanel: outputPanel)
+        let client = client ?? ImageWorkflowClient.sheet(filePanel: filePanel, outputPanel: outputPanel)
         do {
             guard try await client.saveArtifacts(package.saveableArtifacts) else { return .cancelled }
             error = nil

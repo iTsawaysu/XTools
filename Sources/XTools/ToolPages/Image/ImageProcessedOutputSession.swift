@@ -17,6 +17,7 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
     @Published private(set) var outputImage: NSImage?
     @Published private(set) var error: String?
     @Published private(set) var isProcessing = false
+    @Published private(set) var isSaving = false
 
     private var panelRequests = PanelRequestBox()
     private var selectionTask: Task<Void, Never>?
@@ -213,11 +214,14 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
         workflow: ImageOutputWorkflow,
         defaultBasename: String,
         filePanel: FileInputPanelClient,
-        outputPanel: FileOutputPanelClient
+        outputPanel: FileOutputPanelClient,
+        client: ImageWorkflowClient? = nil
     ) async -> ImageSaveOutcome {
-        guard !isProcessing, let output else { return .cancelled }
+        guard !isProcessing, !isSaving, let output else { return .cancelled }
+        isSaving = true
+        defer { isSaving = false }
         let assessment = ImageOutputPolicy.assess(output, for: workflow)
-        let client = ImageWorkflowClient.sheet(filePanel: filePanel, outputPanel: outputPanel)
+        let client = client ?? ImageWorkflowClient.sheet(filePanel: filePanel, outputPanel: outputPanel)
 
         do {
             let didSave = try await client.saveProcessedImage(

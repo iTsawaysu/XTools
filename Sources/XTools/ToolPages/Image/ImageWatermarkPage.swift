@@ -299,7 +299,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                 }
             }
             .indexWorkspaceDiagnostic(session.error)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: session.source == nil ? .infinity : nil, alignment: .top)
             .padding(.vertical, ToolMetrics.Spacing.sm)
             .indexDropZone(
                 isTargeted: $isImageDropTargeted,
@@ -345,11 +345,11 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                         Button {
                             saveImage()
                         } label: {
-                            Label("保存", systemImage: IndexActionSymbol.save)
-                                .font(ToolTypography.buttonSmall)
+                            ImageSaveButtonLabel(isSaving: session.isSaving, title: "保存")
                         }
                         .buttonStyle(IndexSmallButtonStyle())
-                        .accessibilityLabel("保存水印图片")
+                        .disabled(session.isSaving)
+                        .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存水印图片")
                         .help("保存与当前水印设置一致的原尺寸图片")
                     }
                 }

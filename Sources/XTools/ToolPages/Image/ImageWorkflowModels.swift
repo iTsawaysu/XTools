@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import XToolsCore
+import Darwin
 import Foundation
 import UniformTypeIdentifiers
 
@@ -49,6 +50,8 @@ enum ImageWorkflowFailure: Error, Equatable {
     case unsupportedInputType
     case readFailed
     case saveFailed
+    case savePermissionDenied
+    case saveDiskFull
     case partialSaveFailed(savedCount: Int, totalCount: Int)
     case processingFailed(ImageProcessingOperation)
     case blockedCompressionSave
@@ -101,13 +104,51 @@ extension ImageWorkflowFailure: LocalizedError {
             return "图片文件读取失败。"
         case .saveFailed:
             return "图片文件保存失败。"
+        case .savePermissionDenied:
+            return "没有权限写入所选位置，请选择其他文件夹。"
+        case .saveDiskFull:
+            return "磁盘空间不足，无法保存图片。"
         case let .partialSaveFailed(savedCount, totalCount):
-            return "已保存 \(savedCount)/\(totalCount) 个图标。"
+            return "已保存 \(savedCount)/\(totalCount) 个文件。"
         case let .processingFailed(operation):
             return operation.failureMessage
         case .blockedCompressionSave:
             return "当前压缩结果不小于原图，不能作为压缩结果保存。"
         }
+    }
+
+    /// Maps the system write failure the user can act on instead of
+    /// collapsing every write error into a generic save failure. Cancellation
+    /// is handled by callers before this point and must stay silent.
+    static func normalizedSaveFailure(_ error: Error) -> ImageWorkflowFailure {
+        if let failure = error as? ImageWorkflowFailure {
+            return failure
+        }
+
+        let nsError = error as NSError
+        if nsError.domain == NSCocoaErrorDomain {
+            switch nsError.code {
+            case NSFileWriteNoPermissionError, NSFileWriteVolumeReadOnlyError:
+                return .savePermissionDenied
+            case NSFileWriteOutOfSpaceError:
+                return .saveDiskFull
+            default:
+                break
+            }
+        }
+
+        if nsError.domain == NSPOSIXErrorDomain {
+            switch Int32(nsError.code) {
+            case EACCES, EPERM, EROFS:
+                return .savePermissionDenied
+            case ENOSPC:
+                return .saveDiskFull
+            default:
+                break
+            }
+        }
+
+        return .saveFailed
     }
 
     static func diagnosticMessage(for error: Error, unknownFailure: ImageWorkflowFailure) -> String {

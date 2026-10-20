@@ -171,11 +171,12 @@ private struct IndexImageCompressorWorkspaceContent: View {
                 Button {
                     saveImage()
                 } label: {
-                    Label("保存", systemImage: IndexActionSymbol.save)
-                        .font(ToolTypography.buttonSmall)
+                    ImageSaveButtonLabel(isSaving: session.isSaving, title: "保存")
                 }
                 .buttonStyle(IndexSmallButtonStyle())
-                .accessibilityLabel("保存优化图片")
+                .disabled(session.isSaving)
+                .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存优化图片")
+                .help("保存优化后的图片")
             }
         }
         .verticallyFilling()

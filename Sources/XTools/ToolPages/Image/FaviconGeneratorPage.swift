@@ -147,11 +147,12 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                         )
                     }
                 } label: {
-                    Label("全部保存", systemImage: IndexActionSymbol.save)
-                        .font(ToolTypography.buttonSmall)
+                    ImageSaveButtonLabel(isSaving: session.isSaving, title: "全部保存")
                 }
                 .buttonStyle(IndexSmallButtonStyle())
-                .accessibilityLabel("保存全部五个 Favicon 部署文件")
+                .disabled(session.isSaving || session.isProcessing)
+                .accessibilityLabel(session.isSaving ? "正在保存全部 Favicon 部署文件" : "保存全部五个 Favicon 部署文件")
+                .help("保存全部五个 Favicon 部署文件")
             }
         }
         .verticallyFilling()
@@ -191,7 +192,11 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     }
 
     private func faviconArtifactRow(_ artifact: FaviconArtifact, package: FaviconPackage) -> some View {
-        FaviconArtifactRow(artifact: artifact, package: package) {
+        FaviconArtifactRow(
+            artifact: artifact,
+            package: package,
+            isSaving: session.isSaving
+        ) {
             Task { @MainActor in handleSave(await session.saveArtifact(artifact.id, filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient), filename: artifact.filename) }
         }
     }
@@ -234,6 +239,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
 private struct FaviconArtifactRow: View {
     let artifact: FaviconArtifact
     let package: FaviconPackage
+    let isSaving: Bool
     let onSave: () -> Void
 
     var body: some View {
@@ -258,7 +264,8 @@ private struct FaviconArtifactRow: View {
                     help: "保存 \(artifact.filename)",
                     action: onSave
                 )
-                    .accessibilityLabel("保存 \(artifact.filename)")
+                    .disabled(isSaving)
+                    .accessibilityLabel(isSaving ? "正在保存 \(artifact.filename)" : "保存 \(artifact.filename)")
             }
         }
     }
