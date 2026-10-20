@@ -46,42 +46,6 @@ private struct IndexKeycodeWorkspaceContent: View {
         return "最近事件：\(eventTypeDisplay(snapshot.kind))，\(snapshot.displayKey)，event.code \(snapshot.webCode)"
     }
 
-    private var latestEventResult: some View {
-        IndexWorkspaceResultSurface(workspaceSemantic: .naturalHeightShortResultPanel) {
-            IndexResultPresence(
-                value: workspace.snapshot,
-                updateID: workspace.snapshot
-            ) { snapshot in
-                IndexKVSurface {
-                    VStack(spacing: 1) {
-                        ForEach(Array(resultRows(for: snapshot).enumerated()), id: \.offset) { _, row in
-                            resultRow(row)
-                        }
-                    }
-                }
-            } empty: {
-                IndexKV(
-                    rows: [],
-                    emptyText: "等待按键…",
-                    copyable: true,
-                    valueLineBreakMode: .byCharWrapping,
-                    valueMotion: .immediate
-                )
-            }
-        }
-    }
-
-    private func resultRow(_ row: (String, String, Color?)) -> some View {
-        IndexKVRow(
-            key: row.0,
-            value: row.1,
-            color: row.2,
-            copyable: true,
-            valueLineBreakMode: .byCharWrapping,
-            valueMotion: .immediate
-        )
-    }
-
     private func eventTypeDisplay(_ kind: KeyboardEventKind) -> String {
         "\(kind.rawValue) · \(kind.displayName)"
     }
@@ -92,10 +56,22 @@ private struct IndexKeycodeWorkspaceContent: View {
             subtitle: "根据本机按键事件推导对应的 Web KeyboardEvent 字段。",
             workspaceSemantic: .fixedInputWorkspace
         ) {
-            captureCard
-
-            IndexPanel("最近事件") {
-                latestEventResult
+            IndexInputResultWorkbench(
+                inputTitle: "按键捕获",
+                resultTitle: "最近事件"
+            ) {
+                EmptyView()
+            } resultControls: {
+                EmptyView()
+            } input: {
+                captureCard
+                    .padding(.horizontal, ToolMetrics.Spacing.md)
+                    .padding(.vertical, ToolMetrics.Spacing.sm)
+            } result: {
+                IndexResultSurface(
+                    content: .kv(resultItems),
+                    emptyText: "等待按键…"
+                )
             }
         }
         .onAppear {
@@ -105,6 +81,13 @@ private struct IndexKeycodeWorkspaceContent: View {
         .onChange(of: entryGeneration) { generation in
             guard generation > 0 else { return }
             focusRequestToken &+= 1
+        }
+    }
+
+    private var resultItems: [IndexResultKVItem] {
+        guard let snapshot = workspace.snapshot else { return [] }
+        return resultRows(for: snapshot).map {
+            IndexResultKVItem(key: $0.0, value: $0.1, color: $0.2)
         }
     }
 

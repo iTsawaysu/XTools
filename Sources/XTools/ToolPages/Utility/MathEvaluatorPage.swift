@@ -91,22 +91,47 @@ private struct IndexMathWorkspaceContent: View {
 
     var body: some View {
         IndexPage("数学计算", subtitle: "输入数学表达式即时求值。", workspaceSemantic: .naturalHeightShortResultPanel) {
-            IndexPanel("表达式") {
+            IndexInputResultWorkbench(
+                inputTitle: "表达式",
+                resultTitle: "结果"
+            ) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    Spacer(minLength: ToolMetrics.Spacing.sm)
+                    IndexClearButton(
+                        isDisabled: !workspace.hasAnyContent,
+                        action: workspace.clear
+                    )
+                }
+            } resultControls: {
+                EmptyView()
+            } input: {
                 IndexTextInput(placeholder: "例如 (3 + 4) * 2 / sqrt(16)", text: $workspace.expression, height: 42, autoFocus: true)
                     .indexWorkspaceDiagnostic(diagnosticText)
-            } accessory: {
-                IndexClearButton(
-                    isDisabled: !workspace.hasAnyContent,
-                    action: workspace.clear
-                )
-            }
-            IndexHeroStat(value: resultText, copyable: validResult != nil)
-            IndexPanel("说明") {
-                VStack(alignment: .leading, spacing: 8) {
-                    mathHelpRow("运算符", "+  -  *  /  %  ^")
-                    mathHelpRow("常量", "pi  e  phi")
-                    mathHelpRow("函数", "sqrt  abs  round  floor  ceil  min  max  sin  cos  tan  asin  acos  atan  sinh  cosh  tanh  log  ln  exp  cbrt")
-                    mathHelpRow("三角函数", "使用弧度，例如 sin(pi/2) = 1。")
+                    .padding(.horizontal, ToolMetrics.Spacing.md)
+                    .padding(.vertical, ToolMetrics.Spacing.sm)
+            } result: {
+                VStack(alignment: .leading, spacing: 0) {
+                    IndexResultSurface(
+                        content: .hero(
+                            IndexResultHeroItem(
+                                value: validResult ?? "",
+                                copyable: validResult != nil
+                            )
+                        ),
+                        emptyText: "输入表达式后显示结果"
+                    )
+
+                    ToolDivider()
+                        .padding(.horizontal, ToolMetrics.Spacing.md)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        mathHelpRow("运算符", "+  -  *  /  %  ^")
+                        mathHelpRow("常量", "pi  e  phi")
+                        mathHelpRow("函数", "sqrt  abs  round  floor  ceil  min  max  sin  cos  tan  asin  acos  atan  sinh  cosh  tanh  log  ln  exp  cbrt")
+                        mathHelpRow("三角函数", "使用弧度，例如 sin(pi/2) = 1。")
+                    }
+                    .padding(ToolMetrics.Spacing.md)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -132,7 +157,7 @@ private struct IndexMathWorkspaceContent: View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             Text(title)
                 .font(ToolTypography.monoLabel)
-                .foregroundStyle(ToolTheme.accentHover)
+                .foregroundStyle(ToolTheme.textPrimary)
                 .frame(width: 70, alignment: .leading)
 
             Text(detail)

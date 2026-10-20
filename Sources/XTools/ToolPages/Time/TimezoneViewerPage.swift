@@ -57,7 +57,9 @@ struct IndexTimezoneViewerPage: View {
 
     private func page(currentTime: Date) -> some View {
         IndexPage("时区查看器", subtitle: "显示精选全球城市的当前时间，按大洲折叠并按 UTC 偏移量分组。", workspaceSemantic: .queryListWorkspace) {
-            IndexPanel("时区列表") {
+            IndexResultWorkbench(title: "时区列表") {
+                EmptyView()
+            } content: {
                 ScrollView {
                     VStack(spacing: ToolMetrics.Spacing.lg) {
                         let projection = TimezoneViewerProjection(favoriteKeys: favoriteStore.favoriteKeys, date: currentTime)
@@ -81,8 +83,6 @@ struct IndexTimezoneViewerPage: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .verticallyFilling()
-            .withoutDiagnosticStatusSlot()
         }
     }
 

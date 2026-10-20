@@ -65,98 +65,125 @@ private struct IndexDateCalcWorkspaceContent: View {
         ]
     }
 
-    var body: some View {
-        IndexPage("日期计算", subtitle: "计算两个日期之间的间隔，或在某个日期上加减时间。", layout: .scroll) {
-            IndexSegmentedControl(
-                items: DateCalcToolWorkspaceModel.Mode.allCases.map { ($0, $0.title) },
-                selection: $mode
-            )
+    private var resultCopyText: String {
+        mode == .interval ? session.totalDaysText : session.resultCopyText
+    }
 
-            switch mode {
-            case .interval:
-                intervalPanel
-            case .offset:
-                offsetPanel
+    var body: some View {
+        IndexPage("日期计算", subtitle: "计算两个日期之间的间隔，或在某个日期上加减时间。", workspaceSemantic: .naturalHeightShortResultPanel) {
+            IndexInputResultWorkbench(
+                inputTitle: mode.panelTitle,
+                resultTitle: "结果"
+            ) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    IndexSegmentedControl(
+                        items: DateCalcToolWorkspaceModel.Mode.allCases.map { ($0, $0.title) },
+                        selection: $mode
+                    )
+                    Spacer(minLength: ToolMetrics.Spacing.sm)
+                }
+            } resultControls: {
+                IndexCopyButton(text: resultCopyText, title: "复制结果")
+            } input: {
+                Group {
+                    if mode == .interval {
+                        intervalInput
+                    } else {
+                        offsetInput
+                    }
+                }
+            } result: {
+                Group {
+                    if mode == .interval {
+                        intervalResult
+                    } else {
+                        offsetResult
+                    }
+                }
             }
         }
     }
 
-    // MARK: - Interval mode
-
-    private var intervalPanel: some View {
-        IndexPanel(mode.panelTitle) {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("常用范围")
-                        .font(ToolTypography.buttonSmall)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                    IndexFlowLayout(spacing: 6, lineSpacing: 6) {
-                        ForEach(DateCalcWorkspace.DiffPreset.allCases, id: \.rawValue) { preset in
-                            IndexBadge(preset.title) {
-                                session.applyPreset(preset)
-                            }
+    private var intervalInput: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+                Text("常用范围")
+                    .font(ToolTypography.buttonSmall)
+                    .foregroundStyle(ToolTheme.textSecondary)
+                IndexFlowLayout(spacing: 6, lineSpacing: 6) {
+                    ForEach(DateCalcWorkspace.DiffPreset.allCases, id: \.rawValue) { preset in
+                        IndexBadge(preset.title) {
+                            session.applyPreset(preset)
                         }
                     }
                 }
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 12) {
-                        startField()
-                        endField()
-                    }
-                    VStack(alignment: .leading, spacing: 12) {
-                        startField()
-                        endField()
-                    }
-                }
-
-                DateCalculatorInlineOption(
-                    title: "包含结束日",
-                    help: "把结束日期当天也计入结果（+1 天）",
-                    isOn: $session.includeEndDate
-                )
-
-                DateCalculatorHeroResult(
-                    value: session.totalDaysText,
-                    subtitle: session.direction
-                )
-
-                IndexStatGrid(stats: session.breakdownStats, valueMotion: .immediate)
-                IndexKV(rows: intervalDetailRows, copyable: false, valueMotion: .immediate)
             }
-            .indexWorkspaceDiagnostic(session.diffError)
-        } accessory: {
-            IndexCopyButton(text: session.totalDaysText, title: "复制总天数")
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    startField()
+                    endField()
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    startField()
+                    endField()
+                }
+            }
+
+            DateCalculatorInlineOption(
+                title: "包含结束日",
+                help: "把结束日期当天也计入结果（+1 天）",
+                isOn: $session.includeEndDate
+            )
         }
+        .padding(.horizontal, ToolMetrics.Spacing.md)
+        .padding(.vertical, ToolMetrics.Spacing.sm)
+        .indexWorkspaceDiagnostic(session.diffError)
     }
 
-    // MARK: - Offset mode
+    private var intervalResult: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+            DateCalculatorHeroResult(
+                value: session.totalDaysText,
+                subtitle: session.direction
+            )
 
-    private var offsetPanel: some View {
-        IndexPanel(mode.panelTitle) {
-            VStack(alignment: .leading, spacing: 14) {
-                baseField()
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 8) {
-                        offsetControls
-                        Spacer(minLength: 0)
-                    }
-                    VStack(alignment: .leading, spacing: 12) {
-                        offsetControls
-                    }
-                }
-
-                DateCalculatorHeroResult(
-                    value: session.resultDateText,
-                    subtitle: session.resultWeekdayText,
-                    footnote: session.resultRelativeToTodayText()
-                )
-            }
-            .indexWorkspaceDiagnostic(session.baseInputError)
-        } accessory: {
-            IndexCopyButton(text: session.resultCopyText)
+            IndexStatGrid(stats: session.breakdownStats, valueMotion: .immediate)
+            IndexKV(rows: intervalDetailRows, copyable: false, valueMotion: .immediate)
         }
+        .padding(.horizontal, ToolMetrics.Spacing.md)
+        .padding(.vertical, ToolMetrics.Spacing.sm)
+    }
+
+    private var offsetInput: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+            baseField()
+
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    offsetControls
+                    Spacer(minLength: 0)
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    offsetControls
+                }
+            }
+        }
+        .padding(.horizontal, ToolMetrics.Spacing.md)
+        .padding(.vertical, ToolMetrics.Spacing.sm)
+        .indexWorkspaceDiagnostic(session.baseInputError)
+    }
+
+    private var offsetResult: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+            DateCalculatorHeroResult(
+                value: session.resultDateText,
+                subtitle: session.resultWeekdayText,
+                footnote: session.resultRelativeToTodayText()
+            )
+        }
+        .padding(.horizontal, ToolMetrics.Spacing.md)
+        .padding(.vertical, ToolMetrics.Spacing.sm)
     }
 
     @ViewBuilder

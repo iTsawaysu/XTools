@@ -1,5 +1,6 @@
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 @MainActor
 final class RomanNumeralToolWorkspaceModel: ObservableObject {
@@ -27,27 +28,52 @@ private struct IndexRomanWorkspaceContent: View {
         (try? convert(workspace.input, mode: workspace.mode)) ?? IndexEmptyStateCopy.notAvailable
     }
 
+    private var displayOutput: String {
+        guard !workspace.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              output != IndexEmptyStateCopy.notAvailable else {
+            return ""
+        }
+        return output
+    }
+
     private var modeSelection: Binding<String> {
         Binding(get: { workspace.mode }, set: { changeMode(to: $0) })
     }
 
     var body: some View {
         IndexPage("罗马数字", subtitle: "阿拉伯数字与罗马数字互转。", workspaceSemantic: .naturalHeightShortResultPanel) {
-            // 模式切换保留（正当选项），「清空」收进输入面板标题栏（SPEC §P5b）。
-            IndexActionBar {
-                IndexSegmentedControl(items: [("toRoman", "数字→罗马"), ("toNum", "罗马→数字")], selection: modeSelection)
-            }
-            IndexPanel("输入") {
+            IndexInputResultWorkbench(
+                inputTitle: "输入",
+                resultTitle: "结果"
+            ) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    IndexSegmentedControl(
+                        items: [("toRoman", "数字→罗马"), ("toNum", "罗马→数字")],
+                        selection: modeSelection
+                    )
+                    Spacer(minLength: ToolMetrics.Spacing.sm)
+                    IndexClearButton(isDisabled: workspace.input.isEmpty) {
+                        clear()
+                    }
+                }
+            } resultControls: {
+                EmptyView()
+            } input: {
                 IndexTextInput(placeholder: "例如 2024 或 MMXXIV", text: $workspace.input, height: 42, autoFocus: true)
                     .onChange(of: workspace.input) { _ in normalizeRomanCase(); validate() }
                     .indexWorkspaceDiagnostic(workspace.error)
-            } accessory: {
-                IndexClearButton(isDisabled: workspace.input.isEmpty) {
-                    clear()
-                }
-            }
-            IndexPanel("结果") {
-                IndexHeroStat(value: output, copyable: output != IndexEmptyStateCopy.notAvailable)
+                    .padding(.horizontal, ToolMetrics.Spacing.md)
+                    .padding(.vertical, ToolMetrics.Spacing.sm)
+            } result: {
+                IndexResultSurface(
+                    content: .hero(
+                        IndexResultHeroItem(
+                            value: displayOutput,
+                            copyable: displayOutput != IndexEmptyStateCopy.notAvailable
+                        )
+                    ),
+                    emptyText: "输入数字后显示结果"
+                )
             }
         }
     }

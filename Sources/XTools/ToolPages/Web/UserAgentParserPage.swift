@@ -95,50 +95,51 @@ private struct IndexUserAgentWorkspaceContent: View {
         resultProjection?.updateID ?? []
     }
 
+    private var rows: [IndexResultKVItem] {
+        guard let projection = resultProjection else { return [] }
+        return [
+            IndexResultKVItem(key: "浏览器", value: projection.browser),
+            IndexResultKVItem(key: "浏览器版本", value: projection.browserVersion),
+            IndexResultKVItem(key: "操作系统", value: projection.os),
+            IndexResultKVItem(key: "系统版本", value: projection.osVersion),
+            IndexResultKVItem(key: "设备类型", value: projection.device)
+        ]
+    }
+
     var body: some View {
-        IndexPage("User-Agent 解析", subtitle: "本地尽力识别浏览器、操作系统与设备类型，仅供调试，不用于能力判断或安全决策。", layout: .scroll) {
-            IndexPanel("输入") {
+        IndexPage(
+            "User-Agent 解析",
+            subtitle: "本地尽力识别浏览器、操作系统与设备类型，仅供调试，不用于能力判断或安全决策。",
+            workspaceSemantic: .longTextNaturalInput
+        ) {
+            IndexInputResultWorkbench(
+                inputTitle: "输入",
+                resultTitle: "解析结果"
+            ) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    Spacer(minLength: ToolMetrics.Spacing.sm)
+                    IndexClearButton(
+                        isDisabled: !workspace.hasAnyContent,
+                        action: workspace.clear
+                    )
+                }
+            } resultControls: {
+                EmptyView()
+            } input: {
                 IndexWorkspaceTextArea(
                     placeholder: "粘贴 User-Agent 字符串…",
                     text: $workspace.input,
                     minHeight: 80,
+                    embedsFlat: true,
                     workspaceSemantic: .longTextNaturalInput
                 )
-                    .onChange(of: workspace.input) { _ in parse() }
-                    .indexWorkspaceDiagnostic(workspace.error)
-            } accessory: {
-                IndexClearButton(
-                    isDisabled: !workspace.hasAnyContent,
-                    action: workspace.clear
+                .onChange(of: workspace.input) { _ in parse() }
+                .indexWorkspaceDiagnostic(workspace.error)
+            } result: {
+                IndexResultSurface(
+                    content: .kv(rows),
+                    emptyText: "输入 User-Agent 后自动解析"
                 )
-            }
-
-            IndexPanel("解析结果") {
-                VStack(alignment: .leading, spacing: 12) {
-                    IndexWorkspaceResultSurface {
-                        IndexResultPresence(
-                            value: resultProjection,
-                            updateID: resultPresenceUpdateID
-                        ) { result in
-                            VStack(alignment: .leading, spacing: 16) {
-                                IndexKVRow(key: "浏览器", value: result.browser, copyable: true, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "浏览器版本", value: result.browserVersion, copyable: true, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "操作系统", value: result.os, copyable: true, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "系统版本", value: result.osVersion, copyable: true, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "设备类型", value: result.device, copyable: true, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                            }
-                            .padding(ToolMetrics.Spacing.sm)
-                        } empty: {
-                            IndexEmptyState(
-                                title: IndexEmptyStateCopy.noParsedResult,
-                                systemImage: "globe",
-                                message: IndexEmptyStateCopy.autoShow("User-Agent"),
-                                density: .list
-                            )
-                            .frame(minHeight: 70)
-                        }
-                    }
-                }
             }
         }
     }

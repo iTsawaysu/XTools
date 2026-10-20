@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 typealias CaseConversionStyleRow = (label: String, value: String)
 
@@ -120,28 +121,35 @@ private struct IndexCaseConverterWorkspaceContent: View {
     }
 
     var body: some View {
-        // 输入即时反应：派生结果由 workspace 持有，输入变化时重算（大输入
-        // 后台 + 防抖），不再随每帧 body 重算。
-        // 「清空」收进输入面板标题栏，不单独占行（SPEC §P5b）。
         IndexPage("大小写转换", subtitle: "在 camelCase、snake_case、kebab-case 等之间转换。", workspaceSemantic: .longTextNaturalInput) {
-            IndexPanel("输入") {
+            IndexInputResultWorkbench(
+                inputTitle: "输入",
+                resultTitle: "转换结果"
+            ) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    Spacer(minLength: ToolMetrics.Spacing.sm)
+                    IndexClearButton(isDisabled: workspace.text.isEmpty) {
+                        workspace.text = ""
+                    }
+                }
+            } resultControls: {
+                IndexCopyButton(text: allResultsText, title: "全部复制")
+            } input: {
                 IndexWorkspaceTextArea(
                     placeholder: "输入文本，自动转换所有格式…",
                     text: $workspace.text,
                     minHeight: 76,
                     autoFocus: true,
+                    embedsFlat: true,
                     workspaceSemantic: .longTextNaturalInput
                 )
-            } accessory: {
-                IndexClearButton(isDisabled: workspace.text.isEmpty) {
-                    workspace.text = ""
-                }
-            }
-            // 短派生结果自然展开，由页面外层滚动承载长值换行后的高度。
-            IndexPanel("转换结果") {
-                IndexShortResultKV(rows: rows, emptyText: IndexEmptyStateCopy.autoShow("文本"), valueMotion: .immediate)
-            } accessory: {
-                IndexCopyButton(text: allResultsText, title: "全部复制")
+            } result: {
+                IndexResultSurface(
+                    content: .kv(
+                        workspace.styles.map { IndexResultKVItem(key: $0.label, value: $0.value) }
+                    ),
+                    emptyText: IndexEmptyStateCopy.autoShow("文本")
+                )
             }
         }
     }

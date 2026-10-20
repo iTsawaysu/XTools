@@ -31,22 +31,49 @@ private struct IndexBasicAuthWorkspaceContent: View {
 
     private let credentialLabelWidth: CGFloat = 70
 
+    private var isGenerating: Bool {
+        modeBinding.wrappedValue == .generate
+    }
+
     var body: some View {
         IndexPage(
             "Basic Auth",
             subtitle: "生成或解析 Basic Auth 请求头；Base64 不是加密，请仅通过 HTTPS 使用。",
             workspaceSemantic: .securityTransformWorkspace
         ) {
-            IndexGenerateParseModeBar(
-                selection: modeBinding,
-                clearAllDisabled: !session.hasAnyContent,
-                onClearAll: clearAll
-            )
-
-            IndexGenerateParseModeContent(mode: modeBinding.wrappedValue) {
-                generateContent
-            } parse: {
-                parseContent
+            IndexInputResultWorkbench(
+                inputTitle: isGenerating ? "凭据" : "请求头",
+                resultTitle: isGenerating ? "Authorization 请求头" : "解析结果"
+            ) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    IndexSegmentedControl(
+                        items: IndexGenerateParseMode.segmentedItems,
+                        selection: modeSelection
+                    )
+                    .accessibilityLabel("操作模式")
+                    Spacer(minLength: ToolMetrics.Spacing.sm)
+                    IndexClearButton(isDisabled: !session.hasAnyContent, action: clearAll)
+                }
+            } resultControls: {
+                resultControls
+            } input: {
+                Group {
+                    if isGenerating {
+                        credentialsForm
+                    } else {
+                        parseField
+                    }
+                }
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
+            } result: {
+                Group {
+                    if isGenerating {
+                        generateResult
+                    } else {
+                        parseResult
+                    }
+                }
             }
         }
         .onChange(of: entryGeneration) { generation in
@@ -55,6 +82,98 @@ private struct IndexBasicAuthWorkspaceContent: View {
                 showsParsedPassword = false
             }
         }
+        .onAppear {
+            if !isGenerating { parse() }
+        }
+        .onChange(of: isGenerating) { generating in
+            if !generating { parse() }
+        }
+    }
+
+    private var credentialsForm: some View {
+        VStack(spacing: ToolMetrics.Spacing.md) {
+            credentialRow("用户名") {
+                IndexTextInput(placeholder: "username", text: $session.username, autoFocus: true)
+            }
+            credentialRow("密码") {
+                passwordInput
+            }
+        }
+    }
+
+    private var parseField: some View {
+        IndexWorkspaceTextArea(
+            placeholder: "Authorization: Basic dXNlcjpwYXNz",
+            text: $session.parseInput,
+            minHeight: 84,
+            autoFocus: true,
+            embedsFlat: true,
+            workspaceSemantic: .longTextNaturalInput
+        )
+        .onChange(of: session.parseInput) { _ in parse() }
+        .indexWorkspaceDiagnostic(session.parseError)
+    }
+
+    private var generateResult: some View {
+        IndexResultSurface(
+            content: .code(text: session.output, placeholder: session.outputPlaceholder)
+        )
+    }
+
+    @ViewBuilder
+    private var parseResult: some View {
+        if let credentials = session.parsedCredentials {
+            VStack(spacing: 0) {
+                parsedUsernameRow(credentials.username)
+                parsedPasswordRow(credentials.password)
+            }
+            .background(ToolTheme.border)
+            .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                    .strokeBorder(ToolTheme.border, lineWidth: 0.5)
+            }
+            .padding(ToolMetrics.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        } else {
+            IndexEmptyState(
+                title: IndexEmptyStateCopy.noParsedResult,
+                systemImage: "lock.shield",
+                message: IndexEmptyStateCopy.autoParse("Basic Auth 请求头或 Base64 凭据"),
+                density: .list
+            )
+            .frame(maxWidth: .infinity, minHeight: 140)
+        }
+    }
+
+    @ViewBuilder
+    private var resultControls: some View {
+        if isGenerating {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
+                Button(action: transferGeneratedToParse) {
+                    Label("在解析中打开", systemImage: "arrow.right.circle")
+                        .font(ToolTypography.buttonSmall)
+                }
+                .buttonStyle(IndexSmallButtonStyle())
+                .disabled(session.output.isEmpty)
+
+                IndexCopyButton(text: session.output)
+            }
+        } else {
+            Button(action: transferParsedToGenerate) {
+                Label("用于生成", systemImage: "arrow.left.circle")
+                    .font(ToolTypography.buttonSmall)
+            }
+            .buttonStyle(IndexSmallButtonStyle())
+            .disabled(session.parsedCredentials == nil)
+        }
+    }
+
+    private var modeSelection: Binding<String> {
+        Binding(
+            get: { modeBinding.wrappedValue.rawValue },
+            set: { modeBinding.wrappedValue = IndexGenerateParseMode(rawValue: $0) ?? .generate }
+        )
     }
 
     private var modeBinding: Binding<IndexGenerateParseMode> {
@@ -95,7 +214,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
             )
             .indexWorkspaceDiagnostic(session.outputDiagnostic)
         } accessory: {
-            HStack(spacing: 6) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 Button(action: transferGeneratedToParse) {
                     Label("在解析中打开", systemImage: "arrow.right.circle")
                         .font(ToolTypography.buttonSmall)

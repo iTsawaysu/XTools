@@ -31,9 +31,39 @@ private struct IndexFileTypeDetectorWorkspaceContent: View {
         ]
     }
 
+    private var rows: [IndexResultKVItem] {
+        guard let report = session.report else { return [] }
+        return [
+            IndexResultKVItem(key: "文件名", value: report.fileName),
+            IndexResultKVItem(key: "文件扩展名", value: report.fileExtension),
+            IndexResultKVItem(key: "扩展名推断 MIME", value: report.extensionMIMEType),
+            IndexResultKVItem(key: "内容签名 MIME", value: report.contentMIMEType),
+            IndexResultKVItem(key: "最终判定 MIME", value: report.resolvedMIMEType),
+            IndexResultKVItem(key: "文件大小", value: report.fileSize),
+            IndexResultKVItem(key: "文件头（前 16 字节）", value: report.headerBytes)
+        ]
+    }
+
     var body: some View {
-        IndexPage("文件类型探测器", subtitle: "上传文件，对比扩展名与文件内容证据。", layout: .scroll) {
-            IndexPanel("上传文件") {
+        IndexPage(
+            "文件类型探测器",
+            subtitle: "上传文件，对比扩展名与文件内容证据。",
+            workspaceSemantic: .naturalHeightShortResultPanel
+        ) {
+            IndexInputResultWorkbench(
+                inputTitle: "上传文件",
+                resultTitle: "检测结果"
+            ) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    Spacer(minLength: ToolMetrics.Spacing.sm)
+                    IndexClearButton(
+                        isDisabled: !session.canReset,
+                        action: session.reset
+                    )
+                }
+            } resultControls: {
+                EmptyView()
+            } input: {
                 VStack(spacing: 12) {
                     Button {
                         session.selectFile(filePanel: fileInputPanelClient)
@@ -65,8 +95,8 @@ private struct IndexFileTypeDetectorWorkspaceContent: View {
                 }
                 .contentShape(Rectangle())
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 8)
+                .padding(.horizontal, ToolMetrics.Spacing.sm)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
                 .background(
                     isFileDropTargeted ? ToolTheme.selectionFill : Color.clear,
                     in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
@@ -84,41 +114,13 @@ private struct IndexFileTypeDetectorWorkspaceContent: View {
                     onMultipleFiles: { session.rejectMultipleFileDrop() }
                 )
                 .indexWorkspaceDiagnostic(session.error)
-            } accessory: {
-                IndexClearButton(
-                    isDisabled: !session.canReset,
-                    action: session.reset
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
+            } result: {
+                IndexResultSurface(
+                    content: .kv(rows),
+                    emptyText: "选择文件后显示检测结果"
                 )
-            }
-
-            IndexPanel("检测结果") {
-                VStack(alignment: .leading, spacing: 12) {
-                    IndexWorkspaceResultSurface(workspaceSemantic: .naturalHeightShortResultPanel) {
-                        IndexResultPresence(
-                            value: session.report,
-                            updateID: reportPresenceUpdateID,
-                            motion: .immediate
-                        ) { report in
-                            VStack(alignment: .leading, spacing: 16) {
-                                IndexKVRow(key: "文件名", value: report.fileName, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "文件扩展名", value: report.fileExtension, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "扩展名推断 MIME", value: report.extensionMIMEType, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "内容签名 MIME", value: report.contentMIMEType, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "最终判定 MIME", value: report.resolvedMIMEType, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "文件大小", value: report.fileSize, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                                IndexKVRow(key: "文件头（前 16 字节）", value: report.headerBytes, valueLineBreakMode: .byCharWrapping, valueMotion: .immediate)
-                            }
-                            .padding(ToolMetrics.Spacing.sm)
-                        } empty: {
-                            IndexEmptyState(
-                                title: "尚未检测文件",
-                                systemImage: "photo.on.rectangle.angled",
-                                message: "选择文件后显示检测结果"
-                            )
-                        }
-                    }
-                    .indexWorkspaceDiagnostic(session.warning, tone: .warning)
-                }
             }
         }
     }

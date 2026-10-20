@@ -45,14 +45,24 @@ private struct IndexPortWorkspaceContent: View {
             subtitle: "生成 1024-65535 范围内的随机端口号。",
             workspaceSemantic: .naturalHeightShortResultPanel
         ) {
-            IndexPanel("结果") {
-                IndexHeroStat(value: workspace.output ?? "尚未生成", tone: workspace.output == nil ? .primary : .accent, copyable: workspace.output != nil, design: .rounded)
-            } accessory: {
+            IndexResultWorkbench(title: "结果") {
                 Button { workspace.generate() } label: {
                     Label("重新生成", systemImage: IndexActionSymbol.refresh)
                         .font(ToolTypography.buttonSmall)
                 }
                 .buttonStyle(IndexSmallButtonStyle())
+            } content: {
+                IndexResultSurface(
+                    content: .hero(
+                        IndexResultHeroItem(
+                            value: workspace.output ?? "",
+                            tone: workspace.output == nil ? .primary : .accent,
+                            copyable: workspace.output != nil,
+                            design: .rounded
+                        )
+                    ),
+                    emptyText: "点击重新生成"
+                )
             }
         }
     }

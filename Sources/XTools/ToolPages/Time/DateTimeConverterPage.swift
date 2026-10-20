@@ -44,33 +44,53 @@ struct IndexDateTimePage: View {
 private struct IndexDateTimeWorkspaceContent: View {
     @ObservedObject var workspace: DateTimeToolWorkspaceModel
 
+    private var resultItems: [IndexResultKVItem] {
+        workspace.rows.map { IndexResultKVItem(key: $0.0, value: $0.1, color: $0.2) }
+    }
+
     var body: some View {
-        IndexPage("时间戳转换", subtitle: "Unix 时间戳与人类可读时间互转。", layout: .scroll) {
-            IndexPanel("Unix 时间戳（秒）") {
-                unixTimestampInput
-            } accessory: {
-                currentTimePageAction
-            }
-            IndexPanel("人类可读时间（本地时区）") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("日期与时间")
+        IndexPage(
+            "时间戳转换",
+            subtitle: "Unix 时间戳与人类可读时间互转。",
+            workspaceSemantic: .naturalHeightShortResultPanel
+        ) {
+            IndexInputResultWorkbench(
+                inputTitle: "时间",
+                resultTitle: "各格式"
+            ) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    Spacer(minLength: ToolMetrics.Spacing.sm)
+                    clearAllButton
+                }
+            } resultControls: {
+                IndexCopyButton(text: allRowsText, title: "全部复制")
+            } input: {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+                    HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.sm) {
+                        Text("Unix 时间戳（秒）")
+                            .font(ToolTypography.buttonSmall)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                        Spacer(minLength: ToolMetrics.Spacing.sm)
+                        currentTimePageAction
+                    }
+
+                    unixTimestampInput
+
+                    Text("人类可读时间（本地时区）")
                         .font(ToolTypography.buttonSmall)
                         .foregroundStyle(ToolTheme.textSecondary)
 
                     humanTimeInputView
+                        .indexWorkspaceDiagnostic(workspace.humanError)
                 }
-                .indexWorkspaceDiagnostic(workspace.humanError)
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
+            } result: {
+                IndexResultSurface(
+                    content: .kv(resultItems),
+                    emptyText: IndexEmptyStateCopy.autoCalculate("时间戳或时间")
+                )
             }
-            IndexPanel("各格式") {
-                IndexShortResultKV(rows: workspace.rows, emptyText: IndexEmptyStateCopy.autoCalculate("时间戳或时间"), valueMotion: .immediate)
-            } accessory: {
-                HStack(spacing: 8) {
-                    clearAllButton
-                    IndexCopyButton(text: allRowsText, title: "全部复制")
-                }
-                .fixedSize(horizontal: true, vertical: false)
-            }
-            .withoutDiagnosticStatusSlot()
         }
     }
 

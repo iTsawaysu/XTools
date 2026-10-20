@@ -55,8 +55,34 @@ private struct IndexCrontabWorkspaceContent: View {
 
     var body: some View {
         IndexPage("Crontab 生成", subtitle: "用预设拼出 cron 表达式并给出说明。", workspaceSemantic: .naturalHeightShortResultPanel) {
-            IndexPanel("Cron 表达式") {
-                VStack(alignment: .leading, spacing: 14) {
+            IndexInputResultWorkbench(
+                inputTitle: "Cron 表达式",
+                resultTitle: "解析结果"
+            ) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    Spacer(minLength: ToolMetrics.Spacing.sm)
+                    IndexClearButton(
+                        isDisabled: !workspace.hasAnyContent,
+                        title: "清空 Cron 表达式",
+                        iconOnly: true,
+                        action: workspace.clear
+                    )
+                    IndexCopyButton(text: workspace.expression.trimmingCharacters(in: .whitespacesAndNewlines))
+                }
+            } resultControls: {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    if let identifier = workspace.previewTimeZoneIdentifier {
+                        Text("时区 \(identifier)")
+                            .font(ToolTypography.monoCaption)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                            .lineLimit(1)
+                    }
+                    IndexIconButton(systemImage: "arrow.clockwise", help: "刷新下次运行时间") {
+                        validate()
+                    }
+                }
+            } input: {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
                     IndexTextInput(placeholder: "*/5 * * * *", text: $workspace.expression, height: 44, alignment: .center)
                         .font(ToolTypography.valueMedium)
                         .onChange(of: workspace.expression) { _ in
@@ -82,20 +108,10 @@ private struct IndexCrontabWorkspaceContent: View {
                         }
                     }
                 }
-            } accessory: {
-                HStack(spacing: 8) {
-                    IndexClearButton(
-                        isDisabled: !workspace.hasAnyContent,
-                        title: "清空 Cron 表达式",
-                        iconOnly: true,
-                        action: workspace.clear
-                    )
-                    IndexCopyButton(text: workspace.expression.trimmingCharacters(in: .whitespacesAndNewlines))
-                }
-            }
-
-            IndexPanel("解析结果") {
-                VStack(alignment: .leading, spacing: 12) {
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
+            } result: {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
                     if let summary = CronScheduler.expressionSummary(workspace.expression) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Image(systemName: "clock")
@@ -136,18 +152,9 @@ private struct IndexCrontabWorkspaceContent: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-            } accessory: {
-                HStack(spacing: 10) {
-                    if let identifier = workspace.previewTimeZoneIdentifier {
-                        Text("时区 \(identifier)")
-                            .font(ToolTypography.monoCaption)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                            .lineLimit(1)
-                    }
-                    IndexIconButton(systemImage: "arrow.clockwise", help: "刷新下次运行时间") {
-                        validate()
-                    }
-                }
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
         }
         .onAppear { if entryGeneration > 0 { validate() } }

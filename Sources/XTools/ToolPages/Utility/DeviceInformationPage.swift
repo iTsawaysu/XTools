@@ -18,11 +18,7 @@ struct IndexDeviceInfoPage: View {
 
     var body: some View {
         IndexPage("设备信息", subtitle: "读取 macOS 系统、硬件与显示器信息。", workspaceSemantic: .queryListWorkspace) {
-            IndexPanel("macOS 设备信息") {
-                ScrollView {
-                    IndexKV(rows: rows, emptyText: "加载设备信息中…", copyable: true)
-                }
-            } accessory: {
+            IndexResultWorkbench(title: "macOS 设备信息") {
                 HStack(spacing: 8) {
                     Button {
                         session.refresh()
@@ -35,9 +31,11 @@ struct IndexDeviceInfoPage: View {
 
                     IndexCopyButton(text: copySummary, title: "复制全部")
                 }
+            } content: {
+                ScrollView {
+                    IndexKV(rows: rows, emptyText: "加载设备信息中…", copyable: true)
+                }
             }
-            .verticallyFilling()
-            .withoutDiagnosticStatusSlot()
         }
         .onReceive(screenParametersChanged) { _ in
             if entryGeneration > 0 { session.refresh() }

@@ -155,22 +155,31 @@ private struct IndexEmojiWorkspaceContent: View {
             subtitle: "\(EmojiCatalog.totalProducible) 个 Emoji（含肤色变体） · \(EmojiCatalog.specialSymbolCount) 个特殊符号。搜索关键词或选择分类，点击即复制。",
             workspaceSemantic: .queryListWorkspace
         ) {
-            IndexActionBar {
-                IndexSearchInput(
-                    placeholder: "搜索 Emoji 或符号（如 right / 右 / 播放）…",
-                    text: $workspace.query,
-                    clearTitle: "清空 Emoji 搜索",
-                    onClear: workspace.clearSearch
-                )
-                .frame(maxWidth: 360)
-            }
+            IndexInputResultWorkbench(
+                inputTitle: "搜索",
+                resultTitle: display.panelTitle
+            ) {
+                EmptyView()
+            } resultControls: {
+                panelAccessory(for: display)
+            } input: {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+                    IndexSearchInput(
+                        placeholder: "搜索 Emoji 或符号（如 right / 右 / 播放）…",
+                        text: $workspace.query,
+                        clearTitle: "清空 Emoji 搜索",
+                        onClear: workspace.clearSearch
+                    )
+                    .frame(maxWidth: 360)
 
-            if !display.isSearching {
-                IndexEmojiCategoryBar(selection: $workspace.category)
-            }
-
-            // SPEC §P6：emoji 网格在面板内部滚动，整页不滚。
-            IndexPanel(display.panelTitle) {
+                    if !display.isSearching {
+                        IndexEmojiCategoryBar(selection: $workspace.category)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
+            } result: {
                 if display.entries.isEmpty {
                     IndexEmptyState(
                         title: "无匹配结果",
@@ -187,10 +196,7 @@ private struct IndexEmojiWorkspaceContent: View {
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-            } accessory: {
-                panelAccessory(for: display)
             }
-            .verticallyFilling()
         }
     }
 

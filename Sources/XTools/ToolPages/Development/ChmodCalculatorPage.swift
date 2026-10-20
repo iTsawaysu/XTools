@@ -67,68 +67,71 @@ private struct IndexChmodWorkspaceContent: View {
 
     var body: some View {
         IndexPage("Chmod 计算器", subtitle: "在八进制与 rwx（含特殊权限位）之间双向换算。", workspaceSemantic: .naturalHeightShortResultPanel) {
-            IndexPanel("八进制权限") {
-                IndexTextInput(placeholder: "644 或 4755", text: octalBinding, height: 44, alignment: .center)
-                    .font(ToolTypography.valueMedium)
-                    .accessibilityLabel("Chmod 八进制权限")
-                    .accessibilityHint("输入三位 rwx 权限或四位特殊权限模式")
-                    .indexWorkspaceDiagnostic(workspace.error)
-            }
+            IndexInputResultWorkbench(
+                inputTitle: "八进制权限",
+                resultTitle: "结果"
+            ) {
+                EmptyView()
+            } resultControls: {
+                EmptyView()
+            } input: {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+                    IndexTextInput(placeholder: "644 或 4755", text: octalBinding, height: 44, alignment: .center)
+                        .font(ToolTypography.valueMedium)
+                        .accessibilityLabel("Chmod 八进制权限")
+                        .accessibilityHint("输入三位 rwx 权限或四位特殊权限模式")
+                        .indexWorkspaceDiagnostic(workspace.error)
 
-            IndexPanel("权限矩阵") {
-                VStack(alignment: .leading, spacing: 14) {
-                    chmodRow(
-                        "所有者",
-                        r: permissionBinding(\ChmodMode.owner.read),
-                        w: permissionBinding(\ChmodMode.owner.write),
-                        x: permissionBinding(\ChmodMode.owner.execute)
-                    )
-                    chmodRow(
-                        "所属组",
-                        r: permissionBinding(\ChmodMode.group.read),
-                        w: permissionBinding(\ChmodMode.group.write),
-                        x: permissionBinding(\ChmodMode.group.execute)
-                    )
-                    chmodRow(
-                        "其他",
-                        r: permissionBinding(\ChmodMode.other.read),
-                        w: permissionBinding(\ChmodMode.other.write),
-                        x: permissionBinding(\ChmodMode.other.execute)
-                    )
-
-                    Divider().overlay(ToolTheme.border)
-
-                    IndexFlowLayout(spacing: 14, lineSpacing: 8) {
-                        IndexOptionSwitch(title: "setuid", style: .standalone, isOn: permissionBinding(\ChmodMode.setuid))
-                            .help("显示所有者 s/S")
-                            .accessibilityHint("控制 setuid 特殊权限位")
-                        IndexOptionSwitch(title: "setgid", style: .standalone, isOn: permissionBinding(\ChmodMode.setgid))
-                            .help("显示所属组 s/S")
-                            .accessibilityHint("控制 setgid 特殊权限位")
-                        IndexOptionSwitch(title: "sticky", style: .standalone, isOn: permissionBinding(\ChmodMode.sticky))
-                            .help("显示其他用户 t/T")
-                            .accessibilityHint("控制 sticky 特殊权限位")
-                    }
+                    permissionMatrix
                 }
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
+            } result: {
+                IndexResultSurface(
+                    content: .hero(
+                        IndexResultHeroItem(
+                            value: workspace.mode.octalString,
+                            caption: "chmod \(workspace.mode.octalString)  ·  \(workspace.mode.symbolicString)"
+                        )
+                    )
+                )
             }
+        }
+    }
 
-            IndexPanel("结果") {
-                VStack(spacing: 8) {
-                    Text(workspace.mode.octalString)
-                        .font(ToolTypography.heroValue)
-                        .foregroundStyle(ToolTheme.accentHover)
-                        .textSelection(.enabled)
-                        .toolMotionTextSwap(id: workspace.mode.octalString)
-                    Text("chmod \(workspace.mode.octalString)  ·  \(workspace.mode.symbolicString)")
-                        .font(ToolTypography.monoCaption)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                        .multilineTextAlignment(.center)
-                        .toolMotionTextSwap(id: workspace.mode.symbolicString)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, ToolMetrics.Spacing.lg)
-            } accessory: {
-                IndexCopyButton(text: workspace.mode.octalString, title: "复制八进制", iconOnly: true)
+    private var permissionMatrix: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+            chmodRow(
+                "所有者",
+                r: permissionBinding(\ChmodMode.owner.read),
+                w: permissionBinding(\ChmodMode.owner.write),
+                x: permissionBinding(\ChmodMode.owner.execute)
+            )
+            chmodRow(
+                "所属组",
+                r: permissionBinding(\ChmodMode.group.read),
+                w: permissionBinding(\ChmodMode.group.write),
+                x: permissionBinding(\ChmodMode.group.execute)
+            )
+            chmodRow(
+                "其他",
+                r: permissionBinding(\ChmodMode.other.read),
+                w: permissionBinding(\ChmodMode.other.write),
+                x: permissionBinding(\ChmodMode.other.execute)
+            )
+
+            ToolDivider()
+
+            IndexFlowLayout(spacing: 14, lineSpacing: 8) {
+                IndexOptionSwitch(title: "setuid", style: .standalone, isOn: permissionBinding(\ChmodMode.setuid))
+                    .help("显示所有者 s/S")
+                    .accessibilityHint("控制 setuid 特殊权限位")
+                IndexOptionSwitch(title: "setgid", style: .standalone, isOn: permissionBinding(\ChmodMode.setgid))
+                    .help("显示所属组 s/S")
+                    .accessibilityHint("控制 setgid 特殊权限位")
+                IndexOptionSwitch(title: "sticky", style: .standalone, isOn: permissionBinding(\ChmodMode.sticky))
+                    .help("显示其他用户 t/T")
+                    .accessibilityHint("控制 sticky 特殊权限位")
             }
         }
     }

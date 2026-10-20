@@ -51,44 +51,43 @@ private struct IndexHashTextWorkspaceContent: View {
             subtitle: "计算 SHA-2、SHA-3、RIPEMD-160 摘要；SHA-1 与 MD5 仅用于兼容校验。",
             workspaceSemantic: .boundedLongTextInput
         ) {
-            IndexActionBar {
-                IndexSegmentedControl(
-                    items: [
-                        ("hex", "Hex"),
-                        ("binary", "Binary"),
-                        ("base64", "Base64"),
-                        ("base64url", "Base64url")
-                    ],
-                    selection: $workspace.encoding
-                )
-            }
-            IndexPanel("输入") {
+            IndexInputResultWorkbench(
+                inputTitle: "输入",
+                resultTitle: "摘要结果"
+            ) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    IndexSegmentedControl(
+                        items: [
+                            ("hex", "Hex"),
+                            ("binary", "Binary"),
+                            ("base64", "Base64"),
+                            ("base64url", "Base64url")
+                        ],
+                        selection: $workspace.encoding,
+                        density: .compact
+                    )
+                    Spacer(minLength: ToolMetrics.Spacing.sm)
+                    if workspace.usesExplicitComputation {
+                        explicitComputationButton
+                    }
+                    IndexClearButton(isDisabled: workspace.input.isEmpty) {
+                        workspace.input = ""
+                    }
+                }
+            } resultControls: {
+                resultPanelAccessory
+            } input: {
                 IndexWorkspaceTextArea(
                     placeholder: "输入要计算摘要的文本…",
                     text: $workspace.input,
                     minHeight: inputViewportHeight,
                     autoFocus: true,
+                    embedsFlat: true,
                     workspaceSemantic: .boundedLongTextInput
                 )
-            } accessory: {
-                HStack(spacing: 8) {
-                    if workspace.usesExplicitComputation {
-                        explicitComputationButton
-                    }
-
-                    IndexClearButton(isDisabled: workspace.input.isEmpty) {
-                        workspace.input = ""
-                    }
-                }
-            }
-            .withoutDiagnosticStatusSlot()
-            // 八行摘要属于短派生结果，自然展开并按可用宽度换行。
-            IndexPanel("摘要结果") {
+            } result: {
                 IndexResultSurface(content: .list(resultItems), emptyText: emptyResultText)
-            } accessory: {
-                resultPanelAccessory
             }
-            .withoutDiagnosticStatusSlot()
         }
     }
 

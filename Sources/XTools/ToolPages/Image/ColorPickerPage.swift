@@ -47,13 +47,21 @@ private struct IndexColorWorkspaceContent: View {
             subtitle: "解析现代 CSS 颜色，统一转换为带 Alpha 的多种格式。",
             workspaceSemantic: .naturalHeightShortResultPanel
         ) {
-            IndexPanel("输入与预览") {
+            IndexInputResultWorkbench(
+                inputTitle: "输入与预览",
+                resultTitle: "转换结果"
+            ) {
+                EmptyView()
+            } resultControls: {
+                EmptyView()
+            } input: {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: ToolMetrics.Spacing.lg) { pickerBody }
                     VStack(alignment: .leading, spacing: ToolMetrics.Spacing.lg) { pickerBody }
                 }
-            }
-            IndexPanel("转换结果") {
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
+            } result: {
                 VStack(alignment: .leading, spacing: 0) {
                     resultRows(commonValues, emptyText: IndexEmptyStateCopy.autoShow("有效 CSS 颜色"))
 
@@ -61,6 +69,8 @@ private struct IndexColorWorkspaceContent: View {
 
                     advancedFormatsDisclosure
                 }
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
             }
         }
     }

@@ -1,4 +1,5 @@
 import XToolsCore
+import XToolsDesign
 import SwiftUI
 
 typealias IntegerBasePreparedRenderer = @Sendable (
@@ -132,43 +133,49 @@ private struct IndexBaseConverterWorkspaceContent: View {
         ]
     }
 
+    private var resultItems: [IndexResultKVItem] {
+        rows.map { IndexResultKVItem(key: $0.0, value: $0.1, color: $0.2) }
+    }
+
     var body: some View {
         IndexPage("进制转换", subtitle: "在二进制、八进制、十进制、十六进制之间转换。", workspaceSemantic: .naturalHeightShortResultPanel) {
-            IndexActionBar {
-                IndexOptionGroup {
-                    IndexOptionLabel("输入进制")
+            IndexInputResultWorkbench(
+                inputTitle: "输入",
+                resultTitle: "各进制结果"
+            ) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    IndexOptionLabel("进制")
                     IndexSegmentedControl(
                         items: [("2", "二进制"), ("8", "八进制"), ("10", "十进制"), ("16", "十六进制")],
                         selection: $workspace.base,
-                        selectionStyle: .filled
+                        density: .compact
                     )
+                    Spacer(minLength: ToolMetrics.Spacing.sm)
+                    IndexClearButton(isDisabled: workspace.input.isEmpty && workspace.error == nil) {
+                        workspace.clear()
+                    }
                 }
-            }
-            IndexPanel("输入数值") {
+            } resultControls: {
+                EmptyView()
+            } input: {
                 IndexTextInput(placeholder: "输入数值…", text: $workspace.input, height: 38, autoFocus: true)
                     .indexWorkspaceDiagnostic(workspace.error)
-            } accessory: {
-                IndexClearButton(isDisabled: workspace.input.isEmpty && workspace.error == nil) {
-                    workspace.clear()
+                    .padding(.horizontal, ToolMetrics.Spacing.md)
+                    .padding(.vertical, ToolMetrics.Spacing.sm)
+            } result: {
+                Group {
+                    if workspace.isProcessing {
+                        IndexProgressLabel(message: "正在换算…")
+                            .frame(maxWidth: .infinity, minHeight: 70)
+                            .padding(ToolMetrics.Spacing.md)
+                    } else {
+                        IndexResultSurface(
+                            content: .kv(resultItems),
+                            emptyText: IndexEmptyStateCopy.autoCalculate("数值")
+                        )
+                    }
                 }
             }
-            IndexPanel("各进制结果") {
-                resultContent
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var resultContent: some View {
-        if workspace.isProcessing {
-            IndexWorkspaceResultSurface {
-                IndexKVSurface {
-                    IndexProgressLabel(message: "正在换算…")
-                        .frame(minHeight: 70)
-                }
-            }
-        } else {
-            IndexShortResultKV(rows: rows, emptyText: IndexEmptyStateCopy.autoCalculate("数值"), valueMotion: .immediate)
         }
     }
 }
