@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "上次打开" : {
+      "extractionState" : "manual"
+    },
     "搜索" : {
       "extractionState" : "manual"
     },
