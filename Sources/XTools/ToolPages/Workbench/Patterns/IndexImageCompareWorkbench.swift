@@ -13,6 +13,10 @@ struct IndexImageCompareWorkbench<SourceFacts: View, ResultFacts: View>: View {
     let resultTitle: String
     let emptyTitle: String
     let placeholder: String
+    let sourceAccessibilityLabel: String
+    let sourceAccessibilityValue: String
+    let resultAccessibilityLabel: String
+    let resultAccessibilityValue: String
     let selectLabel: String
     let replaceLabel: String
     let clearLabel: String
@@ -40,6 +44,10 @@ struct IndexImageCompareWorkbench<SourceFacts: View, ResultFacts: View>: View {
         resultTitle: String,
         emptyTitle: String,
         placeholder: String,
+        sourceAccessibilityLabel: String,
+        sourceAccessibilityValue: String,
+        resultAccessibilityLabel: String,
+        resultAccessibilityValue: String,
         selectLabel: String,
         replaceLabel: String,
         clearLabel: String,
@@ -63,6 +71,10 @@ struct IndexImageCompareWorkbench<SourceFacts: View, ResultFacts: View>: View {
         self.resultTitle = resultTitle
         self.emptyTitle = emptyTitle
         self.placeholder = placeholder
+        self.sourceAccessibilityLabel = sourceAccessibilityLabel
+        self.sourceAccessibilityValue = sourceAccessibilityValue
+        self.resultAccessibilityLabel = resultAccessibilityLabel
+        self.resultAccessibilityValue = resultAccessibilityValue
         self.selectLabel = selectLabel
         self.replaceLabel = replaceLabel
         self.clearLabel = clearLabel
@@ -119,8 +131,8 @@ struct IndexImageCompareWorkbench<SourceFacts: View, ResultFacts: View>: View {
                     IndexImageComparisonCard(
                         title: "原图",
                         image: sourceImage,
-                        accessibilityLabel: "\(panelTitle)原图预览",
-                        accessibilityValue: "原图",
+                        accessibilityLabel: sourceAccessibilityLabel,
+                        accessibilityValue: sourceAccessibilityValue,
                         placeholder: "等待原图预览"
                     ) {
                         sourceFacts
@@ -131,8 +143,8 @@ struct IndexImageCompareWorkbench<SourceFacts: View, ResultFacts: View>: View {
                         badgeText: badgeText,
                         badgeTone: badgeTone,
                         image: resultImage,
-                        accessibilityLabel: "\(panelTitle)\(resultTitle)预览",
-                        accessibilityValue: resultTitle,
+                        accessibilityLabel: resultAccessibilityLabel,
+                        accessibilityValue: resultAccessibilityValue,
                         placeholder: placeholder,
                         isProcessing: isProcessing
                     ) {
