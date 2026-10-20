@@ -2707,6 +2707,9 @@
     "转换结果写入临时文件失败。" : {
       "extractionState" : "manual"
     },
+    "转换设置" : {
+      "extractionState" : "manual"
+    },
     "转换质量" : {
       "extractionState" : "manual"
     },
