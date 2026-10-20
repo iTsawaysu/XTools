@@ -76,7 +76,7 @@ struct IndexStepperInput: View {
                 Image(systemName: symbol)
                     .font(ToolTypography.label)
                     .foregroundStyle(isDisabled ? ToolTheme.textTertiary : ToolTheme.textSecondary)
-                    .frame(width: 24, height: 26)
+                    .frame(width: 24, height: ToolMetrics.ControlHeight.small)
                     .background(background, in: Rectangle())
                     .contentShape(Rectangle())
             }

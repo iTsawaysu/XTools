@@ -263,10 +263,15 @@ private struct IndexTextEncryptionWorkspaceContent: View {
     }
 
     private var primaryActionButton: some View {
-        Button { run() } label: { Label(primaryActionTitle, systemImage: "play.fill") }
-            .buttonStyle(IndexButtonStyle(primary: true))
-            .frame(minWidth: 76)
-            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
+        IndexPrimaryActionButton(
+            title: primaryActionTitle,
+            systemImage: "play.fill",
+            hint: entryGeneration > 0 ? "⌘↩" : nil,
+            help: "\(primaryActionTitle)文本" + (entryGeneration > 0 ? "（⌘↩）" : ""),
+            action: run
+        )
+        .frame(minWidth: 76)
+        .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
     }
 
     private var widePasswordInput: some View {

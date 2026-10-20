@@ -10,13 +10,15 @@ enum ToolMetrics {
     /// Geometry for the approved V3 workbench. Shell and home components use
     /// these values instead of changing the shared tool-page scale.
     enum Workbench {
-        static let mainMaxWidth: CGFloat = 880
-        static let horizontalInset: CGFloat = 32
-        static let topInset: CGFloat = 38
-        static let shortcutRowHeight: CGFloat = 58
-        static let sectionGap: CGFloat = 32
-        static let compactCorner: CGFloat = 6
-        static let groupCorner: CGFloat = 8
+        static let mainMaxWidth: CGFloat = 980
+        static let horizontalInset: CGFloat = 30
+        static let topInset: CGFloat = 26
+        static let sectionGap: CGFloat = 16
+        static let searchHeroHeight: CGFloat = 48
+        static let toolCardIconBox: CGFloat = 30
+        static let toolCardHeight: CGFloat = 54
+        static let categoryChipHeight: CGFloat = 36
+        static let panelMinHeight: CGFloat = 176
     }
 
     // MARK: - Spacing (4x scale)
@@ -62,6 +64,24 @@ enum ToolMetrics {
         static let large: CGFloat = 15     // rows, primary glyphs
         static let tool: CGFloat = 16      // tool identity icons (sidebar rows)
         static let display: CGFloat = 22   // empty-state / drop-zone hero glyphs
+    }
+
+    // MARK: - Control Height Ladder
+
+    /// One height per role. Pages and shared controls must not invent other
+    /// values for the same role; internal calendar cells and decorative
+    /// chrome are not part of this ladder.
+    enum ControlHeight {
+        /// Icon buttons, small text buttons, compact option-menu triggers.
+        static let compact: CGFloat = 24
+        /// Segmented items, option pills/switches, steppers.
+        static let small: CGFloat = 28
+        /// Primary/secondary action buttons; regular segmented tray is 32.
+        static let action: CGFloat = 32
+        /// Text/search/date fields, menus, option groups.
+        static let field: CGFloat = 38
+        /// Workbench tool rows and generated-value rows.
+        static let row: CGFloat = 44
     }
 
     // MARK: - Responsive Breakpoints

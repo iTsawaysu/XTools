@@ -280,7 +280,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(height: 44)
+        .frame(height: ToolMetrics.ControlHeight.row)
         .padding(.horizontal, 12)
         // Anchored toolbar menus (IndexOptionsMenu) drop below the 44pt row and
         // over the panes; the toolbar subtree must draw above the later pane

@@ -65,13 +65,14 @@ struct IndexButtonStyle: ButtonStyle {
                 .labelStyle(.titleAndIcon)
                 .foregroundStyle(primary ? ToolTheme.onAccent : ToolTheme.textPrimary)
                 .padding(.horizontal, 12)
-                .frame(height: 32)
+                .frame(height: ToolMetrics.ControlHeight.action)
                 .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
                         .strokeBorder(primary ? ToolTheme.accent : (hovering ? ToolTheme.strongBorder : Color.clear), lineWidth: 1)
                 }
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+                .opacity(isEnabled ? 1 : 0.45)
                 .scaleEffect(!reduceMotion && configuration.isPressed ? ToolMotion.Scale.modal : 1)
                 .onHover { isHovering = $0 }
                 .toolAnimation(ToolMotion.Preset.controlFeedback, value: hovering)
@@ -129,13 +130,14 @@ struct IndexSmallButtonStyle: ButtonStyle {
                 .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(done ? ToolTheme.success : ToolTheme.textSecondary)
                 .padding(.horizontal, 9)
-                .frame(height: 24)
+                .frame(height: ToolMetrics.ControlHeight.compact)
                 .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
                         .strokeBorder(border, lineWidth: 1)
                 }
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
+                .opacity(isEnabled ? 1 : 0.5)
                 .scaleEffect(!reduceMotion && configuration.isPressed ? ToolMotion.Scale.pressed : 1)
                 .onHover { isHovering = $0 }
                 .toolAnimation(ToolMotion.Preset.controlFeedback, value: hovering)
@@ -189,9 +191,10 @@ struct IndexIconActionButtonStyle: ButtonStyle {
             configuration.label
                 .font(ToolTypography.buttonSmall)
                 .foregroundStyle(foreground)
-                .frame(width: 24, height: 24)
+                .frame(width: ToolMetrics.ControlHeight.compact, height: ToolMetrics.ControlHeight.compact)
                 .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
+                .opacity(isEnabled ? 1 : 0.4)
                 .scaleEffect(configuration.isPressed ? ToolMotion.Scale.pressed : 1)
                 .onHover { isHovering = $0 }
                 .toolAnimation(
@@ -223,6 +226,7 @@ enum IndexPasteboard {
 /// to look for shortcut wiring.
 struct IndexPrimaryActionButton: View {
     let title: String
+    var systemImage: String? = nil
     var hint: String? = nil
     var help: String
     let action: () -> Void
@@ -230,6 +234,10 @@ struct IndexPrimaryActionButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 7) {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .accessibilityHidden(true)
+                }
                 Text(title)
                 if let hint {
                     IndexKeyboardHintLabel(hint: hint)

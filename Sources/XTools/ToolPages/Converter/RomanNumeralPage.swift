@@ -21,6 +21,7 @@ struct IndexRomanPage: View {
 }
 
 private struct IndexRomanWorkspaceContent: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var workspace: RomanNumeralToolWorkspaceModel
 
     private var output: String {
@@ -38,7 +39,7 @@ private struct IndexRomanWorkspaceContent: View {
                 IndexSegmentedControl(items: [("toRoman", "数字→罗马"), ("toNum", "罗马→数字")], selection: modeSelection)
             }
             IndexPanel("输入") {
-                IndexTextInput(placeholder: "例如 2024 或 MMXXIV", text: $workspace.input, height: 42, autoFocus: true)
+                IndexTextInput(placeholder: "例如 2024 或 MMXXIV", text: $workspace.input, autoFocus: true)
                     .onChange(of: workspace.input) { _ in normalizeRomanCase(); validate() }
                     .indexWorkspaceDiagnostic(workspace.error)
             } accessory: {
@@ -47,8 +48,24 @@ private struct IndexRomanWorkspaceContent: View {
                 }
             }
             IndexPanel("结果") {
-                IndexHeroStat(value: output, copyable: output != IndexEmptyStateCopy.notAvailable)
+                if output == IndexEmptyStateCopy.notAvailable {
+                    IndexEmptyState(
+                        title: "等待输入",
+                        systemImage: "arrow.left.arrow.right",
+                        message: "输入数字或罗马数字后自动转换。",
+                        density: .list
+                    )
+                    .frame(minHeight: 96)
+                    .transition(ToolMotion.Transition.modeContent)
+                } else {
+                    IndexHeroStat(value: output, copyable: true)
+                        .transition(ToolMotion.Transition.modeContent)
+                }
             }
+            .animation(
+                ToolMotion.animation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion),
+                value: output == IndexEmptyStateCopy.notAvailable
+            )
         }
     }
 

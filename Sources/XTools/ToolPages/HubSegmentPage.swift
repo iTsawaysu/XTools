@@ -47,7 +47,9 @@ struct HubSegmentPage<Segment: HubSegmentIdentifier, Content: View>: View {
                 selection: segmentSelection,
                 density: .regular
             )
-            content(segment)
+            IndexModeContent(id: segment) { displayedSegment in
+                content(displayedSegment)
+            }
         }
         .onAppear { consumeEntryHintIfNeeded() }
         .onChange(of: entryHint.request) { _ in consumeEntryHintIfNeeded() }

@@ -77,7 +77,7 @@ struct IndexOptionGroup<Content: View>: View {
         }
         .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 8)
-        .frame(height: 36)
+        .frame(height: ToolMetrics.ControlHeight.field)
         .background(ToolTheme.utilityBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
@@ -172,7 +172,7 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
                         .fixedSize(horizontal: true, vertical: false)
                 }
                 .padding(.horizontal, 4)
-                .frame(height: 28)
+                .frame(height: ToolMetrics.ControlHeight.small)
                 .background(
                     configuration.isOn ? ToolTheme.selectionFill : Color.clear,
                     in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
@@ -260,7 +260,7 @@ private struct IndexEmbeddedSwitchLabel: View {
                 }
                 .padding(.horizontal, trackPadding)
         }
-        .frame(height: 26)
+        .frame(height: ToolMetrics.ControlHeight.small)
         .background(
             trackBackground,
             in: Capsule(style: .continuous)
@@ -311,7 +311,7 @@ private struct IndexOptionButtonLabel: View {
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 8)
-            .frame(height: 26)
+            .frame(height: ToolMetrics.ControlHeight.small)
             .background(
                 background,
                 in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
@@ -351,7 +351,7 @@ struct IndexOptionMenu: View {
         .padding(.leading, 7)
         .padding(.trailing, 24)
         .frame(minWidth: 116)
-        .frame(height: 38)
+        .frame(height: ToolMetrics.ControlHeight.field)
         .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)

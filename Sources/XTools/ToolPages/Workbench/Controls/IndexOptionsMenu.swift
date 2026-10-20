@@ -49,7 +49,7 @@ struct IndexOptionsMenu: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.toolPageEntryGeneration) private var entryGeneration
 
-    fileprivate static let triggerHeight: CGFloat = 24
+    fileprivate static let triggerHeight: CGFloat = ToolMetrics.ControlHeight.compact
 
     var body: some View {
         trigger

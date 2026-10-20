@@ -147,11 +147,9 @@ struct IndexCodeViewerSurface: View {
 
                 if text.isEmpty {
                     placeholderView
-                        // Wave 2 empty-arrival: the editor placeholder rises in
-                        // softly when content empties (IndexEmptyState owns the
-                        // staged beats for whole-panel empty states).
+                        // Shared single-beat placeholder arrival.
                         .transition(
-                            .opacity.combined(with: .offset(y: ToolMotion.EmptyArrival.textRiseDistance))
+                            .opacity.combined(with: .offset(y: ToolMotion.EmptyArrival.riseDistance))
                         )
                 }
             }

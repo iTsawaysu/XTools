@@ -7,7 +7,7 @@ import XToolsCore
 struct IndexTextInput: View {
     let placeholder: String
     @Binding var text: String
-    var height: CGFloat = 38
+    var height: CGFloat = ToolMetrics.ControlHeight.field
     var alignment: TextAlignment = .leading
     var secure = false
     var allowsCopy = true
@@ -30,7 +30,7 @@ struct IndexTextInput: View {
     init(
         placeholder: String,
         text: Binding<String>,
-        height: CGFloat = 38,
+        height: CGFloat = ToolMetrics.ControlHeight.field,
         alignment: TextAlignment = .leading,
         secure: Bool = false,
         allowsCopy: Bool = true,
@@ -102,7 +102,7 @@ struct IndexTextInput: View {
 struct IndexSearchInput: View {
     let placeholder: String
     @Binding var text: String
-    var height: CGFloat = 38
+    var height: CGFloat = ToolMetrics.ControlHeight.field
     var autoFocus = false
     var clearTitle = "清空搜索"
     private let onClear: () -> Void
@@ -112,7 +112,7 @@ struct IndexSearchInput: View {
     init(
         placeholder: String,
         text: Binding<String>,
-        height: CGFloat = 38,
+        height: CGFloat = ToolMetrics.ControlHeight.field,
         autoFocus: Bool = false,
         clearTitle: String = "清空搜索",
         onClear: (() -> Void)? = nil

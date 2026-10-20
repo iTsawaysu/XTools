@@ -10,8 +10,8 @@ struct IndexSegmentedControl<Value: Hashable>: View {
 
         fileprivate var itemHeight: CGFloat {
             switch self {
-            case .regular: 26
-            case .compact: 22
+            case .regular: ToolMetrics.ControlHeight.small
+            case .compact: ToolMetrics.ControlHeight.compact
             }
         }
 
@@ -104,7 +104,7 @@ struct IndexSegmentedControl<Value: Hashable>: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                     .padding(.horizontal, 11)
-                    .frame(height: 24)
+                    .frame(height: ToolMetrics.ControlHeight.small)
                     .background {
                         if isSelected {
                             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
@@ -293,10 +293,10 @@ private struct IndexSegmentedCursorLayer<Value: Hashable>: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .animation(
-            !reduceMotion && settledFrame != nil && selectionChanged
+            !reduceMotion && settledFrame != nil
                 ? ToolMotion.SegmentedCursor.slide
                 : nil,
-            value: activeFrame
+            value: selection
         )
         .onChange(of: activeFrame) { newFrame in
             if !reduceMotion,
@@ -316,3 +316,75 @@ private struct IndexSegmentedCursorLayer<Value: Hashable>: View {
     }
 }
 
+
+/// Structural content ownership for a segmented mode switch.
+///
+/// The old content fades out, swaps while hidden, then the new content fades
+/// in with a 3pt rise. A plain cross-fade would overlap two dense control
+/// bars at partial opacity and read as a double-exposure. Intra-mode value
+/// updates do not change `id`, so they stay immediate (or use their own
+/// value/text transition).
+struct IndexModeContent<ID: Hashable, Content: View>: View {
+    let id: ID
+    var fillsHeight = false
+    private let content: (ID) -> Content
+    @State private var displayedID: ID
+    @State private var isVisible = true
+    @State private var handoffTask: Task<Void, Never>?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    init(
+        id: ID,
+        fillsHeight: Bool = false,
+        @ViewBuilder content: @escaping (ID) -> Content
+    ) {
+        self.id = id
+        self.fillsHeight = fillsHeight
+        self.content = content
+        _displayedID = State(initialValue: id)
+    }
+
+    var body: some View {
+        content(displayedID)
+            .opacity(isVisible ? 1 : 0)
+            .offset(y: isVisible ? 0 : ToolMotion.Distance.modeContentRise)
+            .frame(
+                maxWidth: fillsHeight ? .infinity : nil,
+                maxHeight: fillsHeight ? .infinity : nil,
+                alignment: .topLeading
+            )
+            .onChange(of: id) { newID in
+                guard newID != displayedID else { return }
+                handoffTask?.cancel()
+
+                guard !reduceMotion else {
+                    displayedID = newID
+                    isVisible = true
+                    return
+                }
+
+                withAnimation(ToolMotion.ModeContent.exit) {
+                    isVisible = false
+                }
+                handoffTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(ToolMotion.ModeContent.handoffDelay * 1_000_000_000))
+                    guard !Task.isCancelled else { return }
+
+                    let transaction = ToolMotion.disabledTransaction
+                    withTransaction(transaction) {
+                        displayedID = newID
+                        isVisible = false
+                    }
+
+                    await Task.yield()
+                    guard !Task.isCancelled else { return }
+                    withAnimation(ToolMotion.ModeContent.enter) {
+                        isVisible = true
+                    }
+                }
+            }
+            .onDisappear {
+                handoffTask?.cancel()
+            }
+    }
+}

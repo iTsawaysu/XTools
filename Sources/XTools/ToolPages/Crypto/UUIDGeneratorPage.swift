@@ -115,6 +115,7 @@ private struct IndexUUIDWorkspaceContent: View {
                 text: allValuesText,
                 title: "全部复制",
                 showsIcon: false,
+                framed: true,
                 successToast: ToolFeedbackCopy.copiedAll(noun: "UUID")
             )
 
@@ -127,7 +128,7 @@ private struct IndexUUIDWorkspaceContent: View {
             .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 9)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .indexSurface(.card, fill: ToolTheme.panelBackground)
     }

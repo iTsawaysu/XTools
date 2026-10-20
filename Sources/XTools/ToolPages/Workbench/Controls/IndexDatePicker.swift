@@ -35,7 +35,7 @@ struct IndexDatePicker: View {
                     .foregroundStyle(ToolTheme.textTertiary)
             }
             .padding(.horizontal, 11)
-            .frame(height: 38)
+            .frame(height: ToolMetrics.ControlHeight.field)
             .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)

@@ -155,8 +155,6 @@ private struct IndexPasswordGeneratorWorkspaceContent: View {
         .indexSurface(.card, fill: ToolTheme.panelBackground)
     }
 
-    /// Shares the parameter row's 30pt height so the actions center against
-    /// the controls instead of riding the wrapped flow's full height.
     private var generationActions: some View {
         HStack(spacing: 6) {
             IndexCopyButton(
@@ -175,7 +173,6 @@ private struct IndexPasswordGeneratorWorkspaceContent: View {
             )
             .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
         }
-        .frame(height: 30, alignment: .center)
     }
 
     private var allPasswordsText: String {

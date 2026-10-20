@@ -110,10 +110,12 @@ private struct IndexBase64FileWorkspaceContent: View {
                 )
             }
 
-            if session.direction == .encode {
-                forwardWorkflow
-            } else {
-                reverseWorkflow
+            IndexModeContent(id: session.direction, fillsHeight: true) { direction in
+                if direction == .encode {
+                    forwardWorkflow
+                } else {
+                    reverseWorkflow
+                }
             }
         }
     }
@@ -834,7 +836,8 @@ private struct Base64EncodedOutputPreviewSurface: View {
                 IndexEmptyState(
                     title: "等待输入",
                     systemImage: "doc.fill",
-                    message: placeholder
+                    message: placeholder,
+                    density: .output
                 )
             } else {
                 Text(indexWrappingAttributedText(text, lineBreakMode: .byCharWrapping))
