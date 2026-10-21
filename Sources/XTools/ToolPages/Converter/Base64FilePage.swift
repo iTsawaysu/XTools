@@ -58,8 +58,8 @@ private struct IndexBase64FileWorkspaceContent: View {
     private func paneFooter(
         _ status: Base64FilePanelStatusProjection,
         trailingText: String
-    ) -> IndexFileWorkbenchFooter {
-        IndexFileWorkbenchFooter(
+    ) -> IndexWorkbenchFooter {
+        IndexWorkbenchFooter(
             status: status.text,
             statusTone: color(for: status.tone),
             trailingText: trailingText
@@ -141,7 +141,7 @@ private struct IndexBase64FileWorkspaceContent: View {
     }
 
     private var sourceFilePane: some View {
-        IndexFileWorkbenchPane(
+        IndexWorkbenchPane(
             title: "源文件",
             footer: paneFooter(projection.sourceStatus, trailingText: "源文件不会被修改"),
             accessory: {
@@ -159,7 +159,7 @@ private struct IndexBase64FileWorkspaceContent: View {
     }
 
     private var encodedOutputPane: some View {
-        IndexFileWorkbenchPane(
+        IndexWorkbenchPane(
             title: "编码输出",
             footer: paneFooter(projection.encodedOutputStatus, trailingText: projection.encodedOutputSizeSummary),
             accessory: {
@@ -188,9 +188,9 @@ private struct IndexBase64FileWorkspaceContent: View {
     }
 
     private var decodeInputPane: some View {
-        IndexFileWorkbenchPane(
+        IndexWorkbenchPane(
             title: "Base64 输入",
-            footer: IndexFileWorkbenchFooter(
+            footer: IndexWorkbenchFooter(
                 status: "自动检测 Base64 与 Data URL",
                 trailingText: "支持导入编码文本文件"
             ),
@@ -217,7 +217,7 @@ private struct IndexBase64FileWorkspaceContent: View {
     }
 
     private var decodedResultPane: some View {
-        IndexFileWorkbenchPane(
+        IndexWorkbenchPane(
             title: "解码结果",
             footer: paneFooter(
                 projection.decodedResultStatus,
