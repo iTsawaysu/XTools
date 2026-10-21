@@ -129,18 +129,20 @@ struct IndexFileWorkbench<Leading: View, Trailing: View>: View {
     }
 }
 
-/// One pane of the file workbench: the 44pt head (title + accessory), the
-/// stretching content and the shared session-derived foot. Pages assemble the
-/// pieces; this frame keeps the pane chrome stable in every state.
-struct IndexFileWorkbenchPane<Accessory: View, Content: View>: View {
+/// One pane of a paper workbench: the 44pt head (title + accessory), the
+/// stretching content and the optional session-derived foot. Workbench shells
+/// assembled from this pane chrome (Base64 files, the regex pair and friends)
+/// keep the same geometry in every state; panes without a session-derived
+/// status close their content with the standard inset instead.
+struct IndexWorkbenchPane<Accessory: View, Content: View>: View {
     private let title: String
-    private let footer: IndexFileWorkbenchFooter
+    private let footer: IndexWorkbenchFooter?
     private let accessory: Accessory
     private let content: Content
 
     init(
         title: String,
-        footer: IndexFileWorkbenchFooter,
+        footer: IndexWorkbenchFooter? = nil,
         @ViewBuilder accessory: () -> Accessory,
         @ViewBuilder content: () -> Content
     ) {
@@ -152,21 +154,24 @@ struct IndexFileWorkbenchPane<Accessory: View, Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            IndexFileWorkbenchHeader(title: title) { accessory }
+            IndexWorkbenchHeader(title: title) { accessory }
 
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(.horizontal, IndexFileWorkbenchPaneMetrics.inset)
-                .padding(.top, IndexFileWorkbenchPaneMetrics.inset)
+                .padding(.horizontal, IndexWorkbenchPaneMetrics.inset)
+                .padding(.top, IndexWorkbenchPaneMetrics.inset)
+                .padding(.bottom, footer == nil ? IndexWorkbenchPaneMetrics.inset : 0)
 
-            footer
+            if let footer {
+                footer
+            }
         }
     }
 }
 
 /// Pane head: the 44pt title/control row closed by a hairline — the pane-level
 /// counterpart of the shared panel head.
-private struct IndexFileWorkbenchHeader<Accessory: View>: View {
+private struct IndexWorkbenchHeader<Accessory: View>: View {
     private let title: String
     private let accessory: Accessory
 
@@ -189,8 +194,8 @@ private struct IndexFileWorkbenchHeader<Accessory: View>: View {
             accessory
                 .layoutPriority(2)
         }
-        .padding(.horizontal, IndexFileWorkbenchPaneMetrics.inset)
-        .frame(height: IndexFileWorkbenchPaneMetrics.headerHeight)
+        .padding(.horizontal, IndexWorkbenchPaneMetrics.inset)
+        .frame(height: IndexWorkbenchPaneMetrics.headerHeight)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(ToolTheme.border)
@@ -203,7 +208,7 @@ private struct IndexFileWorkbenchHeader<Accessory: View>: View {
 /// guidance on a 16pt caption row. The foot geometry (14pt side insets, an
 /// 11pt gap above, a 14pt inset below) lives here so pane feet stay aligned
 /// without per-page spacing math.
-struct IndexFileWorkbenchFooter: View {
+struct IndexWorkbenchFooter: View {
     let status: String
     var statusTone: Color? = nil
     let trailingText: String
@@ -230,15 +235,15 @@ struct IndexFileWorkbenchFooter: View {
         }
         .font(ToolTypography.caption)
         .foregroundStyle(ToolTheme.textTertiary)
-        .frame(maxWidth: .infinity, minHeight: IndexFileWorkbenchPaneMetrics.footerMinHeight)
-        .padding(.horizontal, IndexFileWorkbenchPaneMetrics.inset)
-        .padding(.top, IndexFileWorkbenchPaneMetrics.footerGap)
-        .padding(.bottom, IndexFileWorkbenchPaneMetrics.inset)
+        .frame(maxWidth: .infinity, minHeight: IndexWorkbenchPaneMetrics.footerMinHeight)
+        .padding(.horizontal, IndexWorkbenchPaneMetrics.inset)
+        .padding(.top, IndexWorkbenchPaneMetrics.footerGap)
+        .padding(.bottom, IndexWorkbenchPaneMetrics.inset)
         .accessibilityElement(children: .combine)
     }
 }
 
-private enum IndexFileWorkbenchPaneMetrics {
+private enum IndexWorkbenchPaneMetrics {
     /// The approved 44pt pane-head row from the file workbench contract.
     static let headerHeight: CGFloat = 44
     static let inset: CGFloat = ToolMetrics.Spacing.panelInset

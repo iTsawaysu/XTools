@@ -121,118 +121,12 @@ private struct IndexRegexWorkspaceContent: View {
             workspaceSemantic: .regexResultWorkspace
         ) {
             // 宽窗左右分栏（regex101 式）：左 = 表达式 + 匹配详情，右 = 测试文本。
-            // 窄窗上下堆叠，结果列表与文本各自内部滚动。
-            IndexPairLayout(collapseWidth: 720, fillsHeight: true, leading: {
-                IndexPanel(
-                    "正则表达式",
-                    content: {
-                        VStack(alignment: .leading, spacing: 10) {
-                            HStack(spacing: 8) {
-                                Text("/")
-                                    .font(ToolTypography.body)
-                                    .foregroundStyle(ToolTheme.textSecondary)
-
-                                IndexTextInput(
-                                    placeholder: #"\b\w+@\w+\.\w+\b"#,
-                                    text: $workspace.pattern
-                                )
-
-                                Text("/")
-                                    .font(ToolTypography.body)
-                                    .foregroundStyle(ToolTheme.textSecondary)
-
-                                flagMenu
-                            }
-                            .indexWorkspaceDiagnostic(error)
-
-                            // 状态与统计同行呈现（窄窗自动换行），统计不再占据独立盒面。
-                            ViewThatFits(in: .horizontal) {
-                                HStack(alignment: .firstTextBaseline, spacing: 16) {
-                                    RegexResultStatus(text: resultStatus.text, tone: resultStatus.tone)
-
-                                    if let report = presentedReport {
-                                        Spacer(minLength: 16)
-                                        RegexResultSummary(stats: stats(for: report))
-                                    }
-                                }
-
-                                VStack(alignment: .leading, spacing: 10) {
-                                    RegexResultStatus(text: resultStatus.text, tone: resultStatus.tone)
-
-                                    if let report = presentedReport {
-                                        RegexResultSummary(stats: stats(for: report))
-                                    }
-                                }
-                            }
-
-                            if let report = presentedReport {
-                                if !report.matches.isEmpty {
-                                    ScrollView {
-                                        RegexMatchList(matches: report.matches, valueMotion: .immediate, selectedIndex: selectedMatchIndex, onSelect: selectMatch)
-                                            .toolTransition(resultTransition, reduceMotion: reduceMotion)
-                                    }
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                                }
-                            }
-                        }
-                    },
-                    accessory: {
-                        HStack(spacing: 8) {
-                            Menu {
-                                ForEach(RegexMatcher.presets) { preset in
-                                    Button(preset.title) {
-                                        applyPreset(preset)
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "text.badge.checkmark")
-                                        .accessibilityHidden(true)
-
-                                    Text(activePresetTitle)
-                                        .toolMotionTextSwap(id: activePresetTitle)
-
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
-                                        .foregroundStyle(ToolTheme.textSecondary)
-                                        .accessibilityHidden(true)
-                                }
-                                .font(ToolTypography.buttonSmall)
-                            }
-                            .menuIndicator(.hidden)
-                            .buttonStyle(IndexSmallButtonStyle())
-                            .fixedSize(horizontal: true, vertical: false)
-                            .accessibilityLabel("正则预设，当前为\(activePresetTitle == "预设" ? "自定义" : activePresetTitle)")
-
-                            IndexClearButton(
-                                isDisabled: !workspace.hasAnyContent,
-                                title: "清空工作区",
-                                action: clearWorkspace
-                            )
-                        }
-                    }
-                )
-                .verticallyFilling()
-            }, trailing: {
-                IndexPanel(
-                    "测试文本",
-                    content: {
-                        IndexWorkspaceTextArea(
-                            placeholder: "粘贴待匹配文本…",
-                            text: $workspace.text,
-                            minHeight: 56,
-                            fillsHeight: true,
-                            temporaryHighlights: temporaryHighlights,
-                            scrollRequest: scrollRequest,
-                            workspaceSemantic: .regexResultWorkspace
-                        )
-                    },
-                    accessory: {
-                        IndexCopyButton(text: resultText, title: "复制匹配结果")
-                    }
-                )
-                .verticallyFilling()
-            })
+            // 窄窗上下均分，两侧内层各自滚动；正则语法错误收进纸顶单槽。
+            IndexPairWorkbench(diagnostic: error) {
+                expressionPane
+            } trailing: {
+                textPane
+            }
         }
         .onAppear {
             displayedReport = report
@@ -243,6 +137,100 @@ private struct IndexRegexWorkspaceContent: View {
         .onChange(of: execution.report) { report in
             present(report)
         }
+    }
+
+    private var expressionPane: some View {
+        IndexWorkbenchPane(
+            title: "正则表达式",
+            footer: IndexWorkbenchFooter(
+                status: resultStatus.text,
+                statusTone: toneColor(resultStatus.tone),
+                trailingText: summaryText
+            ),
+            accessory: {
+                HStack(spacing: 8) {
+                    Menu {
+                        ForEach(RegexMatcher.presets) { preset in
+                            Button(preset.title) {
+                                applyPreset(preset)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "text.badge.checkmark")
+                                .accessibilityHidden(true)
+
+                            Text(activePresetTitle)
+                                .toolMotionTextSwap(id: activePresetTitle)
+
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
+                                .foregroundStyle(ToolTheme.textSecondary)
+                                .accessibilityHidden(true)
+                        }
+                        .font(ToolTypography.buttonSmall)
+                    }
+                    .menuIndicator(.hidden)
+                    .buttonStyle(IndexSmallButtonStyle())
+                    .fixedSize(horizontal: true, vertical: false)
+                    .accessibilityLabel("正则预设，当前为\(activePresetTitle == "预设" ? "自定义" : activePresetTitle)")
+
+                    IndexClearButton(
+                        isDisabled: !workspace.hasAnyContent,
+                        title: "清空工作区",
+                        action: clearWorkspace
+                    )
+                }
+            },
+            content: {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 8) {
+                        Text("/")
+                            .font(ToolTypography.body)
+                            .foregroundStyle(ToolTheme.textSecondary)
+
+                        IndexTextInput(
+                            placeholder: #"\b\w+@\w+\.\w+\b"#,
+                            text: $workspace.pattern
+                        )
+
+                        Text("/")
+                            .font(ToolTypography.body)
+                            .foregroundStyle(ToolTheme.textSecondary)
+
+                        flagMenu
+                    }
+
+                    if let report = presentedReport, !report.matches.isEmpty {
+                        ScrollView {
+                            RegexMatchList(matches: report.matches, valueMotion: .immediate, selectedIndex: selectedMatchIndex, onSelect: selectMatch)
+                                .toolTransition(resultTransition, reduceMotion: reduceMotion)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    }
+                }
+            }
+        )
+    }
+
+    private var textPane: some View {
+        IndexWorkbenchPane(
+            title: "测试文本",
+            accessory: {
+                IndexCopyButton(text: resultText, title: "复制匹配结果")
+            },
+            content: {
+                IndexWorkspaceTextArea(
+                    placeholder: "粘贴待匹配文本…",
+                    text: $workspace.text,
+                    minHeight: 56,
+                    fillsHeight: true,
+                    temporaryHighlights: temporaryHighlights,
+                    scrollRequest: scrollRequest,
+                    workspaceSemantic: .regexResultWorkspace
+                )
+            }
+        )
     }
 
     /// 正文高亮：整匹配铺底色，被选中的匹配加强底色并加下划线；
@@ -285,6 +273,27 @@ private struct IndexRegexWorkspaceContent: View {
             return ("找到 \(report.matches.count) 个零长度匹配；详情见下方。", .neutral)
         }
         return ("找到 \(report.matches.count) 个匹配，其中 \(highlightedCount) 个已高亮。", .success)
+    }
+
+    private func toneColor(_ tone: IndexBadgeTone) -> Color? {
+        switch tone {
+        case .neutral:
+            return nil
+        case .success:
+            return ToolTheme.success
+        case .warning:
+            return ToolTheme.warning
+        case .error:
+            return ToolTheme.error
+        case .accent:
+            return ToolTheme.accent
+        }
+    }
+
+    /// 非零统计压进 pane 脚尾部；状态行占脚部首位（窄窗单行截断）。
+    private var summaryText: String {
+        guard let report = presentedReport else { return "" }
+        return stats(for: report).map { "\($0.0) \($0.1)" }.joined(separator: " · ")
     }
 
     private var workspaceInput: RegexWorkspaceInput {
