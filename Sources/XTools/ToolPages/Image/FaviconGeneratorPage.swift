@@ -17,68 +17,75 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     @Environment(\.toolToastCenter) private var toastCenter
 
     @ObservedObject var session: FaviconOutputSetSession
-    @State private var isImageDropTargeted = false
 
     var body: some View {
-        IndexPanel("上传图片", fillsHeight: session.sourceImage == nil) {
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                if let image = session.sourceImage {
-                    imageSelectionActions
+        IndexArtifactWorkbench(
+            title: "Favicon 部署包",
+            emptyTitle: "选择图片开始生成 Favicon",
+            hasSource: session.sourceImage != nil,
+            isProcessing: session.isProcessing,
+            diagnostic: session.error,
+            canSaveAll: session.package != nil && !session.isProcessing,
+            saveAccessibilityLabel: "保存全部五个 Favicon 部署文件",
+            saveHelp: "选择文件夹保存五个部署文件",
+            onSelect: selectImage,
+            onDropURL: receiveImageURL,
+            onDropMultiple: rejectMultipleImageDrop,
+            onSaveAll: saveAll,
+            source: { sourceStrip },
+            content: { packageContent }
+        )
+    }
 
-                    HStack(alignment: .center, spacing: ToolMetrics.Spacing.base) {
-                        IndexImagePreviewStage(
-                            image: image,
-                            accessibilityLabel: "Favicon 源图片预览",
-                            accessibilityValue: faviconSourceAccessibilityValue,
-                            maxDisplayWidth: 120,
-                            maxDisplayHeight: 96,
-                            spacing: 0
-                        )
-                        .frame(width: 140)
-
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(session.sourceURL?.lastPathComponent ?? "源图片")
-                                .font(ToolTypography.bodyPlain)
-                                .foregroundStyle(ToolTheme.textPrimary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-
-                            Text(faviconSourceSummary)
-                                .font(ToolTypography.caption)
-                                .foregroundStyle(ToolTheme.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    // 空态在铺满的输入区内垂直居中，主操作由占位自带的
-                    // 32pt 按钮承担，不再重复小动作行。
-                    ImageUploadPendingState(
-                        isProcessing: session.isProcessing,
-                        title: "选择图片开始生成 Favicon",
-                        fillsHeight: true,
-                        onSelect: selectImage
-                    )
+    private var sourceStrip: some View {
+        HStack(alignment: .center, spacing: ToolMetrics.Spacing.md) {
+            if let image = session.sourceImage {
+                IndexImagePreviewImage(
+                    image: image,
+                    accessibilityLabel: "Favicon 源图片预览",
+                    accessibilityValue: faviconSourceAccessibilityValue,
+                    maxDisplayWidth: FaviconPackageMetrics.sourceThumbnailImage,
+                    maxDisplayHeight: FaviconPackageMetrics.sourceThumbnailImage
+                )
+                .frame(
+                    width: FaviconPackageMetrics.sourceThumbnailBox,
+                    height: FaviconPackageMetrics.sourceThumbnailBox
+                )
+                .background(
+                    ToolTheme.editorBackground,
+                    in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                        .strokeBorder(ToolTheme.border, lineWidth: 0.5)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, ToolMetrics.Spacing.sm)
-            // 源就位后成品面板已持有同一诊断锚；这里只在空态生效，
-            // 避免同一错误被两个面板各提示一次（双 toast/双 banner）。
-            .indexWorkspaceDiagnostic(session.sourceImage == nil ? session.error : nil)
-            .indexDropZone(
-                isTargeted: $isImageDropTargeted,
-                onFile: receiveImageURL,
-                onMultipleFiles: rejectMultipleImageDrop
+
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
+                Text(session.sourceURL?.lastPathComponent ?? "源图片")
+                    .font(ToolTypography.bodyPlain)
+                    .foregroundStyle(ToolTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Text(faviconSourceSummary)
+                    .font(ToolTypography.caption)
+                    .foregroundStyle(ToolTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: ToolMetrics.Spacing.sm)
+
+            ImageSelectionActionRow(
+                hasSource: true,
+                selectAccessibilityLabel: "更换 Favicon 源图片",
+                replaceAccessibilityLabel: "更换 Favicon 源图片",
+                clearAccessibilityLabel: "清除当前 Favicon 图片",
+                onSelect: selectImage,
+                onClear: clearImage
             )
         }
-
-        Group {
-            if session.sourceImage != nil {
-                faviconOutputPanel
-                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
-            }
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var faviconSourceSummary: String {
@@ -91,71 +98,41 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
         return "尺寸 \(metadata.pixelWidth)×\(metadata.pixelHeight)，\(metadata.format?.displayName ?? "未知格式")，\(ByteSizeFormatter.format(bytes: metadata.byteCount))"
     }
 
-    private var imageSelectionActions: ImageSelectionActionRow {
-        ImageSelectionActionRow(
-            hasSource: session.sourceImage != nil,
-            selectAccessibilityLabel: "选择 Favicon 源图片",
-            replaceAccessibilityLabel: "更换 Favicon 源图片",
-            clearAccessibilityLabel: "清除当前 Favicon 图片",
-            onSelect: selectImage,
-            onClear: {
-                withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
-                    session.reset()
-                }
-            }
-        )
-    }
-
-    private var faviconOutputPanel: some View {
-        IndexPanel("Favicon 部署包") {
-            VStack(spacing: ToolMetrics.Spacing.md) {
-                if session.isProcessing {
-                    IndexProgressLabel(message: "正在生成部署包…", layout: .centered)
-                        .accessibilityLabel("正在生成 Favicon 部署包")
-                        .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
-                } else if let package = session.package {
-                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
-                        if let warning = session.sourceWarning {
-                            faviconReviewWarning(warning)
-                        }
-
-                        artifactGroup(.browser, package: package)
-                        artifactGroup(.apple, package: package)
-                        artifactGroup(.pwa, package: package)
-                        artifactGroup(.configuration, package: package)
-                        configurationGroup(package)
-                    }
-                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
-                }
-            }
-            .indexWorkspaceDiagnostic(session.error)
-            .toolAnimation(ToolMotion.Preset.diagnostic, value: session.isProcessing)
-            .padding(ToolMetrics.Spacing.sm)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .toolAnimation(ToolMotion.Preset.panelReveal, value: session.package != nil)
-        } accessory: {
-            if session.package != nil {
-                Button {
-                    Task { @MainActor in
-                        guard let package = session.package else { return }
-                        let outcome = await session.savePackage(filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
-                        ImageSaveOutcomeToasts.presentCountedOutput(
-                            outcome,
-                            savedCount: package.saveableArtifacts.count,
-                            successNoun: "部署文件",
-                            partialNoun: "个部署文件",
-                            toastCenter: toastCenter
-                        )
-                    }
-                } label: {
-                    Label("全部保存", systemImage: IndexActionSymbol.save)
-                        .font(ToolTypography.buttonSmall)
-                }
-                .buttonStyle(IndexSmallButtonStyle())
-                .accessibilityLabel("保存全部五个 Favicon 部署文件")
+    @ViewBuilder
+    private var packageContent: some View {
+        Group {
+            if session.isProcessing {
+                IndexProgressLabel(message: "正在生成部署包…", layout: .centered)
+                    .accessibilityLabel("正在生成 Favicon 部署包")
+                    .frame(maxWidth: .infinity, minHeight: FaviconPackageMetrics.statusMinHeight, alignment: .center)
+            } else if let package = session.package {
+                packageGroups(package)
+            } else {
+                IndexEmptyState(
+                    title: "尚未生成部署包",
+                    systemImage: "shippingbox",
+                    message: "更换图片后会重新生成。",
+                    density: .list
+                )
+                .frame(maxWidth: .infinity, minHeight: FaviconPackageMetrics.statusMinHeight, alignment: .center)
             }
         }
-        .verticallyFilling()
+        .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
+    }
+
+    private func packageGroups(_ package: FaviconPackage) -> some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+            if let warning = session.sourceWarning {
+                faviconReviewWarning(warning)
+            }
+
+            artifactGroup(.browser, package: package)
+            artifactGroup(.apple, package: package)
+            artifactGroup(.pwa, package: package)
+            artifactGroup(.configuration, package: package)
+            configurationGroup(package)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func faviconReviewWarning(_ warning: String) -> some View {
@@ -178,7 +155,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     private func artifactGroup(_ group: FaviconArtifactGroup, package: FaviconPackage) -> some View {
         let artifacts = package.artifacts.filter { $0.group == group }
         if !artifacts.isEmpty {
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                 Text(group.displayName)
                     .font(ToolTypography.sectionTitle)
                     .foregroundStyle(ToolTheme.textPrimary)
@@ -193,7 +170,16 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
 
     private func faviconArtifactRow(_ artifact: FaviconArtifact, package: FaviconPackage) -> some View {
         FaviconArtifactRow(artifact: artifact, package: package) {
-            Task { @MainActor in handleSave(await session.saveArtifact(artifact.id, filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient), filename: artifact.filename) }
+            Task { @MainActor in
+                handleSave(
+                    await session.saveArtifact(
+                        artifact.id,
+                        filePanel: fileInputPanelClient,
+                        outputPanel: fileOutputPanelClient
+                    ),
+                    filename: artifact.filename
+                )
+            }
         }
     }
 
@@ -210,6 +196,23 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
         ImageSaveOutcomeToasts.presentSingleOutput(outcome, fileName: filename, toastCenter: toastCenter)
     }
 
+    private func saveAll() {
+        Task { @MainActor in
+            guard let package = session.package else { return }
+            let outcome = await session.savePackage(
+                filePanel: fileInputPanelClient,
+                outputPanel: fileOutputPanelClient
+            )
+            ImageSaveOutcomeToasts.presentCountedOutput(
+                outcome,
+                savedCount: package.saveableArtifacts.count,
+                successNoun: "部署文件",
+                partialNoun: "个部署文件",
+                toastCenter: toastCenter
+            )
+        }
+    }
+
     private var uploadInteractions: ImageUploadInteractions {
         ImageUploadInteractions(reduceMotion: reduceMotion)
     }
@@ -223,6 +226,12 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
 
     private func receiveImageURL(_ url: URL) {
         session.receiveImageURL(url, selectionPublisher: uploadInteractions.publishSelection)
+    }
+
+    private func clearImage() {
+        withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
+            session.reset()
+        }
     }
 
     private func rejectMultipleImageDrop() {
@@ -243,9 +252,11 @@ private struct FaviconArtifactRow: View {
                 if !artifact.previewSizes.isEmpty {
                     FaviconPreviewStrip(artifact: artifact, package: package)
                 }
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
                     Text(artifact.filename)
                         .font(ToolTypography.monoLabel)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                     Text(artifact.purpose)
                         .font(ToolTypography.bodyPlain)
                         .foregroundStyle(ToolTheme.textSecondary)
@@ -253,13 +264,13 @@ private struct FaviconArtifactRow: View {
                         .font(ToolTypography.caption)
                         .foregroundStyle(ToolTheme.textTertiary)
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: ToolMetrics.Spacing.sm)
                 IndexIconButton(
                     systemImage: IndexActionSymbol.save,
                     help: "保存 \(artifact.filename)",
                     action: onSave
                 )
-                    .accessibilityLabel("保存 \(artifact.filename)")
+                .accessibilityLabel("保存 \(artifact.filename)")
             }
         }
     }
@@ -270,7 +281,7 @@ private struct FaviconPreviewStrip: View {
     let package: FaviconPackage
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 5) {
+        HStack(alignment: .bottom, spacing: FaviconPackageMetrics.previewSpacing) {
             ForEach(artifact.previewSizes, id: \.self) { size in
                 if let icon = package.icon(size: size), let image = NSImage(data: icon.data) {
                     Image(nsImage: image)
@@ -283,11 +294,22 @@ private struct FaviconPreviewStrip: View {
                 }
             }
         }
-        .frame(minWidth: artifact.id == .faviconICO ? 106 : 58, alignment: .leading)
+        .frame(minWidth: previewStripeWidth, alignment: .leading)
+    }
+
+    private var previewStripeWidth: CGFloat {
+        artifact.id == .faviconICO
+            ? FaviconPackageMetrics.icoPreviewStripeWidth
+            : FaviconPackageMetrics.pngPreviewStripeWidth
     }
 
     private func previewLength(_ size: Int) -> CGFloat {
-        min(CGFloat(size), artifact.id == .faviconICO ? 48 : 56)
+        min(
+            CGFloat(size),
+            artifact.id == .faviconICO
+                ? FaviconPackageMetrics.icoPreviewMaxLength
+                : FaviconPackageMetrics.iconPreviewMaxLength
+        )
     }
 }
 
@@ -296,7 +318,7 @@ private struct FaviconConfigurationGroup: View {
     let htmlSnippet: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
             FaviconConfigurationCodeSurface(
                 title: "site.webmanifest 内容",
                 text: manifestText,
@@ -321,7 +343,7 @@ private struct FaviconConfigurationCodeSurface: View {
 
     var body: some View {
         IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 8) {
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                 IndexFieldHeader(title) {
                     IndexCopyButton(text: text, title: copyTitle, iconOnly: true)
                 }
@@ -335,4 +357,15 @@ private struct FaviconConfigurationCodeSurface: View {
             }
         }
     }
+}
+
+private enum FaviconPackageMetrics {
+    static let sourceThumbnailBox: CGFloat = 64
+    static let sourceThumbnailImage: CGFloat = 56
+    static let statusMinHeight: CGFloat = 180
+    static let previewSpacing: CGFloat = 4
+    static let iconPreviewMaxLength: CGFloat = 56
+    static let icoPreviewMaxLength: CGFloat = 48
+    static let icoPreviewStripeWidth: CGFloat = 106
+    static let pngPreviewStripeWidth: CGFloat = 58
 }

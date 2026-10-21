@@ -67,6 +67,14 @@ struct IndexImageHubPage: View {
 /// ToolWorkspaceRepository 按 (toolID, slot) 保活（key 已重挂
 /// toolID "image-tools" + 各自 slot），切换分段或离开再回来不丢输入与结果；
 /// 离开 Hub 时五个会话的重载荷按 toolID 一并驱逐（ToolWorkspacePayloadEvicting）。
+extension ImageHubWorkspaceModel.Segment {
+    /// Favicon 的部署包需要在纸内滚动并保持纸头保存动作固定；
+    /// 其余图片分段仍沿用页级滚动，避免批量列表被裁切。
+    var workspaceSemantic: IndexWorkspaceSemantic {
+        self == .favicon ? .liveImagePreviewStage : .imagePreviewStage
+    }
+}
+
 private struct IndexImageHubContent: View {
     @ObservedObject var workspace: ImageHubWorkspaceModel
 
@@ -74,7 +82,7 @@ private struct IndexImageHubContent: View {
         HubSegmentPage(
             title: "图片处理",
             toolID: "image-tools",
-            workspaceSemantic: .imagePreviewStage,
+            workspaceSemantic: { $0.workspaceSemantic },
             segment: $workspace.segment
         ) { segment in
             switch segment {

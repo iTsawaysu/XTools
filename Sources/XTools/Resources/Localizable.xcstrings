@@ -1177,6 +1177,9 @@
     "尚未生成" : {
       "extractionState" : "manual"
     },
+    "尚未生成部署包" : {
+      "extractionState" : "manual"
+    },
     "尚未输入颜色" : {
       "extractionState" : "manual"
     },
@@ -1796,6 +1799,9 @@
       "extractionState" : "manual"
     },
     "更换图片" : {
+      "extractionState" : "manual"
+    },
+    "更换图片后会重新生成。" : {
       "extractionState" : "manual"
     },
     "更换要优化的图片" : {
@@ -2897,6 +2903,9 @@
       "extractionState" : "manual"
     },
     "选择图片开始生成 Favicon" : {
+      "extractionState" : "manual"
+    },
+    "选择文件夹保存五个部署文件" : {
       "extractionState" : "manual"
     },
     "选择图片开始生成灰度图" : {

@@ -22,7 +22,7 @@ struct HubSegmentPage<Segment: HubSegmentIdentifier, Content: View>: View {
 
     private let title: String
     private let toolID: ToolID
-    private let workspaceSemantic: IndexWorkspaceSemantic
+    private let workspaceSemantic: (Segment) -> IndexWorkspaceSemantic
     @Binding private var segment: Segment
     private let content: (Segment) -> Content
 
@@ -30,6 +30,20 @@ struct HubSegmentPage<Segment: HubSegmentIdentifier, Content: View>: View {
         title: String,
         toolID: ToolID,
         workspaceSemantic: IndexWorkspaceSemantic,
+        segment: Binding<Segment>,
+        @ViewBuilder content: @escaping (Segment) -> Content
+    ) {
+        self.title = title
+        self.toolID = toolID
+        self.workspaceSemantic = { _ in workspaceSemantic }
+        self._segment = segment
+        self.content = content
+    }
+
+    init(
+        title: String,
+        toolID: ToolID,
+        workspaceSemantic: @escaping (Segment) -> IndexWorkspaceSemantic,
         segment: Binding<Segment>,
         @ViewBuilder content: @escaping (Segment) -> Content
     ) {
@@ -44,7 +58,7 @@ struct HubSegmentPage<Segment: HubSegmentIdentifier, Content: View>: View {
         IndexPage(
             title,
             subtitle: segment.subtitle,
-            workspaceSemantic: workspaceSemantic
+            workspaceSemantic: workspaceSemantic(segment)
         ) {
             IndexSegmentedControl(
                 items: Segment.allCases.map { ($0.id, $0.label) },

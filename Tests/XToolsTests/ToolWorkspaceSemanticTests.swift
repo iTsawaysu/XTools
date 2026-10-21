@@ -276,6 +276,15 @@ struct ToolWorkspaceSemanticTests {
         #expect(natural.expandsWithContent)
     }
 
+    @Test @MainActor func imageHubFaviconUsesFillPageShell() {
+        for segment in ImageHubWorkspaceModel.Segment.allCases {
+            let expected: IndexWorkspaceSemantic = segment == .favicon
+                ? .liveImagePreviewStage
+                : .imagePreviewStage
+            #expect(segment.workspaceSemantic == expected)
+        }
+    }
+
     @Test @MainActor func lowLevelTextAreaDoesNotInferNaturalGrowthFromMissingBounds() {
         let defaultTextArea = IndexTextArea(placeholder: "输入", text: .constant(""))
         let fillingTextArea = IndexTextArea(placeholder: "输入", text: .constant(""), fillsHeight: true)

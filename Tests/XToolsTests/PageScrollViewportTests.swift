@@ -9,7 +9,9 @@ import XToolsCore
 struct PageScrollViewportTests {
     @Test func emptyUploadWorkspacesPreserveViewportHeight() async throws {
         for size in [NSSize(width: 1000, height: 1000), NSSize(width: 700, height: 700)] {
-            for segment in ImageHubWorkspaceModel.Segment.allCases {
+            // Favicon 使用 fill 页面壳，纸内滚动并固定纸头保存动作；
+            // 页级滚动的空态高度由本测试继续覆盖其余图片分段。
+            for segment in ImageHubWorkspaceModel.Segment.allCases where segment != .favicon {
                 let defaults = UserDefaults(suiteName: "PageScrollViewportTests.\(UUID())")!
                 let repository = ToolWorkspaceRepository(defaults: defaults)
                 repository.model(for: ImageHubWorkspaceModel.key).segment = segment
