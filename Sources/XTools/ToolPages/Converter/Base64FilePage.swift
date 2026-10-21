@@ -5,44 +5,8 @@ import XToolsDesign
 private enum Base64FileLayout {
     static let primaryContentMinHeight: CGFloat = 136
     static let decodedPreviewHeight: CGFloat = 118
-    static let footerTopSpacing: CGFloat = 11
     static let inlinePreviewCharacterLimit = 512
     static let fileReadProgressDelay: Duration = .milliseconds(150)
-}
-
-enum Base64FileWorkbenchLayoutMode: Equatable {
-    case stacked
-    case horizontal
-}
-
-struct Base64FileWorkbenchColumnWidths: Equatable {
-    let leading: CGFloat
-    let trailing: CGFloat
-}
-
-struct Base64FileWorkbenchLayoutPolicy: Equatable {
-    static let minimumHorizontalWidth: CGFloat = 900
-    static let columnSpacing: CGFloat = 14
-    static let leadingWeight: CGFloat = 1
-    static let trailingWeight: CGFloat = 1.05
-    static let minimumStackedPaneHeight: CGFloat = 280
-    static let minimumHorizontalHeight: CGFloat = 398
-
-    func mode(for availableWidth: CGFloat) -> Base64FileWorkbenchLayoutMode {
-        availableWidth >= Self.minimumHorizontalWidth ? .horizontal : .stacked
-    }
-
-    func columnWidths(for availableWidth: CGFloat) -> Base64FileWorkbenchColumnWidths? {
-        guard mode(for: availableWidth) == .horizontal else { return nil }
-
-        let distributableWidth = max(0, availableWidth - Self.columnSpacing)
-        let totalWeight = Self.leadingWeight + Self.trailingWeight
-        let leading = distributableWidth * Self.leadingWeight / totalWeight
-        return Base64FileWorkbenchColumnWidths(
-            leading: leading,
-            trailing: distributableWidth - leading
-        )
-    }
 }
 
 struct IndexBase64FilePage: View {
@@ -81,8 +45,25 @@ private struct IndexBase64FileWorkspaceContent: View {
         )
     }
 
-    private func workbenchStatus(_ status: Base64FilePanelStatusProjection) -> Base64FileWorkbenchStatus {
-        Base64FileWorkbenchStatus(text: status.text, tone: color(for: status.tone))
+    /// ADR-0028 reads “标题+模式”: the direction control joins the page header
+    /// accessory, so the workflow error text reaches the paper-top slot of the
+    /// shared file workbench instead of per-pane diagnostic slots.
+    private var workbenchDiagnostic: String? {
+        switch session.direction {
+        case .encode: return session.fileError
+        case .decode: return session.reverseError
+        }
+    }
+
+    private func paneFooter(
+        _ status: Base64FilePanelStatusProjection,
+        trailingText: String
+    ) -> IndexFileWorkbenchFooter {
+        IndexFileWorkbenchFooter(
+            status: status.text,
+            statusTone: color(for: status.tone),
+            trailingText: trailingText
+        )
     }
 
     private func color(for tone: Base64FileStatusToneKind) -> Color? {
@@ -103,19 +84,34 @@ private struct IndexBase64FileWorkspaceContent: View {
     }
 
     var body: some View {
-        IndexPage("Base64 文件", subtitle: "将文件编码为 Base64 / Data URL，或从 Base64 解码回文件。", workspaceSemantic: .base64FileWorkspace) {
-            IndexActionBar {
+        IndexPage(
+            "Base64 文件",
+            subtitle: "将文件编码为 Base64 / Data URL，或从 Base64 解码回文件。",
+            workspaceSemantic: .base64FileWorkspace,
+            headerAccessory: {
                 IndexSegmentedControl(
                     items: [("encode", "编码"), ("decode", "解码")],
                     selection: directionBinding
                 )
             }
-
-            if session.direction == .encode {
-                forwardWorkflow
-            } else {
-                reverseWorkflow
-            }
+        ) {
+            IndexFileWorkbench(
+                diagnostic: workbenchDiagnostic,
+                leading: {
+                    if session.direction == .encode {
+                        sourceFilePane
+                    } else {
+                        decodeInputPane
+                    }
+                },
+                trailing: {
+                    if session.direction == .encode {
+                        encodedOutputPane
+                    } else {
+                        decodedResultPane
+                    }
+                }
+            )
         }
     }
 
@@ -144,62 +140,35 @@ private struct IndexBase64FileWorkspaceContent: View {
         )
     }
 
-    private var forwardWorkflow: some View {
-        Base64FileWorkbench {
-            sourceFilePanel
-        } trailing: {
-            encodedOutputPanel
-        }
-    }
-
-    private var reverseWorkflow: some View {
-        Base64FileWorkbench {
-            decodeInputPanel
-        } trailing: {
-            decodedResultPanel
-        }
-    }
-
-    private var sourceFilePanel: some View {
-        IndexPanel("源文件") {
-            VStack(alignment: .leading, spacing: 0) {
+    private var sourceFilePane: some View {
+        IndexFileWorkbenchPane(
+            title: "源文件",
+            footer: paneFooter(projection.sourceStatus, trailingText: "源文件不会被修改"),
+            accessory: {
+                if !projection.fileClearDisabled {
+                    IndexClearButton(isDisabled: projection.fileClearDisabled, iconOnly: true) {
+                        session.clearSelection()
+                    }
+                }
+            },
+            content: {
                 filePickerButton
                     .frame(maxHeight: .infinity)
-                    .indexWorkspaceDiagnostic(session.fileError)
-
-                Base64FileWorkbenchFooter(
-                    status: workbenchStatus(projection.sourceStatus),
-                    trailingText: "源文件不会被修改"
-                )
-                .padding(.top, Base64FileLayout.footerTopSpacing)
             }
-        } accessory: {
-            if !projection.fileClearDisabled {
-                IndexClearButton(isDisabled: projection.fileClearDisabled, iconOnly: true) {
-                    session.clearSelection()
-                }
-            }
-        }
-        .verticallyFilling()
+        )
     }
 
-    private var encodedOutputPanel: some View {
-        IndexPanel("编码输出") {
-            VStack(alignment: .leading, spacing: 0) {
+    private var encodedOutputPane: some View {
+        IndexFileWorkbenchPane(
+            title: "编码输出",
+            footer: paneFooter(projection.encodedOutputStatus, trailingText: projection.encodedOutputSizeSummary),
+            accessory: {
+                encodedOutputHeaderActions
+            },
+            content: {
                 encodedOutputPreviewSurface
-                    .frame(maxHeight: .infinity)
-
-                Base64FileWorkbenchFooter(
-                    status: workbenchStatus(projection.encodedOutputStatus),
-                    trailingText: projection.encodedOutputSizeSummary
-                )
-                .padding(.top, Base64FileLayout.footerTopSpacing)
             }
-        } accessory: {
-            encodedOutputHeaderActions
-        }
-        .withoutDiagnosticStatusSlot()
-        .verticallyFilling()
+        )
     }
 
     private var encodedOutputPreviewSurface: some View {
@@ -218,9 +187,17 @@ private struct IndexBase64FileWorkspaceContent: View {
         )
     }
 
-    private var decodeInputPanel: some View {
-        IndexPanel("Base64 输入") {
-            VStack(alignment: .leading, spacing: 0) {
+    private var decodeInputPane: some View {
+        IndexFileWorkbenchPane(
+            title: "Base64 输入",
+            footer: IndexFileWorkbenchFooter(
+                status: "自动检测 Base64 与 Data URL",
+                trailingText: "支持导入编码文本文件"
+            ),
+            accessory: {
+                decodeInputHeaderActions
+            },
+            content: {
                 IndexWorkspaceTextArea(
                     placeholder: "粘贴 Base64 或 Data URL",
                     text: reverseInputBinding,
@@ -235,28 +212,23 @@ private struct IndexBase64FileWorkspaceContent: View {
                     ),
                     workspaceSemantic: .base64FileWorkspace
                 )
-                .indexWorkspaceDiagnostic(session.reverseError)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-                Base64FileWorkbenchFooter(
-                    status: Base64FileWorkbenchStatus(
-                        text: "自动检测 Base64 与 Data URL",
-                        tone: nil
-                    ),
-                    trailingText: "支持导入编码文本文件"
-                )
-                .padding(.top, Base64FileLayout.footerTopSpacing)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        } accessory: {
-            decodeInputHeaderActions
-        }
-        .verticallyFilling()
+        )
     }
 
-    private var decodedResultPanel: some View {
-        IndexPanel("解码结果") {
-            VStack(alignment: .leading, spacing: 0) {
+    private var decodedResultPane: some View {
+        IndexFileWorkbenchPane(
+            title: "解码结果",
+            footer: paneFooter(
+                projection.decodedResultStatus,
+                trailingText: session.decodedPayload == nil ? "解码后显示文件信息" : "保存前可修改文件名"
+            ),
+            accessory: {
+                if session.decodedPayload != nil {
+                    saveDecodedButton
+                }
+            },
+            content: {
                 VStack(alignment: .leading, spacing: 11) {
                     reversePreview
                     if session.decodedPayload != nil {
@@ -264,20 +236,8 @@ private struct IndexBase64FileWorkspaceContent: View {
                         decodedFileNameEditor
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-
-                Base64FileWorkbenchFooter(
-                    status: workbenchStatus(projection.decodedResultStatus),
-                    trailingText: session.decodedPayload == nil ? "解码后显示文件信息" : "保存前可修改文件名"
-                )
-                .padding(.top, Base64FileLayout.footerTopSpacing)
             }
-        } accessory: {
-            if session.decodedPayload != nil {
-                saveDecodedButton
-            }
-        }
-        .verticallyFilling()
+        )
     }
 
     private var filePickerButton: some View {
@@ -608,204 +568,6 @@ private struct IndexBase64FileWorkspaceContent: View {
                 detail: "支持 Base64 与 Data URL"
             )
         }
-    }
-}
-
-private struct Base64FileWorkbench<Leading: View, Trailing: View>: View {
-    private let leading: Leading
-    private let trailing: Trailing
-    private let policy = Base64FileWorkbenchLayoutPolicy()
-
-    init(
-        @ViewBuilder leading: () -> Leading,
-        @ViewBuilder trailing: () -> Trailing
-    ) {
-        self.leading = leading()
-        self.trailing = trailing()
-    }
-
-    var body: some View {
-        // GeometryReader owns the residual IndexPage height. Horizontal mode fills
-        // that band (min 398pt); stacked mode keeps one outer ScrollView so both
-        // complete panes remain reachable. ScrollView alone cannot propose a finite
-        // height, which previously pinned wide panes to the 398pt floor and left a
-        // large empty slab under the workbench.
-        GeometryReader { proxy in
-            let isHorizontal = policy.mode(for: proxy.size.width) == .horizontal
-            let horizontalHeight = max(
-                Base64FileWorkbenchLayoutPolicy.minimumHorizontalHeight,
-                proxy.size.height
-            )
-
-            Group {
-                if isHorizontal {
-                    workbenchLayout
-                        .frame(
-                            maxWidth: .infinity,
-                            minHeight: horizontalHeight,
-                            maxHeight: .infinity,
-                            alignment: .topLeading
-                        )
-                } else {
-                    ScrollView {
-                        workbenchLayout
-                            .frame(maxWidth: .infinity, alignment: .topLeading)
-                    }
-                    .scrollIndicators(.automatic)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var workbenchLayout: some View {
-        Base64FileWorkbenchLayout() {
-            Base64FileWorkbenchPane {
-                leading
-            }
-            Base64FileWorkbenchPane {
-                trailing
-            }
-        }
-    }
-}
-
-private struct Base64FileWorkbenchPane<Content: View>: View {
-    private let content: Content
-
-    init(@ViewBuilder content: () -> Content) {
-        self.content = content()
-    }
-
-    var body: some View {
-        content
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-}
-
-private struct Base64FileWorkbenchLayout: Layout {
-    private let policy = Base64FileWorkbenchLayoutPolicy()
-
-    func sizeThatFits(
-        proposal: ProposedViewSize,
-        subviews: Subviews,
-        cache: inout ()
-    ) -> CGSize {
-        let availableWidth = resolvedWidth(proposal: proposal, subviews: subviews)
-
-        if policy.mode(for: availableWidth) == .horizontal, subviews.count == 2 {
-            // Prefer the container's finite height (GeometryReader / fill parent).
-            // Fall back to the approved 398pt minimum when the proposal is unbounded.
-            let proposedHeight = proposal.height.flatMap { $0.isFinite ? $0 : nil }
-            return CGSize(
-                width: availableWidth,
-                height: max(
-                    Base64FileWorkbenchLayoutPolicy.minimumHorizontalHeight,
-                    proposedHeight ?? Base64FileWorkbenchLayoutPolicy.minimumHorizontalHeight
-                )
-            )
-        }
-
-        let sizes = subviews.map {
-            $0.sizeThatFits(ProposedViewSize(width: availableWidth, height: nil))
-        }
-        let contentHeight = sizes
-            .map { max(Base64FileWorkbenchLayoutPolicy.minimumStackedPaneHeight, $0.height) }
-            .reduce(0, +)
-        let spacingHeight = Base64FileWorkbenchLayoutPolicy.columnSpacing
-            * CGFloat(max(0, sizes.count - 1))
-        return CGSize(
-            width: availableWidth,
-            height: contentHeight + spacingHeight
-        )
-    }
-
-    func placeSubviews(
-        in bounds: CGRect,
-        proposal: ProposedViewSize,
-        subviews: Subviews,
-        cache: inout ()
-    ) {
-        if let widths = policy.columnWidths(for: bounds.width), subviews.count == 2 {
-            subviews[0].place(
-                at: CGPoint(x: bounds.minX, y: bounds.minY),
-                anchor: .topLeading,
-                proposal: ProposedViewSize(width: widths.leading, height: bounds.height)
-            )
-            subviews[1].place(
-                at: CGPoint(
-                    x: bounds.minX + widths.leading + Base64FileWorkbenchLayoutPolicy.columnSpacing,
-                    y: bounds.minY
-                ),
-                anchor: .topLeading,
-                proposal: ProposedViewSize(width: widths.trailing, height: bounds.height)
-            )
-            return
-        }
-
-        var y = bounds.minY
-        for subview in subviews {
-            let size = subview.sizeThatFits(
-                ProposedViewSize(width: bounds.width, height: nil)
-            )
-            let paneHeight = max(
-                Base64FileWorkbenchLayoutPolicy.minimumStackedPaneHeight,
-                size.height
-            )
-            subview.place(
-                at: CGPoint(x: bounds.minX, y: y),
-                anchor: .topLeading,
-                proposal: ProposedViewSize(width: bounds.width, height: paneHeight)
-            )
-            y += paneHeight + Base64FileWorkbenchLayoutPolicy.columnSpacing
-        }
-    }
-
-    private func resolvedWidth(proposal: ProposedViewSize, subviews: Subviews) -> CGFloat {
-        if let width = proposal.width, width.isFinite {
-            return max(0, width)
-        }
-
-        return subviews
-            .map { $0.sizeThatFits(.unspecified).width }
-            .max() ?? 0
-    }
-}
-
-private struct Base64FileWorkbenchStatus {
-    let text: String
-    let tone: Color?
-}
-
-private struct Base64FileWorkbenchFooter: View {
-    let status: Base64FileWorkbenchStatus
-    let trailingText: String
-
-    var body: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 6) {
-                if let tone = status.tone {
-                    Circle()
-                        .fill(tone)
-                        .frame(width: 6, height: 6)
-                        .accessibilityHidden(true)
-                }
-                Text(status.text)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 8)
-
-            Text(trailingText)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .multilineTextAlignment(.trailing)
-        }
-        .font(ToolTypography.caption)
-        .foregroundStyle(ToolTheme.textTertiary)
-        .frame(maxWidth: .infinity, minHeight: 16)
-        .accessibilityElement(children: .combine)
     }
 }
 
