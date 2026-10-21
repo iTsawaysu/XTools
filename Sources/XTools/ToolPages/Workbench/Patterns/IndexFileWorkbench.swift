@@ -152,6 +152,16 @@ struct IndexWorkbenchPane<Accessory: View, Content: View>: View {
         self.content = content()
     }
 
+    /// Convenience init for bands without header controls (parameters,
+    /// single-surface strips): the head keeps title-only spacing.
+    init(
+        title: String,
+        footer: IndexWorkbenchFooter? = nil,
+        @ViewBuilder content: () -> Content
+    ) where Accessory == EmptyView {
+        self.init(title: title, footer: footer, accessory: { EmptyView() }, content: content)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             IndexWorkbenchHeader(title: title) { accessory }

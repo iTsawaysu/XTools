@@ -61,14 +61,21 @@ private struct IndexJWTWorkspaceContent: View {
             subtitle: "生成、解析并执行有限的本地 JWT 检查，所有处理均在本地完成。",
             // Mixed generate/parse workspace keeps page-level scrolling while
             // each input/output surface declares its own semantic contract.
-            layout: .scroll
-        ) {
-            IndexGenerateParseModeBar(
-                selection: modeBinding,
-                clearAllDisabled: !session.hasAnyContent,
-                onClearAll: clearAll
-            )
+            layout: .scroll,
+            headerAccessory: {
+                // ADR-0028「标题+模式」：操作模式分段与全局清空驻留页头。
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    IndexSegmentedControl(
+                        items: IndexGenerateParseMode.segmentedItems,
+                        selection: modeSelectionBinding
+                    )
+                    .accessibilityLabel("操作模式")
 
+                    IndexClearButton(isDisabled: !session.hasAnyContent, action: clearAll)
+                        .accessibilityLabel("清空所有内容")
+                }
+            }
+        ) {
             IndexGenerateParseModeContent(mode: modeBinding.wrappedValue) {
                 generateContent
             } parse: {
@@ -99,91 +106,103 @@ private struct IndexJWTWorkspaceContent: View {
 
     @ViewBuilder
     private var generateContent: some View {
-        IndexPanel("签名配置") {
-            VStack(alignment: .leading, spacing: 12) {
-                IndexFlowLayout(spacing: 8, lineSpacing: 8) {
-                    IndexOptionGroup {
-                        IndexOptionLabel("算法")
-                        IndexSegmentedControl(
-                            items: JWTAlgorithm.allCases.map { ($0.rawValue, $0.rawValue) },
-                            selection: generateAlgorithmBinding,
-                            selectionStyle: .filled
-                        )
+        // 单张自然高度纸：签名配置 / Header·Payload 双栏 / JWT 输出。
+        IndexStackedWorkbench {
+            IndexWorkbenchPane(title: "签名配置") {
+                VStack(alignment: .leading, spacing: 12) {
+                    IndexFlowLayout(spacing: 8, lineSpacing: 8) {
+                        IndexOptionGroup {
+                            IndexOptionLabel("算法")
+                            IndexSegmentedControl(
+                                items: JWTAlgorithm.allCases.map { ($0.rawValue, $0.rawValue) },
+                                selection: generateAlgorithmBinding,
+                                selectionStyle: .filled
+                            )
+                        }
+                        IndexOptionGroup {
+                            IndexOptionLabel("密钥格式")
+                            IndexSegmentedControl(
+                                items: Self.secretEncodingItems,
+                                selection: generateSecretEncodingBinding,
+                                selectionStyle: .filled
+                            )
+                        }
                     }
-                    IndexOptionGroup {
-                        IndexOptionLabel("密钥格式")
-                        IndexSegmentedControl(
-                            items: Self.secretEncodingItems,
-                            selection: generateSecretEncodingBinding,
-                            selectionStyle: .filled
-                        )
-                    }
+
+                    IndexSecureInput(
+                        placeholder: "输入 HMAC Secret",
+                        text: $workspace.session.generateSecret,
+                        showsSecret: $showsGenerateSecret,
+                        secretNoun: "Secret"
+                    )
+                    .indexWorkspaceDiagnostic(session.generationSecretError)
+
+                    Text(secretEncodingHelp(session.generateSecretEncoding))
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-
-                IndexSecureInput(
-                    placeholder: "输入 HMAC Secret",
-                    text: $workspace.session.generateSecret,
-                    showsSecret: $showsGenerateSecret,
-                    secretNoun: "Secret"
-                )
-                .indexWorkspaceDiagnostic(session.generationSecretError)
-
-                Text(secretEncodingHelp(session.generateSecretEncoding))
-                    .font(ToolTypography.caption)
-                    .foregroundStyle(ToolTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-        }
 
-        IndexPairLayout(collapseWidth: 0) {
-            IndexPanel("Header") {
-                IndexWorkspaceOutputSurface(
-                    text: session.generatedHeader,
-                    placeholder: "Header 将显示在这里",
-                    minHeight: 84,
-                    fillsHeight: true,
-                    lineNumbers: true,
-                    colorize: jsonColorize(for: session.generatedHeader),
-                    workspaceSemantic: .structuredOutputReading
+            IndexPairLayout(collapseWidth: 0) {
+                IndexWorkbenchPane(
+                    title: "Header",
+                    accessory: {
+                        IndexCopyButton(text: session.generatedHeader)
+                    },
+                    content: {
+                        IndexWorkspaceOutputSurface(
+                            text: session.generatedHeader,
+                            placeholder: "Header 将显示在这里",
+                            minHeight: 84,
+                            fillsHeight: true,
+                            lineNumbers: true,
+                            colorize: jsonColorize(for: session.generatedHeader),
+                            workspaceSemantic: .structuredOutputReading
+                        )
+                        .indexWorkspaceDiagnostic(session.generationHeaderError)
+                    }
                 )
-                .indexWorkspaceDiagnostic(session.generationHeaderError)
-            } accessory: {
-                IndexCopyButton(text: session.generatedHeader)
-            }
-            .verticallyFilling()
-        } trailing: {
-            IndexPanel("Payload") {
-                IndexWorkspaceTextArea(
-                    placeholder: #"例如 {"sub":"1234567890"}"#,
-                    text: $workspace.session.generatePayload,
-                    minHeight: 84,
-                    fillsHeight: true,
-                    autoFocus: true,
-                    workspaceSemantic: .longTextNaturalInput
+            } trailing: {
+                IndexWorkbenchPane(
+                    title: "Payload",
+                    content: {
+                        IndexWorkspaceTextArea(
+                            placeholder: #"例如 {"sub":"1234567890"}"#,
+                            text: $workspace.session.generatePayload,
+                            minHeight: 84,
+                            fillsHeight: true,
+                            autoFocus: true,
+                            workspaceSemantic: .longTextNaturalInput
+                        )
+                        .indexWorkspaceDiagnostic(session.generationPayloadError)
+                    }
                 )
-                .indexWorkspaceDiagnostic(session.generationPayloadError)
             }
-            .verticallyFilling()
-        }
 
-        IndexPanel("JWT") {
-            IndexWorkspaceOutputSurface(
-                text: session.generatedToken,
-                placeholder: "填写有效 Payload 和 Secret 后自动生成",
-                minHeight: 84,
-                workspaceSemantic: .structuredOutputReading
+            IndexWorkbenchPane(
+                title: "JWT",
+                accessory: {
+                    HStack(spacing: 6) {
+                        Button(action: transferGeneratedToParse) {
+                            Label("在解析中检查", systemImage: "arrow.right.circle")
+                                .font(ToolTypography.buttonSmall)
+                        }
+                        .buttonStyle(IndexSmallButtonStyle())
+                        .disabled(session.generatedToken.isEmpty)
+
+                        IndexCopyButton(text: session.generatedToken)
+                    }
+                },
+                content: {
+                    IndexWorkspaceOutputSurface(
+                        text: session.generatedToken,
+                        placeholder: "填写有效 Payload 和 Secret 后自动生成",
+                        minHeight: 84,
+                        workspaceSemantic: .structuredOutputReading
+                    )
+                }
             )
-        } accessory: {
-            HStack(spacing: 6) {
-                Button(action: transferGeneratedToParse) {
-                    Label("在解析中检查", systemImage: "arrow.right.circle")
-                        .font(ToolTypography.buttonSmall)
-                }
-                .buttonStyle(IndexSmallButtonStyle())
-                .disabled(session.generatedToken.isEmpty)
-
-                IndexCopyButton(text: session.generatedToken)
-            }
         }
     }
 
@@ -214,32 +233,38 @@ private struct IndexJWTWorkspaceContent: View {
 
     @ViewBuilder
     private var parseContent: some View {
-        IndexPanel("JWT") {
-            IndexWorkspaceTextArea(
-                placeholder: "粘贴 JWT（eyJ...）",
-                text: $workspace.session.parseInput,
-                minHeight: 84,
-                autoFocus: true,
-                workspaceSemantic: .longTextNaturalInput
-            )
-            .onChange(of: session.parseInput) { _ in parse() }
-            .indexWorkspaceDiagnostic(session.parseError)
-        }
+        // 单张自然高度纸：JWT 输入 / 解码结果（Header·Payload 双栏 +
+        // 免责文案 + 本地检查 Disclosure）。
+        IndexStackedWorkbench {
+            IndexWorkbenchPane(title: "JWT") {
+                IndexWorkspaceTextArea(
+                    placeholder: "粘贴 JWT（eyJ...）",
+                    text: $workspace.session.parseInput,
+                    minHeight: 84,
+                    autoFocus: true,
+                    workspaceSemantic: .longTextNaturalInput
+                )
+                .onChange(of: session.parseInput) { _ in parse() }
+                .indexWorkspaceDiagnostic(session.parseError)
+            }
 
-        IndexPanel("解码结果") {
-            IndexPairLayout(collapseWidth: 0) {
-                decodedHeaderPane
-            } trailing: {
-                decodedPayloadPane
+            IndexWorkbenchPane(title: "解码结果") {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+                    IndexPairLayout(collapseWidth: 0) {
+                        decodedHeaderPane
+                    } trailing: {
+                        decodedPayloadPane
+                    }
+
+                    Text("Header 和 Payload 仅为解码内容，不代表可信输入或具体应用会接受此 Token。")
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    localCheckDisclosure
+                }
             }
         }
-
-        Text("Header 和 Payload 仅为解码内容，不代表可信输入或具体应用会接受此 Token。")
-            .font(ToolTypography.caption)
-            .foregroundStyle(ToolTheme.textSecondary)
-            .fixedSize(horizontal: false, vertical: true)
-
-        localCheckDisclosure
     }
 
     private var decodedHeaderPane: some View {
@@ -645,6 +670,14 @@ private struct IndexJWTWorkspaceContent: View {
             set: {
                 session.mode = JWTWorkspaceSession.Mode(rawValue: $0.rawValue) ?? .parse
             }
+        )
+    }
+
+    /// 页头模式分段（ADR-0028）用的字符串绑定。
+    private var modeSelectionBinding: Binding<String> {
+        Binding(
+            get: { session.mode.rawValue },
+            set: { session.mode = JWTWorkspaceSession.Mode(rawValue: $0) ?? session.mode }
         )
     }
 
