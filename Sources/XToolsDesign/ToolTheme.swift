@@ -30,10 +30,10 @@ public enum ToolTheme {
 
     // MARK: - Accent (Claude 黏土橙)
 
-    public static let accent = dynamicColor(light: 0xC15F3C, dark: 0xD97757)          // §7.1 accent · Clay
-    public static let accentHover = dynamicColor(light: 0xA84F30, dark: 0xE38A6D)
-    public static let accentSoft = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)  // §7.1 accentSoft
-    public static let accentBorder = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.34, darkAlpha: 0.36) // §7.1 accentBorder
+    public static let accent = dynamicColor(light: 0xB5532F, dark: 0xD97757)          // §7.1 accent · Clay
+    public static let accentHover = dynamicColor(light: 0x9F4927, dark: 0xE38A6D)
+    public static let accentSoft = dynamicColor(light: 0xB5532F, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)  // §7.1 accentSoft
+    public static let accentBorder = dynamicColor(light: 0xB5532F, dark: 0xD97757, alpha: 0.34, darkAlpha: 0.36) // §7.1 accentBorder
     /// Foreground that sits *on top of* an accent fill (status mode block, brand mark).
     /// Light accent is mid-dark → white text reads; dark accent is bright → deep-brown text reads.
     public static let onAccent = dynamicColor(light: 0xFFF8F2, dark: 0x1A0F0A)        // §7.1 onAccent
@@ -46,24 +46,24 @@ public enum ToolTheme {
     // 浅色 = 暖纸底 + 近白卡片；深色 = 暖炭阶梯。
 
     public static let windowBackground = dynamicColor(light: 0xE7E0D4, dark: 0x0D0B09)     // §7.1 surfaceWindow
-    public static let workspaceBackground = dynamicColor(light: 0xF6F1E7, dark: 0x17130F)  // §7.1 surfaceWorkspace
+    public static let workspaceBackground = dynamicColor(light: 0xF6F1E7, dark: 0x16120E)  // §7.1 surfaceWorkspace
     public static let sidebarBackground = dynamicColor(light: 0xEDE6D9, dark: 0x110E0B)    // §7.1 surfaceSidebar
-    public static let panelBackground = dynamicColor(light: 0xFFFDF9, dark: 0x262019)      // §7.1 surfacePanel
-    public static let utilityBackground = dynamicColor(light: 0xF3ECDF, dark: 0x2E271E)    // §7.1 surfacePanel2
-    public static let editorBackground = dynamicColor(light: 0xF7F2E8, dark: 0x100E0B)     // §7.1 surfaceField
+    public static let panelBackground = dynamicColor(light: 0xFCF8EF, dark: 0x2A231C)      // §7.1 surfacePanel
+    public static let utilityBackground = dynamicColor(light: 0xFFFFFF, dark: 0x322A21)    // §7.1 surfacePanel2
+    public static let editorBackground = dynamicColor(light: 0xEFE7D8, dark: 0x0B0908)     // §7.1 surfaceField
     /// 顶栏 ⌘K 触发按钮的 chip 底。浅色比 `editorBackground` 深一档：统一键帽
     /// `IndexKeycap` 的白色顶面落在过浅的 chip 上会白对白糊成一团，需要约 8%
     /// 明度差才能读出 figure-ground 层次（见 `Keycap` 注释的实测锚）；深色沿用
     /// editorBackground 的近黑——亮灰键帽在近黑上已有足够分离。
-    public static let commandTriggerChip = dynamicColor(light: 0xEDE6D9, dark: 0x100E0B)
-    public static let elevatedBackground = dynamicColor(light: 0xFFFDF9, dark: 0x2E271E)
-    public static let popoverBackground = dynamicColor(light: 0xFFFDF9, dark: 0x2A231B, alpha: 0.97, darkAlpha: 0.98)
+    public static let commandTriggerChip = dynamicColor(light: 0xEDE6D9, dark: 0x0B0908)
+    public static let elevatedBackground = dynamicColor(light: 0xFFFFFF, dark: 0x322A21)
+    public static let popoverBackground = dynamicColor(light: 0xFFFFFF, dark: 0x322A21, alpha: 0.97, darkAlpha: 0.98)
 
     // MARK: - Text (暖白 / 次要 / 弱)
 
     public static let textPrimary = dynamicColor(light: 0x2B241C, dark: 0xEDE6DC)     // §7.1 textPrimary · 暖白
-    public static let textSecondary = dynamicColor(light: 0x6C6358, dark: 0xA79D90)   // §7.1 textSecondary
-    public static let textTertiary = dynamicColor(light: 0x9B9184, dark: 0x7A7064)    // §7.1 textTertiary(深色提亮以满足对比度)
+    public static let textSecondary = dynamicColor(light: 0x5F5548, dark: 0xB0A698)   // §7.1 textSecondary
+    public static let textTertiary = dynamicColor(light: 0x6F6455, dark: 0x9E9487)    // §7.1 textTertiary（编辑面 ≥4.5:1）
 
     // MARK: - Lines & fills
 
@@ -71,9 +71,9 @@ public enum ToolTheme {
     public static let strongBorder = dynamicColor(light: 0x3A2A1B, dark: 0xFFE7D2, alpha: 0.14, darkAlpha: 0.115)  // §7.1 border2
     public static let hoverFill = dynamicColor(light: 0x3A2A1B, dark: 0xFFE7D2, alpha: 0.05, darkAlpha: 0.05)      // §7.1 hover
     public static let activeFill = dynamicColor(light: 0x3A2A1B, dark: 0xFFE7D2, alpha: 0.075, darkAlpha: 0.075)
-    public static let selectionFill = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)     // §7.1 selection
-    public static let selectionStroke = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.22, darkAlpha: 0.30)   // §7.1 selectionBorder
-    public static let focusRing = dynamicColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.30, darkAlpha: 0.50)
+    public static let selectionFill = dynamicColor(light: 0xB5532F, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)     // §7.1 selection
+    public static let selectionStroke = dynamicColor(light: 0xB5532F, dark: 0xD97757, alpha: 0.22, darkAlpha: 0.30)   // §7.1 selectionBorder
+    public static let focusRing = dynamicColor(light: 0xB5532F, dark: 0xD97757, alpha: 0.30, darkAlpha: 0.50)
     public static let subtleShadow = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.18, darkAlpha: 0.55)
     public static let panelShadow = dynamicColor(light: 0x1A140E, dark: 0x000000, alpha: 0.05, darkAlpha: 0.32)
     /// Persistent cards sit one step above the workspace. Keep the lift
@@ -181,8 +181,8 @@ public enum ToolTheme {
     /// be wrapped back into appearance-tracking `NSColor` without duplicating
     /// the provider, mirroring the SynNSColor convention above.
     public enum SelectionNSColor {
-        public static let fill = dynamicNSColor(light: 0xC15F3C, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)
-        public static let rail = dynamicNSColor(light: 0xC15F3C, dark: 0xD97757)
+        public static let fill = dynamicNSColor(light: 0xB5532F, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)
+        public static let rail = dynamicNSColor(light: 0xB5532F, dark: 0xD97757)
     }
 
     /// AppKit token for the sidebar's permanent thin scroll knob (see
@@ -258,11 +258,12 @@ public extension View {
     /// so only the shadow is visible.
     func toolShadowBehind(
         _ recipe: ToolTheme.ShadowRecipe,
-        cornerRadius: CGFloat
+        cornerRadius: CGFloat,
+        surface: Color = ToolTheme.panelBackground
     ) -> some View {
         background {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(ToolTheme.panelBackground)
+                .fill(surface)
                 .shadow(color: recipe.color, radius: recipe.radius, y: recipe.y)
         }
     }

@@ -85,7 +85,7 @@ struct IndexTextInput: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .frame(height: height)
         .background(
-            embedsFlat ? Color.clear : ToolTheme.editorBackground,
+            ToolTheme.editorBackground,
             in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
         )
         .overlay {
@@ -725,7 +725,7 @@ struct IndexTextArea: View {
             alignment: .topLeading
         )
         .background(
-            embedsFlat ? Color.clear : ToolTheme.editorBackground,
+            ToolTheme.editorBackground,
             in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
         )
         .overlay {

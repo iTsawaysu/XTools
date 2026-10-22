@@ -190,7 +190,7 @@ struct IndexCodeViewerSurface: View {
             alignment: .topLeading
         )
         .background(
-            embedsFlat ? Color.clear : ToolTheme.editorBackground,
+            ToolTheme.editorBackground,
             in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
         )
         .overlay {

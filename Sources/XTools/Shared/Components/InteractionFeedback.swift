@@ -33,13 +33,20 @@ extension View {
     /// while the pointer is inside, so the editing surface answers the cursor
     /// before any control does. Border-color transition only — no movement,
     /// no shadow; Reduce Motion keeps it (it is a state color, not motion).
-    func toolPaneHoverChrome(cornerRadius: CGFloat = ToolMetrics.CornerRadius.field) -> some View {
-        modifier(ToolPaneHoverChromeModifier(cornerRadius: cornerRadius))
+    func toolPaneHoverChrome(
+        cornerRadius: CGFloat = ToolMetrics.CornerRadius.field,
+        surface: Color? = nil
+    ) -> some View {
+        modifier(ToolPaneHoverChromeModifier(cornerRadius: cornerRadius, surface: surface))
     }
 }
 
 private struct ToolPaneHoverChromeModifier: ViewModifier {
     let cornerRadius: CGFloat
+    /// Opaque backing colour for the shadow layer. Editor panes pass
+    /// `editorBackground` so the backing cannot paint the paper colour over
+    /// the editor surface (audit S-05).
+    let surface: Color?
     @State private var isHovered = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -48,7 +55,7 @@ private struct ToolPaneHoverChromeModifier: ViewModifier {
             ? ToolTheme.Shadow.paneHoverLifted
             : ToolTheme.Shadow.paneHoverResting
         content
-            .toolShadowBehind(recipe, cornerRadius: cornerRadius)
+            .toolShadowBehind(recipe, cornerRadius: cornerRadius, surface: surface ?? ToolTheme.panelBackground)
             .overlay {
                 ZStack {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)

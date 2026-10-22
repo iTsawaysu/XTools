@@ -356,12 +356,12 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         if usesSharedPaneSurface {
             HStack(spacing: 0) {
                 inputPaneWithHeader
-                    .toolPaneHoverChrome()
+                    .toolPaneHoverChrome(surface: ToolTheme.editorBackground)
                 Rectangle()
                     .fill(ToolTheme.border)
                     .frame(width: 0.5)
                 outputPane
-                    .toolPaneHoverChrome()
+                    .toolPaneHoverChrome(surface: ToolTheme.editorBackground)
                     .toolOutputBreath(generation: outputBreathGeneration)
             }
             .background(
@@ -376,9 +376,9 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         } else {
             HStack(spacing: ToolMetrics.Spacing.sm) {
                 inputPaneWithHeader
-                    .toolPaneHoverChrome()
+                    .toolPaneHoverChrome(surface: ToolTheme.editorBackground)
                 outputPane
-                    .toolPaneHoverChrome()
+                    .toolPaneHoverChrome(surface: ToolTheme.editorBackground)
                     .toolOutputBreath(generation: outputBreathGeneration)
             }
         }
