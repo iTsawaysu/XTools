@@ -85,7 +85,7 @@ struct IndexFileWorkbench<Leading: View, Trailing: View>: View {
         GeometryReader { proxy in
             let horizontalHeight = max(
                 IndexFileWorkbenchLayoutPolicy.minimumHorizontalHeight,
-                proxy.size.height
+                proxy.size.height - IndexWorkbenchPaneMetrics.inset
             )
 
             if let widths = layoutPolicy.columnWidths(for: proxy.size.width) {
@@ -103,6 +103,8 @@ struct IndexFileWorkbench<Leading: View, Trailing: View>: View {
                             alignment: .topLeading
                         )
                 }
+                .padding(.horizontal, IndexWorkbenchPaneMetrics.inset)
+                .padding(.top, IndexWorkbenchPaneMetrics.inset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else {
                 ScrollView {
@@ -120,6 +122,8 @@ struct IndexFileWorkbench<Leading: View, Trailing: View>: View {
                                 alignment: .topLeading
                             )
                     }
+                    .padding(.horizontal, IndexWorkbenchPaneMetrics.inset)
+                    .padding(.top, IndexWorkbenchPaneMetrics.inset)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
                 .scrollIndicators(.automatic)

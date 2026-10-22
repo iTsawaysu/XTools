@@ -48,15 +48,15 @@ public enum ToolTheme {
     public static let windowBackground = dynamicColor(light: 0xE7E0D4, dark: 0x0D0B09)     // §7.1 surfaceWindow
     public static let workspaceBackground = dynamicColor(light: 0xF6F1E7, dark: 0x17130F)  // §7.1 surfaceWorkspace
     public static let sidebarBackground = dynamicColor(light: 0xEDE6D9, dark: 0x110E0B)    // §7.1 surfaceSidebar
-    public static let panelBackground = dynamicColor(light: 0xFFFDF9, dark: 0x211C16)      // §7.1 surfacePanel
-    public static let utilityBackground = dynamicColor(light: 0xF3ECDF, dark: 0x2A231B)    // §7.1 surfacePanel2
+    public static let panelBackground = dynamicColor(light: 0xFFFDF9, dark: 0x262019)      // §7.1 surfacePanel
+    public static let utilityBackground = dynamicColor(light: 0xF3ECDF, dark: 0x2E271E)    // §7.1 surfacePanel2
     public static let editorBackground = dynamicColor(light: 0xF7F2E8, dark: 0x100E0B)     // §7.1 surfaceField
     /// 顶栏 ⌘K 触发按钮的 chip 底。浅色比 `editorBackground` 深一档：统一键帽
     /// `IndexKeycap` 的白色顶面落在过浅的 chip 上会白对白糊成一团，需要约 8%
     /// 明度差才能读出 figure-ground 层次（见 `Keycap` 注释的实测锚）；深色沿用
     /// editorBackground 的近黑——亮灰键帽在近黑上已有足够分离。
     public static let commandTriggerChip = dynamicColor(light: 0xEDE6D9, dark: 0x100E0B)
-    public static let elevatedBackground = dynamicColor(light: 0xFFFDF9, dark: 0x2A231B)
+    public static let elevatedBackground = dynamicColor(light: 0xFFFDF9, dark: 0x2E271E)
     public static let popoverBackground = dynamicColor(light: 0xFFFDF9, dark: 0x2A231B, alpha: 0.97, darkAlpha: 0.98)
 
     // MARK: - Text (暖白 / 次要 / 弱)

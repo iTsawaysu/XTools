@@ -37,6 +37,9 @@ struct IndexResultWorkbench<Controls: View, Content: View>: View {
             }
 
             content
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.bottom, ToolMetrics.Spacing.md)
+                .padding(.top, ToolMetrics.Spacing.sm)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .background(
