@@ -141,17 +141,23 @@ struct IndexFileWorkbench<Leading: View, Trailing: View>: View {
 struct IndexWorkbenchPane<Accessory: View, Content: View>: View {
     private let title: String
     private let footer: IndexWorkbenchFooter?
+    private let terminalTag: String?
+    private let stretchContent: Bool
     private let accessory: Accessory
     private let content: Content
 
     init(
         title: String,
         footer: IndexWorkbenchFooter? = nil,
+        terminalTag: String? = nil,
+        stretchContent: Bool = true,
         @ViewBuilder accessory: () -> Accessory,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
         self.footer = footer
+        self.terminalTag = terminalTag
+        self.stretchContent = stretchContent
         self.accessory = accessory()
         self.content = content()
     }
@@ -161,17 +167,30 @@ struct IndexWorkbenchPane<Accessory: View, Content: View>: View {
     init(
         title: String,
         footer: IndexWorkbenchFooter? = nil,
+        terminalTag: String? = nil,
+        stretchContent: Bool = true,
         @ViewBuilder content: () -> Content
     ) where Accessory == EmptyView {
-        self.init(title: title, footer: footer, accessory: { EmptyView() }, content: content)
+        self.init(
+            title: title,
+            footer: footer,
+            terminalTag: terminalTag,
+            stretchContent: stretchContent,
+            accessory: { EmptyView() },
+            content: content
+        )
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            IndexWorkbenchHeader(title: title) { accessory }
+            IndexWorkbenchHeader(title: title, terminalTag: terminalTag) { accessory }
 
             content
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: stretchContent ? .infinity : nil,
+                    alignment: .topLeading
+                )
                 .padding(.horizontal, IndexWorkbenchPaneMetrics.inset)
                 .padding(.top, IndexWorkbenchPaneMetrics.inset)
                 .padding(.bottom, footer == nil ? IndexWorkbenchPaneMetrics.inset : 0)
@@ -187,15 +206,22 @@ struct IndexWorkbenchPane<Accessory: View, Content: View>: View {
 /// counterpart of the shared panel head.
 private struct IndexWorkbenchHeader<Accessory: View>: View {
     private let title: String
+    private let terminalTag: String?
     private let accessory: Accessory
 
-    init(title: String, @ViewBuilder accessory: () -> Accessory) {
+    init(title: String, terminalTag: String? = nil, @ViewBuilder accessory: () -> Accessory) {
         self.title = title
+        self.terminalTag = terminalTag
         self.accessory = accessory()
     }
 
     var body: some View {
         HStack(spacing: ToolMetrics.Spacing.sm) {
+            if let terminalTag {
+                IndexBadge(terminalTag, tone: .accent, isCapsule: true)
+                    .layoutPriority(3)
+            }
+
             Text(title)
                 .font(ToolTypography.panelTitle)
                 .foregroundStyle(ToolTheme.textSecondary)

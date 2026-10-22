@@ -46,46 +46,46 @@ private struct IndexChronometerWorkspaceContent: View {
 
     var body: some View {
         IndexPage("计时器", subtitle: "秒表计时，支持计次与暂停。", layout: .scroll) {
-            IndexPanel("秒表") {
-                VStack(spacing: 8) {
-                    TimelineView(
-                        .animation(minimumInterval: 0.01, paused: !chronometer.isRunning || entryGeneration == 0)
-                    ) { context in
-                        Text(ChronometerFormatter.format(currentTime(tick: context.date)))
-                            .font(ToolTypography.giantValueRounded)
-                            .foregroundStyle(ToolTheme.accentHover)
-                            .frame(maxWidth: .infinity)
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel("已用时间")
-                            .accessibilityValue(ChronometerFormatter.format(currentTime(tick: context.date)))
-                    }
-                    HStack(spacing: 8) {
-                        Button { toggle() } label: {
-                            Label {
-                                Text(primaryActionTitle)
-                                    .toolMotionTextSwap(id: primaryActionTitle)
-                            } icon: {
-                                Image(systemName: primaryActionIcon)
-                                    .toolMotionIconSwap(id: primaryActionIcon)
-                            }
+            IndexStackedWorkbench {
+                IndexWorkbenchPane(title: "秒表", stretchContent: false) {
+                    VStack(spacing: 8) {
+                        TimelineView(
+                            .animation(minimumInterval: 0.01, paused: !chronometer.isRunning || entryGeneration == 0)
+                        ) { context in
+                            Text(ChronometerFormatter.format(currentTime(tick: context.date)))
+                                .font(ToolTypography.giantValueRounded)
+                                .foregroundStyle(ToolTheme.accentHover)
+                                .frame(maxWidth: .infinity)
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel("已用时间")
+                                .accessibilityValue(ChronometerFormatter.format(currentTime(tick: context.date)))
                         }
-                            .buttonStyle(IndexButtonStyle(primary: true))
-                        Button { _ = chronometer.recordLap(at: monotonicNow()) } label: { Text("计次") }
-                            .buttonStyle(IndexButtonStyle())
-                            .disabled(!chronometer.canRecordLap)
-                        Button { reset() } label: { Label("重置", systemImage: IndexActionSymbol.reset) }
-                            .buttonStyle(IndexButtonStyle())
-                            .disabled(!chronometer.canReset)
+                        HStack(spacing: 8) {
+                            Button { toggle() } label: {
+                                Label {
+                                    Text(primaryActionTitle)
+                                        .toolMotionTextSwap(id: primaryActionTitle)
+                                } icon: {
+                                    Image(systemName: primaryActionIcon)
+                                        .toolMotionIconSwap(id: primaryActionIcon)
+                                }
+                            }
+                                .buttonStyle(IndexButtonStyle(primary: true))
+                            Button { _ = chronometer.recordLap(at: monotonicNow()) } label: { Text("计次") }
+                                .buttonStyle(IndexButtonStyle())
+                                .disabled(!chronometer.canRecordLap)
+                            Button { reset() } label: { Label("重置", systemImage: IndexActionSymbol.reset) }
+                                .buttonStyle(IndexButtonStyle())
+                                .disabled(!chronometer.canReset)
+                        }
                     }
                 }
+                .fixedSize(horizontal: false, vertical: true)
+
+                IndexWorkbenchPane(title: "计次记录") {
+                    IndexScrollableKV(rows: lapRows, emptyText: IndexEmptyStateCopy.noRecords, copyable: false, valueMotion: .immediate)
+                }
             }
-            .withoutDiagnosticStatusSlot()
-            // SPEC §P6：计次记录可无限增长，结果面板吃满剩余高度，超长在面板内部滚动。
-            IndexPanel("计次记录") {
-                IndexScrollableKV(rows: lapRows, emptyText: IndexEmptyStateCopy.noRecords, copyable: false, valueMotion: .immediate)
-            }
-            .verticallyFilling()
-            .withoutDiagnosticStatusSlot()
         }
     }
 

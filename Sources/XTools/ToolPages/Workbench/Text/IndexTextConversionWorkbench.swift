@@ -153,54 +153,25 @@ struct IndexTextConversionWorkbench: View {
     }
 
     private var workbenchBody: some View {
-        // Clay Warmth: 12pt breathing gutter between the two editor cards.
-        HStack(spacing: 12) {
-            inputPanel
-                .toolPaneHoverChrome(cornerRadius: ToolMetrics.CornerRadius.panel)
-            staticDivider
-
-            outputPanel
-                .toolPaneHoverChrome(cornerRadius: ToolMetrics.CornerRadius.panel)
-        }
-    }
-
-    private var staticDivider: some View {
-        Rectangle()
-            .fill(ToolTheme.border)
-            .frame(width: 0.5)
-            .accessibilityHidden(true)
-    }
-
-    private var inputPanel: some View {
-        IndexPanel(inputTitle) {
-            IndexWorkspaceTextArea(
-                placeholder: placeholder,
-                text: $input,
-                fillsHeight: true,
-                autoFocus: autoFocus,
-                caretPlacementRequestToken: inputCaretPlacementRequestToken,
-                inputRenderingMode: inputRenderingMode,
-                workspaceSemantic: workspaceSemantic
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        } accessory: {
-            inputHeaderAccessory
-        }
-        .withoutDiagnosticStatusSlot()
-        .terminal("STDIN")
-        .verticallyFilling()
-    }
-
-    private var outputPanel: some View {
-        IndexPanel(outputTitle) {
-            outputSurface
+        IndexPairWorkbench(diagnostic: inputDiagnosticText) {
+            IndexWorkbenchPane(title: inputTitle, terminalTag: "STDIN", accessory: { inputHeaderAccessory }) {
+                IndexWorkspaceTextArea(
+                    placeholder: placeholder,
+                    text: $input,
+                    fillsHeight: true,
+                    autoFocus: autoFocus,
+                    caretPlacementRequestToken: inputCaretPlacementRequestToken,
+                    inputRenderingMode: inputRenderingMode,
+                    workspaceSemantic: workspaceSemantic
+                )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        } accessory: {
-            outputHeaderActions
+            }
+        } trailing: {
+            IndexWorkbenchPane(title: outputTitle, terminalTag: "STDOUT", accessory: { outputHeaderActions }) {
+                outputSurface
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
         }
-        .withoutDiagnosticStatusSlot()
-        .terminal("STDOUT")
-        .verticallyFilling()
     }
 
     @ViewBuilder

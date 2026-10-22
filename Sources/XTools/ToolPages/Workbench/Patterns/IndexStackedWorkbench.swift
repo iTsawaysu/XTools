@@ -10,21 +10,40 @@ import XToolsDesign
 /// title row closes with a hairline), so stacked-band pages cannot drift
 /// back into separate cards.
 struct IndexStackedWorkbench<Bands: View>: View {
+    /// Diagnostic text rendered in the paper-top slot.
+    let diagnostic: String?
+    /// Stretch the paper over the residual page height (fill-height pages).
+    let fillsHeight: Bool
+
     @ViewBuilder private let bands: () -> Bands
 
-    init(@ViewBuilder bands: @escaping () -> Bands) {
+    init(
+        diagnostic: String? = nil,
+        fillsHeight: Bool = false,
+        @ViewBuilder bands: @escaping () -> Bands
+    ) {
+        self.diagnostic = diagnostic
+        self.fillsHeight = fillsHeight
         self.bands = bands
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let diagnostic {
+                IndexDiagnosticBanner(diagnostic: nil, message: diagnostic, tone: .error)
+            }
             bands()
         }
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: fillsHeight ? .infinity : nil,
+            alignment: .topLeading
+        )
         // Scroll pages still propose a finite viewport height, which would let
         // the panes' stretch frames grab a share of it and strand empty bands.
         // A stacked paper takes its ideal height and lets the page background
         // breathe underneath instead.
-        .fixedSize(horizontal: false, vertical: true)
+        .fixedSize(horizontal: false, vertical: !fillsHeight)
         .background(
             ToolTheme.panelBackground,
             in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous)

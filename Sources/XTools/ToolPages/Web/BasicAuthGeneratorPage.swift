@@ -190,101 +190,12 @@ private struct IndexBasicAuthWorkspaceContent: View {
         return [credentials.username, credentials.password]
     }
 
-    // MARK: - Generate
-
-    @ViewBuilder
-    private var generateContent: some View {
-        IndexPanel("凭据") {
-            VStack(spacing: 12) {
-                credentialRow("用户名") {
-                    IndexTextInput(placeholder: "username", text: $session.username, autoFocus: true)
-                }
-                credentialRow("密码") {
-                    passwordInput
-                }
-            }
-        }
-
-        IndexPanel("Authorization 请求头") {
-            IndexWorkspaceOutputSurface(
-                text: session.output,
-                placeholder: session.outputPlaceholder,
-                minHeight: 70,
-                workspaceSemantic: .naturalHeightShortResultPanel
-            )
-            .indexWorkspaceDiagnostic(session.outputDiagnostic)
-        } accessory: {
-            HStack(spacing: ToolMetrics.Spacing.sm) {
-                Button(action: transferGeneratedToParse) {
-                    Label("在解析中打开", systemImage: "arrow.right.circle")
-                        .font(ToolTypography.buttonSmall)
-                }
-                .buttonStyle(IndexSmallButtonStyle())
-                .disabled(session.output.isEmpty)
-
-                IndexCopyButton(text: session.output)
-            }
-        }
-    }
-
     private var passwordInput: some View {
         IndexSecureInput(
             placeholder: "password",
             text: $session.password,
             showsSecret: $showsPassword
         )
-    }
-
-    // MARK: - Parse
-
-    @ViewBuilder
-    private var parseContent: some View {
-        IndexPanel("Authorization 请求头") {
-            IndexWorkspaceTextArea(
-                placeholder: "Authorization: Basic dXNlcjpwYXNz",
-                text: $session.parseInput,
-                minHeight: 84,
-                autoFocus: true,
-                workspaceSemantic: .longTextNaturalInput
-            )
-            .onChange(of: session.parseInput) { _ in parse() }
-            .indexWorkspaceDiagnostic(session.parseError)
-        }
-
-        IndexPanel("解析结果") {
-            IndexWorkspaceResultSurface(workspaceSemantic: .naturalHeightShortResultPanel) {
-                IndexResultPresence(
-                    value: session.parsedCredentials,
-                    updateID: parsedCredentialsPresenceUpdateID
-                ) { parsedCredentials in
-                    VStack(spacing: 1) {
-                        parsedUsernameRow(parsedCredentials.username)
-                        parsedPasswordRow(parsedCredentials.password)
-                    }
-                    .background(ToolTheme.border)
-                    .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                            .strokeBorder(ToolTheme.border, lineWidth: 0.5)
-                    }
-                } empty: {
-                    IndexEmptyState(
-                        title: IndexEmptyStateCopy.noParsedResult,
-                        systemImage: "lock.shield",
-                        message: IndexEmptyStateCopy.autoParse("Basic Auth 请求头或 Base64 凭据"),
-                        density: .list
-                    )
-                    .frame(minHeight: 70)
-                }
-            }
-        } accessory: {
-            Button(action: transferParsedToGenerate) {
-                Label("用于生成", systemImage: "arrow.left.circle")
-                    .font(ToolTypography.buttonSmall)
-            }
-            .buttonStyle(IndexSmallButtonStyle())
-            .disabled(session.parsedCredentials == nil)
-        }
     }
 
     private func parsedUsernameRow(_ value: String) -> some View {
