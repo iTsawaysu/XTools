@@ -94,55 +94,6 @@ private extension View {
     }
 }
 
-/// 单输出页（压缩/灰度）的「上传图片」空态面板：居中的空态/源准备占位，
-/// 面板内容即共享单文件拖放区（多文件整批拒绝）。有源后的「更换/清除」
-/// 动作行由各页的工作区面板自带，空态面板只呈现居中主操作。
-struct ImageUploadEmptyPanel: View {
-    @Binding var isDropTargeted: Bool
-    let isProcessing: Bool
-    let diagnostic: String?
-    let emptyStateTitle: String
-    let onSelect: () -> Void
-    private let onDropFile: (URL) -> Void
-    private let onDropMultipleFiles: () -> Void
-
-    init(
-        isDropTargeted: Binding<Bool>,
-        isProcessing: Bool,
-        diagnostic: String?,
-        emptyStateTitle: String,
-        onSelect: @escaping () -> Void,
-        onDropFile: @escaping (URL) -> Void,
-        onDropMultipleFiles: @escaping () -> Void
-    ) {
-        self._isDropTargeted = isDropTargeted
-        self.isProcessing = isProcessing
-        self.diagnostic = diagnostic
-        self.emptyStateTitle = emptyStateTitle
-        self.onSelect = onSelect
-        self.onDropFile = onDropFile
-        self.onDropMultipleFiles = onDropMultipleFiles
-    }
-
-    var body: some View {
-        IndexPanel("上传图片") {
-            ImageUploadPendingState(
-                isProcessing: isProcessing,
-                title: emptyStateTitle,
-                fillsHeight: true,
-                onSelect: onSelect
-            )
-            .indexWorkspaceDiagnostic(diagnostic)
-            .indexDropZone(
-                isTargeted: $isDropTargeted,
-                onFile: onDropFile,
-                onMultipleFiles: onDropMultipleFiles
-            )
-        }
-        .verticallyFilling()
-    }
-}
-
 /// 单图页共享的页面持有交互事务：接受的选图与多文件拖放拒绝都在
 /// panelReveal 事务内落位（会话源赋值不逃出事务）。
 struct ImageUploadInteractions {

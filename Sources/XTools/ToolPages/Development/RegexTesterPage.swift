@@ -122,7 +122,7 @@ private struct IndexRegexWorkspaceContent: View {
         ) {
             // 宽窗左右分栏（regex101 式）：左 = 表达式 + 匹配详情，右 = 测试文本。
             // 窄窗上下均分，两侧内层各自滚动；正则语法错误收进纸顶单槽。
-            IndexPairWorkbench(diagnostic: error) {
+            IndexFileWorkbench(diagnostic: error, splitMode: .pair(threshold: IndexPairWorkbenchLayoutPolicy.defaultThreshold)) {
                 expressionPane
             } trailing: {
                 textPane

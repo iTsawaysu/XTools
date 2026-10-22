@@ -3,10 +3,11 @@ import XToolsDesign
 
 /// P3 input → result workbench.
 ///
-/// One paper instead of stacked cards: an input strip (title + controls), the
-/// input surface, a hairline, a result strip (title + controls) and the result
-/// surface. The input owns the top half; the result takes the remaining height
-/// so short results never leave an empty card behind.
+/// One paper instead of stacked cards: a 44pt paper head carrying the input
+/// identity and its controls, the paper-top diagnostic slot, the input
+/// surface, a hairline, a 44pt result strip and the result surface. The input
+/// owns the top half; the result takes the remaining height so short results
+/// never leave an empty card behind.
 struct IndexInputResultWorkbench<
     InputControls: View,
     ResultControls: View,
@@ -22,6 +23,10 @@ struct IndexInputResultWorkbench<
     private let resultControls: ResultControls
     private let input: Input
     private let result: Result
+
+    @State private var workspaceDiagnostic: IndexWorkspaceDiagnosticPayload?
+    @State private var diagnosticPresentation = IndexWorkspaceDiagnosticPresentationState()
+    @Environment(\.toolToastCenter) private var toastCenter
 
     init(
         inputTitle: String,
@@ -44,6 +49,16 @@ struct IndexInputResultWorkbench<
     var body: some View {
         VStack(spacing: 0) {
             inputStrip
+            divider
+            IndexDiagnosticStatusSlot(isActive: workspaceDiagnostic != nil) {
+                if let diagnostic = workspaceDiagnostic {
+                    IndexDiagnosticBanner(
+                        diagnostic: nil,
+                        message: diagnostic.text,
+                        tone: diagnostic.tone
+                    )
+                }
+            }
             inputSlot
                 .padding(.horizontal, ToolMetrics.Spacing.xs)
             divider
@@ -59,6 +74,13 @@ struct IndexInputResultWorkbench<
                 .strokeBorder(ToolTheme.border, lineWidth: 0.5)
         }
         .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))
+        .toolAnimation(ToolMotion.Preset.diagnostic, value: workspaceDiagnostic != nil)
+        .onPreferenceChange(IndexWorkspaceDiagnosticPreferenceKey.self) { diagnostic in
+            if let announcement = diagnosticPresentation.update(to: diagnostic) {
+                toastCenter?.show(announcement.text, tone: announcement.tone)
+            }
+            workspaceDiagnostic = diagnostic
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -87,8 +109,8 @@ struct IndexInputResultWorkbench<
             stripTitle(inputTitle)
             inputControls
         }
-        .padding(.horizontal, ToolMetrics.Spacing.md)
-        .frame(height: 44)
+        .padding(.horizontal, ToolMetrics.Spacing.panelInset)
+        .frame(height: ToolMetrics.Workbench.paperHeadHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .bottom) { divider }
     }
@@ -99,8 +121,8 @@ struct IndexInputResultWorkbench<
             Spacer(minLength: ToolMetrics.Spacing.sm)
             resultControls
         }
-        .padding(.horizontal, ToolMetrics.Spacing.md)
-        .frame(height: 40)
+        .padding(.horizontal, ToolMetrics.Spacing.panelInset)
+        .frame(height: ToolMetrics.Workbench.paperHeadHeight)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay(alignment: .bottom) { divider }
     }

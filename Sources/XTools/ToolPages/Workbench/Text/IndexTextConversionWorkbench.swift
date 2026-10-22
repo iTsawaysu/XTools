@@ -146,14 +146,13 @@ struct IndexTextConversionWorkbench: View {
                 }
             }
             workbenchBody
-                .padding(.top, hasDiagnostic ? 8 : 0)
         }
         .toolAnimation(ToolMotion.Preset.diagnostic, value: hasDiagnostic)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var workbenchBody: some View {
-        IndexPairWorkbench(diagnostic: inputDiagnosticText) {
+        IndexFileWorkbench(diagnostic: inputDiagnosticText, splitMode: .pair(threshold: IndexPairWorkbenchLayoutPolicy.defaultThreshold)) {
             IndexWorkbenchPane(title: inputTitle, terminalTag: "STDIN", accessory: { inputHeaderAccessory }) {
                 IndexWorkspaceTextArea(
                     placeholder: placeholder,

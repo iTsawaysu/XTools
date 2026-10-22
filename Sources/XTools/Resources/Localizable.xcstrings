@@ -568,6 +568,9 @@
     "保存全部五个 Favicon 部署文件": {
       "extractionState": "manual"
     },
+    "保存优化结果": {
+      "extractionState": "manual"
+    },
     "保存前可修改文件名": {
       "extractionState": "manual"
     },

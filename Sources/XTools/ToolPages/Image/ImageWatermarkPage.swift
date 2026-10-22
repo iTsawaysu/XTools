@@ -185,6 +185,8 @@ private struct IndexImageWatermarkWorkspaceContent: View {
     @Binding var position: ImageWatermarkPosition
     @Binding var textColor: ImageWatermarkTextColor
 
+    @State private var isDropTargeted = false
+
     private var sizePercent: Int {
         Int((sizeRatio * 100).rounded())
     }
@@ -223,33 +225,84 @@ private struct IndexImageWatermarkWorkspaceContent: View {
     /// 预览替换即时生效、状态行保持 18pt 稳定高度、连续控件走双轨防抖，
     /// 画布在有界预览区（720×480 上限）内等比呈现。
     var body: some View {
-        IndexSinglePreviewWorkbench(
+        IndexImageWorkbench(
             title: "水印设置",
-            emptyTitle: "选择图片开始添加水印",
-            previewAccessibilityLabel: "水印成品预览",
-            previewPlaceholder: previewPlaceholder,
-            selectLabel: "选择要添加水印的图片",
-            replaceLabel: "更换要添加水印的图片",
-            clearLabel: "清除当前水印图片",
-            sourceImage: session.source?.image,
-            previewImage: resultPreviewImage,
-            isProcessing: session.isProcessing,
-            diagnostic: session.error ?? previewSession.error,
-            canSave: session.output != nil && !session.isProcessing,
-            saveLabel: "保存",
-            saveAccessibilityLabel: "保存水印图片",
-            saveHelp: "保存与当前水印设置一致的原尺寸图片",
-            onSelect: selectImage,
-            onDropURL: receiveImageURL,
-            onDropMultiple: rejectMultipleImageDrop,
-            onClear: clearImage,
-            onSave: saveImage,
-            parameters: { watermarkParameters },
-            input: { watermarkTextField },
-            sourceFacts: { sourceIdentity },
-            resultFacts: { previewStatus }
-        )
+            trailingActions: saveButton
+        ) {
+            watermarkParameters
+        } content: {
+            watermarkContent
+                .indexWorkspaceDiagnostic(session.error ?? previewSession.error)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .indexDropZone(
+                    isTargeted: $isDropTargeted,
+                    onFile: receiveImageURL,
+                    onMultipleFiles: rejectMultipleImageDrop
+                )
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var saveButton: AnyView? {
+        guard session.output != nil, !session.isProcessing else { return nil }
+        return AnyView(
+            Button(action: saveImage) {
+                Label("保存", systemImage: IndexActionSymbol.save)
+                    .font(ToolTypography.buttonSmall)
+            }
+            .buttonStyle(IndexSmallButtonStyle())
+            .accessibilityLabel("保存水印图片")
+            .help("保存与当前水印设置一致的原尺寸图片")
+        )
+    }
+
+    @ViewBuilder
+    private var watermarkContent: some View {
+        if session.source == nil {
+            VStack(spacing: ToolMetrics.Spacing.lg) {
+                watermarkTextField
+                    .frame(maxWidth: ToolMetrics.Spacing.compactFormMaxWidth)
+                ImageUploadPendingState(
+                    isProcessing: session.isProcessing,
+                    title: "选择图片开始添加水印",
+                    onSelect: selectImage
+                )
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        } else {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+                ImageSelectionActionRow(
+                    hasSource: true,
+                    selectAccessibilityLabel: "更换要添加水印的图片",
+                    replaceAccessibilityLabel: "更换要添加水印的图片",
+                    clearAccessibilityLabel: "清除当前水印图片",
+                    onSelect: selectImage,
+                    onClear: clearImage
+                )
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .center, spacing: ToolMetrics.Spacing.lg) {
+                        watermarkTextField
+                        sourceIdentity
+                    }
+                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+                        watermarkTextField
+                        sourceIdentity
+                    }
+                }
+
+                IndexImagePreviewStage(
+                    image: resultPreviewImage,
+                    accessibilityLabel: "水印成品预览",
+                    placeholder: previewPlaceholder,
+                    fillsHeight: true,
+                    replacementMotion: .immediate
+                ) {
+                    previewStatus
+                }
+            }
+            .padding(.vertical, ToolMetrics.Spacing.sm)
+        }
     }
 
     @ViewBuilder

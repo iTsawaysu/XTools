@@ -17,6 +17,14 @@ public enum ToolMetrics {
         public static let sectionGap: CGFloat = 32
         public static let compactCorner: CGFloat = 6
         public static let groupCorner: CGFloat = 8
+        /// Fixed height of every paper's head row. One value for all shells so
+        /// paper identities align across tools (audit H-02).
+        public static let paperHeadHeight: CGFloat = 44
+        /// Fixed paper inset on all four sides (audit H-02 / rules §2.2).
+        public static let paperInset: CGFloat = 14
+        /// Maximum readable width for tool-paper content on very wide windows.
+        /// Above this the paper stops growing and centres (audit W-04).
+        public static let paperMaxWidth: CGFloat = 1080
     }
 
     // MARK: - Spacing (4x scale)
@@ -33,6 +41,11 @@ public enum ToolMetrics {
         // workspaces from inventing slightly different header/content insets.
         public static let panelInset: CGFloat = 14
         public static let panelSection: CGFloat = 10
+        /// 0.5pt hairline. Pages must not spell the literal themselves.
+        public static let hairline: CGFloat = 0.5
+        /// Reading measure for a single centered form field (watermark text,
+        /// short input strips) inside a paper.
+        public static let compactFormMaxWidth: CGFloat = 360
     }
 
     // MARK: - Corner Radius

@@ -558,7 +558,8 @@ struct IndexWorkspaceDiagnosticPresentationState: Equatable {
 
         guard let next else { return nil }
         guard let previous else { return next }
-        guard next.tone.workspaceDiagnosticPriority > previous.tone.workspaceDiagnosticPriority else {
+        guard next != previous else { return nil }
+        guard next.tone.workspaceDiagnosticPriority >= previous.tone.workspaceDiagnosticPriority else {
             return nil
         }
         return next

@@ -28,14 +28,26 @@ struct IndexFileWorkbench<Leading: View, Trailing: View>: View {
     @State private var diagnosticPresentation = IndexWorkspaceDiagnosticPresentationState()
     @Environment(\.toolToastCenter) private var toastCenter
 
-    private let layoutPolicy = IndexFileWorkbenchLayoutPolicy()
+    /// Layout contract. File workloads use the 1 : 1.05 / 900pt split; the
+    /// pair family keeps its equal-column / 720pt contract. Both share this
+    /// paper, its diagnostic slot and the pane chrome.
+    enum SplitMode: Equatable {
+        case file
+        case pair(threshold: CGFloat)
+    }
+
+    private let splitMode: SplitMode
+    private let layoutPolicy: IndexFileWorkbenchLayoutPolicy
 
     init(
         diagnostic: String?,
+        splitMode: SplitMode = .file,
         @ViewBuilder leading: () -> Leading,
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.diagnostic = diagnostic
+        self.splitMode = splitMode
+        self.layoutPolicy = IndexFileWorkbenchLayoutPolicy()
         self.leading = leading()
         self.trailing = trailing()
     }
@@ -87,8 +99,16 @@ struct IndexFileWorkbench<Leading: View, Trailing: View>: View {
                 IndexFileWorkbenchLayoutPolicy.minimumHorizontalHeight,
                 proxy.size.height - IndexWorkbenchPaneMetrics.inset
             )
+            let pairPolicy: IndexPairWorkbenchLayoutPolicy? = {
+                if case let .pair(threshold) = splitMode {
+                    return IndexPairWorkbenchLayoutPolicy(threshold: threshold)
+                }
+                return nil
+            }()
 
-            if let widths = layoutPolicy.columnWidths(for: proxy.size.width) {
+            if let pairPolicy {
+                pairContent(policy: pairPolicy, proxy: proxy)
+            } else if let widths = layoutPolicy.columnWidths(for: proxy.size.width) {
                 HStack(spacing: IndexFileWorkbenchLayoutPolicy.columnSpacing) {
                     leading
                         .frame(
@@ -104,7 +124,6 @@ struct IndexFileWorkbench<Leading: View, Trailing: View>: View {
                         )
                 }
                 .padding(.horizontal, IndexWorkbenchPaneMetrics.inset)
-                .padding(.top, IndexWorkbenchPaneMetrics.inset)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else {
                 ScrollView {
@@ -123,13 +142,50 @@ struct IndexFileWorkbench<Leading: View, Trailing: View>: View {
                             )
                     }
                     .padding(.horizontal, IndexWorkbenchPaneMetrics.inset)
-                    .padding(.top, IndexWorkbenchPaneMetrics.inset)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
                 .scrollIndicators(.automatic)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder
+    private func pairContent(
+        policy: IndexPairWorkbenchLayoutPolicy,
+        proxy: GeometryProxy
+    ) -> some View {
+        let paneHeight = max(
+            IndexPairWorkbenchLayoutPolicy.minimumPaneHeight,
+            proxy.size.height - IndexWorkbenchPaneMetrics.inset
+        )
+        if policy.mode(for: proxy.size.width) == .horizontal {
+            HStack(spacing: IndexPairWorkbenchLayoutPolicy.columnSpacing) {
+                leading
+                    .frame(
+                        width: policy.paneWidth(for: proxy.size.width),
+                        height: paneHeight,
+                        alignment: .topLeading
+                    )
+                trailing
+                    .frame(
+                        width: policy.paneWidth(for: proxy.size.width),
+                        height: paneHeight,
+                        alignment: .topLeading
+                    )
+            }
+            .padding(.horizontal, IndexWorkbenchPaneMetrics.inset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        } else {
+            VStack(spacing: IndexPairWorkbenchLayoutPolicy.columnSpacing) {
+                leading
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                trailing
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+            .padding(.horizontal, IndexWorkbenchPaneMetrics.inset)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
     }
 }
 
@@ -330,4 +386,33 @@ struct IndexFileWorkbenchLayoutPolicy: Equatable {
             trailing: distributableWidth - leading
         )
     }
+}
+
+/// Equal-column split contract inherited from the regex page: at or above the
+/// configured content width (720pt by default) the two panes share the row
+/// through a 14pt gap and fill the residual height; below it they stack and
+/// halve the band. Pure values so the contract tests can exercise the math.
+struct IndexPairWorkbenchLayoutPolicy {
+    static let defaultThreshold: CGFloat = 720
+    static let columnSpacing: CGFloat = 14
+    static let minimumPaneHeight: CGFloat = 280
+
+    let threshold: CGFloat
+
+    init(threshold: CGFloat = Self.defaultThreshold) {
+        self.threshold = threshold
+    }
+
+    func mode(for availableWidth: CGFloat) -> IndexPairWorkbenchLayoutMode {
+        availableWidth >= threshold ? .horizontal : .stacked
+    }
+
+    func paneWidth(for availableWidth: CGFloat) -> CGFloat {
+        max(0, (availableWidth - Self.columnSpacing) / 2)
+    }
+}
+
+enum IndexPairWorkbenchLayoutMode: Equatable {
+    case stacked
+    case horizontal
 }

@@ -1,15 +1,19 @@
 import SwiftUI
 import XToolsDesign
 
-/// P5 batch workbench: one paper whose top strip carries the batch parameters,
-/// a hairline, the shared diagnostic slot and the drop target / selection list.
+/// P5 image workbench: the only paper used by the five image segments.
 ///
-/// Pages own the parameter controls, import session and save action; this shell
-/// owns the paper, the scrolling parameter strip and the diagnostic anchor so
-/// batch pages cannot drift back to a toolbar floating outside the surface.
-struct IndexBatchWorkbench<Parameters: View, Content: View>: View {
+/// One paper, one 44pt head carrying the segment title, optional parameters
+/// and the save action, the paper-top diagnostic slot and one content stage.
+/// The former compare / batch / single-preview / artifact shells are variants
+/// of this implementation and must not be re-forked (audit H-01).
+struct IndexImageWorkbench<Parameters: View, Content: View>: View {
     let title: String
+    /// Segment parameters shown in the 44pt head; scrolls horizontally on
+    /// narrow papers instead of wrapping or squeezing the save action.
     private let parameters: Parameters
+    private let hasParameters: Bool
+    private let trailingActions: AnyView?
     private let content: Content
 
     @State private var workspaceDiagnostic: IndexWorkspaceDiagnosticPayload?
@@ -18,17 +22,20 @@ struct IndexBatchWorkbench<Parameters: View, Content: View>: View {
 
     init(
         title: String,
+        trailingActions: AnyView? = nil,
         @ViewBuilder parameters: () -> Parameters,
         @ViewBuilder content: () -> Content
     ) {
         self.title = title
+        self.trailingActions = trailingActions
         self.parameters = parameters()
+        self.hasParameters = !(Parameters.self == EmptyView.self)
         self.content = content()
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            parameterBar
+            head
             divider
             IndexDiagnosticStatusSlot(isActive: workspaceDiagnostic != nil) {
                 if let diagnostic = workspaceDiagnostic {
@@ -62,29 +69,52 @@ struct IndexBatchWorkbench<Parameters: View, Content: View>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    /// The strip scrolls horizontally on narrow windows instead of wrapping
-    /// into the content or squeezing the title; controls keep their intrinsic
-    /// widths at every window size.
-    private var parameterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: ToolMetrics.Spacing.md) {
-                Text(title)
-                    .font(ToolTypography.panelTitle)
-                    .foregroundStyle(ToolTheme.textPrimary)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+    private var head: some View {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
+            Text(title)
+                .font(ToolTypography.panelTitle)
+                .foregroundStyle(ToolTheme.textPrimary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
 
-                parameters
+            if hasParameters {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    parameters
+                        .padding(.leading, ToolMetrics.Spacing.sm)
+                        .frame(height: ToolMetrics.Workbench.paperHeadHeight)
+                }
+                .scrollBounceBehavior(.basedOnSize)
             }
-            .padding(.horizontal, ToolMetrics.Spacing.md)
-            .frame(height: 44)
+
+            Spacer(minLength: ToolMetrics.Spacing.sm)
+
+            if let trailingActions {
+                trailingActions
+            }
         }
-        .scrollBounceBehavior(.basedOnSize)
+        .padding(.horizontal, ToolMetrics.Spacing.panelInset)
+        .frame(height: ToolMetrics.Workbench.paperHeadHeight)
+        .overlay(alignment: .bottom) { divider }
     }
 
     private var divider: some View {
         Rectangle()
             .fill(ToolTheme.border)
             .frame(height: 0.5)
+    }
+}
+
+extension IndexImageWorkbench where Parameters == EmptyView {
+    init(
+        title: String,
+        trailingActions: AnyView? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.init(
+            title: title,
+            trailingActions: trailingActions,
+            parameters: { EmptyView() },
+            content: content
+        )
     }
 }

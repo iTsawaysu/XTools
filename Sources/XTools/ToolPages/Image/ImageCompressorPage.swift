@@ -78,9 +78,13 @@ private struct IndexImageCompressorWorkspaceContent: View {
     }
 
     var body: some View {
-        VStack(spacing: ToolMetrics.Spacing.md) {
+        IndexImageWorkbench(
+            title: "优化工作区",
+            trailingActions: canSaveCompressed ? AnyView(saveButton) : nil
+        ) {
             parametersBar
-            IndexImageCompareWorkbench(
+        } content: {
+            IndexImageCompareContent(
                 panelTitle: "优化工作区",
                 resultTitle: "优化结果",
                 emptyTitle: "选择图片开始优化",
@@ -118,7 +122,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
     }
 
     private var parametersBar: some View {
-        IndexActionBar {
+        IndexFlowLayout(spacing: ToolMetrics.Spacing.md, lineSpacing: ToolMetrics.Spacing.sm) {
             IndexOptionGroup {
                 IndexOptionLabel("优化偏好")
                 IndexSegmentedControl(
@@ -264,5 +268,14 @@ private struct IndexImageCompressorWorkspaceContent: View {
             let outcome = await session.save(workflow: .compression, defaultBasename: "compressed", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
             ImageSaveOutcomeToasts.presentSingleOutput(outcome, toastCenter: toastCenter)
         }
+    }
+
+    private var saveButton: some View {
+        Button(action: saveImage) {
+            Label("保存", systemImage: IndexActionSymbol.save)
+                .font(ToolTypography.buttonSmall)
+        }
+        .buttonStyle(IndexSmallButtonStyle())
+        .accessibilityLabel("保存优化结果")
     }
 }

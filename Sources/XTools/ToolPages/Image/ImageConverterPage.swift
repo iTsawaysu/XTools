@@ -138,7 +138,7 @@ private struct IndexImageConverterWorkspaceContent: View {
         // 诊断槽与拖放/列表内容。拖放命中区仍挂整个内容根容器（参数区、
         // 列表、空白处均可接收），视觉高亮由输入区内容层经共享
         // isImageDropTargeted 呈现。
-        IndexBatchWorkbench(title: "转换设置") {
+        IndexImageWorkbench(title: "转换设置") {
             conversionParameters
         } content: {
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {

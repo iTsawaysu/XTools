@@ -18,23 +18,63 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
 
     @ObservedObject var session: FaviconOutputSetSession
 
+    @State private var isDropTargeted = false
+
     var body: some View {
-        IndexArtifactWorkbench(
+        IndexImageWorkbench(
             title: "Favicon 部署包",
-            emptyTitle: "选择图片开始生成 Favicon",
-            hasSource: session.sourceImage != nil,
-            isProcessing: session.isProcessing,
-            diagnostic: session.error,
-            canSaveAll: session.package != nil && !session.isProcessing,
-            saveAccessibilityLabel: "保存全部五个 Favicon 部署文件",
-            saveHelp: "选择文件夹保存五个部署文件",
-            onSelect: selectImage,
-            onDropURL: receiveImageURL,
-            onDropMultiple: rejectMultipleImageDrop,
-            onSaveAll: saveAll,
-            source: { sourceStrip },
-            content: { packageContent }
+            trailingActions: saveAllButton
+        ) {
+            faviconContent
+                .indexWorkspaceDiagnostic(session.error)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .indexDropZone(
+                    isTargeted: $isDropTargeted,
+                    onFile: receiveImageURL,
+                    onMultipleFiles: rejectMultipleImageDrop
+                )
+        }
+    }
+
+    private var saveAllButton: AnyView? {
+        guard session.package != nil, !session.isProcessing else { return nil }
+        return AnyView(
+            Button(action: saveAll) {
+                Label("全部保存", systemImage: IndexActionSymbol.save)
+                    .font(ToolTypography.buttonSmall)
+            }
+            .buttonStyle(IndexSmallButtonStyle())
+            .accessibilityLabel("保存全部五个 Favicon 部署文件")
+            .help("选择文件夹保存五个部署文件")
         )
+    }
+
+    @ViewBuilder
+    private var faviconContent: some View {
+        if session.sourceImage == nil {
+            ImageUploadPendingState(
+                isProcessing: session.isProcessing,
+                title: "选择图片开始生成 Favicon",
+                fillsHeight: true,
+                onSelect: selectImage
+            )
+        } else {
+            VStack(spacing: 0) {
+                sourceStrip
+                    .padding(.bottom, ToolMetrics.Spacing.sm)
+
+                Rectangle()
+                    .fill(ToolTheme.border)
+                    .frame(height: ToolMetrics.Spacing.hairline)
+
+                ScrollView {
+                    packageContent
+                        .padding(.top, ToolMetrics.Spacing.panelInset)
+                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+            }
+        }
     }
 
     private var sourceStrip: some View {

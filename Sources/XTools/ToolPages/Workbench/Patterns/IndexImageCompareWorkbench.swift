@@ -2,13 +2,12 @@ import AppKit
 import SwiftUI
 import XToolsDesign
 
-/// P5 image compare workbench.
+/// Image compare presentation used by the image hub's re-encoding segments.
 ///
-/// One surface for the image hub's re-encoding tools: upload/empty state,
-/// select/replace/clear row, source/result comparison cards, drop zone and the
-/// save action. Pages keep their parameters, renderer and facts; the compare
-/// chrome cannot drift between compressor, grayscale and the other segments.
-struct IndexImageCompareWorkbench<SourceFacts: View, ResultFacts: View>: View {
+/// It is no longer a standalone shell: it renders inside
+/// `IndexImageWorkbench` so the paper, the 44pt head and the paper-top
+/// diagnostic slot are owned once for all five image segments.
+struct IndexImageCompareContent<SourceFacts: View, ResultFacts: View>: View {
     let panelTitle: String
     let resultTitle: String
     let emptyTitle: String
@@ -98,14 +97,11 @@ struct IndexImageCompareWorkbench<SourceFacts: View, ResultFacts: View>: View {
     var body: some View {
         Group {
             if sourceImage == nil {
-                ImageUploadEmptyPanel(
-                    isDropTargeted: $isDropTargeted,
+                ImageUploadPendingState(
                     isProcessing: isProcessing,
-                    diagnostic: diagnostic,
-                    emptyStateTitle: emptyTitle,
-                    onSelect: onSelect,
-                    onDropFile: onDropURL,
-                    onDropMultipleFiles: onDropMultiple
+                    title: emptyTitle,
+                    fillsHeight: true,
+                    onSelect: onSelect
                 )
                 .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
             } else {
@@ -113,62 +109,50 @@ struct IndexImageCompareWorkbench<SourceFacts: View, ResultFacts: View>: View {
                     .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
             }
         }
+        .indexWorkspaceDiagnostic(diagnostic)
     }
 
     private var comparisonPanel: some View {
-        IndexPanel(panelTitle) {
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                ImageSelectionActionRow(
-                    hasSource: sourceImage != nil,
-                    selectAccessibilityLabel: selectLabel,
-                    replaceAccessibilityLabel: replaceLabel,
-                    clearAccessibilityLabel: clearLabel,
-                    onSelect: onSelect,
-                    onClear: onClear
-                )
-
-                IndexPairLayout(collapseWidth: 0) {
-                    IndexImageComparisonCard(
-                        title: "原图",
-                        image: sourceImage,
-                        accessibilityLabel: sourceAccessibilityLabel,
-                        accessibilityValue: sourceAccessibilityValue,
-                        placeholder: "等待原图预览"
-                    ) {
-                        sourceFacts
-                    }
-                } trailing: {
-                    IndexImageComparisonCard(
-                        title: resultTitle,
-                        badgeText: badgeText,
-                        badgeTone: badgeTone,
-                        image: resultImage,
-                        accessibilityLabel: resultAccessibilityLabel,
-                        accessibilityValue: resultAccessibilityValue,
-                        placeholder: placeholder,
-                        isProcessing: isProcessing
-                    ) {
-                        resultFacts
-                    }
-                }
-            }
-            .indexWorkspaceDiagnostic(diagnostic)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .indexDropZone(
-                isTargeted: $isDropTargeted,
-                onFile: onDropURL,
-                onMultipleFiles: onDropMultiple
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+            ImageSelectionActionRow(
+                hasSource: sourceImage != nil,
+                selectAccessibilityLabel: selectLabel,
+                replaceAccessibilityLabel: replaceLabel,
+                clearAccessibilityLabel: clearLabel,
+                onSelect: onSelect,
+                onClear: onClear
             )
-        } accessory: {
-            if canSave {
-                Button(action: onSave) {
-                    Label(saveLabel, systemImage: IndexActionSymbol.save)
-                        .font(ToolTypography.buttonSmall)
+
+            IndexPairLayout(collapseWidth: 0) {
+                IndexImageComparisonCard(
+                    title: "原图",
+                    image: sourceImage,
+                    accessibilityLabel: sourceAccessibilityLabel,
+                    accessibilityValue: sourceAccessibilityValue,
+                    placeholder: "等待原图预览"
+                ) {
+                    sourceFacts
                 }
-                .buttonStyle(IndexSmallButtonStyle())
-                .accessibilityLabel(saveLabel)
+            } trailing: {
+                IndexImageComparisonCard(
+                    title: resultTitle,
+                    badgeText: badgeText,
+                    badgeTone: badgeTone,
+                    image: resultImage,
+                    accessibilityLabel: resultAccessibilityLabel,
+                    accessibilityValue: resultAccessibilityValue,
+                    placeholder: placeholder,
+                    isProcessing: isProcessing
+                ) {
+                    resultFacts
+                }
             }
         }
-        .verticallyFilling()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .indexDropZone(
+            isTargeted: $isDropTargeted,
+            onFile: onDropURL,
+            onMultipleFiles: onDropMultiple
+        )
     }
 }

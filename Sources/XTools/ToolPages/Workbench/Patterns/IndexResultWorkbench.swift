@@ -1,12 +1,17 @@
 import SwiftUI
 import XToolsDesign
 
-/// Single-result workbench for tools without an input: one paper, a header
-/// with the actions, and the result surface filling the rest.
+/// Single-result workbench for tools without an input: one paper, a 44pt head
+/// with the actions, the paper-top diagnostic slot, and the result surface
+/// filling the rest.
 struct IndexResultWorkbench<Controls: View, Content: View>: View {
     let title: String
     private let controls: Controls
     private let content: Content
+
+    @State private var workspaceDiagnostic: IndexWorkspaceDiagnosticPayload?
+    @State private var diagnosticPresentation = IndexWorkspaceDiagnosticPresentationState()
+    @Environment(\.toolToastCenter) private var toastCenter
 
     init(
         title: String,
@@ -27,8 +32,8 @@ struct IndexResultWorkbench<Controls: View, Content: View>: View {
                 Spacer(minLength: ToolMetrics.Spacing.sm)
                 controls
             }
-            .padding(.horizontal, ToolMetrics.Spacing.md)
-            .frame(height: 44)
+            .padding(.horizontal, ToolMetrics.Spacing.panelInset)
+            .frame(height: ToolMetrics.Workbench.paperHeadHeight)
             .frame(maxWidth: .infinity, alignment: .leading)
             .overlay(alignment: .bottom) {
                 Rectangle()
@@ -36,9 +41,19 @@ struct IndexResultWorkbench<Controls: View, Content: View>: View {
                     .frame(height: 0.5)
             }
 
+            IndexDiagnosticStatusSlot(isActive: workspaceDiagnostic != nil) {
+                if let diagnostic = workspaceDiagnostic {
+                    IndexDiagnosticBanner(
+                        diagnostic: nil,
+                        message: diagnostic.text,
+                        tone: diagnostic.tone
+                    )
+                }
+            }
+
             content
-                .padding(.horizontal, ToolMetrics.Spacing.md)
-                .padding(.bottom, ToolMetrics.Spacing.md)
+                .padding(.horizontal, ToolMetrics.Spacing.panelInset)
+                .padding(.bottom, ToolMetrics.Spacing.panelInset)
                 .padding(.top, ToolMetrics.Spacing.sm)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
@@ -51,6 +66,13 @@ struct IndexResultWorkbench<Controls: View, Content: View>: View {
                 .strokeBorder(ToolTheme.border, lineWidth: 0.5)
         }
         .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))
+        .toolAnimation(ToolMotion.Preset.diagnostic, value: workspaceDiagnostic != nil)
+        .onPreferenceChange(IndexWorkspaceDiagnosticPreferenceKey.self) { diagnostic in
+            if let announcement = diagnosticPresentation.update(to: diagnostic) {
+                toastCenter?.show(announcement.text, tone: announcement.tone)
+            }
+            workspaceDiagnostic = diagnostic
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

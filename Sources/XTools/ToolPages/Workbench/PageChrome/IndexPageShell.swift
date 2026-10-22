@@ -75,42 +75,42 @@ enum IndexPageChrome: Equatable {
 
     var horizontalPadding: CGFloat {
         switch self {
-        case .standard, .compactWorkspace: return 30
-        case .dashboard: return 30
+        case .standard, .compactWorkspace, .dashboard: return 30
         }
     }
 
     /// Space between the native unified toolbar bottom and the page title.
     /// Asymmetric from bottom padding so identity sits tighter under chrome
     /// without pinching the workbench against the window edge.
+    ///
+    /// `compactWorkspace` is kept as a call-site semantic, but its chrome now
+    /// resolves to the same values as `.standard`: the old 5/8/9/4 variants
+    /// shifted every compact paper 7pt upward, making paper heads disagree
+    /// across pages (audit H-02 / rules §2.2).
     var topPadding: CGFloat {
         switch self {
-        case .standard: return 6
-        case .compactWorkspace: return 5
+        case .standard, .compactWorkspace: return 6
         case .dashboard: return 2
         }
     }
 
     var bottomPadding: CGFloat {
         switch self {
-        case .standard: return ToolMetrics.Spacing.panelSection
-        case .compactWorkspace: return 8
+        case .standard, .compactWorkspace: return ToolMetrics.Spacing.panelSection
         case .dashboard: return ToolMetrics.Spacing.page
         }
     }
 
     var sectionSpacing: CGFloat {
         switch self {
-        case .standard: return 10
-        case .compactWorkspace: return 9
+        case .standard, .compactWorkspace: return ToolMetrics.Spacing.panelSection
         case .dashboard: return ToolMetrics.Spacing.lg
         }
     }
 
     var headerBottomPadding: CGFloat {
         switch self {
-        case .standard: return 5
-        case .compactWorkspace: return 4
+        case .standard, .compactWorkspace: return 5
         case .dashboard: return 7
         }
     }
@@ -443,7 +443,8 @@ struct IndexPage<Content: View, HeaderAccessory: View>: View {
                     .padding(.horizontal, chrome.horizontalPadding)
                     .padding(.top, chrome.topPadding)
                     .padding(.bottom, chrome.bottomPadding)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .frame(maxWidth: ToolMetrics.Workbench.paperMaxWidth, alignment: .topLeading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 case .scroll:
                     ScrollView {
                         VStack(alignment: .leading, spacing: chrome.sectionSpacing) {
@@ -453,7 +454,12 @@ struct IndexPage<Content: View, HeaderAccessory: View>: View {
                         .padding(.horizontal, chrome.horizontalPadding)
                         .padding(.top, chrome.topPadding)
                         .padding(.bottom, chrome.bottomPadding)
-                        .frame(maxWidth: .infinity, minHeight: fillsScrollViewport ? proxy.size.height : nil, alignment: .topLeading)
+                        .frame(maxWidth: ToolMetrics.Workbench.paperMaxWidth, alignment: .topLeading)
+                        .frame(
+                            maxWidth: .infinity,
+                            minHeight: fillsScrollViewport ? proxy.size.height : nil,
+                            alignment: .top
+                        )
                     }
                     .modifier(IndexPageArrivalScrollerSuppressor(title: title))
                     // v3 header-rhythm unification: the window safe area already

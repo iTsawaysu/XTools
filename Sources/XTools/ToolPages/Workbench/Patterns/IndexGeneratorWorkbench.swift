@@ -1,12 +1,13 @@
 import SwiftUI
 import XToolsDesign
 
-/// P4 generator workbench: one parameter card with the primary generate
-/// action, above the generated value rows.
+/// P4 generator workbench: one paper whose 44pt head carries the parameters
+/// and the primary generate action, followed by the paper-top diagnostic slot
+/// and the generated value rows.
 ///
 /// Pages own the parameter controls, copy text and generation logic; this
-/// shell owns the card, action cluster, meta slot and row-list frame so the
-/// three generator tools cannot drift apart again.
+/// shell owns the paper, head row, action cluster, meta slot and row-list
+/// frame so the three generator tools cannot drift apart again.
 struct IndexGeneratorWorkbench<Parameters: View>: View {
     var metaText: String? = nil
     let copyText: String
@@ -19,6 +20,11 @@ struct IndexGeneratorWorkbench<Parameters: View>: View {
     let shortcutEnabled: Bool
     let generate: () -> Void
     private let parameters: Parameters
+
+    @State private var workspaceDiagnostic: IndexWorkspaceDiagnosticPayload?
+    @State private var diagnosticPresentation = IndexWorkspaceDiagnosticPresentationState()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.toolToastCenter) private var toastCenter
 
     init(
         metaText: String? = nil,
@@ -47,44 +53,75 @@ struct IndexGeneratorWorkbench<Parameters: View>: View {
     }
 
     var body: some View {
-        VStack(spacing: ToolMetrics.Spacing.md) {
-            parameterCard
-
+        VStack(spacing: 0) {
+            parameterHead
+            divider
+            IndexDiagnosticStatusSlot(isActive: workspaceDiagnostic != nil) {
+                if let diagnostic = workspaceDiagnostic {
+                    IndexDiagnosticBanner(
+                        diagnostic: nil,
+                        message: diagnostic.text,
+                        tone: diagnostic.tone
+                    )
+                }
+            }
             IndexGeneratedValueRowList(
                 rows: rows,
                 emptyText: emptyText,
                 motionGeneration: motionGeneration,
                 wrapsValues: wrapsValues
             )
-            .indexSurface(.card, fill: ToolTheme.panelBackground)
+            .padding(ToolMetrics.Spacing.panelInset)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .background(
+            ToolTheme.panelBackground,
+            in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous)
+                .strokeBorder(ToolTheme.border, lineWidth: 0.5)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))
+        .toolAnimation(ToolMotion.Preset.diagnostic, value: workspaceDiagnostic != nil)
+        .onPreferenceChange(IndexWorkspaceDiagnosticPreferenceKey.self) { diagnostic in
+            if let announcement = diagnosticPresentation.update(to: diagnostic) {
+                toastCenter?.show(announcement.text, tone: announcement.tone)
+            }
+            workspaceDiagnostic = diagnostic
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private var parameterCard: some View {
-        HStack(alignment: .top, spacing: ToolMetrics.Spacing.md) {
-            parameters
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            if let metaText {
-                Text(metaText)
-                    .font(ToolTypography.caption)
-                    .monospacedDigit()
-                    .foregroundStyle(ToolTheme.textTertiary)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+    /// The 44pt paper head scrolls its parameter cluster horizontally on
+    /// narrow windows instead of wrapping or squeezing the generate action.
+    private var parameterHead: some View {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: ToolMetrics.Spacing.md) {
+                    parameters
+                    if let metaText {
+                        Text(metaText)
+                            .font(ToolTypography.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(ToolTheme.textTertiary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
+                }
+                .padding(.leading, ToolMetrics.Spacing.panelInset)
+                .frame(height: ToolMetrics.Workbench.paperHeadHeight)
             }
+            .scrollBounceBehavior(.basedOnSize)
 
             actions
+                .padding(.trailing, ToolMetrics.Spacing.panelInset)
         }
-        .padding(.horizontal, ToolMetrics.Spacing.md)
-        .padding(.vertical, ToolMetrics.Spacing.sm)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .indexSurface(.card, fill: ToolTheme.panelBackground)
+        .frame(height: ToolMetrics.Workbench.paperHeadHeight)
     }
 
     private var actions: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             IndexCopyButton(
                 text: copyText,
                 title: "全部复制",
@@ -101,6 +138,12 @@ struct IndexGeneratorWorkbench<Parameters: View>: View {
             )
             .keyboardShortcut(shortcutEnabled ? KeyboardShortcut(.return, modifiers: .command) : nil)
         }
-        .frame(height: 30, alignment: .center)
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(ToolTheme.border)
+            .frame(height: 0.5)
     }
 }
