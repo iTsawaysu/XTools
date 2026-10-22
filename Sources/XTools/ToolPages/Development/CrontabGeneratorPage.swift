@@ -98,7 +98,7 @@ private struct IndexCrontabWorkspaceContent: View {
                         .font(ToolTypography.micro)
                         .foregroundStyle(ToolTheme.textTertiary)
 
-                    IndexFlowLayout(spacing: 6, lineSpacing: 6) {
+                    IndexFlowLayout(spacing: ToolMetrics.Spacing.fine, lineSpacing: 6) {
                         ForEach(presets, id: \.0) { preset in
                             let isActive = preset.1 == workspace.expression.trimmingCharacters(in: .whitespacesAndNewlines)
                             IndexBadge(preset.0, isSelected: isActive, help: preset.1) {
@@ -113,7 +113,7 @@ private struct IndexCrontabWorkspaceContent: View {
             } result: {
                 VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
                     if let summary = CronScheduler.expressionSummary(workspace.expression) {
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.sm) {
                             Image(systemName: "clock")
                                 .font(ToolTypography.body)
                                 .foregroundStyle(ToolTheme.accentHover)
@@ -128,7 +128,7 @@ private struct IndexCrontabWorkspaceContent: View {
                     }
 
                     if let dayNote = CronScheduler.dayMatchingExplanation(workspace.expression) {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.fine) {
                             Image(systemName: "info.circle")
                                 .font(ToolTypography.caption)
                                 .foregroundStyle(ToolTheme.textSecondary)
@@ -166,7 +166,7 @@ private struct IndexCrontabWorkspaceContent: View {
     /// 表达式的五段拆解：受限字段 accent 描边突出，通配字段弱化，
     /// 每段自带字段名、原文 token 与人话解释（悬停可见完整解释）。
     private func fieldSegmentBar(_ fields: [CronScheduler.CronFieldExplanation]) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: ToolMetrics.Spacing.fine) {
             ForEach(Array(fields.enumerated()), id: \.offset) { _, field in
                 fieldSegment(field)
             }
@@ -175,7 +175,7 @@ private struct IndexCrontabWorkspaceContent: View {
 
     private func fieldSegment(_ field: CronScheduler.CronFieldExplanation) -> some View {
         let shortLabel = field.label.components(separatedBy: " ").first ?? field.label
-        return VStack(spacing: 3) {
+        return VStack(spacing: ToolMetrics.Spacing.tiny) {
             Text(shortLabel)
                 .font(ToolTypography.micro)
                 .foregroundStyle(ToolTheme.textSecondary)
@@ -193,8 +193,8 @@ private struct IndexCrontabWorkspaceContent: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .top)
-        .padding(.vertical, 9)
-        .padding(.horizontal, 6)
+        .padding(.vertical, ToolMetrics.Spacing.tight)
+        .padding(.horizontal, ToolMetrics.Spacing.fine)
         .background(
             field.isWildcard ? ToolTheme.editorBackground : ToolTheme.accentSoft.opacity(0.45),
             in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
@@ -211,12 +211,12 @@ private struct IndexCrontabWorkspaceContent: View {
     }
 
     private var nextRunsSection: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.snug) {
             Text("下次运行")
                 .font(ToolTypography.micro)
                 .foregroundStyle(ToolTheme.textSecondary)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.fine) {
                 ForEach(Array(workspace.nextRuns.enumerated()), id: \.offset) { index, run in
                     nextRunRow(run, ordinal: index)
                 }
@@ -229,7 +229,7 @@ private struct IndexCrontabWorkspaceContent: View {
     /// 首条最显眼（本地时间强调 + 人话相对时间），其余各条右侧给 UTC 对照。
     private func nextRunRow(_ date: Date, ordinal: Int) -> some View {
         let isFirst = ordinal == 0
-        return HStack(alignment: .firstTextBaseline, spacing: 12) {
+        return HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.md) {
             Text(Self.nextRunsDateFormatter.string(from: date))
                 .font(isFirst ? ToolTypography.monoValueSmall : ToolTypography.monoLabel)
                 .foregroundStyle(isFirst ? ToolTheme.accentHover : ToolTheme.textSecondary)

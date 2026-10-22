@@ -1,4 +1,5 @@
 import XToolsCore
+import XToolsDesign
 import SwiftUI
 
 @MainActor
@@ -149,7 +150,7 @@ private struct IndexJSONDiffWorkspaceContent: View {
             onClear: workspace.clear,
             clearDisabled: !workspace.hasAnyContent,
             leadingControl: {
-                HStack(spacing: 8) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
                     IndexOptionSwitch(title: "忽略数组顺序", style: .button, isOn: $workspace.ignoreArrayOrder)
                     IndexIconButton(
                         systemImage: "chevron.up.chevron.down",

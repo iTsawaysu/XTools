@@ -122,7 +122,7 @@ private struct IndexChmodWorkspaceContent: View {
 
             ToolDivider()
 
-            IndexFlowLayout(spacing: 14, lineSpacing: 8) {
+            IndexFlowLayout(spacing: ToolMetrics.Spacing.base, lineSpacing: 8) {
                 IndexOptionSwitch(title: "setuid", style: .standalone, isOn: permissionBinding(\ChmodMode.setuid))
                     .help("显示所有者 s/S")
                     .accessibilityHint("控制 setuid 特殊权限位")
@@ -144,11 +144,11 @@ private struct IndexChmodWorkspaceContent: View {
     }
 
     private func chmodRow(_ title: String, r: Binding<Bool>, w: Binding<Bool>, x: Binding<Bool>) -> some View {
-        HStack(spacing: 16) {
+        HStack(spacing: ToolMetrics.Spacing.lg) {
             Text(title)
                 .font(ToolTypography.bodyPlain)
                 .foregroundStyle(ToolTheme.textSecondary)
-                .frame(width: 70, alignment: .leading)
+                .frame(width: ToolMetrics.Control.labelColumn, alignment: .leading)
             IndexOptionSwitch(title: "读 r", style: .standalone, isOn: r)
             IndexOptionSwitch(title: "写 w", style: .standalone, isOn: w)
             IndexOptionSwitch(title: "执行 x", style: .standalone, isOn: x)

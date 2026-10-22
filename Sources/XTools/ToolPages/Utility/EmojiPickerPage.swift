@@ -170,7 +170,7 @@ private struct IndexEmojiWorkspaceContent: View {
                         clearTitle: "清空 Emoji 搜索",
                         onClear: workspace.clearSearch
                     )
-                    .frame(maxWidth: 360)
+                    .frame(maxWidth: ToolMetrics.Control.readingMedium)
 
                     if !display.isSearching {
                         IndexEmojiCategoryBar(selection: $workspace.category)
@@ -202,7 +202,7 @@ private struct IndexEmojiWorkspaceContent: View {
 
     @ViewBuilder
     private func panelAccessory(for display: DisplayState) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: ToolMetrics.Spacing.compact) {
             if display.isTruncated {
                 Text("仅展示前 200 个结果")
                     .font(ToolTypography.caption)
@@ -231,7 +231,7 @@ private struct IndexEmojiCategoryBar: View {
     @Binding var selection: String
 
     var body: some View {
-        IndexFlowLayout(spacing: 6, lineSpacing: 6) {
+        IndexFlowLayout(spacing: ToolMetrics.Spacing.fine, lineSpacing: 6) {
             ForEach(EmojiCatalog.groups) { group in
                 let active = group.name == selection
                 IndexBadge(group.name, isSelected: active) {

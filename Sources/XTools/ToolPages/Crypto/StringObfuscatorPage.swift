@@ -1,4 +1,5 @@
 import XToolsCore
+import XToolsDesign
 import SwiftUI
 
 struct StringObfuscationRequest: Equatable, Sendable {
@@ -207,12 +208,12 @@ private struct IndexStringObfuscatorWorkspaceContent: View {
     var body: some View {
         IndexPage("字符串遮蔽", subtitle: "保留首尾指定位数并遮蔽中部；遮蔽不是加密，仍可能泄露长度和结构。", workspaceSemantic: .securityTransformWorkspace) {
             IndexWorkbenchControlBar {
-                HStack(spacing: 8) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
                     obfuscationControls
                 }
                 .fixedSize(horizontal: true, vertical: false)
             } compactControls: {
-                IndexFlowLayout(spacing: 8, lineSpacing: 8) {
+                IndexFlowLayout(spacing: ToolMetrics.Spacing.sm, lineSpacing: 8) {
                     obfuscationControls
                 }
             }
@@ -253,7 +254,7 @@ private struct IndexStringObfuscatorWorkspaceContent: View {
         }
 
         IndexOptionGroup {
-            HStack(spacing: 6) {
+            HStack(spacing: ToolMetrics.Spacing.fine) {
                 IndexOptionLabel("替换字符")
                 IndexTextInput(
                     placeholder: "*",
@@ -263,7 +264,7 @@ private struct IndexStringObfuscatorWorkspaceContent: View {
                     ),
                     height: 30
                 )
-                    .frame(width: 44)
+                    .frame(width: ToolMetrics.Control.thumb)
             }
         }
     }

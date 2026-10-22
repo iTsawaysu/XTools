@@ -120,9 +120,9 @@ struct IndexTimezoneViewerPage: View {
         let isFavorite = group.favoriteKeys.isSubset(of: favoriteStore.favoriteKeys)
 
         return IndexSurfaceRow(horizontalPadding: ToolMetrics.Spacing.panelInset, verticalPadding: ToolMetrics.Spacing.md) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
+            HStack(spacing: ToolMetrics.Spacing.md) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
+                    HStack(spacing: ToolMetrics.Spacing.fine) {
                         Text(group.offsetString)
                             .font(ToolTypography.monoCaption)
                             .foregroundStyle(ToolTheme.textSecondary)

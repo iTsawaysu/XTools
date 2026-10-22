@@ -244,15 +244,15 @@ private struct IndexBasicAuthWorkspaceContent: View {
         title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: ToolMetrics.Spacing.md) {
             Text(title)
                 .font(ToolTypography.monoLabel)
                 .foregroundStyle(ToolTheme.accentHover)
-                .frame(width: 70, alignment: .leading)
+                .frame(width: ToolMetrics.Control.labelColumn, alignment: .leading)
             content()
         }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 9)
+        .padding(.horizontal, ToolMetrics.Control.labelInset)
+        .padding(.vertical, ToolMetrics.Spacing.tight)
         .background(ToolTheme.panelBackground)
     }
 
@@ -267,7 +267,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
         _ title: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: ToolMetrics.Spacing.md) {
             Text(title).fieldLabel(width: credentialLabelWidth)
             content()
                 .frame(maxWidth: .infinity)

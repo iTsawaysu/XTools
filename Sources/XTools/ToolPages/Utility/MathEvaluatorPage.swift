@@ -124,7 +124,7 @@ private struct IndexMathWorkspaceContent: View {
                     ToolDivider()
                         .padding(.horizontal, ToolMetrics.Spacing.md)
 
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                         mathHelpRow("运算符", "+  -  *  /  %  ^")
                         mathHelpRow("常量", "pi  e  phi")
                         mathHelpRow("函数", "sqrt  abs  round  floor  ceil  min  max  sin  cos  tan  asin  acos  atan  sinh  cosh  tanh  log  ln  exp  cbrt")
@@ -154,11 +154,11 @@ private struct IndexMathWorkspaceContent: View {
     }
 
     private func mathHelpRow(_ title: String, _ detail: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.md) {
             Text(title)
                 .font(ToolTypography.monoLabel)
                 .foregroundStyle(ToolTheme.textPrimary)
-                .frame(width: 70, alignment: .leading)
+                .frame(width: ToolMetrics.Control.labelColumn, alignment: .leading)
 
             Text(detail)
                 .font(ToolTypography.caption)

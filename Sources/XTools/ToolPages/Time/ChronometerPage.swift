@@ -48,7 +48,7 @@ private struct IndexChronometerWorkspaceContent: View {
         IndexPage("计时器", subtitle: "秒表计时，支持计次与暂停。", layout: .scroll) {
             IndexStackedWorkbench {
                 IndexWorkbenchPane(title: "秒表", stretchContent: false) {
-                    VStack(spacing: 8) {
+                    VStack(spacing: ToolMetrics.Spacing.sm) {
                         TimelineView(
                             .animation(minimumInterval: 0.01, paused: !chronometer.isRunning || entryGeneration == 0)
                         ) { context in
@@ -60,7 +60,7 @@ private struct IndexChronometerWorkspaceContent: View {
                                 .accessibilityLabel("已用时间")
                                 .accessibilityValue(ChronometerFormatter.format(currentTime(tick: context.date)))
                         }
-                        HStack(spacing: 8) {
+                        HStack(spacing: ToolMetrics.Spacing.sm) {
                             Button { toggle() } label: {
                                 Label {
                                     Text(primaryActionTitle)

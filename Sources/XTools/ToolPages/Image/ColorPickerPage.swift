@@ -80,14 +80,14 @@ private struct IndexColorWorkspaceContent: View {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
                 .fill(ToolTheme.editorBackground)
                 .overlay { Rectangle().fill(Color(nsColor: previewColor)).clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)) }
-                .frame(width: 132, height: 132)
+                .frame(width: ToolMetrics.Control.preview, height: ToolMetrics.Control.preview)
                 .overlay { RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field).strokeBorder(ToolTheme.border, lineWidth: 0.5) }
                 .accessibilityElement()
                 .accessibilityLabel("颜色预览")
                 .accessibilityValue(previewAccessibilityValue)
 
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                HStack(spacing: 8) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
                     Button {
                         showsSystemColorPicker.toggle()
                     } label: {
@@ -122,7 +122,7 @@ private struct IndexColorWorkspaceContent: View {
 
                 hslControls
             }
-            .frame(maxWidth: 620)
+            .frame(maxWidth: ToolMetrics.Control.readingWide)
         }
     }
 
@@ -212,7 +212,7 @@ private struct IndexColorWorkspaceContent: View {
                     ))
                 }
             ), supportsOpacity: true)
-            .frame(width: 180)
+            .frame(width: ToolMetrics.Control.colorWell)
             .accessibilityLabel("系统颜色和透明度")
         }
         .padding(ToolMetrics.Spacing.md)
@@ -241,14 +241,14 @@ private struct IndexColorWorkspaceContent: View {
             Text(title)
                 .font(ToolTypography.bodyPlain)
                 .foregroundStyle(ToolTheme.textSecondary)
-                .frame(width: 64, alignment: .leading)
+                .frame(width: ToolMetrics.Control.thumbnail, alignment: .leading)
             IndexSlider(value: value, range: range, step: 1, track: track)
                 .accessibilityLabel(accessibilityName)
                 .accessibilityValue(colorSliderValueText(value.wrappedValue, suffix: suffix))
             Text(colorSliderValueText(value.wrappedValue, suffix: suffix))
                 .font(ToolTypography.monoLabel)
                 .foregroundStyle(ToolTheme.textPrimary)
-                .frame(width: 48, alignment: .trailing)
+                .frame(width: ToolMetrics.Control.swatch, alignment: .trailing)
         }
     }
 
@@ -346,12 +346,12 @@ private struct ColorFormatResultRow: View {
     let value: CSSColorFormattedValue
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
+        HStack(alignment: .center, spacing: ToolMetrics.Spacing.compact) {
             Text(value.label)
                 .font(ToolTypography.micro)
                 .foregroundStyle(ToolTheme.textTertiary)
                 .lineLimit(1)
-                .frame(width: 88, alignment: .leading)
+                .frame(width: ToolMetrics.Control.valueColumn, alignment: .leading)
 
             valueText
                 .layoutPriority(1)

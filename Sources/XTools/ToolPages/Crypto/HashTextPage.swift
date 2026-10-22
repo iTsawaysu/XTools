@@ -107,7 +107,7 @@ private struct IndexHashTextWorkspaceContent: View {
 
     @ViewBuilder
     private var resultPanelAccessory: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             if !workspace.usesExplicitComputation, workspace.isComputing {
                 IndexProgressLabel(message: "计算中")
                 .accessibilityElement(children: .combine)

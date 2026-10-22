@@ -27,102 +27,30 @@ struct IndexSegmentedControl<Value: Hashable>: View {
     /// How the selected segment renders: the shared floating spring cursor,
     /// or the inline matched-geometry fill the compact option pickers use
     /// (nested pill, control-label typography, tone-aware tray border).
-    enum SelectionStyle {
-        case cursor
-        case filled
-    }
-
     let items: [(Value, String)]
     @Binding var selection: Value
     let density: Density
-    let selectionStyle: SelectionStyle
     var tone: ToolFeedbackTone? = nil
 
     /// Segment bounds published to the shared cursor layer (same anchor
     /// family as the command-palette selection highlight).
     @State private var segmentAnchors: [Value: Anchor<CGRect>] = [:]
-    @Namespace private var filledSelectionNamespace
 
     init(
         items: [(Value, String)],
         selection: Binding<Value>,
         density: Density = .regular,
-        selectionStyle: SelectionStyle = .cursor,
         tone: ToolFeedbackTone? = nil
     ) {
         self.items = items
         self._selection = selection
         self.density = density
-        self.selectionStyle = selectionStyle
         self.tone = tone
     }
 
     var body: some View {
-        if selectionStyle == .filled {
-            filledBody
-        } else {
-            cursorBody
-        }
-    }
-
-    // MARK: Filled selection (the former IndexOptionPicker)
-
-    private var filledBody: some View {
-        HStack(spacing: 2) {
-            ForEach(items, id: \.0) { item in
-                FilledItem(
-                    label: item.1,
-                    isSelected: selection == item.0,
-                    namespace: filledSelectionNamespace
-                ) {
-                    selection = item.0
-                }
-            }
-        }
-        .padding(2)
-        .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                .strokeBorder(tone?.tint.opacity(0.7) ?? ToolTheme.border, lineWidth: 1)
-        }
-        .fixedSize(horizontal: true, vertical: false)
-        .toolAnimation(ToolMotion.Preset.settle, value: selection)
-    }
-
-    /// One filled-selection segment: selected fill springs between segments
-    /// through matched geometry inside the tray.
-    private struct FilledItem: View {
-        let label: String
-        let isSelected: Bool
-        let namespace: Namespace.ID
-        let action: () -> Void
-
-        var body: some View {
-            Button(action: action) {
-                Text(label)
-                    .font(ToolTypography.controlLabel(weight: isSelected ? .semibold : .medium))
-                    .foregroundStyle(isSelected ? ToolTheme.accentHover : ToolTheme.textSecondary)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.horizontal, 11)
-                    .frame(height: 24)
-                    .background {
-                        if isSelected {
-                            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-                                .fill(ToolTheme.selectionFill)
-                                .matchedGeometryEffect(id: "selection", in: namespace)
-                        }
-                    }
-                    .overlay {
-                        if isSelected {
-                            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-                                .strokeBorder(ToolTheme.selectionStroke, lineWidth: 1)
-                        }
-                    }
-                    .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
-            }
-            .buttonStyle(.plain)
-        }
+        // One selection implementation for both call-site spellings.
+        cursorBody
     }
 
     // MARK: Floating cursor selection

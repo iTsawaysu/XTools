@@ -51,6 +51,7 @@ struct IndexButtonStyle: ButtonStyle {
 
         private var background: Color {
             if primary {
+                if !isEnabled { return ToolTheme.accent.opacity(0.40) }
                 return (configuration.isPressed || hovering) ? ToolTheme.accentHover : ToolTheme.accent
             }
             if configuration.isPressed { return ToolTheme.activeFill }
@@ -60,17 +61,29 @@ struct IndexButtonStyle: ButtonStyle {
             return hovering ? ToolTheme.hoverFill : Color.clear
         }
 
+        private var foreground: Color {
+            guard isEnabled else {
+                return primary ? ToolTheme.onAccent.opacity(0.55) : ToolTheme.textTertiary
+            }
+            return primary ? ToolTheme.onAccent : ToolTheme.textPrimary
+        }
+
         var body: some View {
             configuration.label
                 .font(ToolTypography.bodyMedium)
                 .labelStyle(.titleAndIcon)
-                .foregroundStyle(primary ? ToolTheme.onAccent : ToolTheme.textPrimary)
+                .foregroundStyle(foreground)
                 .padding(.horizontal, 12)
                 .frame(height: 32)
                 .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                        .strokeBorder(primary ? ToolTheme.accent : (hovering ? ToolTheme.strongBorder : Color.clear), lineWidth: 1)
+                        .strokeBorder(
+                            primary
+                                ? (isEnabled ? ToolTheme.accent : ToolTheme.accent.opacity(0.35))
+                                : (hovering ? ToolTheme.strongBorder : Color.clear),
+                            lineWidth: 1
+                        )
                 }
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
                 .scaleEffect(!reduceMotion && configuration.isPressed ? ToolMotion.Scale.modal : 1)
@@ -123,12 +136,17 @@ struct IndexSmallButtonStyle: ButtonStyle {
             return framed ? ToolTheme.border : Color.clear
         }
 
+        private var foreground: Color {
+            if done { return ToolTheme.success }
+            return isEnabled ? ToolTheme.textSecondary : ToolTheme.textTertiary.opacity(0.7)
+        }
+
         var body: some View {
             configuration.label
                 .font(ToolTypography.buttonSmall)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
-                .foregroundStyle(done ? ToolTheme.success : ToolTheme.textSecondary)
+                .foregroundStyle(foreground)
                 .padding(.horizontal, 9)
                 .frame(height: 24)
                 .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
@@ -193,7 +211,7 @@ struct IndexIconActionButtonStyle: ButtonStyle {
                 .frame(width: 24, height: 24)
                 .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
-                .scaleEffect(configuration.isPressed ? ToolMotion.Scale.pressed : 1)
+                .scaleEffect(!reduceMotion && configuration.isPressed ? ToolMotion.Scale.pressed : 1)
                 .onHover { isHovering = $0 }
                 .toolAnimation(
                     ToolMotion.Preset.controlFeedback,

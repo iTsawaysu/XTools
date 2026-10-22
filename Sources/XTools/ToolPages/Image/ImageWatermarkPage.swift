@@ -310,7 +310,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         IndexOptionGroup {
             IndexOptionLabel("透明度")
             IndexSlider(value: $opacity, range: 0.1...1.0, step: 0)
-                .frame(width: 100)
+                .frame(width: ToolMetrics.Control.slider)
                 .accessibilityLabel("水印透明度")
                 .accessibilityValue("\(Int(opacity * 100))%")
                 .onChange(of: opacity) { _, _ in recipeDidChange(previewCadence: .debounced) }
@@ -318,7 +318,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
             IndexOptionDivider()
             IndexOptionLabel("大小")
             IndexSlider(value: $sizeRatio, range: ImageWatermarkSizing.ratioRange, step: 0.01)
-                .frame(width: 100)
+                .frame(width: ToolMetrics.Control.slider)
                 .accessibilityLabel("水印大小")
                 .accessibilityValue("\(sizePercent)%")
                 .help("按图片宽度比例设置水印大小")
@@ -326,7 +326,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
             Text("\(sizePercent)%")
                 .font(ToolTypography.monoCaption)
                 .foregroundStyle(ToolTheme.textSecondary)
-                .frame(width: 32, alignment: .trailing)
+                .frame(width: ToolMetrics.Control.regular, alignment: .trailing)
                 .accessibilityHidden(true)
         }
 
@@ -338,7 +338,6 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                     (.black, "黑色")
                 ],
                 selection: $textColor,
-                selectionStyle: .filled
             )
             .onChange(of: textColor) { _, _ in recipeDidChange(previewCadence: .immediate) }
 
@@ -387,7 +386,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
             text: $watermarkText,
             onSubmit: applyFinalImmediately
         )
-        .frame(minWidth: 220, idealWidth: 300, maxWidth: .infinity)
+        .frame(minWidth: ToolMetrics.Control.passwordIdealWidth, idealWidth: ToolMetrics.Control.textWideWidth, maxWidth: .infinity)
         .accessibilityLabel("水印文字")
         .onChange(of: watermarkText) { _, _ in recipeDidChange(previewCadence: .debounced) }
     }
@@ -402,7 +401,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                     maxDisplayWidth: 64,
                     maxDisplayHeight: 48
                 )
-                .frame(width: 64, height: 48)
+                .frame(width: ToolMetrics.Control.thumbnail, height: ToolMetrics.Control.swatch)
 
                 VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
                     Text(source.url.lastPathComponent)
@@ -418,7 +417,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                         .lineLimit(1)
                 }
             }
-            .frame(width: 300, alignment: .leading)
+            .frame(width: ToolMetrics.Control.textWideWidth, alignment: .leading)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("源图片信息")
             .accessibilityValue(sourceAccessibilityValue)
@@ -567,7 +566,7 @@ private struct WatermarkAnchorOption: View {
     let onChange: () -> Void
     @State private var isPickerPresented = false
 
-    private let columns = Array(repeating: GridItem(.fixed(28), spacing: 4), count: 3)
+    private let columns = Array(repeating: GridItem(.fixed(28), spacing: ToolMetrics.Spacing.xs), count: 3)
 
     var body: some View {
         IndexOptionLabel("位置")
@@ -575,7 +574,7 @@ private struct WatermarkAnchorOption: View {
         Button {
             isPickerPresented.toggle()
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: ToolMetrics.Spacing.fine) {
                 Image(systemName: "square.grid.3x3")
                     .accessibilityHidden(true)
 
@@ -588,20 +587,20 @@ private struct WatermarkAnchorOption: View {
             }
             .font(ToolTypography.controlLabel(weight: .semibold))
             .foregroundStyle(ToolTheme.textPrimary)
-            .padding(.horizontal, 9)
-            .frame(height: 24)
+            .padding(.horizontal, ToolMetrics.Spacing.tight)
+            .frame(height: ToolMetrics.Control.small)
             .indexSurface(.control, fill: ToolTheme.editorBackground, border: ToolTheme.border)
         }
         .buttonStyle(IndexBareButtonStyle())
         .accessibilityLabel("水印位置")
         .accessibilityValue(position.displayName)
         .popover(isPresented: $isPickerPresented, arrowEdge: .bottom) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.compact) {
                 Text("水印位置")
                     .font(ToolTypography.panelTitle)
                     .foregroundStyle(ToolTheme.textSecondary)
 
-                LazyVGrid(columns: columns, spacing: 4) {
+                LazyVGrid(columns: columns, spacing: ToolMetrics.Spacing.xs) {
                     ForEach(ImageWatermarkPosition.allCases, id: \.self) { item in
                         anchorButton(item)
                     }
@@ -641,13 +640,13 @@ private struct WatermarkAnchorCell: View {
                     isHovering ? ToolTheme.hoverFill :
                     ToolTheme.editorBackground
                 )
-                .frame(width: 28, height: 28)
+                .frame(width: ToolMetrics.Control.medium, height: ToolMetrics.Control.medium)
                 .overlay {
                     Circle()
                         .fill(isSelected ? ToolTheme.accentHover : ToolTheme.textSecondary)
-                        .frame(width: 5, height: 5)
+                        .frame(width: ToolMetrics.Control.dot, height: ToolMetrics.Control.dot)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: item.alignment)
-                        .padding(5)
+                        .padding(ToolMetrics.Spacing.micro)
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)

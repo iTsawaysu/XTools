@@ -76,7 +76,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                     )
                 },
                 inputHeader: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: ToolMetrics.Spacing.fine) {
                         urlInput
                         fetchButton
                             .fixedSize(horizontal: true, vertical: false)
@@ -113,7 +113,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
     }
 
     private var urlInput: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: ToolMetrics.Spacing.snug) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: ToolMetrics.IconSize.small))
                 .foregroundStyle(ToolTheme.textTertiary)
@@ -137,7 +137,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                             .foregroundStyle(ToolTheme.textTertiary)
                     }
                     .buttonStyle(IndexBareButtonStyle())
-                    .padding(.trailing, 8)
+                    .padding(.trailing, ToolMetrics.Spacing.sm)
                     .arrowCursorOnHover()
                     .help("清空 URL (Esc)")
                     .accessibilityLabel("清空 URL 地址")

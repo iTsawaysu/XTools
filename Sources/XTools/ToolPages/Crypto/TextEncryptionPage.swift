@@ -214,7 +214,7 @@ private struct IndexTextEncryptionWorkspaceContent: View {
     }
 
     private var wideControls: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: ToolMetrics.Spacing.tight) {
             modeControl
             algorithmControlGroup
             widePasswordInput
@@ -225,13 +225,13 @@ private struct IndexTextEncryptionWorkspaceContent: View {
     }
 
     private var compactControls: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 modeControl
                 algorithmControlGroup
             }
 
-            HStack(spacing: 9) {
+            HStack(spacing: ToolMetrics.Spacing.tight) {
                 compactPasswordInput
                 primaryActionButton
             }
@@ -241,7 +241,7 @@ private struct IndexTextEncryptionWorkspaceContent: View {
 
     private var modeControl: some View {
         IndexSegmentedControl(items: [("enc", "加密"), ("dec", "解密")], selection: modeSelection)
-            .frame(width: 110, height: 38)
+            .frame(width: ToolMetrics.Control.modeSegment, height: ToolMetrics.Control.modeSegmentHeight)
     }
 
     private var algorithmSelector: some View {
@@ -254,7 +254,7 @@ private struct IndexTextEncryptionWorkspaceContent: View {
     }
 
     private var algorithmControlGroup: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: ToolMetrics.Spacing.fine) {
             algorithmSelector
             if let weakAlgorithmDiagnostic {
                 IndexDiagnosticStatusButton(payload: weakAlgorithmDiagnostic)
@@ -266,18 +266,18 @@ private struct IndexTextEncryptionWorkspaceContent: View {
     private var primaryActionButton: some View {
         Button { run() } label: { Label(primaryActionTitle, systemImage: "play.fill") }
             .buttonStyle(IndexButtonStyle(primary: true))
-            .frame(minWidth: 76)
+            .frame(minWidth: ToolMetrics.Control.actionMinWidth)
             .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
     }
 
     private var widePasswordInput: some View {
         passwordInput
-            .frame(minWidth: 160, idealWidth: 220, maxWidth: .infinity)
+            .frame(minWidth: ToolMetrics.Control.fieldMinWidth, idealWidth: ToolMetrics.Control.passwordIdealWidth, maxWidth: .infinity)
     }
 
     private var compactPasswordInput: some View {
         passwordInput
-            .frame(minWidth: 160, idealWidth: 220, maxWidth: 280)
+            .frame(minWidth: ToolMetrics.Control.fieldMinWidth, idealWidth: ToolMetrics.Control.passwordIdealWidth, maxWidth: ToolMetrics.Control.passwordMaxWidth)
     }
 
     private var passwordInput: some View {

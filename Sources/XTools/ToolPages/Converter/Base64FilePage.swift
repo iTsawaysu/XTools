@@ -229,7 +229,7 @@ private struct IndexBase64FileWorkspaceContent: View {
                 }
             },
             content: {
-                VStack(alignment: .leading, spacing: 11) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.relaxed) {
                     reversePreview
                     if session.decodedPayload != nil {
                         Base64DecodedMetadataList(rows: metadataRows(projection.reverseRows))
@@ -250,7 +250,7 @@ private struct IndexBase64FileWorkspaceContent: View {
                     minHeight: Base64FileLayout.primaryContentMinHeight,
                     maxHeight: .infinity
                 )
-                .padding(.horizontal, 14)
+                .padding(.horizontal, ToolMetrics.Spacing.base)
                 .background(isFileDropTargeted ? ToolTheme.selectionFill : ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
@@ -287,7 +287,7 @@ private struct IndexBase64FileWorkspaceContent: View {
 
     @ViewBuilder
     private var filePickerContent: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: ToolMetrics.Spacing.fine) {
             filePickerStatusIcon
 
             if let selectedFile = session.selectedFile {
@@ -338,7 +338,7 @@ private struct IndexBase64FileWorkspaceContent: View {
                     .foregroundStyle(ToolTheme.accent)
             }
         }
-        .frame(width: 32, height: 32)
+        .frame(width: ToolMetrics.Control.regular, height: ToolMetrics.Control.regular)
         .indexSurface(.field, fill: ToolTheme.panelBackground, border: ToolTheme.border)
     }
 
@@ -392,7 +392,7 @@ private struct IndexBase64FileWorkspaceContent: View {
     }
 
     private var encodedOutputHeaderActions: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: ToolMetrics.Spacing.xs) {
             encodedOutputFormatControls
             if session.selectedFile != nil {
                 encodedOutputActionButtons
@@ -402,7 +402,7 @@ private struct IndexBase64FileWorkspaceContent: View {
     }
 
     private var encodedOutputFormatControls: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: ToolMetrics.Spacing.xs) {
             IndexSegmentedControl(
                 items: [("base64", "Base64"), ("dataURL", "Data URL")],
                 selection: outputModeBinding,
@@ -417,7 +417,7 @@ private struct IndexBase64FileWorkspaceContent: View {
     }
 
     private var encodedOutputActionButtons: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: ToolMetrics.Spacing.xs) {
             viewDecodeResultButton
             copyFullOutputButton
             saveEncodedOutputButton
@@ -425,7 +425,7 @@ private struct IndexBase64FileWorkspaceContent: View {
     }
 
     private var decodeInputHeaderActions: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             IndexInputCountLabel(count: session.reverseInput.count)
             decodeActionButton
             importEncodedTextFileButton
@@ -474,7 +474,7 @@ private struct IndexBase64FileWorkspaceContent: View {
     }
 
     private var decodedFileNameEditor: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: ToolMetrics.Spacing.tight) {
             Text("文件名")
                 .font(ToolTypography.caption)
                 .foregroundStyle(ToolTheme.textTertiary)
@@ -547,7 +547,7 @@ private struct IndexBase64FileWorkspaceContent: View {
                     minHeight: Base64FileLayout.decodedPreviewHeight,
                     maxHeight: Base64FileLayout.decodedPreviewHeight
                 )
-                .padding(10)
+                .padding(ToolMetrics.Spacing.compact)
                 .indexSurface(.field, fill: ToolTheme.editorBackground, border: ToolTheme.border)
                 .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
                 .toolAnimation(ToolMotion.Preset.panelReveal, value: ObjectIdentifier(previewImage).hashValue)
@@ -592,7 +592,7 @@ private struct Base64EncodedOutputPreviewSurface: View {
     }
 
     private var previewBody: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.lg) {
             if text.isEmpty {
                 IndexEmptyState(
                     title: "等待输入",
@@ -628,7 +628,7 @@ private struct Base64DecodedMetadataList: View {
     var body: some View {
         VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
-                HStack(alignment: .firstTextBaseline, spacing: 16) {
+                HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.lg) {
                     Text(row.0)
                         .foregroundStyle(ToolTheme.textTertiary)
                     Spacer(minLength: 8)
@@ -639,13 +639,13 @@ private struct Base64DecodedMetadataList: View {
                         .textSelection(.enabled)
                 }
                 .font(ToolTypography.caption)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, ToolMetrics.Spacing.compact)
                 .frame(maxWidth: .infinity, minHeight: 34)
 
                 if index < rows.count - 1 {
                     Rectangle()
                         .fill(ToolTheme.border)
-                        .frame(height: 0.5)
+                        .frame(height: ToolMetrics.Spacing.hairline)
                 }
             }
         }
@@ -658,11 +658,11 @@ private struct Base64DecodedFilePreview: View {
     let detail: String
 
     var body: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: ToolMetrics.Spacing.snug) {
             Image(systemName: "doc.fill")
                 .font(.system(size: ToolMetrics.IconSize.display, weight: .medium))
                 .foregroundStyle(ToolTheme.accent)
-                .frame(width: 32, height: 32)
+                .frame(width: ToolMetrics.Control.regular, height: ToolMetrics.Control.regular)
         .indexSurface(.field, fill: ToolTheme.panelBackground, border: ToolTheme.border)
 
             Text(indexWrappingAttributedText(fileName, lineBreakMode: .byCharWrapping))
@@ -677,7 +677,7 @@ private struct Base64DecodedFilePreview: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, ToolMetrics.Spacing.lg)
         .frame(
             maxWidth: .infinity,
             minHeight: Base64FileLayout.decodedPreviewHeight,
@@ -712,8 +712,8 @@ private struct Base64OutputCountBadge: View {
             .foregroundStyle(isTruncated ? ToolTheme.warning : ToolTheme.textSecondary)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 5)
-            .frame(height: 20)
+            .padding(.horizontal, ToolMetrics.Spacing.micro)
+            .frame(height: ToolMetrics.Control.mini)
             .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
@@ -768,11 +768,11 @@ private struct Base64DecodedNoticeSurface: View {
     var minHeight: CGFloat = 74
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             Image(systemName: systemImage)
                 .font(.system(size: ToolMetrics.IconSize.large, weight: .semibold))
                 .foregroundStyle(ToolTheme.warning)
-                .frame(width: 18, height: 18)
+                .frame(width: ToolMetrics.Control.badge, height: ToolMetrics.Control.badge)
             Text(text)
                 .font(ToolTypography.bodyPlain)
                 .foregroundStyle(ToolTheme.textSecondary)

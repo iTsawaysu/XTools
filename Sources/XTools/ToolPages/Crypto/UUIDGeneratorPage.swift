@@ -90,7 +90,7 @@ private struct IndexUUIDWorkspaceContent: View {
     }
 
     private var parameters: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: ToolMetrics.Spacing.compact) {
             IndexOptionLabel("数量")
             IndexStepperInput(value: $workspace.quantity, range: Self.quantityRange)
                 .onChange(of: workspace.quantity) { _ in generate() }

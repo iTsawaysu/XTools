@@ -30,12 +30,25 @@ public enum ToolMetrics {
     // MARK: - Spacing (4x scale)
 
     public enum Spacing {
+        public static let hair: CGFloat = 1
+        public static let xxs: CGFloat = 2
+        public static let tiny: CGFloat = 3
         public static let xs: CGFloat = 4
+        public static let micro: CGFloat = 5
+        public static let fine: CGFloat = 6
+        public static let snug: CGFloat = 7
         public static let sm: CGFloat = 8
+        public static let tight: CGFloat = 9
+        public static let compact: CGFloat = 10
+        public static let relaxed: CGFloat = 11
         public static let md: CGFloat = 12
         public static let base: CGFloat = 14      // Default panel padding & spacing
         public static let lg: CGFloat = 16
+        public static let xl: CGFloat = 18
+        public static let xxl: CGFloat = 20
+        public static let xxxl: CGFloat = 24
         public static let page: CGFloat = 30      // Page horizontal/vertical padding
+        public static let hero: CGFloat = 32
 
         // Shared panel geometry. Keeping these named prevents individual
         // workspaces from inventing slightly different header/content insets.
@@ -54,16 +67,66 @@ public enum ToolMetrics {
     // generously rounded; controls and fields share one softer step. The ladder
     // is {6, 8, 10, 12} plus Capsule for pills.
 
+    /// Four fixed steps (rules §3.2): paper 10 · editor/input 8 · small
+    /// control 8 · keycap 4. `card`/`modal` are legacy aliases that resolve
+    /// to the same four steps so old call sites cannot reintroduce a fifth
+    /// or sixth visual radius (audit C-04).
     public enum CornerRadius {
-        public static let panel: CGFloat = 10     // IndexPanel surfaces
+        public static let panel: CGFloat = 10     // Paper surfaces
         public static let control: CGFloat = 8    // Small buttons, chips, segment items
         public static let field: CGFloat = 8      // Input fields, large buttons, KV rows
-        public static let card: CGFloat = 12      // Resting dashboard/content cards
-        public static let modal: CGFloat = 12     // Floating surfaces: command palette, toasts, popovers, empty-state tiles
-        public static let keycap: CGFloat = 4      // Keyboard hint keycaps (near-square, Raycast-style)
+        public static let card: CGFloat = panel   // Legacy alias → paper step
+        public static let modal: CGFloat = panel  // Legacy alias → paper step
+        public static let keycap: CGFloat = 4     // Keyboard hint keycaps
         // pill: use Capsule() directly for fully rounded
-        // Nested rule: inner radius = outer radius - padding (e.g. 8 - 2 = 6 for segment items)
+        /// Nested rule: inner radius = outer radius - padding (8 − 2 = 6).
         public static let nestedControl: CGFloat = 6
+    }
+
+    // MARK: - Control Size (fixed square/row dimensions used by chrome)
+
+    /// Fixed control dimensions. Pages must not spell these numbers; the
+    /// values cover the app's icon buttons, chips, rows and thumbnails.
+    public enum Control {
+        public static let tiny: CGFloat = 16
+        public static let mini: CGFloat = 20
+        public static let small: CGFloat = 24
+        public static let medium: CGFloat = 28
+        public static let regular: CGFloat = 32
+        public static let large: CGFloat = 38
+        public static let thumb: CGFloat = 44
+        public static let badge: CGFloat = 18
+        public static let swatch: CGFloat = 48
+        public static let row: CGFloat = 36
+        public static let strip: CGFloat = 92
+        /// Label column for "label + value" rows (chmod, Basic Auth, math).
+        public static let labelColumn: CGFloat = 70
+        /// Number field / slider column widths used by option groups.
+        public static let slider: CGFloat = 100
+        public static let colorWell: CGFloat = 180
+        public static let valueColumn: CGFloat = 88
+        public static let thumbnail: CGFloat = 64
+        public static let preview: CGFloat = 132
+        public static let calendar: CGFloat = 280
+        public static let modeSegment: CGFloat = 110
+        public static let modeSegmentHeight: CGFloat = 38
+        public static let dot: CGFloat = 5
+        public static let separator: CGFloat = 2
+        public static let swatchTiny: CGFloat = 8
+        public static let textMicroWidth: CGFloat = 18
+        public static let labelInset: CGFloat = 13
+        /// Minimum widths for the long-text action cluster on text conversion
+        /// pages (mode picker, password field).
+        public static let actionMinWidth: CGFloat = 76
+        public static let fieldMinWidth: CGFloat = 160
+        public static let passwordIdealWidth: CGFloat = 220
+        public static let passwordMaxWidth: CGFloat = 280
+        /// Reading measures for long-form / list content inside papers.
+        public static let readingWide: CGFloat = 620
+        public static let readingMedium: CGFloat = 360
+        public static let readingNarrow: CGFloat = 320
+        public static let textSmallWidth: CGFloat = 44
+        public static let textWideWidth: CGFloat = 300
     }
 
     // MARK: - Icon Size (SF Symbols rendered inside controls and chrome)

@@ -1,4 +1,5 @@
 import XToolsCore
+import XToolsDesign
 import SwiftUI
 
 @MainActor
@@ -87,7 +88,7 @@ private struct IndexSQLPrettifyWorkspaceContent: View {
             onFormat: format,
             onClear: workspace.clear,
             leadingControl: {
-                HStack(spacing: 6) {
+                HStack(spacing: ToolMetrics.Spacing.fine) {
                     IndexSegmentedControl(
                         items: SQLPrettifyToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
                         selection: formatModeSelection,

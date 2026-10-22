@@ -109,14 +109,13 @@ private struct IndexJWTWorkspaceContent: View {
         // 单张自然高度纸：签名配置 / Header·Payload 双栏 / JWT 输出。
         IndexStackedWorkbench {
             IndexWorkbenchPane(title: "签名配置") {
-                VStack(alignment: .leading, spacing: 12) {
-                    IndexFlowLayout(spacing: 8, lineSpacing: 8) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+                    IndexFlowLayout(spacing: ToolMetrics.Spacing.sm, lineSpacing: 8) {
                         IndexOptionGroup {
                             IndexOptionLabel("算法")
                             IndexSegmentedControl(
                                 items: JWTAlgorithm.allCases.map { ($0.rawValue, $0.rawValue) },
                                 selection: generateAlgorithmBinding,
-                                selectionStyle: .filled
                             )
                         }
                         IndexOptionGroup {
@@ -124,7 +123,6 @@ private struct IndexJWTWorkspaceContent: View {
                             IndexSegmentedControl(
                                 items: Self.secretEncodingItems,
                                 selection: generateSecretEncodingBinding,
-                                selectionStyle: .filled
                             )
                         }
                     }
@@ -183,7 +181,7 @@ private struct IndexJWTWorkspaceContent: View {
             IndexWorkbenchPane(
                 title: "JWT",
                 accessory: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: ToolMetrics.Spacing.fine) {
                         Button(action: transferGeneratedToParse) {
                             Label("在解析中检查", systemImage: "arrow.right.circle")
                                 .font(ToolTypography.buttonSmall)
@@ -268,7 +266,7 @@ private struct IndexJWTWorkspaceContent: View {
     }
 
     private var decodedHeaderPane: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
             IndexFieldHeader("Header") {
                 IndexCopyButton(text: session.parsedHeader, iconOnly: true)
             }
@@ -286,9 +284,9 @@ private struct IndexJWTWorkspaceContent: View {
     }
 
     private var decodedPayloadPane: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
             IndexFieldHeader("Payload") {
-                HStack(spacing: 6) {
+                HStack(spacing: ToolMetrics.Spacing.fine) {
                     IndexSegmentedControl(
                         items: Self.payloadPresentationItems,
                         selection: $payloadPresentation,
@@ -321,7 +319,7 @@ private struct IndexJWTWorkspaceContent: View {
 
     private var registeredClaimsView: some View {
         IndexWorkspaceResultSurface(workspaceSemantic: .naturalHeightShortResultPanel) {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                 if session.registeredClaimInsights.isEmpty {
                     IndexEmptyState(
                         title: session.parsedPayload.isEmpty ? "等待解析" : "无注册声明",
@@ -333,7 +331,7 @@ private struct IndexJWTWorkspaceContent: View {
                     .frame(maxWidth: .infinity, minHeight: 164, alignment: .center)
                 } else {
                     IndexKVSurface {
-                        VStack(spacing: 1) {
+                        VStack(spacing: ToolMetrics.Spacing.hair) {
                             ForEach(session.registeredClaimInsights) { insight in
                                 registeredClaimRow(insight)
                             }
@@ -351,14 +349,14 @@ private struct IndexJWTWorkspaceContent: View {
     }
 
     private func registeredClaimRow(_ insight: JWTRegisteredClaimInsight) -> some View {
-        HStack(alignment: .top, spacing: 9) {
+        HStack(alignment: .top, spacing: ToolMetrics.Spacing.tight) {
             Image(systemName: JWTStatusChrome(insight.status).symbol)
                 .font(.system(size: ToolMetrics.IconSize.medium, weight: .semibold))
                 .foregroundStyle(JWTStatusChrome(insight.status).color)
-                .frame(width: 16, height: 16)
+                .frame(width: ToolMetrics.Control.tiny, height: ToolMetrics.Control.tiny)
                 .accessibilityHidden(true)
 
-            HStack(spacing: 5) {
+            HStack(spacing: ToolMetrics.Spacing.micro) {
                 Text(insight.kind.title)
                     .font(ToolTypography.label)
                     .foregroundStyle(ToolTheme.textPrimary)
@@ -366,9 +364,9 @@ private struct IndexJWTWorkspaceContent: View {
                     .font(ToolTypography.monoCaption)
                     .foregroundStyle(ToolTheme.textTertiary)
             }
-            .frame(width: 92, alignment: .leading)
+            .frame(width: ToolMetrics.Control.strip, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.tiny) {
                 Text(insight.displayValue)
                     .font(ToolTypography.monoLabel)
                     .foregroundStyle(ToolTheme.textPrimary)
@@ -382,8 +380,8 @@ private struct IndexJWTWorkspaceContent: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, 11)
-        .padding(.vertical, 8)
+        .padding(.horizontal, ToolMetrics.Spacing.relaxed)
+        .padding(.vertical, ToolMetrics.Spacing.sm)
         .background(ToolTheme.panelBackground)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(insight.kind.title) \(insight.kind.rawValue)：\(insight.displayValue)，\(insight.explanation)")
@@ -402,14 +400,13 @@ private struct IndexJWTWorkspaceContent: View {
             .buttonStyle(IndexSmallButtonStyle())
             .disabled(session.parsedHeader.isEmpty || session.parsedPayload.isEmpty)
         } content: {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
                     IndexOptionGroup {
                         IndexOptionLabel("密钥格式")
                         IndexSegmentedControl(
                             items: Self.secretEncodingItems,
                             selection: parseSecretEncodingBinding,
-                            selectionStyle: .filled
                         )
                     }
 
@@ -473,7 +470,7 @@ private struct IndexJWTWorkspaceContent: View {
                 value: session.localCheckPresentation,
                 updateID: localCheckPresenceUpdateID
             ) { presentation in
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.compact) {
                     localCheckAxisRow(presentation.signature)
                     localCheckAxisRow(presentation.timeClaims)
 
@@ -484,7 +481,7 @@ private struct IndexJWTWorkspaceContent: View {
                             .foregroundStyle(ToolTheme.textSecondary)
 
                         ForEach(Array(presentation.details.enumerated()), id: \.offset) { _, item in
-                            HStack(alignment: .top, spacing: 6) {
+                            HStack(alignment: .top, spacing: ToolMetrics.Spacing.fine) {
                                 Image(systemName: JWTStatusChrome(item.status).symbol)
                                     .foregroundStyle(JWTStatusChrome(item.status).color)
                                 Text("\(item.name)：\(item.message)")
@@ -513,10 +510,10 @@ private struct IndexJWTWorkspaceContent: View {
     private func localCheckAxisRow(
         _ axis: JWTWorkspaceSession.LocalCheckPresentation.Axis
     ) -> some View {
-        HStack(alignment: .top, spacing: 6) {
+        HStack(alignment: .top, spacing: ToolMetrics.Spacing.fine) {
             Image(systemName: JWTStatusChrome(axis.status).symbol)
                 .foregroundStyle(JWTStatusChrome(axis.status).color)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xxs) {
                 Text(axis.title)
                     .font(ToolTypography.label)
                     .foregroundStyle(ToolTheme.textPrimary)

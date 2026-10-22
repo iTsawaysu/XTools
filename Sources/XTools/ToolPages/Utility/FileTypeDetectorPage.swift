@@ -64,7 +64,7 @@ private struct IndexFileTypeDetectorWorkspaceContent: View {
             } resultControls: {
                 EmptyView()
             } input: {
-                VStack(spacing: 12) {
+                VStack(spacing: ToolMetrics.Spacing.md) {
                     Button {
                         session.selectFile(filePanel: fileInputPanelClient)
                     } label: {

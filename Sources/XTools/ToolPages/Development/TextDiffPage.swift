@@ -1,4 +1,5 @@
 import SwiftUI
+import XToolsDesign
 
 /// 「对比」Hub 的文本分段。workspace key 使用注册表 toolID "diff" + slot "text"
 /// （evictHeavyPayloads 按注册表 ID 淘汰，F1），输入与执行状态由
@@ -38,7 +39,7 @@ private struct IndexTextDiffWorkspaceContent: View {
             onClear: workspace.clear,
             clearDisabled: !workspace.hasAnyContent,
             leadingControl: {
-                HStack(spacing: 6) {
+                HStack(spacing: ToolMetrics.Spacing.fine) {
                     IndexOptionSwitch(title: "忽略空白", style: .button, isOn: $workspace.ignoreWhitespace)
                     IndexOptionSwitch(title: "忽略大小写", style: .button, isOn: $workspace.ignoreCase)
                     IndexIconButton(

@@ -190,7 +190,6 @@ private struct IndexImageConverterWorkspaceContent: View {
                 IndexSegmentedControl(
                     items: outputFormats.map { ($0, $0.displayName) },
                     selection: $targetFormat,
-                    selectionStyle: .filled
                 )
                 .accessibilityLabel("目标格式")
                 .accessibilityValue(targetFormat.displayName)
@@ -234,7 +233,6 @@ private struct IndexImageConverterWorkspaceContent: View {
                         (.custom, "自定义")
                     ],
                     selection: $transparencyFillMode,
-                    selectionStyle: .filled
                 )
                 .accessibilityLabel("透明区域填充颜色")
                 .accessibilityValue(transparencyFillAccessibilityValue)

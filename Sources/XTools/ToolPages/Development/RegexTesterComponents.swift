@@ -12,7 +12,7 @@ struct RegexMatchList: View {
     var onSelect: ((Int) -> Void)? = nil
 
     var body: some View {
-        LazyVStack(spacing: 8) {
+        LazyVStack(spacing: ToolMetrics.Spacing.sm) {
             ForEach(Array(matches.enumerated()), id: \.offset) { index, match in
                 RegexMatchRow(
                     ordinal: index + 1,
@@ -44,8 +44,8 @@ private struct RegexMatchRow: View {
             onSelect?(ordinal - 1)
         } label: {
             content
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                .padding(.horizontal, ToolMetrics.Spacing.compact)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
                     rowFill,
@@ -67,8 +67,8 @@ private struct RegexMatchRow: View {
     }
 
     private var content: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+            HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.sm) {
                 Text("#\(ordinal)")
                     .font(ToolTypography.monoLabel)
                     .foregroundStyle(isSelected ? ToolTheme.accentHover : ToolTheme.textSecondary)
@@ -137,15 +137,15 @@ private struct RegexCaptureList: View {
     var tint: (Int) -> Color
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.snug) {
             Text(title)
                 .font(ToolTypography.micro)
                 .foregroundStyle(ToolTheme.textTertiary)
                 .textCase(.uppercase)
 
             ForEach(Array(captures.enumerated()), id: \.offset) { index, capture in
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
+                    HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.sm) {
                         Text(capture.name)
                             .font(ToolTypography.monoLabel)
                             .foregroundStyle(tint(index))
@@ -160,11 +160,11 @@ private struct RegexCaptureList: View {
 
                     RegexMatchValue(capture.value, color: tint(index))
                 }
-                .padding(.leading, 10)
+                .padding(.leading, ToolMetrics.Spacing.compact)
                 .overlay(alignment: .leading) {
                     Rectangle()
                         .fill(tint(index).opacity(0.45))
-                        .frame(width: 2)
+                        .frame(width: ToolMetrics.Control.separator)
                 }
             }
         }

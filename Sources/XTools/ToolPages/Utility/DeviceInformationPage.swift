@@ -19,7 +19,7 @@ struct IndexDeviceInfoPage: View {
     var body: some View {
         IndexPage("设备信息", subtitle: "读取 macOS 系统、硬件与显示器信息。", workspaceSemantic: .queryListWorkspace) {
             IndexResultWorkbench(title: "macOS 设备信息") {
-                HStack(spacing: 8) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
                     Button {
                         session.refresh()
                     } label: {

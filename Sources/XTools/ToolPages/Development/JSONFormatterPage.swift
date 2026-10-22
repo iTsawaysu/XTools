@@ -1,4 +1,5 @@
 import XToolsCore
+import XToolsDesign
 import SwiftUI
 
 @MainActor
@@ -117,7 +118,7 @@ private struct IndexJSONFormatterWorkspaceContent: View {
             onFormat: format,
             onClear: workspace.clear,
             leadingControl: {
-                HStack(spacing: 6) {
+                HStack(spacing: ToolMetrics.Spacing.fine) {
                     IndexSegmentedControl(
                         items: JSONFormatterToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
                         selection: formatModeSelection,

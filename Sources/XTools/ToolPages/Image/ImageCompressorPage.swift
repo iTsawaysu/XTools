@@ -128,7 +128,6 @@ private struct IndexImageCompressorWorkspaceContent: View {
                 IndexSegmentedControl(
                     items: ImageCompressionPreference.allCases.map { ($0, $0.displayName) },
                     selection: $compressionPreference,
-                    selectionStyle: .filled
                 )
                 .onChange(of: compressionPreference) { _ in compress() }
             }
@@ -167,7 +166,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
     @ViewBuilder
     private var resultCardFacts: some View {
         if let compressedAssessment, compressedAssessment.canSave {
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.fine) {
                 HStack(spacing: ToolMetrics.Spacing.md) {
                     Text("输出大小")
                         .font(ToolTypography.caption)

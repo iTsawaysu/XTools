@@ -110,7 +110,7 @@ private struct IndexDateCalcWorkspaceContent: View {
                 Text("常用范围")
                     .font(ToolTypography.buttonSmall)
                     .foregroundStyle(ToolTheme.textSecondary)
-                IndexFlowLayout(spacing: 6, lineSpacing: 6) {
+                IndexFlowLayout(spacing: ToolMetrics.Spacing.fine, lineSpacing: 6) {
                     ForEach(DateCalcWorkspace.DiffPreset.allCases, id: \.rawValue) { preset in
                         IndexBadge(preset.title) {
                             session.applyPreset(preset)
@@ -120,11 +120,11 @@ private struct IndexDateCalcWorkspaceContent: View {
             }
 
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top, spacing: 12) {
+                HStack(alignment: .top, spacing: ToolMetrics.Spacing.md) {
                     startField()
                     endField()
                 }
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
                     startField()
                     endField()
                 }
@@ -160,11 +160,11 @@ private struct IndexDateCalcWorkspaceContent: View {
             baseField()
 
             ViewThatFits(in: .horizontal) {
-                HStack(spacing: 8) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
                     offsetControls
                     Spacer(minLength: 0)
                 }
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
                     offsetControls
                 }
             }
@@ -192,7 +192,7 @@ private struct IndexDateCalcWorkspaceContent: View {
             items: DateCalcWorkspace.Op.allCases.map { ($0, $0.label) },
             selection: $session.op
         )
-        .frame(width: 100)
+        .frame(width: ToolMetrics.Control.slider)
 
         IndexNumberInput(value: $session.amount, range: 0...100_000, fieldWidth: 56)
 
@@ -261,12 +261,12 @@ private struct DateCalculatorDateField: View {
     @State private var showsCalendar = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.fine) {
             Text(title)
                 .font(ToolTypography.buttonSmall)
                 .foregroundStyle(ToolTheme.textSecondary)
 
-            HStack(spacing: 8) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 IndexControlledDateInput(
                     input: $input,
                     placeholder: "2026-07-06",
@@ -276,13 +276,13 @@ private struct DateCalculatorDateField: View {
                     onCommit: onCommit,
                     onInvalidPaste: onInvalidPaste
                 ) {
-                    HStack(spacing: 2) {
+                    HStack(spacing: ToolMetrics.Spacing.xxs) {
                         DateCalculatorTodayButton(action: onToday)
                         IndexIconButton(systemImage: "calendar", help: "选择日期") {
                             showsCalendar = true
                         }
                     }
-                    .padding(.trailing, 6)
+                    .padding(.trailing, ToolMetrics.Spacing.fine)
                 }
             }
 
@@ -299,7 +299,7 @@ private struct DateCalculatorDateField: View {
                 ),
                 dismiss: { showsCalendar = false }
             )
-            .frame(width: 280)
+            .frame(width: ToolMetrics.Control.calendar)
         }
     }
 }
@@ -315,8 +315,8 @@ private struct DateCalculatorTodayButton: View {
             Text("今天")
                 .font(ToolTypography.buttonSmall)
                 .foregroundStyle(isHovering ? ToolTheme.textPrimary : ToolTheme.textSecondary)
-                .padding(.horizontal, 6)
-                .frame(height: 24)
+                .padding(.horizontal, ToolMetrics.Spacing.fine)
+                .frame(height: ToolMetrics.Control.small)
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
         }
         .buttonStyle(IndexBareButtonStyle())
@@ -349,11 +349,11 @@ private struct DateCalculatorInlineOption: View {
 
     private var optionLabel: some View {
         Button { isOn.toggle() } label: {
-            HStack(spacing: 7) {
+            HStack(spacing: ToolMetrics.Spacing.snug) {
                 Image(systemName: isOn ? "checkmark.square.fill" : "square")
                     .font(.system(size: ToolMetrics.IconSize.medium, weight: .semibold))
                     .foregroundStyle(isOn ? ToolTheme.accentHover : ToolTheme.textSecondary)
-                    .frame(width: 16, height: 16)
+                    .frame(width: ToolMetrics.Control.tiny, height: ToolMetrics.Control.tiny)
                     .toolMotionIconSwap(id: isOn)
 
                 Text(title)
@@ -377,7 +377,7 @@ private struct DateCalculatorHeroResult: View {
     var footnote: String? = nil
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: ToolMetrics.Spacing.fine) {
             Text(value)
                 .font(ToolTypography.heroValue)
                 .foregroundStyle(ToolTheme.accentHover)
@@ -393,7 +393,7 @@ private struct DateCalculatorHeroResult: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
+        .padding(.vertical, ToolMetrics.Spacing.xxl)
         .indexSurface(.field, fill: ToolTheme.editorBackground, border: ToolTheme.border)
     }
 }

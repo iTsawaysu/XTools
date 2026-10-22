@@ -66,7 +66,7 @@ private struct TextStatisticsAnalysisStatus: View {
                 IndexProgressLabel(message: "统计中")
             }
         }
-        .frame(width: 64, height: 18, alignment: .trailing)
+        .frame(width: ToolMetrics.Control.thumbnail, height: ToolMetrics.Control.badge, alignment: .trailing)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("正在统计")
         .accessibilityHidden(!isAnalyzing)

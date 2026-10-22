@@ -148,7 +148,7 @@ private struct IndexRegexWorkspaceContent: View {
                 trailingText: summaryText
             ),
             accessory: {
-                HStack(spacing: 8) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
                     Menu {
                         ForEach(RegexMatcher.presets) { preset in
                             Button(preset.title) {
@@ -156,7 +156,7 @@ private struct IndexRegexWorkspaceContent: View {
                             }
                         }
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: ToolMetrics.Spacing.fine) {
                             Image(systemName: "text.badge.checkmark")
                                 .accessibilityHidden(true)
 
@@ -183,8 +183,8 @@ private struct IndexRegexWorkspaceContent: View {
                 }
             },
             content: {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.compact) {
+                    HStack(spacing: ToolMetrics.Spacing.sm) {
                         Text("/")
                             .font(ToolTypography.body)
                             .foregroundStyle(ToolTheme.textSecondary)
@@ -418,7 +418,7 @@ private struct IndexRegexWorkspaceContent: View {
             Toggle("点号匹配换行 (s)", isOn: flagBinding("s"))
             Toggle("允许注释与空白 (x)", isOn: flagBinding("x"))
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: ToolMetrics.Spacing.micro) {
                 Text(activeFlagsLabel)
                     .font(ToolTypography.monoLabel)
                     .foregroundStyle(ToolTheme.textPrimary)

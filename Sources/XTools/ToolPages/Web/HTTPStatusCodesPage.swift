@@ -51,9 +51,9 @@ private struct IndexHTTPStatusWorkspaceContent: View {
                         clearTitle: "清空状态码搜索",
                         onClear: workspace.clearSearch
                     )
-                    .frame(maxWidth: 320)
+                    .frame(maxWidth: ToolMetrics.Control.readingNarrow)
 
-                    IndexFlowLayout(spacing: 6, lineSpacing: 6) {
+                    IndexFlowLayout(spacing: ToolMetrics.Spacing.fine, lineSpacing: 6) {
                         ForEach(categories, id: \.self) { name in
                             let isActive = workspace.category == name
                             IndexBadge(name, isSelected: isActive) {
@@ -99,11 +99,11 @@ private struct IndexHTTPStatusRow: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: ToolMetrics.Spacing.md) {
             IndexBadge("\(row.code)", tone: statusTone(row.family), fixedWidth: 64)
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.tiny) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
                     Text(row.name)
                         .font(ToolTypography.monoValueMedium)
                     Text(row.meaning)
@@ -123,7 +123,7 @@ private struct IndexHTTPStatusRow: View {
                 iconOnly: true
             )
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, ToolMetrics.Spacing.compact)
         .background(isHovering ? ToolTheme.hoverFill : Color.clear)
         .contentShape(Rectangle())
         .onHover { hovering in

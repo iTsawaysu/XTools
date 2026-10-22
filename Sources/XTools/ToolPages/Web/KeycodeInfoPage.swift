@@ -101,14 +101,14 @@ private struct IndexKeycodeWorkspaceContent: View {
                 onEvent: handleEvent
             )
 
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.compact) {
+                HStack(alignment: .top, spacing: ToolMetrics.Spacing.compact) {
                     Circle()
                         .fill(isListening ? ToolTheme.success : ToolTheme.textSecondary)
-                        .frame(width: 8, height: 8)
-                        .padding(.top, 4)
+                        .frame(width: ToolMetrics.Control.swatchTiny, height: ToolMetrics.Control.swatchTiny)
+                        .padding(.top, ToolMetrics.Spacing.xs)
 
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.tiny) {
                         Text(isListening ? "正在监听" : "监听已暂停")
                             .font(ToolTypography.bodyMedium)
                             .foregroundStyle(ToolTheme.textPrimary)
@@ -132,7 +132,7 @@ private struct IndexKeycodeWorkspaceContent: View {
                     .frame(maxWidth: .infinity, alignment: .center)
 
                 ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: ToolMetrics.Spacing.fine) {
                         IndexBadge("Control", tone: workspace.snapshot?.modifiers.control == true ? .accent : .neutral)
                         IndexBadge("Shift", tone: workspace.snapshot?.modifiers.shift == true ? .accent : .neutral)
                         IndexBadge("Option", tone: workspace.snapshot?.modifiers.option == true ? .accent : .neutral)
@@ -141,7 +141,7 @@ private struct IndexKeycodeWorkspaceContent: View {
                         IndexBadge("Fn", tone: workspace.snapshot?.modifiers.function == true ? .accent : .neutral)
                     }
 
-                    IndexFlowLayout(spacing: 6, lineSpacing: 6) {
+                    IndexFlowLayout(spacing: ToolMetrics.Spacing.fine, lineSpacing: 6) {
                         IndexBadge("Control", tone: workspace.snapshot?.modifiers.control == true ? .accent : .neutral)
                         IndexBadge("Shift", tone: workspace.snapshot?.modifiers.shift == true ? .accent : .neutral)
                         IndexBadge("Option", tone: workspace.snapshot?.modifiers.option == true ? .accent : .neutral)
