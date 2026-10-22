@@ -185,4 +185,4 @@ enum AppShellPreferenceKeys {
 
 // 跨工具偏好键按域拆分在 Shared/Preferences/ 下：
 // SensitiveToolPreferenceKeys / MediaToolPreferenceKeys /
-// SourceControlToolPreferenceKeys / TextDevelopmentToolPreferenceKeys。
+// TextDevelopmentToolPreferenceKeys。
