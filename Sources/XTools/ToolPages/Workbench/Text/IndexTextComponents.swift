@@ -681,6 +681,7 @@ struct IndexTextArea: View {
                 if renderingMode == .textKit2Viewport {
                     IndexTextKit2ViewportTextView(
                         text: $text,
+                        accessibilityLabel: placeholder,
                         exactTextIdentity: exactTextIdentity,
                         lineBreakMode: lineBreakMode,
                         autoFocus: autoFocus,
@@ -693,6 +694,7 @@ struct IndexTextArea: View {
                 } else {
                     IndexUndoableTextView(
                         text: $text,
+                        accessibilityLabel: placeholder,
                         exactTextIdentity: exactTextIdentity,
                         growsWithContent: growsWithContent,
                         lineBreakMode: lineBreakMode,
@@ -733,6 +735,8 @@ struct IndexTextArea: View {
             }
         }
         .iBeamCursorOnHover(excludingLeading: lineNumbers ? IndexEditorLineNumberGutter.width : 0)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(placeholder)
     }
 }
 
@@ -765,6 +769,7 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
     @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
 
     @Binding var text: String
+    var accessibilityLabel: String = ""
     var exactTextIdentity: JSONExactTextIdentity? = nil
     var lineBreakMode: NSLineBreakMode
     var autoFocus = false
@@ -810,6 +815,10 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
         scrollView.verticalScrollElasticity = .automatic
 
         configure(textView)
+        textView.setAccessibilityRole(.textArea)
+        if !accessibilityLabel.isEmpty {
+            textView.setAccessibilityLabel(accessibilityLabel)
+        }
         textView.delegate = context.coordinator
         textView.setStringWithoutUndoRegistration(text)
         if context.coordinator.placeCaretAtEndIfRequested(caretPlacementRequestToken, in: textView) {
@@ -998,6 +1007,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
     @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
 
     @Binding var text: String
+    var accessibilityLabel: String = ""
     var exactTextIdentity: JSONExactTextIdentity? = nil
     var growsWithContent: Bool
     var lineBreakMode: NSLineBreakMode
@@ -1047,6 +1057,10 @@ struct IndexUndoableTextView: NSViewRepresentable {
         scrollView.verticalScrollElasticity = growsWithContent ? .none : .automatic
 
         configure(textView)
+        textView.setAccessibilityRole(.textArea)
+        if !accessibilityLabel.isEmpty {
+            textView.setAccessibilityLabel(accessibilityLabel)
+        }
         textView.delegate = context.coordinator
         textView.setStringWithoutUndoRegistration(text)
         if lineNumbers {

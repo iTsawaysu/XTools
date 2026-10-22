@@ -81,7 +81,7 @@ struct IndexKVSurface<Content: View>: View {
 
     var body: some View {
         content
-            .background(ToolTheme.border)
+            .background(ToolTheme.strongBorder)
             .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)

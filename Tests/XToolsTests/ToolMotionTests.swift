@@ -19,4 +19,24 @@ struct ToolMotionTests {
             break
         }
     }
+
+    @Test func pageTransitionPresetsRespectReduceMotion() {
+        for preset in [
+            ToolMotion.Preset.pageArrival,
+            ToolMotion.Preset.pageDeparture,
+            ToolMotion.Preset.pageSharedAxisArrival,
+            ToolMotion.Preset.pageSharedAxisDeparture,
+            ToolMotion.Preset.pageBloomArrival,
+            ToolMotion.Preset.pageBloomDeparture
+        ] {
+            #expect(ToolMotion.animation(preset, reduceMotion: true) == nil)
+            #expect(ToolMotion.animation(preset, reduceMotion: false) != nil)
+        }
+    }
+
+    @Test func pageTransitionDurationsStayOrdered() {
+        #expect(ToolMotion.Duration.pageSinkExit < ToolMotion.Duration.pageSinkEnter)
+        #expect(ToolMotion.Duration.pageSharedAxisExit < ToolMotion.Duration.pageSharedAxisEnter)
+        #expect(ToolMotion.Duration.pageBloomExit < ToolMotion.Duration.pageBloomEnter)
+    }
 }
