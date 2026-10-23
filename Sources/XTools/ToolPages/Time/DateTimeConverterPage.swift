@@ -52,46 +52,61 @@ private struct IndexDateTimeWorkspaceContent: View {
         IndexPage(
             "时间戳转换",
             subtitle: "Unix 时间戳与人类可读时间互转。",
-            workspaceSemantic: .naturalHeightShortResultPanel
+            workspaceSemantic: .queryListWorkspace
         ) {
-            IndexInputResultWorkbench(
-                inputTitle: "时间",
-                resultTitle: "各格式"
-            ) {
-                HStack(spacing: ToolMetrics.Spacing.sm) {
-                    Spacer(minLength: ToolMetrics.Spacing.sm)
-                    clearAllButton
+            WorkbenchSurface(title: nil, shape: .inputOutput) {
+                WorkbenchIOPair(
+                    leadingTitle: "时间",
+                    trailingTitle: "各格式",
+                    leadingActions: [
+                        .clear(title: "全部清空", enabled: hasAnyContent, onPerform: clearAll)
+                    ],
+                    trailingActions: [
+                        .copy(text: allRowsText, title: "全部复制")
+                    ]
+                ) {
+                    inputPane
+                } trailing: {
+                    IndexResultSurface(
+                        content: .kv(resultItems),
+                        emptyText: IndexEmptyStateCopy.autoCalculate("时间戳或时间")
+                    )
                 }
-            } resultControls: {
-                IndexCopyButton(text: allRowsText, title: "全部复制")
-            } input: {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                    HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.sm) {
-                        Text("Unix 时间戳（秒）")
-                            .font(ToolTypography.buttonSmall)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                        Spacer(minLength: ToolMetrics.Spacing.sm)
-                        currentTimePageAction
-                    }
-
-                    unixTimestampInput
-
-                    Text("人类可读时间（本地时区）")
-                        .font(ToolTypography.buttonSmall)
-                        .foregroundStyle(ToolTheme.textSecondary)
-
-                    humanTimeInputView
-                        .indexWorkspaceDiagnostic(workspace.humanError)
-                }
-                .padding(.horizontal, ToolMetrics.Spacing.md)
-                .padding(.vertical, ToolMetrics.Spacing.sm)
-            } result: {
-                IndexResultSurface(
-                    content: .kv(resultItems),
-                    emptyText: IndexEmptyStateCopy.autoCalculate("时间戳或时间")
-                )
             }
         }
+    }
+
+    /// 输入 pane 内容（原 IndexInputResultWorkbench input 槽投影）：
+    /// 标签行 + 时间戳输入 + 人类时间输入；「现在」为就近的即时动作。
+    /// 内边距由 `IndexWorkbenchPane` 统一持有（pane inset）。
+    private var inputPane: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+            HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.sm) {
+                Text("Unix 时间戳（秒）")
+                    .font(ToolTypography.buttonSmall)
+                    .foregroundStyle(ToolTheme.textSecondary)
+                Spacer(minLength: ToolMetrics.Spacing.sm)
+                currentTimePageAction
+            }
+
+            unixTimestampInput
+
+            Text("人类可读时间（本地时区）")
+                .font(ToolTypography.buttonSmall)
+                .foregroundStyle(ToolTheme.textSecondary)
+
+            humanTimeInputView
+                .indexWorkspaceDiagnostic(workspace.humanError)
+        }
+    }
+
+    /// 「全部清空」的可用性（原 clearAllButton 的 disabled 条件取反）。
+    private var hasAnyContent: Bool {
+        !(workspace.timestamp.isEmpty
+            && workspace.humanTimeInput.isEmpty
+            && workspace.rows.isEmpty
+            && workspace.timestampError == nil
+            && workspace.humanError == nil)
     }
 
     private var unixTimestampInput: some View {
@@ -100,7 +115,7 @@ private struct IndexDateTimeWorkspaceContent: View {
             text: $workspace.timestamp,
             onSubmit: parseTimestamp
         )
-            .onChange(of: workspace.timestamp) { _ in
+            .onChange(of: workspace.timestamp) {
                 handleTimestampChange()
             }
             .indexWorkspaceDiagnostic(workspace.timestampError)
@@ -156,14 +171,6 @@ private struct IndexDateTimeWorkspaceContent: View {
     private func applyCurrentTime() {
         NSApp.keyWindow?.makeFirstResponder(nil)
         apply(Date())
-    }
-
-    private var clearAllButton: some View {
-        IndexClearButton(
-            isDisabled: workspace.timestamp.isEmpty && workspace.humanTimeInput.isEmpty && workspace.rows.isEmpty && workspace.timestampError == nil && workspace.humanError == nil,
-            title: "全部清空",
-            action: clearAll
-        )
     }
 
     private func applyFromHumanTimeInput(_ date: Date) {

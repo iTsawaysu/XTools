@@ -22,10 +22,14 @@ private struct IndexBase64FileWorkspaceContent: View {
     @Environment(\.fileInputPanelClient) private var fileInputPanelClient
     @Environment(\.fileOutputPanelClient) private var fileOutputPanelClient
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
 
     @ObservedObject var session: Base64FileWorkflowSession
     @State private var isFileDropTargeted = false
     @State private var isShowingFileReadProgress = false
+    /// 「用作输入」写入解码输入后的光标放置请求（token 变化时光标置于
+    /// 文本末尾并滚动可见；`IndexTextAreaCaretPlacementState` 消费）。
+    @State private var decodeInputCaretRequestToken = 0
 
     private var projection: Base64FileWorkspaceProjection {
         Base64FileWorkspaceProjection.make(
@@ -47,7 +51,8 @@ private struct IndexBase64FileWorkspaceContent: View {
 
     /// ADR-0028 reads “标题+模式”: the direction control joins the page header
     /// accessory, so the workflow error text reaches the paper-top slot of the
-    /// shared file workbench instead of per-pane diagnostic slots.
+    /// unified workbench instead of per-pane diagnostic slots.（新壳诊断单轨：
+    /// 该文本经 `.indexWorkspaceDiagnostic` 发布，壳聚合成纸顶 banner + toast。）
     private var workbenchDiagnostic: String? {
         switch session.direction {
         case .encode: return session.fileError
@@ -83,6 +88,12 @@ private struct IndexBase64FileWorkspaceContent: View {
         rows.map { ($0.label, $0.value, color(for: $0.tone)) }
     }
 
+    // MARK: - 统一壳装配（unified-workbench C1）
+
+    /// 方向即页面/工作流的既有模式状态（`session.direction`）：编码方向 =
+    /// 源文件 pane / 编码输出 pane；解码方向 = Base64 输入 pane / 解码结果
+    /// pane。方向的唯一交互表达是页头 accessory 的方向分段（swap 语义经
+    /// 分段换段实现，见对照表取舍），ActionBar 不再重复放换向钮。
     var body: some View {
         IndexPage(
             "Base64 文件",
@@ -95,25 +106,109 @@ private struct IndexBase64FileWorkspaceContent: View {
                 )
             }
         ) {
-            IndexFileWorkbench(
-                diagnostic: workbenchDiagnostic,
-                leading: {
-                    if session.direction == .encode {
-                        sourceFilePane
-                    } else {
-                        decodeInputPane
-                    }
-                },
-                trailing: {
-                    if session.direction == .encode {
-                        encodedOutputPane
-                    } else {
-                        decodedResultPane
-                    }
-                }
-            )
+            WorkbenchSurface(title: nil, shape: .inputOutput) {
+                ioPair
+                    // 诊断单轨发布（旧 IndexFileWorkbench 参数轨的等价迁移：
+                    // 同一文本、同一纸顶槽、同一 toast 门控）。
+                    .indexWorkspaceDiagnostic(workbenchDiagnostic)
+            }
         }
     }
+
+    private var ioPair: some View {
+        WorkbenchIOPair(
+            leadingTitle: session.direction == .encode ? "源文件" : "Base64 输入",
+            trailingTitle: session.direction == .encode ? "编码输出" : "解码结果",
+            splitPolicy: .fileAsymmetric,
+            trailingActions: encodeOutputActions,
+            leadingFooter: session.direction == .encode
+                ? paneFooter(projection.sourceStatus, trailingText: "源文件不会被修改")
+                : IndexWorkbenchFooter(
+                    status: "自动检测 Base64 与 Data URL",
+                    trailingText: "支持导入编码文本文件"
+                ),
+            trailingFooter: session.direction == .encode
+                ? paneFooter(projection.encodedOutputStatus, trailingText: projection.encodedOutputSizeSummary)
+                : paneFooter(
+                    projection.decodedResultStatus,
+                    trailingText: session.decodedPayload == nil ? "解码后显示文件信息" : "保存前可修改文件名"
+                ),
+            leadingAccessory: {
+                if session.direction == .encode {
+                    sourcePaneAccessory
+                } else {
+                    decodeInputHeaderActions
+                }
+            },
+            leading: {
+                if session.direction == .encode {
+                    filePickerButton
+                        .frame(maxHeight: .infinity)
+                } else {
+                    decodeInputEditor
+                }
+            },
+            trailingAccessory: {
+                if session.direction == .encode {
+                    encodedOutputHeaderActions
+                } else if session.decodedPayload != nil {
+                    saveDecodedButton
+                }
+            },
+            trailing: {
+                if session.direction == .encode {
+                    encodedOutputPreviewSurface
+                } else {
+                    decodedResultContent
+                }
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var sourcePaneAccessory: some View {
+        // 源清空仅在有选择/读取工作/来源诊断时在场（真空态不放禁用命令）。
+        if !projection.fileClearDisabled {
+            IndexClearButton(isDisabled: projection.fileClearDisabled, iconOnly: true) {
+                session.clearSelection()
+            }
+        }
+    }
+
+    // MARK: - 「用作输入」（unified-workbench C2，新能力）
+
+    /// 编码输出 pane 尾部操作条：唯一动作是「用作输入」（把完整编码输出
+    /// 写入解码输入并切到解码方向，toast「已作为输入」由操作条统一播报）。
+    /// 在场条件 = 已选文件且完整输出落在可编辑反向输入的字节限制内
+    /// （Base64/Data URL 全 ASCII，字符数即 UTF-8 字节数）；超限输出写入
+    /// 必被会话拒绝，动作直接缺席，避免成功 toast 与真实结果矛盾——大文件
+    /// 走既有的「导入编码文本文件 / 在解码结果中预览」路径。
+    private var encodeOutputActions: [WorkbenchActionBarAction] {
+        guard session.direction == .encode,
+              session.selectedFile != nil,
+              projection.outputCharacterCount <= Base64FileWorkflowSession.editableReverseInputByteLimit
+        else { return [] }
+        return [
+            .useAsInput(onPerform: sendEncodedOutputToDecodeInput)
+        ]
+    }
+
+    /// 写回路径：完整输出经静态 `Base64FileWorkflow.fullOutput` 在 detached
+    /// 任务计算（几十 MB 编码不落主线程），随后按会话公开接口写入反向
+    /// 输入并换向；写入前请求把光标放到解码输入末尾。
+    private func sendEncodedOutputToDecodeInput() {
+        guard let selectedFile = session.selectedFile else { return }
+        let mode = session.outputMode
+        Task { @MainActor in
+            let text = await Base64FileWorkflow.fullOutput(for: selectedFile, mode: mode)
+            guard session.selectedFile == selectedFile, session.outputMode == mode else { return }
+            decodeInputCaretRequestToken += 1
+            session.updateReverseInput(text)
+            session.changeDirection(to: .decode)
+        }
+    }
+
+    // MARK: - 绑定
 
     private var directionBinding: Binding<String> {
         Binding(
@@ -140,36 +235,7 @@ private struct IndexBase64FileWorkspaceContent: View {
         )
     }
 
-    private var sourceFilePane: some View {
-        IndexWorkbenchPane(
-            title: "源文件",
-            footer: paneFooter(projection.sourceStatus, trailingText: "源文件不会被修改"),
-            accessory: {
-                if !projection.fileClearDisabled {
-                    IndexClearButton(isDisabled: projection.fileClearDisabled, iconOnly: true) {
-                        session.clearSelection()
-                    }
-                }
-            },
-            content: {
-                filePickerButton
-                    .frame(maxHeight: .infinity)
-            }
-        )
-    }
-
-    private var encodedOutputPane: some View {
-        IndexWorkbenchPane(
-            title: "编码输出",
-            footer: paneFooter(projection.encodedOutputStatus, trailingText: projection.encodedOutputSizeSummary),
-            accessory: {
-                encodedOutputHeaderActions
-            },
-            content: {
-                encodedOutputPreviewSurface
-            }
-        )
-    }
+    // MARK: - pane 内容
 
     private var encodedOutputPreviewSurface: some View {
         Base64EncodedOutputPreviewSurface(
@@ -187,57 +253,34 @@ private struct IndexBase64FileWorkspaceContent: View {
         )
     }
 
-    private var decodeInputPane: some View {
-        IndexWorkbenchPane(
-            title: "Base64 输入",
-            footer: IndexWorkbenchFooter(
-                status: "自动检测 Base64 与 Data URL",
-                trailingText: "支持导入编码文本文件"
+    private var decodeInputEditor: some View {
+        IndexWorkspaceTextArea(
+            placeholder: "粘贴 Base64 或 Data URL",
+            text: reverseInputBinding,
+            minHeight: Base64FileLayout.primaryContentMinHeight,
+            fillsHeight: true,
+            caretPlacementRequestToken: decodeInputCaretRequestToken == 0
+                ? nil
+                : decodeInputCaretRequestToken,
+            inputPolicy: .init(
+                maxUTF8Bytes: Base64FileWorkflowSession.editableReverseInputByteLimit,
+                undoLevels: Base64FileWorkflowSession.reverseInputUndoLevels,
+                onRejectedInput: { rejection in
+                    session.rejectReverseInputLimit(maxBytes: rejection.maxUTF8Bytes)
+                }
             ),
-            accessory: {
-                decodeInputHeaderActions
-            },
-            content: {
-                IndexWorkspaceTextArea(
-                    placeholder: "粘贴 Base64 或 Data URL",
-                    text: reverseInputBinding,
-                    minHeight: Base64FileLayout.primaryContentMinHeight,
-                    fillsHeight: true,
-                    inputPolicy: .init(
-                        maxUTF8Bytes: Base64FileWorkflowSession.editableReverseInputByteLimit,
-                        undoLevels: Base64FileWorkflowSession.reverseInputUndoLevels,
-                        onRejectedInput: { rejection in
-                            session.rejectReverseInputLimit(maxBytes: rejection.maxUTF8Bytes)
-                        }
-                    ),
-                    workspaceSemantic: .base64FileWorkspace
-                )
-            }
+            workspaceSemantic: .base64FileWorkspace
         )
     }
 
-    private var decodedResultPane: some View {
-        IndexWorkbenchPane(
-            title: "解码结果",
-            footer: paneFooter(
-                projection.decodedResultStatus,
-                trailingText: session.decodedPayload == nil ? "解码后显示文件信息" : "保存前可修改文件名"
-            ),
-            accessory: {
-                if session.decodedPayload != nil {
-                    saveDecodedButton
-                }
-            },
-            content: {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                    reversePreview
-                    if session.decodedPayload != nil {
-                        Base64DecodedMetadataList(rows: metadataRows(projection.reverseRows))
-                        decodedFileNameEditor
-                    }
-                }
+    private var decodedResultContent: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+            reversePreview
+            if session.decodedPayload != nil {
+                Base64DecodedMetadataList(rows: metadataRows(projection.reverseRows))
+                decodedFileNameEditor
             }
-        )
+        }
     }
 
     private var filePickerButton: some View {
@@ -355,8 +398,15 @@ private struct IndexBase64FileWorkspaceContent: View {
         }
         .buttonStyle(IndexIconActionButtonStyle())
         .disabled(session.selectedFile == nil || session.outputPreview == nil || session.outputAction != nil || session.isPreparingOutput || session.isReadingFile)
-        .help("复制完整输出")
+        .help("复制完整输出 (⇧⌘C)")
         .accessibilityLabel(session.outputAction == .copying ? "正在复制完整输出" : "复制完整输出")
+        // 页面级 ⇧⌘C（design.md §5-6）：主输出复制。Base64File 的主输出是
+        // 异步大负载，无法走 ActionBar 的同步 .copy 模型，故快捷键挂在可见
+        // 的「复制完整输出」钮上（IndexFormatWorkbench 同款）；entryGeneration
+        // 为 0（停靠/失活）时传 nil 注销。
+        .keyboardShortcut(
+            entryGeneration > 0 ? KeyboardShortcut("c", modifiers: [.command, .shift]) : nil
+        )
     }
 
     private var viewDecodeResultButton: some View {

@@ -51,17 +51,16 @@ struct IndexUUIDGeneratorSegment: View {
     }
 }
 
-/// Prototype v3 (Clay 收敛) body: one parameter card row (数量 stepper, 版本
-/// segments, 上次生成 meta, 全部复制, 生成 ⌘↩) above the value row list, which
-/// scrolls internally while the parameters stay put. Every generation replays
-/// the staggered row pop-in.
+/// 统一壳 body（unified-workbench B2）：弹性参数区（条数 stepper + 版本
+/// 分段 + 标题行「上次生成」meta 与「生成 ⌘↩」主操作）在上，生成值行
+/// 列表在下并于内容区底部挂「全部复制」（首个 copy 持 ⇧⌘C）；行列表
+/// 内部滚动而参数行保持固定。每次生成重播交错弹出（30ms/行）。
 private struct IndexUUIDWorkspaceContent: View {
-    @Environment(\.toolPageEntryGeneration) private var entryGeneration
-    /// Prototype v3 parameter bounds (stepper clamps 1…32).
-    private static let quantityRange = 1...32
-
     @ObservedObject var workspace: UUIDGeneratorToolWorkspaceModel
     @State private var motionGeneration = 0
+
+    /// 批量条数范围（PRD 决策 10：默认 10、1–100；偏好键同步持有）。
+    private static let quantityRange = 1...100
 
     private static let generatedTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -70,37 +69,66 @@ private struct IndexUUIDWorkspaceContent: View {
     }()
 
     var body: some View {
-        IndexGeneratorWorkbench(
-            metaText: workspace.lastGeneratedAt.map { "上次生成 " + Self.generatedTimeFormatter.string(from: $0) },
-            copyText: allValuesText,
-            copySuccessToast: ToolFeedbackCopy.copiedAll(noun: "UUID"),
-            rows: resultRows,
-            emptyText: IndexEmptyStateCopy.noResults,
-            motionGeneration: motionGeneration,
-            wrapsValues: false,
-            generateHelp: "生成 UUID（⌘↩）",
-            shortcutEnabled: entryGeneration > 0,
-            generate: generate
+        WorkbenchSurface(
+            title: nil,
+            primaryAction: WorkbenchPrimaryAction(
+                title: "生成",
+                help: "生成 UUID（⌘↩）",
+                perform: generate
+            ),
+            shape: .generator,
+            actions: [
+                .copy(
+                    text: allValuesText,
+                    title: "全部复制",
+                    successToast: ToolFeedbackCopy.copiedAll(noun: "UUID")
+                )
+            ],
+            titleAccessory: { generationMeta },
+            parameters: { parameters }
         ) {
-            parameters
+            IndexGeneratedValueRowList(
+                rows: resultRows,
+                emptyText: IndexEmptyStateCopy.noResults,
+                motionGeneration: motionGeneration,
+                wrapsValues: false
+            )
         }
         .onAppear {
             if workspace.values.isEmpty { generate() }
         }
     }
 
-    private var parameters: some View {
-        HStack(spacing: ToolMetrics.Spacing.compact) {
-            IndexOptionLabel("数量")
-            IndexStepperInput(value: $workspace.quantity, range: Self.quantityRange)
-                .onChange(of: workspace.quantity) { _ in generate() }
+    /// 标题行次级信息（原 44pt 纸头的 metaText 投影）。
+    @ViewBuilder
+    private var generationMeta: some View {
+        if let lastGeneratedAt = workspace.lastGeneratedAt {
+            Text("上次生成 " + Self.generatedTimeFormatter.string(from: lastGeneratedAt))
+                .font(ToolTypography.caption)
+                .monospacedDigit()
+                .foregroundStyle(ToolTheme.textTertiary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+    }
 
-            IndexOptionLabel("版本")
-            IndexSegmentedControl(
-                items: [("v4", "v4"), ("v7", "v7")],
-                selection: versionSelection
-            )
-            .onChange(of: workspace.version) { _ in generate() }
+    /// 弹性参数区：条数与版本都是影响当下生成的即时参数，换行承载
+    /// （窄窗不再横向滚动）。
+    private var parameters: some View {
+        WorkbenchParameterFlow {
+            WorkbenchParameterGroup {
+                WorkbenchParameterItem("条数") {
+                    IndexStepperInput(value: $workspace.quantity, range: Self.quantityRange)
+                        .onChange(of: workspace.quantity) { generate() }
+                }
+                WorkbenchParameterItem("版本") {
+                    IndexSegmentedControl(
+                        items: [("v4", "v4"), ("v7", "v7")],
+                        selection: versionSelection
+                    )
+                    .onChange(of: workspace.version) { generate() }
+                }
+            }
         }
     }
 

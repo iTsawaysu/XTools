@@ -478,7 +478,9 @@ struct GeneratorWorkspaceRetentionTests {
         #expect(!password.symbols)
         #expect(password.excludeAmbiguous)
 
-        #expect(uuid.quantity == 8)
+        // uuid 条数默认值随 unified-workbench B2 从 8 调整为 10（范围 1–100）；
+        // 越界(0)仍按 outOfRangePolicy 回落到安全默认。
+        #expect(uuid.quantity == 10)
         #expect(uuid.version == .v4)
     }
 

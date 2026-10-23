@@ -114,123 +114,174 @@ private struct IndexRegexWorkspaceContent: View {
     @State private var scrollRequest: IndexTextAreaScrollRequest?
     @State private var scrollRequestToken = 0
 
+    /// 预设菜单的「自定义」哨兵：当前表达式不等于任何预设时的选中项。
+    /// 自定义是派生态（只能经编辑进入），选择它不做任何事。
+    private static let customPresetItemID = "custom"
+
     var body: some View {
         IndexPage(
             "正则测试",
             subtitle: "使用 ICU 引擎实时测试正则并高亮匹配。",
             workspaceSemantic: .regexResultWorkspace
         ) {
-            // 宽窗左右分栏（regex101 式）：左 = 表达式 + 匹配详情，右 = 测试文本。
-            // 窄窗上下均分，两侧内层各自滚动；正则语法错误收进纸顶单槽。
-            IndexFileWorkbench(diagnostic: error, splitMode: .pair(threshold: IndexPairWorkbenchLayoutPolicy.defaultThreshold)) {
-                expressionPane
-            } trailing: {
-                textPane
+            // 统一壳（unified-workbench D1）：表达式/预设/标志开关收纳进弹性
+            // 参数区（默认全展开、随窗宽换行，无横向滚动、无折叠后门）；
+            // 内容区为「测试文本 → 匹配结果」对等双栏（regex101 式宽分窄堆，
+            // 720pt 等宽分栏数学与旧 pair 契约一致）；语法错误仍收纸顶单槽。
+            WorkbenchSurface(title: nil, shape: .inputOutput, parameters: { parameterFlow }) {
+                WorkbenchIOPair(
+                    leadingTitle: "测试文本",
+                    trailingTitle: "匹配结果",
+                    splitPolicy: .default,
+                    leadingActions: [
+                        .clear(
+                            title: "清空工作区",
+                            enabled: workspace.hasAnyContent,
+                            onPerform: clearWorkspace
+                        )
+                    ],
+                    trailingActions: [
+                        .copy(text: resultText, title: "复制匹配结果")
+                    ],
+                    trailingFooter: IndexWorkbenchFooter(
+                        status: resultStatus.text,
+                        statusTone: toneColor(resultStatus.tone),
+                        trailingText: summaryText
+                    ),
+                    leading: { textEditor },
+                    trailing: { matchList }
+                )
+                // 诊断单轨发布：正则语法错误经 preference 聚合到纸顶单槽
+                //（与旧壳参数轨同一文本、同一播报门控、同一错误描边）。
+                .indexWorkspaceDiagnostic(error)
             }
         }
         .onAppear {
             displayedReport = report
         }
-        .onChange(of: workspaceInput) { input in
-            handleWorkspaceInputChange(input)
+        .onChange(of: workspaceInput) {
+            handleWorkspaceInputChange(workspaceInput)
         }
-        .onChange(of: execution.report) { report in
-            present(report)
+        .onChange(of: execution.report) {
+            present(execution.report)
         }
     }
 
-    private var expressionPane: some View {
-        IndexWorkbenchPane(
-            title: "正则表达式",
-            footer: IndexWorkbenchFooter(
-                status: resultStatus.text,
-                statusTone: toneColor(resultStatus.tone),
-                trailingText: summaryText
-            ),
-            accessory: {
-                HStack(spacing: ToolMetrics.Spacing.sm) {
-                    Menu {
-                        ForEach(RegexMatcher.presets) { preset in
-                            Button(preset.title) {
-                                applyPreset(preset)
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: ToolMetrics.Spacing.fine) {
-                            Image(systemName: "text.badge.checkmark")
-                                .accessibilityHidden(true)
+    // MARK: - 弹性参数区（unified-workbench D1）
 
-                            Text(activePresetTitle)
-                                .toolMotionTextSwap(id: activePresetTitle)
-
-                            Image(systemName: "chevron.down")
-                                .font(ToolTypography.icon(ToolMetrics.IconSize.micro, .semibold))
-                                .foregroundStyle(ToolTheme.textSecondary)
-                                .accessibilityHidden(true)
-                        }
-                        .font(ToolTypography.buttonSmall)
-                    }
-                    .menuIndicator(.hidden)
-                    .buttonStyle(IndexButtonStyle(compact: true))
-                    .fixedSize(horizontal: true, vertical: false)
-                    .accessibilityLabel("正则预设，当前为\(activePresetTitle == "预设" ? "自定义" : activePresetTitle)")
-
-                    IndexClearButton(
-                        isDisabled: !workspace.hasAnyContent,
-                        title: "清空工作区",
-                        action: clearWorkspace
-                    )
+    /// 参数区：正则独占一行（长表达式可得全带宽，超长部分在字段内部滚动）；
+    /// 预设菜单与五个标志开关进流式组，随窗宽换行。全部参数一次铺开、
+    /// 默认无折叠（design.md §10：RegexTester 参数默认展开全部）。
+    private var parameterFlow: some View {
+        WorkbenchParameterFlow {
+            WorkbenchParameterItem("正则表达式") {
+                patternField
+            }
+            WorkbenchParameterGroup {
+                WorkbenchParameterItem("预设") {
+                    presetMenu
                 }
-            },
-            content: {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.compact) {
-                    HStack(spacing: ToolMetrics.Spacing.sm) {
-                        Text("/")
-                            .font(ToolTypography.body)
-                            .foregroundStyle(ToolTheme.textSecondary)
-
-                        IndexTextInput(
-                            placeholder: #"\b\w+@\w+\.\w+\b"#,
-                            text: $workspace.pattern
-                        )
-
-                        Text("/")
-                            .font(ToolTypography.body)
-                            .foregroundStyle(ToolTheme.textSecondary)
-
-                        flagMenu
-                    }
-
-                    if let report = presentedReport, !report.matches.isEmpty {
-                        ScrollView {
-                            RegexMatchList(matches: report.matches, valueMotion: .immediate, selectedIndex: selectedMatchIndex, onSelect: selectMatch)
-                                .toolTransition(resultTransition, reduceMotion: reduceMotion)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    }
+                WorkbenchParameterItem {
+                    IndexOptionSwitch(title: "全局匹配 (g)", isOn: flagBinding("g"))
                 }
+                WorkbenchParameterItem {
+                    IndexOptionSwitch(title: "忽略大小写 (i)", isOn: flagBinding("i"))
+                }
+                WorkbenchParameterItem {
+                    IndexOptionSwitch(title: "多行模式 (m)", isOn: flagBinding("m"))
+                }
+                WorkbenchParameterItem {
+                    IndexOptionSwitch(title: "点号匹配换行 (s)", isOn: flagBinding("s"))
+                }
+                WorkbenchParameterItem {
+                    IndexOptionSwitch(title: "允许注释与空白 (x)", isOn: flagBinding("x"))
+                }
+            }
+        }
+    }
+
+    /// 正则字段：保留旧页 "/…/" 字面量记法；占满参数行余宽（IndexTextInput
+    /// 自身贪婪扩展，放在流式组外由 VStack 提出有界宽度）。
+    private var patternField: some View {
+        HStack(spacing: ToolMetrics.Spacing.fine) {
+            Text("/")
+                .font(ToolTypography.body)
+                .foregroundStyle(ToolTheme.textSecondary)
+
+            IndexTextInput(
+                placeholder: #"\b\w+@\w+\.\w+\b"#,
+                text: $workspace.pattern,
+                height: ToolMetrics.Control.row
+            )
+
+            Text("/")
+                .font(ToolTypography.body)
+                .foregroundStyle(ToolTheme.textSecondary)
+        }
+    }
+
+    /// 预设菜单（旧手写原生 Menu → IndexOptionMenu）：选中项即当前生效
+    /// 预设；表达式被改动后自动回到「自定义」。挑同一项（含「自定义」）
+    /// 不触发任何变更。
+    private var presetMenu: some View {
+        IndexOptionMenu(
+            items: presetItems,
+            selection: presetSelection,
+            title: "预设"
+        )
+    }
+
+    private var presetItems: [(String, String)] {
+        [(Self.customPresetItemID, "自定义")]
+            + RegexMatcher.presets.map { ($0.id, $0.title) }
+    }
+
+    private var presetSelection: Binding<String> {
+        Binding(
+            get: { workspace.activePreset?.id ?? Self.customPresetItemID },
+            set: { selected in
+                guard selected != Self.customPresetItemID,
+                      let preset = RegexMatcher.presets.first(where: { $0.id == selected })
+                else { return }
+                applyPreset(preset)
             }
         )
     }
 
-    private var textPane: some View {
-        IndexWorkbenchPane(
-            title: "测试文本",
-            accessory: {
-                IndexCopyButton(text: resultText, title: "复制匹配结果")
-            },
-            content: {
-                IndexWorkspaceTextArea(
-                    placeholder: "粘贴待匹配文本…",
-                    text: $workspace.text,
-                    minHeight: 56,
-                    fillsHeight: true,
-                    temporaryHighlights: temporaryHighlights,
-                    scrollRequest: scrollRequest,
-                    workspaceSemantic: .regexResultWorkspace
+    // MARK: - 内容区 pane
+
+    /// 测试文本 pane：受控 AppKit 编辑器 + 正文高亮（整匹配铺底色、被选中
+    /// 的匹配加强底色并加下划线、捕获组按组序循环取色）与一次性滚动定位
+    /// 请求，全部保持旧页路径。
+    private var textEditor: some View {
+        IndexWorkspaceTextArea(
+            placeholder: "粘贴待匹配文本…",
+            text: $workspace.text,
+            minHeight: 56,
+            fillsHeight: true,
+            temporaryHighlights: temporaryHighlights,
+            scrollRequest: scrollRequest,
+            workspaceSemantic: .regexResultWorkspace
+        )
+    }
+
+    /// 匹配结果 pane：有匹配才渲染列表；点击行在正文中定位（再次点击取消）。
+    /// 状态与统计由 pane footer 播报；预设/清空的低频动效分支
+    /// （resultPresence*，输入中的 .identity 即时分支）保持原语义。
+    @ViewBuilder
+    private var matchList: some View {
+        if let report = presentedReport, !report.matches.isEmpty {
+            ScrollView {
+                RegexMatchList(
+                    matches: report.matches,
+                    valueMotion: .immediate,
+                    selectedIndex: selectedMatchIndex,
+                    onSelect: selectMatch
                 )
+                .toolTransition(resultTransition, reduceMotion: reduceMotion)
             }
-        )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
     }
 
     /// 正文高亮：整匹配铺底色，被选中的匹配加强底色并加下划线；
@@ -397,6 +448,8 @@ private struct IndexRegexWorkspaceContent: View {
         }
     }
 
+    /// 输入中的高频更新走 .identity（无过渡直切）；只有预设/清空这类
+    /// 低频意图才挂 modeContent 过渡——高频路径不加结果动效（spec 合同）。
     private var resultTransition: AnyTransition {
         switch resultMotionIntent {
         case .preset, .clear:
@@ -404,39 +457,6 @@ private struct IndexRegexWorkspaceContent: View {
         case .immediate:
             .identity
         }
-    }
-
-    private var activePresetTitle: String {
-        workspace.activePreset?.title ?? "预设"
-    }
-
-    private var flagMenu: some View {
-        Menu {
-            Toggle("全局匹配 (g)", isOn: flagBinding("g"))
-            Toggle("忽略大小写 (i)", isOn: flagBinding("i"))
-            Toggle("多行模式 (m)", isOn: flagBinding("m"))
-            Toggle("点号匹配换行 (s)", isOn: flagBinding("s"))
-            Toggle("允许注释与空白 (x)", isOn: flagBinding("x"))
-        } label: {
-            HStack(spacing: ToolMetrics.Spacing.xs) {
-                Text(activeFlagsLabel)
-                    .font(ToolTypography.monoLabel)
-                    .foregroundStyle(ToolTheme.textPrimary)
-
-                Image(systemName: "chevron.down")
-                    .font(ToolTypography.icon(ToolMetrics.IconSize.micro, .semibold))
-                    .foregroundStyle(ToolTheme.textSecondary)
-                    .accessibilityHidden(true)
-            }
-        }
-        .menuIndicator(.hidden)
-        .buttonStyle(IndexButtonStyle(compact: true))
-        .fixedSize(horizontal: true, vertical: false)
-        .accessibilityLabel("正则标志，当前为 \(activeFlagsLabel)")
-    }
-
-    private var activeFlagsLabel: String {
-        workspace.flags.isEmpty ? "无" : workspace.flags
     }
 
     private func flagBinding(_ flag: Character) -> Binding<Bool> {

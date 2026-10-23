@@ -65,8 +65,8 @@ enum SensitiveToolPreferenceKeys {
 
     static let uuidQuantity = ToolPreferenceKey<Int>.integer(
         "tools.uuidGenerator.quantity.v1",
-        default: 8,
-        range: 1...32,
+        default: 10,
+        range: 1...100,
         outOfRangePolicy: .useDefault
     )
     static let uuidVersion = ToolPreferenceKey<UUIDGenerationVersion>.rawRepresentable(
