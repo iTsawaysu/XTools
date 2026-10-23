@@ -33,9 +33,25 @@ private struct IndexOptionalHelp: ViewModifier {
 
 struct IndexButtonStyle: ButtonStyle {
     var primary = false
+    /// 紧凑密度（design-foundation C2，吸收原 IndexSmallButtonStyle）：
+    /// 高 `Control.small`（24）、水平内距 `Spacing.sm`、buttonSmall 字号、
+    /// control 圆角；`done`/`framed` 为 compact 专属变体（成功回执/描边静止态）。
+    var compact = false
+    var done = false
+    /// Framed secondary treatment (prototype v3 workbench actions): the button
+    /// rests on `utilityBackground` inside a hairline instead of staying quiet
+    /// on the page surface until hover.
+    var framed = false
+
+    init(primary: Bool = false, compact: Bool = false, done: Bool = false, framed: Bool = false) {
+        self.primary = primary
+        self.compact = compact
+        self.done = done
+        self.framed = framed
+    }
 
     func makeBody(configuration: Configuration) -> some View {
-        StyleBody(configuration: configuration, primary: primary)
+        StyleBody(configuration: configuration, primary: primary, compact: compact, done: done, framed: framed)
     }
 
     /// Extracted into a `View` so we can hold `@State` for hover — `ButtonStyle.Configuration`
@@ -44,95 +60,52 @@ struct IndexButtonStyle: ButtonStyle {
     private struct StyleBody: View {
         let configuration: Configuration
         let primary: Bool
-
-        @State private var isHovering = false
-        @Environment(\.isEnabled) private var isEnabled
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-        private var hovering: Bool { isHovering && isEnabled }
-
-        private var background: Color {
-            if primary {
-                if !isEnabled { return ToolTheme.accent.opacity(0.40) }
-                return (configuration.isPressed || hovering) ? ToolTheme.accentHover : ToolTheme.accent
-            }
-            if configuration.isPressed { return ToolTheme.activeFill }
-            // Quiet controls stay on the page surface until interaction. This
-            // keeps action rows closer to Linear/Craft's low-noise grammar and
-            // avoids a sea of bordered system buttons.
-            return hovering ? ToolTheme.hoverFill : Color.clear
-        }
-
-        private var foreground: Color {
-            guard isEnabled else {
-                return primary ? ToolTheme.onAccent.opacity(0.55) : ToolTheme.textTertiary
-            }
-            return primary ? ToolTheme.onAccent : ToolTheme.textPrimary
-        }
-
-        var body: some View {
-            configuration.label
-                .font(ToolTypography.bodyMedium)
-                .labelStyle(.titleAndIcon)
-                .foregroundStyle(foreground)
-                .padding(.horizontal, 12)
-                .frame(height: 32)
-                .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                        .strokeBorder(
-                            primary
-                                ? (isEnabled ? ToolTheme.accent : ToolTheme.accent.opacity(0.35))
-                                : (hovering ? ToolTheme.strongBorder : Color.clear),
-                            lineWidth: 1
-                        )
-                }
-                .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
-                .scaleEffect(!reduceMotion && configuration.isPressed ? ToolMotion.Scale.modal : 1)
-                .onHover { isHovering = $0 }
-                .toolAnimation(ToolMotion.Preset.controlFeedback, value: hovering)
-                .toolAnimation(ToolMotion.Preset.controlFeedback, value: configuration.isPressed)
-        }
-    }
-}
-
-// MARK: - IndexSmallButtonStyle
-
-struct IndexSmallButtonStyle: ButtonStyle {
-    var done = false
-    /// Framed secondary treatment (prototype v3 workbench actions): the button
-    /// rests on `utilityBackground` inside a hairline instead of staying quiet
-    /// on the page surface until hover.
-    var framed = false
-
-    init(done: Bool = false, framed: Bool = false) {
-        self.done = done
-        self.framed = framed
-    }
-
-    func makeBody(configuration: Configuration) -> some View {
-        StyleBody(configuration: configuration, done: done, framed: framed)
-    }
-
-    private struct StyleBody: View {
-        let configuration: Configuration
+        let compact: Bool
         let done: Bool
         let framed: Bool
 
         @State private var isHovering = false
         @Environment(\.isEnabled) private var isEnabled
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+        @Environment(\.colorScheme) private var colorScheme
 
         private var hovering: Bool { isHovering && isEnabled }
 
+        private var height: CGFloat { compact ? ToolMetrics.Control.small : ToolMetrics.Control.regular }
+        private var horizontalPadding: CGFloat { compact ? ToolMetrics.Spacing.sm : ToolMetrics.Spacing.md }
+        private var cornerRadius: CGFloat { compact ? ToolMetrics.CornerRadius.control : ToolMetrics.CornerRadius.field }
+        private var font: Font { compact ? ToolTypography.buttonSmall : ToolTypography.bodyMedium }
+
+        /// Compact 密度沿用原 IndexSmallButtonStyle 的紧凑文本（单行、
+        /// 定宽不压缩）；regular 密度保持自然标题排版。
+        @ViewBuilder
+        private var labelContent: some View {
+            if compact {
+                configuration.label
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            } else {
+                configuration.label
+            }
+        }
+
         private var background: Color {
+            if primary {
+                if !isEnabled { return ToolTheme.accent.opacity(ToolTheme.Opacity.disabled(colorScheme)) }
+                return (configuration.isPressed || hovering) ? ToolTheme.accentHover : ToolTheme.accent
+            }
             if done { return ToolTheme.successSoft }
             if configuration.isPressed { return ToolTheme.activeFill }
             if hovering { return framed ? ToolTheme.activeFill : ToolTheme.hoverFill }
+            // Quiet controls stay on the page surface until interaction. This
+            // keeps action rows closer to Linear/Craft's low-noise grammar and
+            // avoids a sea of bordered system buttons.
             return framed ? ToolTheme.utilityBackground : Color.clear
         }
 
         private var border: Color {
+            if primary {
+                return isEnabled ? ToolTheme.accent : ToolTheme.accent.opacity(ToolTheme.Opacity.disabled(colorScheme))
+            }
             if done { return ToolTheme.successSoft }
             if hovering || configuration.isPressed { return ToolTheme.strongBorder }
             return framed ? ToolTheme.border : Color.clear
@@ -140,24 +113,28 @@ struct IndexSmallButtonStyle: ButtonStyle {
 
         private var foreground: Color {
             if done { return ToolTheme.success }
-            return isEnabled ? ToolTheme.textSecondary : ToolTheme.textTertiary.opacity(0.7)
+            guard isEnabled else {
+                if primary { return ToolTheme.onAccent.opacity(ToolTheme.Opacity.disabled(colorScheme)) }
+                return compact ? ToolTheme.textTertiary.opacity(0.7) : ToolTheme.textTertiary
+            }
+            if primary { return ToolTheme.onAccent }
+            return compact ? ToolTheme.textSecondary : ToolTheme.textPrimary
         }
 
         var body: some View {
-            configuration.label
-                .font(ToolTypography.buttonSmall)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+            labelContent
+                .font(font)
+                .labelStyle(.titleAndIcon)
                 .foregroundStyle(foreground)
-                .padding(.horizontal, 9)
-                .frame(height: 24)
-                .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
+                .padding(.horizontal, horizontalPadding)
+                .frame(height: height)
+                .background(background, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 .overlay {
-                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .strokeBorder(border, lineWidth: 1)
                 }
-                .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
-                .scaleEffect(!reduceMotion && configuration.isPressed ? ToolMotion.Scale.pressed : 1)
+                .contentShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .indexPressFeedback(configuration.isPressed)
                 .onHover { isHovering = $0 }
                 .toolAnimation(ToolMotion.Preset.controlFeedback, value: hovering)
                 .toolAnimation(ToolMotion.Preset.controlFeedback, value: configuration.isPressed)
@@ -194,6 +171,9 @@ struct IndexIconActionButtonStyle: ButtonStyle {
 
         private var hovering: Bool { isHovering && isEnabled }
 
+        // reduceMotion 仍用于下方 RM 事务门（禁用隐式动画）；按压几何/
+        // 透明度反馈已由 `indexPressFeedback` 内部接管 RM 分支。
+
         private var foreground: Color {
             if isActive { return activeTint }
             return isEnabled ? tint : ToolTheme.textTertiary
@@ -213,7 +193,7 @@ struct IndexIconActionButtonStyle: ButtonStyle {
                 .frame(width: 24, height: 24)
                 .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
-                .scaleEffect(!reduceMotion && configuration.isPressed ? ToolMotion.Scale.pressed : 1)
+                .indexPressFeedback(configuration.isPressed)
                 .onHover { isHovering = $0 }
                 .toolAnimation(
                     ToolMotion.Preset.controlFeedback,
@@ -263,7 +243,7 @@ struct IndexPrimaryActionButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 7) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 Text(title)
                 if let hint {
                     IndexKeyboardHintLabel(hint: hint)
@@ -297,7 +277,7 @@ struct IndexProgressMotionLabel<ID: Hashable>: View {
     let id: ID
 
     var body: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             Group {
                 if isProcessing {
                     ProgressView()
@@ -331,7 +311,7 @@ struct IndexFieldHeader<Accessory: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             Text(title)
                 .font(ToolTypography.label)
                 .foregroundStyle(ToolTheme.textSecondary)
@@ -377,7 +357,7 @@ struct IndexClearButton: View {
                     .font(ToolTypography.buttonSmall)
             }
         }
-        .buttonStyle(IndexSmallButtonStyle(framed: framed))
+        .buttonStyle(IndexButtonStyle(compact: true, framed: framed))
         .disabled(isDisabled)
         // Icon-only slots have no visible title to fall back on.
         .modifier(IndexOptionalHelp(title: iconOnly ? title : nil))

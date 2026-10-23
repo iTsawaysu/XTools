@@ -27,6 +27,17 @@ enum IndexBadgeTone: Sendable {
         case .accent: return ToolTheme.accentSoft
         }
     }
+
+    /// Hairline border twin of `tint` (shared tone-border alpha pair).
+    var borderTint: Color {
+        switch self {
+        case .neutral: return ToolTheme.border
+        case .success: return ToolTheme.successBorder
+        case .warning: return ToolTheme.warningBorder
+        case .error: return ToolTheme.errorBorder
+        case .accent: return ToolTheme.accentBorder
+        }
+    }
 }
 
 struct IndexBadge: View {
@@ -91,7 +102,7 @@ struct IndexBadge: View {
         if effectiveTone == .neutral {
             return ToolTheme.border
         }
-        return effectiveTone.tint.opacity(0.26)
+        return effectiveTone.borderTint
     }
     
     private var font: Font {
@@ -105,14 +116,16 @@ struct IndexBadge: View {
             }
             .buttonStyle(.plain)
             .onHover { isHovering = $0 }
-                        .help(help ?? "")
+            // hover 状态变化补 controlFeedback 动画（design-foundation D2）。
+            .toolAnimation(ToolMotion.Preset.controlFeedback, value: isHovering)
+            .help(help ?? "")
         } else {
             content
         }
     }
 
     private var content: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: ToolMetrics.Spacing.fine) {
             if let systemImage {
                 Image(systemName: systemImage)
             }

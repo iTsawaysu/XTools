@@ -103,6 +103,26 @@ public enum ToolTypography {
         .system(size: 12, weight: weight)
     }
 
+    /// SF Symbol glyph font for chrome and rows. `size` must come from
+    /// `ToolMetrics.IconSize`; weights collapse to regular / medium /
+    /// semibold so icon weight cannot drift per page (design-foundation).
+    public static func icon(_ size: CGFloat, _ weight: Font.Weight = .medium) -> Font {
+        .system(size: size, weight: weight)
+    }
+
+    // MARK: - Numeric point-size mirrors
+    //
+    // Renderers that merge over point sizes (markdown inline pipeline) cannot
+    // hold a composed `Font`. These mirrors keep their numeric hierarchies in
+    // lockstep with the tokens above instead of re-spelling literals.
+
+    public enum PointSize {
+        public static let pageTitle: CGFloat = 20
+        public static let sectionHeader: CGFloat = 15
+        public static let sectionTitle: CGFloat = 14
+        public static let markdownProse: CGFloat = 13
+    }
+
     // MARK: - AppKit mirrors
     //
     // NSFont factories for AppKit-backed surfaces (collection headers, hover
@@ -110,7 +130,12 @@ public enum ToolTypography {
     // this is the only sanctioned place to construct raw NSFont point sizes.
 
     public enum AppKitMirror {
+        public static func body() -> NSFont { .systemFont(ofSize: 12.5) }
         public static func bodyMedium() -> NSFont { .systemFont(ofSize: 12.5, weight: .medium) }
         public static func caption() -> NSFont { .systemFont(ofSize: 11) }
+        /// Monospaced body twin of `codeBody` (12.5 regular) for AppKit-backed
+        /// editors, gutters and read-only surfaces — the only sanctioned mono
+        /// 12.5 construction.
+        public static func codeBody() -> NSFont { .monospacedSystemFont(ofSize: 12.5, weight: .regular) }
     }
 }

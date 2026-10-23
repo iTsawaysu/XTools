@@ -101,7 +101,7 @@ private struct IndexHashTextWorkspaceContent: View {
             )
             .font(ToolTypography.buttonSmall)
         }
-        .buttonStyle(IndexSmallButtonStyle())
+        .buttonStyle(IndexButtonStyle(compact: true))
         .disabled(workspace.isComputing)
     }
 

@@ -31,7 +31,7 @@ extension View {
 
     /// 行级 hover 背景（丝滑范式）：固定渲染一个圆角色片 + opacity 插值。
     ///
-    /// 与 `isHovering ? color : Color.clear` 的三元颜色硬切不同，`opacity`
+    /// 与「hover 时在两种填充色之间三元切换」的硬切写法不同，`opacity`
     /// 是 SwiftUI 最稳定的可动画通道，不会出现透明↔不透明的中间态闪烁。
     /// 调用方必须用 `withToolAnimation(...) { isHovering = $0 }` 把状态变更
     /// 包进显式动画事务，让 opacity 在同一事务内插值。
@@ -208,8 +208,8 @@ extension View {
 /// One-shot locating wash for difference-block jumps (Wave 2, see
 /// `ToolMotion.LocatingWash`): when a jump lands on a difference block, one
 /// layer over the target block sweeps its opacity 0 → peak → 0 across a
-/// single 360ms arc while the pane's line-number slot marker deepens on the
-/// same arc. One layer, one animated property, one arc — outline and enclose
+/// single 900ms arc (quick attack, long readable decay). One layer, one
+/// animated property, one arc — outline and enclose
 /// treatments were explicitly rejected. Hosted on the AppKit side because
 /// block geometry lives inside the TextKit diff editors; SwiftUI hosts keep
 /// `toolOutputBreath` for pane-level feedback.

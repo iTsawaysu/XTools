@@ -10,7 +10,7 @@ import XToolsDesign
 ///
 /// This file owns the geometry plumbing (row anchor preference, list-space
 /// resolution) so the palette view itself stays free of continuous geometry
-/// measurement (see `MotionSourceContractTests`).
+/// measurement.
 
 /// Bounds of the palette's selectable rows, published once per row and
 /// resolved by the highlight host in list coordinates. Section titles and

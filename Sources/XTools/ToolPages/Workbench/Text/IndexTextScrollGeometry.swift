@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 /// Clamps the live selection into the current UTF-16 text length before
 /// scroll-to-reveal: large programmatic replacements can leave a stale
@@ -48,7 +49,7 @@ enum IndexTextKitGeometry {
 
         layoutManager.ensureLayout(for: textContainer)
         let usedHeight = layoutManager.usedRect(for: textContainer).height
-        let font = textView.font ?? .monospacedSystemFont(ofSize: 12.5, weight: .regular)
+        let font = textView.font ?? ToolTypography.AppKitMirror.codeBody()
         let lineHeight = layoutManager.defaultLineHeight(for: font)
         return ceil(max(lineHeight, usedHeight) + textView.textContainerInset.height * 2)
     }

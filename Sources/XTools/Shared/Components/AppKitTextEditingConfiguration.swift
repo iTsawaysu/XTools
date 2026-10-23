@@ -1,4 +1,5 @@
 import AppKit
+import XToolsDesign
 
 @MainActor
 enum AppKitTextEditingConfiguration {
@@ -30,7 +31,7 @@ enum AppKitTextEditingConfiguration {
         contentInsets: IndexTextFieldContentInsets
     ) {
         textField.placeholderString = placeholder
-        textField.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
+        textField.font = ToolTypography.AppKitMirror.codeBody()
         textField.textColor = .labelColor
         textField.alignment = alignment
         textField.isEditable = true

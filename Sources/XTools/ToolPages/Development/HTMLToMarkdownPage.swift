@@ -86,7 +86,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                             } label: {
                                 Label("停止", systemImage: IndexActionSymbol.stop)
                             }
-                            .buttonStyle(IndexSmallButtonStyle(done: false, framed: true))
+                            .buttonStyle(IndexButtonStyle(compact: true, framed: true))
                             .fixedSize(horizontal: true, vertical: false)
                             .accessibilityLabel("停止解析网页")
                             .help("停止解析网页")
@@ -113,9 +113,9 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
     }
 
     private var urlInput: some View {
-        HStack(spacing: ToolMetrics.Spacing.snug) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: ToolMetrics.IconSize.small))
+                .font(ToolTypography.icon(ToolMetrics.IconSize.small, .regular))
                 .foregroundStyle(ToolTheme.textTertiary)
                 .accessibilityHidden(true)
             IndexTextInput(
@@ -136,7 +136,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                             .font(ToolTypography.caption)
                             .foregroundStyle(ToolTheme.textTertiary)
                     }
-                    .buttonStyle(IndexBareButtonStyle())
+                    .buttonStyle(IndexQuietChromeStyle(look: .bare))
                     .padding(.trailing, ToolMetrics.Spacing.sm)
                     .arrowCursorOnHover()
                     .help("清空 URL (Esc)")
@@ -163,7 +163,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 id: session.isURLProcessing
             )
         }
-        .buttonStyle(IndexSmallButtonStyle(done: false, framed: true))
+        .buttonStyle(IndexButtonStyle(compact: true, framed: true))
         .disabled(fetchDisabled)
         .accessibilityLabel(session.isURLProcessing ? "正在解析网页" : "获取网页")
         .help("获取网页 (↩)")

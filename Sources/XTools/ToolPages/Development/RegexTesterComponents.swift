@@ -48,19 +48,26 @@ private struct RegexMatchRow: View {
                 .padding(.vertical, ToolMetrics.Spacing.sm)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
-                    rowFill,
+                    // 选中填充保持整块直铺；hover 通道走 opacity 插值
+                    //（design-foundation D2，原三元色硬切）。
+                    isSelected ? ToolTheme.selectionFill : Color.clear,
                     in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                )
+                .indexRowHoverBackground(
+                    isHovered && showsInteraction && !isSelected,
+                    cornerRadius: ToolMetrics.CornerRadius.field
                 )
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                        .strokeBorder(isSelected ? ToolTheme.accent.opacity(0.55) : .clear, lineWidth: 1)
+                        .strokeBorder(isSelected ? ToolTheme.selectionStroke : .clear, lineWidth: 1)
                 }
         }
-        .buttonStyle(IndexBareButtonStyle())
+        .buttonStyle(IndexQuietChromeStyle(look: .bare))
         .onHover { hovered in
             guard showsInteraction else { return }
             isHovered = hovered
         }
+        .toolAnimation(ToolMotion.Preset.controlFeedback, value: isHovered)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text("匹配 \(ordinal)，范围 \(match.displayRange.start) 到 \(match.displayRange.end)") + Text(match.displayRange.unitSuffix))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
@@ -91,11 +98,6 @@ private struct RegexMatchRow: View {
         }
     }
 
-    private var rowFill: Color {
-        if isSelected { return ToolTheme.selectionFill }
-        if isHovered && showsInteraction { return ToolTheme.hoverFill }
-        return .clear
-    }
 }
 
 private struct RegexMatchValue: View {
@@ -135,9 +137,10 @@ private struct RegexCaptureList: View {
     let title: String
     let captures: [RegexMatcher.Capture]
     var tint: (Int) -> Color
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.snug) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
             Text(title)
                 .font(ToolTypography.micro)
                 .foregroundStyle(ToolTheme.textTertiary)
@@ -163,7 +166,7 @@ private struct RegexCaptureList: View {
                 .padding(.leading, ToolMetrics.Spacing.compact)
                 .overlay(alignment: .leading) {
                     Rectangle()
-                        .fill(tint(index).opacity(0.45))
+                        .fill(tint(index).opacity(ToolTheme.Opacity.disabled(colorScheme)))
                         .frame(width: ToolMetrics.Control.separator)
                 }
             }

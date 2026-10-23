@@ -46,6 +46,21 @@ enum ToolFeedbackTone: Equatable {
         }
     }
 
+    /// Hairline border twin of `tint` (shared 0.32/0.38 alpha pair). Tone
+    /// outlines must not spell per-caller opacities.
+    var borderTint: Color {
+        switch self {
+        case .success:
+            return ToolTheme.successBorder
+        case .error:
+            return ToolTheme.errorBorder
+        case .warning:
+            return ToolTheme.warningBorder
+        case .info:
+            return ToolTheme.infoBorder
+        }
+    }
+
     var accessibilityPrefix: String {
         switch self {
         case .success:

@@ -97,7 +97,7 @@ enum IndexPageChrome: Equatable {
     var bottomPadding: CGFloat {
         switch self {
         case .standard, .compactWorkspace: return ToolMetrics.Spacing.panelSection
-        case .dashboard: return ToolMetrics.Spacing.page
+        case .dashboard: return ToolMetrics.Spacing.xxxl
         }
     }
 
@@ -218,7 +218,7 @@ struct IndexPageHeader<Accessory: View>: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.bottom, chrome.headerBottomPadding)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(ToolTheme.border).frame(height: 0.5)
+            Rectangle().fill(ToolTheme.border).frame(height: ToolMetrics.Spacing.hairline)
         }
     }
 }
@@ -237,7 +237,7 @@ private struct IndexPageHeaderText: View {
     @State private var arrived = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xxs) {
             IndexPageHeaderLetterTitle(text: title)
                 .font(ToolTypography.pageTitle)
                 .foregroundStyle(ToolTheme.textPrimary)
@@ -496,7 +496,7 @@ private struct IndexPanelOutline: ViewModifier {
         content.overlay {
             if let diagnostic {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(diagnostic.tone.tint.opacity(0.55), lineWidth: 1)
+                    .strokeBorder(diagnostic.tone.borderTint, lineWidth: 1)
             } else if colorScheme == .dark {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(ToolTheme.border, lineWidth: 0.5)

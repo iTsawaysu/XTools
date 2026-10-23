@@ -314,7 +314,7 @@ struct CommandPaletteView: View {
                 selectableIndex: selectableIndex
             )
         case .empty:
-            VStack(spacing: 10) {
+            VStack(spacing: ToolMetrics.Spacing.compact) {
                 Text("没有匹配的工具或命令")
                     .font(ToolTypography.bodyPlain)
                     .foregroundStyle(ToolTheme.textSecondary)
@@ -397,8 +397,8 @@ struct CommandPaletteView: View {
             highlightRanges: highlightRanges,
             subtitleAnnotation: subtitleAnnotation
         )
-        .padding(.horizontal, 9)
-        .padding(.vertical, 1)
+        .padding(.horizontal, ToolMetrics.Spacing.sm)
+        .padding(.vertical, ToolMetrics.Spacing.hair)
         .anchorPreference(key: CommandPaletteRowAnchorsKey.self, value: .bounds) { bounds in
             Self.rowAnchors(
                 itemID: item.id,
@@ -436,7 +436,7 @@ struct CommandPaletteView: View {
                     )
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, ToolMetrics.Spacing.xs)
             // Floating selection highlight: resolves the active row's frame
             // in list space and springs between rows on keyboard moves
             // (geometry lives in `CommandPaletteSelectionHighlightHost`).
@@ -475,7 +475,7 @@ struct CommandPaletteView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: CommandPaletteMetrics.searchHeaderSpacing) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: ToolMetrics.IconSize.medium, weight: .medium))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .medium))
                     .foregroundStyle(ToolTheme.textSecondary)
 
                 CommandPaletteSearchField(
@@ -522,7 +522,7 @@ struct CommandPaletteView: View {
                     }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .frame(height: 24)
+                .frame(height: ToolMetrics.Control.small)
 
                 ZStack {
                     if !sessionModel.query.isEmpty {
@@ -532,7 +532,7 @@ struct CommandPaletteView: View {
                             onRequestFocus()
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: ToolMetrics.IconSize.medium))
+                                .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .regular))
                                 .frame(
                                     width: CommandPaletteMetrics.searchClearButtonSize,
                                     height: CommandPaletteMetrics.searchClearButtonSize
@@ -556,7 +556,7 @@ struct CommandPaletteView: View {
             }
             .padding(.leading, CommandPaletteMetrics.searchHeaderLeadingPadding)
             .padding(.trailing, CommandPaletteMetrics.searchHeaderTrailingPadding)
-            .frame(height: 48)
+            .frame(height: ToolMetrics.Control.swatch)
 
             ToolDivider()
 

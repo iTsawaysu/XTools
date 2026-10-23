@@ -49,9 +49,9 @@ struct SidebarView: View {
 
     private var dashboardEntry: some View {
         Button(action: onOpenDashboard) {
-            HStack(spacing: 9) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 Image(systemName: "square.grid.3x3")
-                    .font(.system(size: ToolMetrics.IconSize.small, weight: .semibold))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.small, .semibold))
                     .frame(width: SidebarMetrics.iconSize)
                 Text("工作台")
                     .font(ToolTypography.label)
@@ -72,8 +72,8 @@ struct SidebarView: View {
         .accessibilityIdentifier("sidebar.dashboard")
         .accessibilityLabel("工作台")
         .padding(.horizontal, SidebarMetrics.toolRowHorizontalPadding)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
+        .padding(.top, ToolMetrics.Spacing.sm)
+        .padding(.bottom, ToolMetrics.Spacing.xs)
     }
 
     private var sidebarHeader: some View {
@@ -81,7 +81,7 @@ struct SidebarView: View {
             // Local content-area brand band under the native unified toolbar (no
             // fullSizeContentView). Compact height + zero gap into search so the
             // header reads as one unit instead of a second titlebar slab.
-            HStack(spacing: 8) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 BrandMark()
 
                 (Text("~/")
@@ -100,7 +100,7 @@ struct SidebarView: View {
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(ToolTheme.border)
-                .frame(height: 0.5)
+                .frame(height: ToolMetrics.Spacing.hairline)
         }
     }
 
@@ -121,7 +121,7 @@ struct SidebarView: View {
             HStack(spacing: SidebarMetrics.searchContentSpacing) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(ToolTheme.textSecondary)
-                    .font(.system(size: ToolMetrics.IconSize.small, weight: .medium))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.small, .medium))
                     .frame(width: SidebarMetrics.searchIconWidth)
                     .allowsHitTesting(false)
                     .arrowCursorOnHover()
@@ -198,9 +198,9 @@ struct SidebarView: View {
         .layoutPriority(1)
         .overlay(alignment: .top) {
             if isSearchActive && projection.sidebarGroups.isEmpty {
-                VStack(spacing: 6) {
+                VStack(spacing: ToolMetrics.Spacing.fine) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: ToolMetrics.IconSize.medium, weight: .medium))
+                        .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .medium))
                         .foregroundStyle(ToolTheme.textTertiary)
                     Text("没有匹配的工具")
                         .font(ToolTypography.label)
@@ -215,8 +215,8 @@ struct SidebarView: View {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
                         .strokeBorder(ToolTheme.border, lineWidth: 0.5)
                 }
-                .padding(.horizontal, 12)
-                .padding(.top, 12)
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.top, ToolMetrics.Spacing.md)
             }
         }
     }
@@ -225,14 +225,14 @@ struct SidebarView: View {
         VStack(spacing: 0) {
             Rectangle()
                 .fill(ToolTheme.border)
-                .frame(height: 0.5)
+                .frame(height: ToolMetrics.Spacing.hairline)
 
-            HStack(spacing: 6) {
+            HStack(spacing: ToolMetrics.Spacing.fine) {
                 SidebarFooterButton(title: themeTitle, systemImage: themeIcon, action: onToggleTheme)
                 SidebarFooterButton(title: "设置", systemImage: "gearshape", action: onPreferences)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.horizontal, ToolMetrics.Spacing.compact)
+            .padding(.vertical, ToolMetrics.Spacing.sm)
         }
     }
 

@@ -28,7 +28,7 @@ struct ImageSelectionActionRow: View {
                 Label(hasSource ? changeTitle : selectTitle, systemImage: "photo")
                     .font(ToolTypography.buttonSmall)
             }
-            .buttonStyle(IndexSmallButtonStyle())
+            .buttonStyle(IndexButtonStyle(compact: true))
             .accessibilityLabel(hasSource ? replaceAccessibilityLabel : selectAccessibilityLabel)
 
             if hasSource {
@@ -36,7 +36,7 @@ struct ImageSelectionActionRow: View {
                     Label(clearTitle, systemImage: IndexActionSymbol.removeResource)
                         .font(ToolTypography.buttonSmall)
                 }
-                .buttonStyle(IndexSmallButtonStyle())
+                .buttonStyle(IndexButtonStyle(compact: true))
                 .accessibilityLabel(clearAccessibilityLabel)
             }
         }

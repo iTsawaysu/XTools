@@ -169,7 +169,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
                     HStack(spacing: 0) {
                         IndexDiagnosticBanner(diagnostic: nil, message: rejection.message)
                         IndexIconButton(systemImage: "xmark", help: "关闭导入提示", action: droppedFile.dismissRejection)
-                            .padding(.trailing, 8)
+                            .padding(.trailing, ToolMetrics.Spacing.sm)
                     }
                 } else if hasDiagnostic, let diagnostic {
                     IndexDiagnosticBanner(
@@ -213,7 +213,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         // its own pane's leading edge (prototype: STDOUT pinned at left:50%),
         // and the actions right-align inside the output half.
         HStack(spacing: 0) {
-            HStack(spacing: 6) {
+            HStack(spacing: ToolMetrics.Spacing.fine) {
                 IndexBadge("STDIN", tone: .neutral, isCapsule: true)
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(10)
@@ -241,7 +241,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 6) {
+            HStack(spacing: ToolMetrics.Spacing.fine) {
                 IndexBadge("STDOUT", tone: .neutral, isCapsule: true)
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(10)
@@ -260,7 +260,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
 
                 Spacer(minLength: 0)
 
-                HStack(spacing: 6) {
+                HStack(spacing: ToolMetrics.Spacing.fine) {
                     IndexClearButton(isDisabled: clearDisabled, showsIcon: false, framed: true, action: onClear)
                     IndexCopyButton(text: output, title: "复制", showsIcon: false, framed: true, help: "复制全部 (⇧⌘C)")
                         .disabled(!isOutputFresh)
@@ -275,8 +275,8 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(height: 44)
-        .padding(.horizontal, 12)
+        .frame(height: ToolMetrics.Control.thumb)
+        .padding(.horizontal, ToolMetrics.Spacing.md)
         // Anchored toolbar menus (IndexOptionsMenu) drop below the 44pt row and
         // over the panes; the toolbar subtree must draw above the later pane
         // siblings or the editors would paint over the open menu.
@@ -284,7 +284,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(ToolTheme.border)
-                .frame(height: 0.5)
+                .frame(height: ToolMetrics.Spacing.hairline)
         }
         .accessibilityElement(children: .contain)
     }
@@ -311,13 +311,13 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         tone: ToolFeedbackTone,
         showsSpinner: Bool
     ) -> some View {
-            HStack(spacing: 4) {
+            HStack(spacing: ToolMetrics.Spacing.xs) {
                 if showsSpinner {
                     IndexProgressSpinner()
                         .accessibilityHidden(true)
                 } else {
                     Image(systemName: tone.systemImage)
-                        .font(.system(size: ToolMetrics.IconSize.small, weight: .semibold))
+                        .font(ToolTypography.icon(ToolMetrics.IconSize.small, .semibold))
                 }
                 Text(message)
                     .lineLimit(1)
@@ -392,11 +392,11 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
                 // surface: single border, hairline divider, embedded editor.
                 VStack(spacing: 0) {
                     inputHeader()
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, ToolMetrics.Spacing.fine)
+                        .padding(.vertical, ToolMetrics.Spacing.fine)
                     Rectangle()
                         .fill(ToolTheme.border)
-                        .frame(height: 0.5)
+                        .frame(height: ToolMetrics.Spacing.hairline)
                     inputPane
                 }
                 .background(
@@ -467,7 +467,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         } else {
             switch outputPresentation {
             case .standard:
-                IndexCodeViewerSurface(
+                IndexOutputSurface(
                     text: output,
                     placeholder: outputPlaceholder,
                     lineNumbers: outputLineNumbers,
@@ -477,9 +477,11 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
                 )
                 .accessibilityLabel(hasStaleResult ? "\(outputTitle)，结果已过期" : outputTitle)
             case .nativeReadOnlyText:
-                IndexReadOnlyTextSurface(
+                IndexOutputSurface(
                     text: output,
                     placeholder: outputPlaceholder,
+                    presentation: .plain,
+                    lineNumbers: false,
                     fillsHeight: true
                 )
                 .accessibilityLabel(hasStaleResult ? "\(outputTitle)，结果已过期" : outputTitle)

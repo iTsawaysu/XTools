@@ -139,6 +139,6 @@ struct IndexInputResultWorkbench<
     private var divider: some View {
         Rectangle()
             .fill(ToolTheme.border)
-            .frame(height: 0.5)
+            .frame(height: ToolMetrics.Spacing.hairline)
     }
 }

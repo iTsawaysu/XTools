@@ -234,7 +234,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
                         IndexIconButton(systemImage: "xmark", help: "关闭导入提示") {
                             droppedFileDiagnostic = nil
                         }
-                        .padding(.trailing, 8)
+                        .padding(.trailing, ToolMetrics.Spacing.sm)
                     }
                 }
             }
@@ -278,7 +278,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
         .overlay {
             if showsErrorState {
                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous)
-                    .strokeBorder(ToolTheme.error.opacity(0.55), lineWidth: 1)
+                    .strokeBorder(ToolTheme.errorBorder, lineWidth: 1)
             }
         }
         .toolShadow(ToolTheme.Shadow.panel)
@@ -288,7 +288,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
 
     private var toolbar: some View {
         HStack(spacing: 0) {
-            HStack(spacing: 6) {
+            HStack(spacing: ToolMetrics.Spacing.fine) {
                 IndexBadge("STDIN", tone: .accent, isCapsule: true)
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(10)
@@ -305,7 +305,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 6) {
+            HStack(spacing: ToolMetrics.Spacing.fine) {
                 IndexBadge("STDOUT", tone: .accent, isCapsule: true)
                     .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(10)
@@ -320,7 +320,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
 
                 Spacer(minLength: 0)
 
-                HStack(spacing: 6) {
+                HStack(spacing: ToolMetrics.Spacing.fine) {
                     if let current = navigationProgress.current,
                        navigationProgress.total == diffSummary.differenceBlockCount {
                         IndexBadge(
@@ -364,12 +364,12 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(height: 44)
-        .padding(.horizontal, 12)
+        .frame(height: ToolMetrics.Control.thumb)
+        .padding(.horizontal, ToolMetrics.Spacing.md)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(ToolTheme.border)
-                .frame(height: 0.5)
+                .frame(height: ToolMetrics.Spacing.hairline)
         }
         .accessibilityElement(children: .contain)
     }
@@ -385,9 +385,9 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     @ViewBuilder
     private var inlineDiagnostic: some View {
         if let diagnosticText, !hasDiagnostic {
-            HStack(spacing: 4) {
+            HStack(spacing: ToolMetrics.Spacing.xs) {
                 Image(systemName: diagnosticTone.systemImage)
-                    .font(.system(size: ToolMetrics.IconSize.small, weight: .semibold))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.small, .semibold))
                 Text(diagnosticText)
                     .lineLimit(1)
                     .truncationMode(.tail)

@@ -175,7 +175,7 @@ private struct IndexCrontabWorkspaceContent: View {
 
     private func fieldSegment(_ field: CronScheduler.CronFieldExplanation) -> some View {
         let shortLabel = field.label.components(separatedBy: " ").first ?? field.label
-        return VStack(spacing: ToolMetrics.Spacing.tiny) {
+        return VStack(spacing: ToolMetrics.Spacing.xs) {
             Text(shortLabel)
                 .font(ToolTypography.micro)
                 .foregroundStyle(ToolTheme.textSecondary)
@@ -193,16 +193,19 @@ private struct IndexCrontabWorkspaceContent: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .top)
-        .padding(.vertical, ToolMetrics.Spacing.tight)
+        .padding(.vertical, ToolMetrics.Spacing.sm)
         .padding(.horizontal, ToolMetrics.Spacing.fine)
         .background(
-            field.isWildcard ? ToolTheme.editorBackground : ToolTheme.accentSoft.opacity(0.45),
+            // 填充/描边对齐 IndexBadge accent 语义（design-foundation C6：
+            // accentSoft 原值 + accentBorder；此前误用 disabled 压暗 + 自造
+            // 0.40 描边，语义与观感都偏离徽章语言）。
+            field.isWildcard ? ToolTheme.editorBackground : IndexBadgeTone.accent.softFill,
             in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
         )
         .overlay {
             if !field.isWildcard {
                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                    .strokeBorder(ToolTheme.accent.opacity(0.40), lineWidth: 0.5)
+                    .strokeBorder(IndexBadgeTone.accent.borderTint, lineWidth: 0.5)
             }
         }
         .help(field.explanation)
@@ -211,7 +214,7 @@ private struct IndexCrontabWorkspaceContent: View {
     }
 
     private var nextRunsSection: some View {
-        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.snug) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
             Text("下次运行")
                 .font(ToolTypography.micro)
                 .foregroundStyle(ToolTheme.textSecondary)

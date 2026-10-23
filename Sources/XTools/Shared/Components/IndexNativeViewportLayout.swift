@@ -1,4 +1,5 @@
 import AppKit
+import XToolsDesign
 
 /// Keep the complete native document, but let TextKit estimate unvisited
 /// paragraphs. Explicit selection/find/navigation may lay out their target.
@@ -15,7 +16,7 @@ enum IndexNativeViewportLayout {
         guard let manager = textView.layoutManager,
               let container = textView.textContainer else { return 0 }
         configure(textView, allowsNonContiguousLayout: allowsNonContiguousLayout)
-        let font = textView.font ?? .monospacedSystemFont(ofSize: 12.5, weight: .regular)
+        let font = textView.font ?? ToolTypography.AppKitMirror.codeBody()
         let lineHeight = manager.defaultLineHeight(for: font)
         let origin = textView.textContainerOrigin
         let visible = textView.visibleRect

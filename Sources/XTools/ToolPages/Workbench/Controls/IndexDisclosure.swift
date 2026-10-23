@@ -59,7 +59,7 @@ struct IndexDisclosure<Content: View, Accessory: View>: View {
                 isExpanded.toggle()
             }
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 Text(title)
                     .font(isInline ? ToolTypography.bodyMedium : ToolTypography.panelTitle)
                     .foregroundStyle(isInline ? ToolTheme.textPrimary : ToolTheme.textSecondary)
@@ -79,17 +79,14 @@ struct IndexDisclosure<Content: View, Accessory: View>: View {
                 accessory()
 
                 Image(systemName: "chevron.right")
-                    .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.micro, .semibold))
                     .foregroundStyle(ToolTheme.textTertiary)
                     .frame(width: 16, height: 16)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
             }
             .padding(.horizontal, isInline ? 8 : 14)
             .frame(maxWidth: .infinity, minHeight: isInline ? 42 : 36, alignment: .leading)
-            .background(
-                isHovering ? ToolTheme.hoverFill : Color.clear,
-                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
-            )
+            .indexRowHoverBackground(isHovering)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

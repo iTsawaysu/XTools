@@ -204,19 +204,23 @@ struct IndexTextConversionWorkbench: View {
         } else {
             switch outputPresentation {
             case .standard:
-                IndexWorkspaceOutputSurface(
+                IndexOutputSurface(
                     text: output,
                     placeholder: IndexEmptyStateCopy.outputWillShowHere,
-                    fillsHeight: true,
                     lineNumbers: outputLineNumbers,
+                    syntax: nil,
+                    fillsHeight: true,
                     colorize: outputColorize,
                     workspaceSemantic: workspaceSemantic
                 )
             case .nativeReadOnlyText:
-                IndexReadOnlyTextSurface(
+                IndexOutputSurface(
                     text: output,
                     placeholder: IndexEmptyStateCopy.outputWillShowHere,
-                    fillsHeight: true
+                    presentation: .plain,
+                    lineNumbers: false,
+                    fillsHeight: true,
+                    workspaceSemantic: workspaceSemantic
                 )
             case .markdownPreview:
                 IndexMarkdownPreviewSurface(
@@ -238,7 +242,7 @@ struct IndexTextConversionWorkbench: View {
     }
 
     private var outputHeaderActions: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             IndexCopyButton(text: output, iconOnly: true)
             if showsOutputSave {
                 IndexSaveTextButton(text: output, fileName: outputFileName, iconOnly: true, saveClient: saveClient)
@@ -283,7 +287,7 @@ struct IndexSaveTextButton: View {
                 }
             }
         }
-        .buttonStyle(IndexSmallButtonStyle(done: saved, framed: framed))
+        .buttonStyle(IndexButtonStyle(compact: true, done: saved, framed: framed))
         .disabled(text.isEmpty)
         .help(saved ? "已保存" : "保存输出")
         .accessibilityLabel(saved ? "已保存" : "保存输出")

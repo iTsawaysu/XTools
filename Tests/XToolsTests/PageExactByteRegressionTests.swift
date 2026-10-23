@@ -188,6 +188,13 @@ private final class ExactReadOnlyProbe: ObservableObject {
 private struct ExactReadOnlyHost: View {
     @ObservedObject var model: ExactReadOnlyProbe
     var body: some View {
-        IndexReadOnlyTextSurface(text: model.text, placeholder: "", fillsHeight: true)
+        IndexOutputSurface(
+            text: model.text,
+            placeholder: "",
+            presentation: .plain,
+            lineNumbers: false,
+            syntax: nil,
+            fillsHeight: true
+        )
     }
 }

@@ -155,15 +155,15 @@ struct ToolToastHost: View {
             Color.clear
                 .allowsHitTesting(false)
 
-            VStack(alignment: .trailing, spacing: 8) {
+            VStack(alignment: .trailing, spacing: ToolMetrics.Spacing.sm) {
                 ForEach(center.messages) { message in
                     ToolToastCard(message: message, center: center)
                         .toolTransition(ToolMotion.Transition.toastPanel, reduceMotion: reduceMotion)
                 }
             }
             .frame(maxWidth: 360, alignment: .bottomTrailing)
-            .padding(.bottom, 18)
-            .padding(.trailing, 18)
+            .padding(.bottom, ToolMetrics.Spacing.lg)
+            .padding(.trailing, ToolMetrics.Spacing.lg)
             .animation(ToolMotion.animation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion), value: center.messages)
         }
     }
@@ -175,12 +175,12 @@ private struct ToolToastCard: View {
     @State private var isCloseHovered = false
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: ToolMetrics.Spacing.compact) {
             Image(systemName: message.tone.systemImage)
-                .font(.system(size: ToolMetrics.IconSize.medium, weight: .semibold))
+                .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .semibold))
                 .foregroundStyle(message.tone.tint)
                 .frame(width: 16, height: 16)
-                .padding(.top, 1)
+                .padding(.top, ToolMetrics.Spacing.hair)
                 .accessibilityHidden(true)
 
             Text(message.text)
@@ -195,7 +195,7 @@ private struct ToolToastCard: View {
                 center.dismiss(message.id)
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: ToolMetrics.IconSize.micro, weight: .bold))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.micro, .semibold))
                     .frame(width: 18, height: 18)
             }
             .buttonStyle(.plain)
@@ -211,8 +211,8 @@ private struct ToolToastCard: View {
             .help("关闭提示")
             .accessibilityLabel("关闭提示")
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, ToolMetrics.Spacing.md)
+        .padding(.vertical, ToolMetrics.Spacing.compact)
         .frame(width: 320, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.modal, style: .continuous)
@@ -229,7 +229,7 @@ private struct ToolToastCard: View {
         )
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.modal, style: .continuous)
-                .strokeBorder(message.tone.tint.opacity(0.34), lineWidth: 0.5)
+                .strokeBorder(message.tone.borderTint, lineWidth: 0.5)
         }
         .toolShadow(ToolTheme.Shadow.floating)
         .onHover { hovering in

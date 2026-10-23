@@ -4,7 +4,7 @@ import XToolsDesign
 /// Shared copy action (F3 归位): the shared layer's hero stat and code viewer
 /// surfaces consume this button, so it lives in Shared/Components rather than
 /// the Workbench control family. Styling collaborators (IndexIconActionButtonStyle,
-/// IndexSmallButtonStyle) stay in the Workbench controls file.
+/// IndexButtonStyle compact 密度) stay in the Workbench controls file.
 ///
 /// Copy variant on the same icon-only discipline: the tooltip keeps
 /// announcing the copied state while it exists.
@@ -54,7 +54,7 @@ struct IndexCopyButton: View {
                     activeBackground: ToolTheme.successSoft
                 ))
             } else {
-                copyButton.buttonStyle(IndexSmallButtonStyle(done: copied, framed: framed))
+                copyButton.buttonStyle(IndexButtonStyle(compact: true, done: copied, framed: framed))
             }
         }
         .disabled(text.isEmpty)

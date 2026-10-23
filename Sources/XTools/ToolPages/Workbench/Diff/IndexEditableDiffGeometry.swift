@@ -1,4 +1,5 @@
 import XToolsCore
+import XToolsDesign
 import AppKit
 
 /// Owned by one native editor. Character edits invalidate the source index;
@@ -69,7 +70,7 @@ protocol IndexDiffIndexedTextSurface: AnyObject {
 enum IndexDiffTextLayoutGeometry {
     static func defaultLineHeight(for textView: NSTextView) -> CGFloat {
         textView.layoutManager?.defaultLineHeight(
-            for: textView.font ?? .monospacedSystemFont(ofSize: 12.5, weight: .regular)
+            for: textView.font ?? ToolTypography.AppKitMirror.codeBody()
         ) ?? 16
     }
 

@@ -274,7 +274,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
             Label("保存", systemImage: IndexActionSymbol.save)
                 .font(ToolTypography.buttonSmall)
         }
-        .buttonStyle(IndexSmallButtonStyle())
+        .buttonStyle(IndexButtonStyle(compact: true))
         .accessibilityLabel("保存优化结果")
     }
 }

@@ -162,16 +162,10 @@ private struct IndexCheckerboard: View {
     }
 }
 
-/// Bare hit-testing style for page-local custom-chrome controls (dashed
-/// pickers, anchor grids, inline toggles). Keeping the named style in the
-/// shared library keeps `.buttonStyle(.plain)` out of page files.
-struct IndexBareButtonStyle: ButtonStyle {
-    init() {}
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-    }
-}
+// 原 IndexBareButtonStyle 已并入共享安静钮家族（design-foundation C1）：
+// 页面局部自绘 chrome 的裸命中样式统一为
+// `IndexQuietChromeStyle(look: .bare)`，继续把 `.buttonStyle(.plain)`
+// 挡在页面文件之外。
 
 // MARK: - IndexNumberInput
 

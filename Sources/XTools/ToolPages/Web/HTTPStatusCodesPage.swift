@@ -102,7 +102,7 @@ private struct IndexHTTPStatusRow: View {
         HStack(alignment: .top, spacing: ToolMetrics.Spacing.md) {
             IndexBadge("\(row.code)", tone: statusTone(row.family), fixedWidth: 64)
 
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.tiny) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
                 HStack(spacing: ToolMetrics.Spacing.sm) {
                     Text(row.name)
                         .font(ToolTypography.monoValueMedium)
@@ -124,7 +124,7 @@ private struct IndexHTTPStatusRow: View {
             )
         }
         .padding(.vertical, ToolMetrics.Spacing.compact)
-        .background(isHovering ? ToolTheme.hoverFill : Color.clear)
+        .indexRowHoverBackground(isHovering)
         .contentShape(Rectangle())
         .onHover { hovering in
             withToolAnimation(ToolMotion.Preset.controlFeedback) { isHovering = hovering }

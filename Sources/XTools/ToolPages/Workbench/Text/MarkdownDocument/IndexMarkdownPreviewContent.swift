@@ -172,16 +172,18 @@ private struct IndexMarkdownHeadingView: View {
     }
 
     private static func fontProperties(level: Int) -> MarkdownFontProperties {
+        // 字号并轨 ToolTypography（design-foundation）：h1=pageTitle(20)、
+        // h2=sectionHeader(15，原 16)、h3=sectionTitle(14)、h4-6=markdownProse(13)。
         switch level {
         case 1:
-            return .init(size: 20, weight: .semibold)
+            return .init(size: ToolTypography.PointSize.pageTitle, weight: .semibold)
         case 2:
-            return .init(size: 16, weight: .semibold)
+            return .init(size: ToolTypography.PointSize.sectionHeader, weight: .semibold)
         case 3:
-            return .init(size: 14, weight: .semibold)
+            return .init(size: ToolTypography.PointSize.sectionTitle, weight: .semibold)
         default:
             // indexClay 未覆盖 h4-h6：与正文同字号、无边距。
-            return .init(size: 13)
+            return .init(size: ToolTypography.PointSize.markdownProse)
         }
     }
 }
@@ -243,7 +245,7 @@ private struct IndexMarkdownCodeBlockView: View {
         Text(self.content)
             .font(ToolTypography.markdownCodeBlock)
             .foregroundStyle(IndexClayMarkdownStyle.textColor)
-            .padding(12)
+            .padding(ToolMetrics.Spacing.md)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(IndexClayMarkdownStyle.fieldColor)
             .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
@@ -377,7 +379,8 @@ private struct IndexMarkdownListBullet: View {
         default: "square.fill"
         }
         Image(systemName: symbol)
-            .font(.system(size: round(13 / 3)))
+            // 列表符字形：正文的 1/3（≈4.33）就近吸附 4 档（design.md §2）。
+            .font(.system(size: ToolMetrics.Spacing.xs))
             .frame(minWidth: IndexClayMarkdownStyle.markerMinWidth, alignment: .trailing)
     }
 }
@@ -426,7 +429,7 @@ private struct IndexMarkdownTableView: View {
                 }
             }
         }
-        .padding(1)
+        .padding(ToolMetrics.Spacing.hair)
         .background(IndexClayMarkdownStyle.borderColor)
     }
 

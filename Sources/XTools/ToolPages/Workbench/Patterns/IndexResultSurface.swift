@@ -69,9 +69,11 @@ struct IndexResultSurface: View {
                 )
             }
         case let .code(text, placeholder):
-            IndexWorkspaceOutputSurface(
+            IndexOutputSurface(
                 text: text,
                 placeholder: placeholder,
+                lineNumbers: false,
+                syntax: nil,
                 minHeight: 90,
                 embedsFlat: true,
                 workspaceSemantic: .naturalHeightShortResultPanel

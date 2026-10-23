@@ -218,8 +218,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
         var onDifferenceNavigationChange: ((DiffDifferenceNavigationProgress) -> Void)?
         var lastNavigationRequestID = 0
 
-        // Wave 2 locating wash: one block wash plus one slot-mark deepening
-        // per pane. Bumping the generation per successful jump keeps each
+        // Wave 2 locating wash: one block wash per pane. Bumping the
+        // generation per successful jump keeps each
         // wash a single arc; Reduce Motion leaves these silent (the jump
         // still scrolls and selects).
         private var blockWashes: [Side: ToolLocatingWashView] = [:]
@@ -310,7 +310,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
 
             let placeholderLabel = NSTextField(labelWithString: placeholder)
             placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
-            placeholderLabel.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
+            placeholderLabel.font = ToolTypography.AppKitMirror.codeBody()
             placeholderLabel.textColor = IndexDiffNSPalette.textTertiary
             placeholderLabel.lineBreakMode = .byTruncatingTail
             placeholderLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -354,8 +354,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             }
 
             // Wave 2 locating wash surfaces: the block wash rides above the
-            // editor pane; the slot-mark deepening rides above the gutter
-            // overlay. Both stay non-interactive and animate opacity only.
+            // editor pane. It stays non-interactive and animates opacity only.
             let blockWash = ToolLocatingWashView()
             container.addSubview(blockWash)
             blockWashes[side] = blockWash
@@ -540,8 +539,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
                 )
             )
 
-            // Wave 2 locating wash: one arc over the landed block (and its
-            // gutter slot marks) per jump; Reduce Motion keeps positioning
+            // Wave 2 locating wash: one arc over the landed block per jump;
+            // Reduce Motion keeps positioning
             // only. The scroll/selection behavior above is untouched.
             locatingWashGeneration += 1
             playLocatingWash(for: hunk, generation: locatingWashGeneration)
@@ -549,8 +548,8 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
 
         /// Wave 2 locating wash (see `ToolMotion.LocatingWash`): after a jump
         /// lands, every pane that carries the hunk sweeps one soft accent
-        /// wash across the block while its gutter slot mark deepens on the
-        /// same 360ms arc. Single element per pane, single arc per jump.
+        /// wash across the block on the same 900ms arc. Single element per
+        /// pane, single arc per jump.
         /// Reduce Motion skips the wash entirely — positioning is owned by
         /// `navigateDifference(forward:)` and never changes here.
         private func playLocatingWash(for hunk: DifferenceHunk, generation: Int) {
@@ -804,7 +803,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
 
         private func configure(_ textView: NSTextView) {
             IndexNativeViewportLayout.configure(textView, allowsNonContiguousLayout: false)
-            textView.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
+            textView.font = ToolTypography.AppKitMirror.codeBody()
             textView.textColor = IndexDiffNSPalette.textPrimary
             textView.insertionPointColor = IndexDiffNSPalette.textPrimary
             textView.drawsBackground = false
@@ -951,7 +950,7 @@ struct IndexEditableDiffMergeView: NSViewRepresentable {
             var caretRect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
             caretRect.origin.x += textView.textContainerOrigin.x
             caretRect.origin.y += textView.textContainerOrigin.y
-            caretRect.size.height = max(caretRect.height, layoutManager.defaultLineHeight(for: textView.font ?? .monospacedSystemFont(ofSize: 12.5, weight: .regular)))
+            caretRect.size.height = max(caretRect.height, layoutManager.defaultLineHeight(for: textView.font ?? ToolTypography.AppKitMirror.codeBody()))
             let documentRect = textView.convert(caretRect.insetBy(dx: 0, dy: -24), to: documentView)
             documentView.scrollToVisible(documentRect)
         }

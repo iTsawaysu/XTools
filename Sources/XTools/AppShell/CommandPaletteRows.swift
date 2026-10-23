@@ -13,7 +13,7 @@ struct CommandPaletteSectionTitle: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: ToolMetrics.Spacing.fine) {
             Text(text)
                 .font(ToolTypography.groupHeader)
                 .foregroundStyle(ToolTheme.textTertiary)
@@ -24,9 +24,9 @@ struct CommandPaletteSectionTitle: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 8)
-        .padding(.top, 10)
-        .padding(.bottom, 3)
+        .padding(.horizontal, ToolMetrics.Spacing.sm)
+        .padding(.top, ToolMetrics.Spacing.compact)
+        .padding(.bottom, ToolMetrics.Spacing.xs)
         .accessibilityElement(children: .combine)
     }
 }
@@ -42,19 +42,19 @@ struct CommandPaletteHintsBar: View {
     var body: some View {
         VStack(spacing: 0) {
             ToolDivider()
-            HStack(spacing: 12) {
+            HStack(spacing: ToolMetrics.Spacing.md) {
                 Self.hint(key: "↑↓", label: "浏览")
                 Self.hint(key: "↩", label: returnLabel)
                 Spacer()
                 Self.hint(key: "esc", label: "关闭")
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 7)
+            .padding(.horizontal, ToolMetrics.Spacing.md)
+            .padding(.vertical, ToolMetrics.Spacing.sm)
         }
     }
 
     private static func hint(key: String, label: String) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: ToolMetrics.Spacing.xs) {
             IndexKeycap(label: key)
             Text(label)
                 .font(ToolTypography.caption)
@@ -76,10 +76,10 @@ struct CommandPaletteRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 10) {
+            HStack(spacing: ToolMetrics.Spacing.compact) {
                 Image(systemName: systemImage)
                     .symbolRenderingMode(.monochrome)
-                    .font(.system(size: ToolMetrics.IconSize.tool, weight: .regular))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.tool, .regular))
                     .foregroundStyle(isActive ? ToolTheme.accentHover : ToolTheme.textSecondary)
                     // The shared solid-chip bed (Keycap recipe) carries the
                     // resting icon; the active row swaps to the accent tint.
@@ -92,7 +92,7 @@ struct CommandPaletteRow: View {
                         )
                     )
 
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.hair) {
                     Text(Self.accentHighlighted(
                         title,
                         baseColor: ToolTheme.textPrimary,
@@ -121,8 +121,8 @@ struct CommandPaletteRow: View {
                         .accessibilityHidden(true)
                 }
             }
-            .padding(.horizontal, 8)
-            .frame(height: 36)
+            .padding(.horizontal, ToolMetrics.Spacing.sm)
+            .frame(height: ToolMetrics.Control.row)
             .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
             // Selection fill/stroke live in the floating highlight layer
             // (`CommandPaletteSelectionHighlightLayer`); the row keeps only

@@ -56,7 +56,7 @@ struct IndexEmptyState: View {
                     .animation(ToolMotion.animation(ToolMotion.EmptyArrival.iconRise, reduceMotion: reduceMotion), value: arrivalStage)
             }
 
-            VStack(alignment: .center, spacing: 4) {
+            VStack(alignment: .center, spacing: ToolMetrics.Spacing.xs) {
                 Text(title)
                     .font(density == .panel ? ToolTypography.sectionTitle : ToolTypography.bodyMedium)
                     .foregroundStyle(ToolTheme.textPrimary)

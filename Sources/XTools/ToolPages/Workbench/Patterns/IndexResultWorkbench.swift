@@ -38,7 +38,7 @@ struct IndexResultWorkbench<Controls: View, Content: View>: View {
             .overlay(alignment: .bottom) {
                 Rectangle()
                     .fill(ToolTheme.border)
-                    .frame(height: 0.5)
+                    .frame(height: ToolMetrics.Spacing.hairline)
             }
 
             IndexDiagnosticStatusSlot(isActive: workspaceDiagnostic != nil) {

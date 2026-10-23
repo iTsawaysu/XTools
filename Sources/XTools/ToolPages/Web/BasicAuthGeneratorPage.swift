@@ -154,7 +154,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
                     Label("在解析中打开", systemImage: "arrow.right.circle")
                         .font(ToolTypography.buttonSmall)
                 }
-                .buttonStyle(IndexSmallButtonStyle())
+                .buttonStyle(IndexButtonStyle(compact: true))
                 .disabled(session.output.isEmpty)
 
                 IndexCopyButton(text: session.output)
@@ -164,7 +164,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
                 Label("用于生成", systemImage: "arrow.left.circle")
                     .font(ToolTypography.buttonSmall)
             }
-            .buttonStyle(IndexSmallButtonStyle())
+            .buttonStyle(IndexButtonStyle(compact: true))
             .disabled(session.parsedCredentials == nil)
         }
     }
@@ -252,7 +252,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
             content()
         }
         .padding(.horizontal, ToolMetrics.Control.labelInset)
-        .padding(.vertical, ToolMetrics.Spacing.tight)
+        .padding(.vertical, ToolMetrics.Spacing.sm)
         .background(ToolTheme.panelBackground)
     }
 

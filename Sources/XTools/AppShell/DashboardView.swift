@@ -73,8 +73,8 @@ struct DashboardView: View {
             .frame(maxWidth: ToolMetrics.Workbench.mainMaxWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .top)
             .padding(.horizontal, ToolMetrics.Workbench.horizontalInset)
-            .padding(.top, ToolMetrics.Spacing.xl)
-            .padding(.bottom, 30)
+            .padding(.top, ToolMetrics.Spacing.lg)
+            .padding(.bottom, ToolMetrics.Spacing.xxxl)
         }
         .background(ToolTheme.Workbench.canvas)
         .onAppear {
@@ -121,7 +121,7 @@ struct DashboardView: View {
         } label: {
             HStack(spacing: ToolMetrics.Spacing.md) {
                 Image(systemName: item.tool.systemImage)
-                    .font(.system(size: ToolMetrics.IconSize.display, weight: .medium))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.display, .medium))
                     .foregroundStyle(ToolTheme.accent)
                     .frame(width: 40, height: 40)
                     .background(
@@ -129,7 +129,7 @@ struct DashboardView: View {
                         in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
                     )
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xxs) {
                     Text("继续工作")
                         .font(ToolTypography.Workbench.caption)
                         .foregroundStyle(ToolTheme.Workbench.textFaint)
@@ -144,22 +144,28 @@ struct DashboardView: View {
 
                 Spacer(minLength: 0)
 
+                // 「继续」强调件与 IndexButtonStyle(primary) 同配方
+                //（design-foundation C6：bodyMedium 字号、md 水平内距、
+                // Control.regular 高、field 圆角、onAccent 前景）。整卡是
+                // 唯一命中钮（嵌套 Button 的命中/无障碍行为有歧义，见
+                // SidebarToolRow 先例），故此处复刻配方而非嵌套按钮。
                 HStack(spacing: ToolMetrics.Spacing.sm) {
                     Text("继续")
-                        .font(ToolTypography.Workbench.body.weight(.medium))
+                        .font(ToolTypography.bodyMedium)
                         .foregroundStyle(ToolTheme.onAccent)
                     Image(systemName: "arrow.right")
-                        .font(ToolTypography.Workbench.icon)
+                        .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .medium))
                         .foregroundStyle(ToolTheme.onAccent)
                 }
-                .padding(.horizontal, ToolMetrics.Spacing.lg)
-                .frame(height: 32)
-                .background(ToolTheme.accent, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
+                .labelStyle(.titleAndIcon)
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .frame(height: ToolMetrics.Control.regular)
+                .background(ToolTheme.accent, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
             }
             .padding(ToolMetrics.Spacing.md)
             .contentShape(Rectangle())
         }
-        .buttonStyle(IndexBareButtonStyle())
+        .buttonStyle(IndexQuietChromeStyle(look: .bare))
         .indexRowHoverBackground(
             true,
             color: ToolTheme.Workbench.surface,
@@ -176,8 +182,8 @@ struct DashboardView: View {
     // MARK: - 页头
 
     private var pageHeader: some View {
-        HStack(alignment: .top, spacing: 24) {
-            VStack(alignment: .leading, spacing: 6) {
+        HStack(alignment: .top, spacing: ToolMetrics.Spacing.xxxl) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.fine) {
                 Text("工作台")
                     .font(ToolTypography.Workbench.title)
                     .foregroundStyle(ToolTheme.Workbench.textPrimary)
@@ -239,10 +245,10 @@ struct DashboardView: View {
                             .foregroundStyle(ToolTheme.Workbench.textFaint)
                     }
                     .padding(.horizontal, ToolMetrics.Spacing.md)
-                    .frame(height: 36)
+                    .frame(height: ToolMetrics.Control.row)
                     .contentShape(Rectangle())
                 }
-                .buttonStyle(IndexBareButtonStyle())
+                .buttonStyle(IndexQuietChromeStyle(look: .bare))
                 .background(ToolTheme.panelBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous)
@@ -271,10 +277,10 @@ struct DashboardView: View {
                 IndexKeycap(label: "⌘K")
             }
             .padding(.horizontal, ToolMetrics.Spacing.md)
-            .frame(height: 36)
+            .frame(height: ToolMetrics.Control.row)
             .contentShape(Rectangle())
         }
-        .buttonStyle(IndexBareButtonStyle())
+        .buttonStyle(IndexQuietChromeStyle(look: .bare))
         .background(ToolTheme.panelBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous)
@@ -440,7 +446,7 @@ private struct DashboardTile: View {
                         in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
                     )
 
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.hair) {
                     Text(tool.title)
                         .font(ToolTypography.Workbench.body.weight(.semibold))
                         .foregroundStyle(ToolTheme.Workbench.textPrimary)
@@ -455,11 +461,11 @@ private struct DashboardTile: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.leading, ToolMetrics.Spacing.md)
-            .padding(.trailing, 32) // 给右上收藏星留独立命中区
+            .padding(.trailing, ToolMetrics.Spacing.xxxl) // 给右上收藏星留独立命中区
             .frame(height: ToolMetrics.Control.thumb)
             .contentShape(Rectangle())
         }
-        .buttonStyle(IndexBareButtonStyle())
+        .buttonStyle(IndexQuietChromeStyle(look: .bare))
         .accessibilityLabel("打开\(tool.title)")
         .overlay(alignment: .topTrailing) {
             IndexFavoriteButton(isFavorite: isFavorite, density: .compact) {

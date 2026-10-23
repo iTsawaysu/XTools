@@ -39,7 +39,7 @@ struct IndexKVRow: View {
     var valueMotion: IndexValueMotionPolicy = .immediate
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: ToolMetrics.Spacing.md) {
             Text(key)
                 .font(ToolTypography.monoLabel)
                 .foregroundStyle(color ?? ToolTheme.textSecondary)
@@ -54,8 +54,8 @@ struct IndexKVRow: View {
                 IndexCopyButton(text: value, title: "")
             }
         }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 9)
+        .padding(.horizontal, ToolMetrics.Spacing.md)
+        .padding(.vertical, ToolMetrics.Spacing.sm)
         .background(ToolTheme.panelBackground)
     }
 
@@ -101,9 +101,9 @@ struct IndexKV: View {
         IndexKVSurface {
             VStack(spacing: 0) {
                 if rows.isEmpty {
-                    Text(emptyText)
-                        .font(ToolTypography.bodyPlain)
-                        .foregroundStyle(ToolTheme.textTertiary)
+                    // 空态唯一入口（design-foundation C4）：内联空文案行归一
+                    // 到 IndexEmptyState（output 密度），保持 70 最小高度语义。
+                    IndexEmptyState(title: emptyText, density: .output)
                         .frame(maxWidth: .infinity, minHeight: 70, alignment: .center)
                         .background(ToolTheme.panelBackground)
                 } else {
@@ -285,10 +285,11 @@ struct IndexSurfaceRow<Content: View>: View {
                     )
             }
             .background {
-                if isInteractive && isHovering {
-                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                        .fill(ToolTheme.hoverFill)
-                }
+                // hover 通道 opacity 插值（design-foundation D2）：固定渲染
+                // 圆角色片，只在交互态 hover 时升至 1。
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                    .fill(ToolTheme.hoverFill)
+                    .opacity(isInteractive && isHovering ? 1 : 0)
             }
             .onHover { hovering in
                 guard isInteractive else { return }
@@ -348,7 +349,7 @@ struct IndexShortResultCardList: View {
                 updateID: presenceUpdateID
             ) { snapshot in
                 IndexResultCardStack(items: snapshot, revealsItems: false)
-                    .padding(8)
+                    .padding(ToolMetrics.Spacing.sm)
             } empty: {
                 IndexEmptyState(
                     title: emptyText,
@@ -376,13 +377,15 @@ private struct IndexResultCardStack: View {
     }
 
     private var stack: some View {
-        LazyVStack(spacing: 8) {
+        LazyVStack(spacing: ToolMetrics.Spacing.sm) {
             ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                 IndexResultCard(
                     item: item,
                     valueMotion: indexGeneratedResultValueMotion(index: index, limit: valueMotionLimit)
                 )
-                    .toolTransition(revealsItems && index < 8 ? ToolMotion.Transition.diagnostic : .identity, reduceMotion: reduceMotion)
+                    // 诊断卡入场并入 contentReveal 0.24（design-foundation D1：
+                    // 原 diagnostic 0.15 与结果出现 0.24 同屏节奏不齐）。
+                    .toolTransition(revealsItems && index < 8 ? ToolMotion.Transition.modeContent : .identity, reduceMotion: reduceMotion)
             }
         }
     }
@@ -404,8 +407,8 @@ private struct IndexResultCard: View {
 
     var body: some View {
         IndexSurfaceRow(horizontalPadding: 12, verticalPadding: 8) {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.fine) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
                     Text(item.label)
                         .font(ToolTypography.micro)
                         .foregroundStyle(ToolTheme.textTertiary)
@@ -453,8 +456,8 @@ struct IndexWorkspaceDiagnostic: View {
                 .foregroundStyle(tone.tint)
                 .lineLimit(6)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
                 .background {
                     ZStack {
                         RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
@@ -465,11 +468,11 @@ struct IndexWorkspaceDiagnostic: View {
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                        .strokeBorder(tone.tint.opacity(0.45), lineWidth: 0.5)
+                        .strokeBorder(tone.borderTint, lineWidth: 0.5)
                 }
                 .toolShadow(ToolTheme.Shadow.floating)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                .padding(.horizontal, ToolMetrics.Spacing.compact)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
                 .frame(maxWidth: maxWidth, alignment: .trailing)
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
@@ -489,13 +492,13 @@ struct IndexDiagnosticStatusButton: View {
             showsPopover.toggle()
         } label: {
             Image(systemName: payload.tone.systemImage)
-                .font(.system(size: ToolMetrics.IconSize.medium, weight: .semibold))
+                .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .semibold))
                 .foregroundStyle(payload.tone.tint)
                 .frame(width: 24, height: 24)
                 .background(payload.tone.softFill, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
-                        .strokeBorder(payload.tone.tint.opacity(0.45), lineWidth: 0.5)
+                        .strokeBorder(payload.tone.borderTint, lineWidth: 0.5)
                 }
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
         }
@@ -503,9 +506,9 @@ struct IndexDiagnosticStatusButton: View {
         .help(payload.text)
         .accessibilityLabel("\(payload.tone.accessibilityPrefix)：\(payload.text)")
         .popover(isPresented: $showsPopover, arrowEdge: .bottom) {
-            HStack(alignment: .top, spacing: 9) {
+            HStack(alignment: .top, spacing: ToolMetrics.Spacing.sm) {
                 Image(systemName: payload.tone.systemImage)
-                    .font(.system(size: ToolMetrics.IconSize.large, weight: .semibold))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.large, .semibold))
                     .foregroundStyle(payload.tone.tint)
                     .accessibilityHidden(true)
 
@@ -515,7 +518,7 @@ struct IndexDiagnosticStatusButton: View {
                     .lineLimit(6)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(12)
+            .padding(ToolMetrics.Spacing.md)
             .frame(maxWidth: min(payload.maxWidth, 360), alignment: .leading)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(payload.tone.accessibilityPrefix)：\(payload.text)")
@@ -637,9 +640,9 @@ struct IndexStatGrid: View {
     var valueMotion: IndexValueMotionPolicy = .textSwap
 
     var body: some View {
-        HStack(spacing: 1) {
+        HStack(spacing: ToolMetrics.Spacing.hair) {
             ForEach(Array(stats.enumerated()), id: \.offset) { _, stat in
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
                     Text(stat.1)
                         .font(ToolTypography.statValue)
                         .foregroundStyle(ToolTheme.accentHover)
@@ -648,8 +651,8 @@ struct IndexStatGrid: View {
                         .font(ToolTypography.caption)
                         .foregroundStyle(ToolTheme.textSecondary)
                 }
-                .padding(.horizontal, 15)
-                .padding(.vertical, 13)
+                .padding(.horizontal, ToolMetrics.Spacing.lg)
+                .padding(.vertical, ToolMetrics.Spacing.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(ToolTheme.panelBackground)
             }

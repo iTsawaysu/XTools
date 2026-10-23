@@ -32,7 +32,7 @@ struct IndexSecureInput: View {
             .frame(width: 32, height: 32)
             .arrowCursorOnHover()
             .toolMotionIconSwap(id: showsSecret)
-            .padding(.trailing, 5)
+            .padding(.trailing, ToolMetrics.Spacing.xs)
         }
         .accessibilityElement(children: .contain)
     }

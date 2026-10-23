@@ -204,7 +204,7 @@ private struct IndexControlledSegmentInput<TrailingAccessory: View>: View {
             }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .frame(height: 38)
+        .frame(height: ToolMetrics.Control.large)
         .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)

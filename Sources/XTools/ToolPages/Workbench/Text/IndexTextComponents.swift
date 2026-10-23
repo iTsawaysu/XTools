@@ -143,7 +143,7 @@ struct IndexSearchInput: View {
                     action: clear
                 )
                 .arrowCursorOnHover()
-                .padding(.trailing, 4)
+                .padding(.trailing, ToolMetrics.Spacing.xs)
             }
         }
     }
@@ -682,8 +682,8 @@ struct IndexTextArea: View {
                     .font(lineNumbers ? ToolTypography.codeBody : ToolTypography.body)
                     .foregroundStyle(ToolTheme.textTertiary)
                     .padding(.leading, placeholderLeadingPadding)
-                    .padding(.trailing, 13)
-                    .padding(.vertical, 12)
+                    .padding(.trailing, ToolMetrics.Spacing.md)
+                    .padding(.vertical, ToolMetrics.Spacing.md)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -867,7 +867,7 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
     }
 
     private func configure(_ textView: NSTextView) {
-        textView.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
+        textView.font = ToolTypography.AppKitMirror.codeBody()
         textView.textColor = .labelColor
         textView.insertionPointColor = .labelColor
         textView.drawsBackground = false
@@ -1143,7 +1143,7 @@ struct IndexUndoableTextView: NSViewRepresentable {
     }
 
     private func configure(_ textView: NSTextView) {
-        textView.font = .monospacedSystemFont(ofSize: 12.5, weight: .regular)
+        textView.font = ToolTypography.AppKitMirror.codeBody()
         textView.textColor = .labelColor
         textView.insertionPointColor = .labelColor
         textView.drawsBackground = false

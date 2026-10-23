@@ -607,20 +607,26 @@ private final class IndexEmojiCollectionButton: NSButton {
                 controlPoints: Float(smooth.x1), Float(smooth.y1), Float(smooth.x2), Float(smooth.y2)
             )
         )
-        let fillColor: NSColor = isHighlighted ? NSColor(ToolTheme.activeFill) : (
-            isHovering ? NSColor(ToolTheme.hoverFill) : .clear
-        )
-        layer?.backgroundColor = fillColor.cgColor
-        layer?.borderColor = (
-            isHovering ? NSColor(ToolTheme.strongBorder) : .clear
-        ).cgColor
+        // 填充/描边按状态分支赋值（design-foundation D2：AppKit 侧不经
+        // 三元色表达式，nil 即无着色；CATransaction 驱动插值）。
+        if isHighlighted {
+            layer?.backgroundColor = NSColor(ToolTheme.activeFill).cgColor
+        } else if isHovering {
+            layer?.backgroundColor = NSColor(ToolTheme.hoverFill).cgColor
+        } else {
+            layer?.backgroundColor = nil
+        }
+        layer?.borderColor = isHovering ? NSColor(ToolTheme.strongBorder).cgColor : nil
         layer?.borderWidth = 0.5
+        // 统一按压反馈（design-foundation C2）：0.97 缩放 + 0.88 压暗，
+        // 与 SwiftUI 侧 `indexPressFeedback` 同参数（RM 由调用侧跳过动画）。
         layer?.setAffineTransform(
             CGAffineTransform(
                 scaleX: isHighlighted ? ToolMotion.Scale.pressed : 1,
                 y: isHighlighted ? ToolMotion.Scale.pressed : 1
             )
         )
+        layer?.opacity = isHighlighted ? Float(ToolTheme.Opacity.pressed) : 1
         CATransaction.commit()
     }
 }

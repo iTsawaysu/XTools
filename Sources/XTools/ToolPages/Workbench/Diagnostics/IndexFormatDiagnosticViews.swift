@@ -55,9 +55,9 @@ struct IndexDiagnosticBanner: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             Image(systemName: tone.systemImage)
-                .font(.system(size: ToolMetrics.IconSize.medium, weight: .semibold))
+                .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .semibold))
                 .foregroundStyle(tone.tint)
                 .accessibilityHidden(true)
             if let line = diagnostic?.line {
@@ -75,15 +75,15 @@ struct IndexDiagnosticBanner: View {
             Spacer(minLength: 0)
             if let onLocate {
                 Button("定位", action: onLocate)
-                    .buttonStyle(IndexSmallButtonStyle())
+                    .buttonStyle(IndexButtonStyle(compact: true))
                     .accessibilityLabel("定位问题，\(presentation.location ?? "当前输入")")
             }
             Button("详情") { showsDetails.toggle() }
-                .buttonStyle(IndexSmallButtonStyle())
+                .buttonStyle(IndexButtonStyle(compact: true))
                 .accessibilityLabel("查看诊断详情")
                 .popover(isPresented: $showsDetails, arrowEdge: .bottom) {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 10) {
+                        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.compact) {
                             Text(presentation.summary).font(ToolTypography.label)
                             if let location = presentation.location {
                                 Text(location).font(ToolTypography.monoLabel).foregroundStyle(tone.tint)
@@ -102,16 +102,16 @@ struct IndexDiagnosticBanner: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
-                        .padding(14)
+                        .padding(ToolMetrics.Spacing.base)
                     }
                     .frame(width: 380, height: 250)
                 }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, ToolMetrics.Spacing.base)
         .frame(maxWidth: .infinity, minHeight: 36, maxHeight: 36, alignment: .leading)
         .background(tone.softFill)
         .overlay(alignment: .bottom) {
-            Rectangle().fill(tone.tint.opacity(0.25)).frame(height: 0.5)
+            Rectangle().fill(tone.borderTint).frame(height: ToolMetrics.Spacing.hairline)
         }
         .onChange(of: message) { _ in showsDetails = false }
     }

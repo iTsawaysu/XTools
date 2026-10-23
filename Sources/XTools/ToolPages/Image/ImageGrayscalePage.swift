@@ -67,7 +67,7 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
             Label(saveButtonTitle, systemImage: IndexActionSymbol.save)
                 .font(ToolTypography.buttonSmall)
         }
-        .buttonStyle(IndexSmallButtonStyle())
+        .buttonStyle(IndexButtonStyle(compact: true))
         .accessibilityLabel("保存灰度图")
     }
 

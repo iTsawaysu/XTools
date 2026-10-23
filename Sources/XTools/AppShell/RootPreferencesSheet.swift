@@ -14,8 +14,8 @@ struct RootPreferencesSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: ToolMetrics.Spacing.md) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
                     Text("设置")
                         .font(ToolTypography.sectionHeader)
                         .foregroundStyle(ToolTheme.textPrimary)
@@ -31,11 +31,11 @@ struct RootPreferencesSheet: View {
 
             Rectangle()
                 .fill(ToolTheme.border)
-                .frame(height: 0.5)
-                .padding(.vertical, 20)
+                .frame(height: ToolMetrics.Spacing.hairline)
+                .padding(.vertical, ToolMetrics.Spacing.xxl)
 
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.lg) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                     Text("外观")
                         .font(ToolTypography.label)
                         .foregroundStyle(ToolTheme.textSecondary)
@@ -51,7 +51,7 @@ struct RootPreferencesSheet: View {
                 }
 
                 Toggle(isOn: $autoResumeLastTool) {
-                    VStack(alignment: .leading, spacing: 3) {
+                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
                         Text("启动时继续上次工具")
                             .font(ToolTypography.bodyMedium)
                             .foregroundStyle(ToolTheme.textPrimary)
@@ -64,14 +64,14 @@ struct RootPreferencesSheet: View {
             }
 
             Spacer(minLength: 0)
-            HStack(spacing: 6) {
+            HStack(spacing: ToolMetrics.Spacing.fine) {
                 Image(systemName: "lock.shield")
                 Text("所有设置只保存在本机。")
             }
             .font(ToolTypography.caption)
             .foregroundStyle(ToolTheme.textTertiary)
         }
-        .padding(24)
+        .padding(ToolMetrics.Spacing.xxxl)
         .frame(width: 440, height: 300)
         .background(ToolTheme.panelBackground)
         .background(WindowAppearanceOwner(preference: themePreference))

@@ -149,12 +149,13 @@ private struct IndexJWTWorkspaceContent: View {
                         IndexCopyButton(text: session.generatedHeader)
                     },
                     content: {
-                        IndexWorkspaceOutputSurface(
+                        IndexOutputSurface(
                             text: session.generatedHeader,
                             placeholder: "Header 将显示在这里",
-                            minHeight: 84,
-                            fillsHeight: true,
                             lineNumbers: true,
+                            syntax: nil,
+                            fillsHeight: true,
+                            minHeight: 84,
                             colorize: jsonColorize(for: session.generatedHeader),
                             workspaceSemantic: .structuredOutputReading
                         )
@@ -186,16 +187,18 @@ private struct IndexJWTWorkspaceContent: View {
                             Label("在解析中检查", systemImage: "arrow.right.circle")
                                 .font(ToolTypography.buttonSmall)
                         }
-                        .buttonStyle(IndexSmallButtonStyle())
+                        .buttonStyle(IndexButtonStyle(compact: true))
                         .disabled(session.generatedToken.isEmpty)
 
                         IndexCopyButton(text: session.generatedToken)
                     }
                 },
                 content: {
-                    IndexWorkspaceOutputSurface(
+                    IndexOutputSurface(
                         text: session.generatedToken,
                         placeholder: "填写有效 Payload 和 Secret 后自动生成",
+                        lineNumbers: false,
+                        syntax: nil,
                         minHeight: 84,
                         workspaceSemantic: .structuredOutputReading
                     )
@@ -271,11 +274,12 @@ private struct IndexJWTWorkspaceContent: View {
                 IndexCopyButton(text: session.parsedHeader, iconOnly: true)
             }
 
-            IndexWorkspaceOutputSurface(
+            IndexOutputSurface(
                 text: session.parsedHeader,
                 placeholder: IndexEmptyStateCopy.notAvailable,
-                fillsHeight: true,
                 lineNumbers: true,
+                syntax: nil,
+                fillsHeight: true,
                 colorize: jsonColorize(for: session.parsedHeader),
                 workspaceSemantic: .structuredOutputReading
             )
@@ -306,11 +310,12 @@ private struct IndexJWTWorkspaceContent: View {
         if payloadPresentation == "claims" {
             registeredClaimsView
         } else {
-            IndexWorkspaceOutputSurface(
+            IndexOutputSurface(
                 text: session.parsedPayload,
                 placeholder: IndexEmptyStateCopy.notAvailable,
-                fillsHeight: true,
                 lineNumbers: true,
+                syntax: nil,
+                fillsHeight: true,
                 colorize: jsonColorize(for: session.parsedPayload),
                 workspaceSemantic: .structuredOutputReading
             )
@@ -349,14 +354,14 @@ private struct IndexJWTWorkspaceContent: View {
     }
 
     private func registeredClaimRow(_ insight: JWTRegisteredClaimInsight) -> some View {
-        HStack(alignment: .top, spacing: ToolMetrics.Spacing.tight) {
+        HStack(alignment: .top, spacing: ToolMetrics.Spacing.sm) {
             Image(systemName: JWTStatusChrome(insight.status).symbol)
-                .font(.system(size: ToolMetrics.IconSize.medium, weight: .semibold))
+                .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .semibold))
                 .foregroundStyle(JWTStatusChrome(insight.status).color)
                 .frame(width: ToolMetrics.Control.tiny, height: ToolMetrics.Control.tiny)
                 .accessibilityHidden(true)
 
-            HStack(spacing: ToolMetrics.Spacing.micro) {
+            HStack(spacing: ToolMetrics.Spacing.xs) {
                 Text(insight.kind.title)
                     .font(ToolTypography.label)
                     .foregroundStyle(ToolTheme.textPrimary)
@@ -366,7 +371,7 @@ private struct IndexJWTWorkspaceContent: View {
             }
             .frame(width: ToolMetrics.Control.strip, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.tiny) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
                 Text(insight.displayValue)
                     .font(ToolTypography.monoLabel)
                     .foregroundStyle(ToolTheme.textPrimary)
@@ -380,7 +385,7 @@ private struct IndexJWTWorkspaceContent: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, ToolMetrics.Spacing.relaxed)
+        .padding(.horizontal, ToolMetrics.Spacing.md)
         .padding(.vertical, ToolMetrics.Spacing.sm)
         .background(ToolTheme.panelBackground)
         .accessibilityElement(children: .combine)
@@ -397,7 +402,7 @@ private struct IndexJWTWorkspaceContent: View {
                 Label("用于生成", systemImage: "arrow.left.circle")
                     .font(ToolTypography.buttonSmall)
             }
-            .buttonStyle(IndexSmallButtonStyle())
+            .buttonStyle(IndexButtonStyle(compact: true))
             .disabled(session.parsedHeader.isEmpty || session.parsedPayload.isEmpty)
         } content: {
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {

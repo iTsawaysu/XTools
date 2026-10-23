@@ -319,12 +319,9 @@ private struct DateCalculatorTodayButton: View {
                 .frame(height: ToolMetrics.Control.small)
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
         }
-        .buttonStyle(IndexBareButtonStyle())
+        .buttonStyle(IndexQuietChromeStyle(look: .bare))
         .accessibilityLabel("设为今天")
-        .background(
-            isHovering ? ToolTheme.hoverFill : Color.clear,
-            in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-        )
+        .indexRowHoverBackground(isHovering, cornerRadius: ToolMetrics.CornerRadius.nestedControl)
         .onHover { hovering in
             withToolAnimation(ToolMotion.Preset.controlFeedback) { isHovering = hovering }
         }
@@ -349,9 +346,9 @@ private struct DateCalculatorInlineOption: View {
 
     private var optionLabel: some View {
         Button { isOn.toggle() } label: {
-            HStack(spacing: ToolMetrics.Spacing.snug) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 Image(systemName: isOn ? "checkmark.square.fill" : "square")
-                    .font(.system(size: ToolMetrics.IconSize.medium, weight: .semibold))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .semibold))
                     .foregroundStyle(isOn ? ToolTheme.accentHover : ToolTheme.textSecondary)
                     .frame(width: ToolMetrics.Control.tiny, height: ToolMetrics.Control.tiny)
                     .toolMotionIconSwap(id: isOn)
@@ -362,7 +359,7 @@ private struct DateCalculatorInlineOption: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(IndexBareButtonStyle())
+        .buttonStyle(IndexQuietChromeStyle(look: .bare))
         .accessibilityLabel(title)
         .accessibilityValue(isOn ? "开启" : "关闭")
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: isOn)

@@ -89,7 +89,7 @@ struct IndexOptionsMenu: View {
 
     private var trigger: some View {
         Button(action: toggleMenu) {
-            HStack(spacing: 4) {
+            HStack(spacing: ToolMetrics.Spacing.xs) {
                 Text(triggerTitle)
 
                 // The digit only joins the row while options are enabled, so
@@ -105,13 +105,18 @@ struct IndexOptionsMenu: View {
                 }
 
                 Image(systemName: "chevron.down")
-                    .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.micro, .semibold))
                     .foregroundStyle(ToolTheme.textSecondary)
                     .accessibilityHidden(true)
             }
+            .font(ToolTypography.buttonSmall)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .padding(.horizontal, ToolMetrics.Spacing.sm)
+            .frame(height: Self.triggerHeight)
             .toolAnimation(ToolMotion.Preset.settle, value: enabledOptions.count)
         }
-        .buttonStyle(IndexOptionsMenuTriggerStyle(isOpen: isOpen))
+        .buttonStyle(IndexQuietChromeStyle(look: .framed, ink: .quiet, isEngaged: isOpen))
         .focused($triggerFocus, equals: .trigger)
         .indexFocusRing(active: triggerFocus == .trigger, cornerRadius: ToolMetrics.CornerRadius.control)
         .overlay {
@@ -127,13 +132,13 @@ struct IndexOptionsMenu: View {
     private var menuPanel: some View {
         // No in-panel heading: the trigger carries the full 「处理选项」 name,
         // so the menu is just the option rows (prototype r2.2 compactness).
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xxs) {
             ForEach(options.indices, id: \.self) { index in
                 if dividersBefore.contains(options[index].id) {
                     Rectangle()
                         .fill(ToolTheme.strongBorder)
-                        .frame(height: 0.5)
-                        .padding(.vertical, 3)
+                        .frame(height: ToolMetrics.Spacing.hairline)
+                        .padding(.vertical, ToolMetrics.Spacing.xs)
                         .accessibilityHidden(true)
                 }
                 optionRow(index)
@@ -141,7 +146,7 @@ struct IndexOptionsMenu: View {
 
             keyboardShortcutSurrogate
         }
-        .padding(4)
+        .padding(ToolMetrics.Spacing.xs)
         .frame(minWidth: 112, alignment: .leading)
         .background(
             ToolTheme.panelBackground,
@@ -194,11 +199,11 @@ struct IndexOptionsMenu: View {
             option.isOn.wrappedValue.toggle()
             highlightedRow = index
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 // The checkmark slot stays reserved while off so the labels of
                 // all three rows align on one column.
                 Image(systemName: "checkmark")
-                    .font(.system(size: ToolMetrics.IconSize.small, weight: .semibold))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.small, .semibold))
                     .foregroundStyle(ToolTheme.accent)
                     .frame(width: 14)
                     .opacity(option.isOn.wrappedValue ? 1 : 0)
@@ -210,11 +215,14 @@ struct IndexOptionsMenu: View {
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, ToolMetrics.Spacing.sm)
             .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .buttonStyle(IndexOptionsMenuRowStyle(isHighlighted: highlightedRow == index))
+        .buttonStyle(IndexQuietChromeStyle(
+            isKeyboardHighlighted: highlightedRow == index,
+            cornerRadius: ToolMetrics.CornerRadius.nestedControl
+        ))
         // Descriptions stay available to VoiceOver; the visual tooltip inside
         // the open menu reads as noise.
         .accessibilityHint(option.help)
@@ -369,113 +377,15 @@ private final class IndexOptionsMenuDismissalBox {
 }
 
 // MARK: - Styles
-
-/// Toolbar-family trigger treatment: it rests on the framed small-button look
-/// the workbench actions use (`IndexSmallButtonStyle(framed:)` — utility fill
-/// inside a hairline) so the disclosure sits in the toolbar's control family.
-/// Hover and press use the shared quiet fills; while the menu is open the
-/// trigger switches to the app's engaged-option tint (`selectionFill` inside
-/// `accentBorder` — the same language `IndexOptionSwitch` uses for on-state),
-/// staying warm and light instead of the muddy neutral press fill.
-private struct IndexOptionsMenuTriggerStyle: ButtonStyle {
-    let isOpen: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        StyleBody(configuration: configuration, isOpen: isOpen)
-    }
-
-    private struct StyleBody: View {
-        let configuration: Configuration
-        let isOpen: Bool
-
-        @State private var isHovering = false
-        @Environment(\.isEnabled) private var isEnabled
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-        private var hovering: Bool { isHovering && isEnabled }
-
-        private var background: Color {
-            if isOpen { return ToolTheme.selectionFill }
-            if hovering || configuration.isPressed { return ToolTheme.activeFill }
-            return ToolTheme.utilityBackground
-        }
-
-        private var border: Color {
-            if isOpen { return ToolTheme.accentBorder }
-            if hovering || configuration.isPressed { return ToolTheme.strongBorder }
-            return ToolTheme.border
-        }
-
-        private var foreground: Color {
-            if !isEnabled { return ToolTheme.textTertiary }
-            if isOpen || configuration.isPressed { return ToolTheme.textPrimary }
-            return hovering ? ToolTheme.textPrimary : ToolTheme.textSecondary
-        }
-
-        var body: some View {
-            configuration.label
-                .font(ToolTypography.buttonSmall)
-                .foregroundStyle(foreground)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 9)
-                .frame(height: IndexOptionsMenu.triggerHeight)
-                .background(
-                    background,
-                    in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
-                        .strokeBorder(border, lineWidth: 1)
-                }
-                .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
-                .scaleEffect(!reduceMotion && configuration.isPressed ? ToolMotion.Scale.pressed : 1)
-                .onHover { isHovering = $0 }
-                .toolAnimation(ToolMotion.Preset.controlFeedback, value: hovering)
-                .toolAnimation(ToolMotion.Preset.controlFeedback, value: configuration.isPressed)
-        }
-    }
-}
-
-/// Menu row treatment: the whole row is the hit target, hover and press use
-/// the shared quiet fills, and the enabled state is carried by the accent
-/// checkmark instead of a selection block. Keyboard highlight renders as the
-/// palette-style soft selection fill — a hard focus ring reads like an error
-/// outline on a transient menu.
-private struct IndexOptionsMenuRowStyle: ButtonStyle {
-    let isHighlighted: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        StyleBody(configuration: configuration, isHighlighted: isHighlighted)
-    }
-
-    private struct StyleBody: View {
-        let configuration: Configuration
-        let isHighlighted: Bool
-
-        @State private var isHovering = false
-        @Environment(\.isEnabled) private var isEnabled
-
-        private var hovering: Bool { isHovering && isEnabled }
-
-        private var background: Color {
-            if configuration.isPressed { return ToolTheme.activeFill }
-            if isHighlighted { return ToolTheme.selectionFill }
-            return hovering ? ToolTheme.hoverFill : Color.clear
-        }
-
-        var body: some View {
-            configuration.label
-                .background(
-                    background,
-                    in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-                )
-                .onHover { isHovering = $0 }
-                .toolAnimation(ToolMotion.Preset.controlFeedback, value: hovering)
-                .toolAnimation(ToolMotion.Preset.controlFeedback, value: configuration.isPressed)
-        }
-    }
-}
+//
+// 触发器与菜单行的 hover/press 样式已并入共享安静钮家族
+// （design-foundation C1）：
+// - 触发器：`IndexQuietChromeStyle(look: .framed, ink: .quiet, isEngaged:)`
+//   ——静止 utility 底 + hairline，hover/press 共享安静底色，菜单打开时
+//   切到 selectionFill + accentBorder（与 IndexOptionSwitch 的 on 态同语言）。
+// - 菜单行：`IndexQuietChromeStyle(isKeyboardHighlighted:, cornerRadius:
+//   nestedControl)` ——整行命中，hover/press 共享安静底色，键盘高亮是
+//   palette 式软选中填充；启用态由 accent 勾选承担而非选中色块。
 
 // MARK: - Cursor
 

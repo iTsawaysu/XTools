@@ -7,9 +7,9 @@ import XToolsDesign
 /// must go through `.indexSurface` so corner radius stays on the
 /// `ToolMetrics.CornerRadius` ladder instead of scattering magic values.
 enum IndexSurfaceShape {
-    /// Dense workbench panels (3pt).
+    /// Dense workbench panels (10pt).
     case panel
-    /// Small controls: buttons, chips, segment items (6pt).
+    /// Small controls: buttons, chips, segment items (8pt).
     case control
     /// Input fields, KV rows, and large buttons (8pt).
     case field

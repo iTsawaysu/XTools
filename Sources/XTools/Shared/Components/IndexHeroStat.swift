@@ -35,8 +35,8 @@ struct IndexHeroStat: View {
     }
 
  var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 12) {
+        VStack(spacing: ToolMetrics.Spacing.sm) {
+            HStack(spacing: ToolMetrics.Spacing.md) {
                 Text(value)
                     .font(ToolTypography.heroValue(design: design))
                     .foregroundStyle(tone.valueColor)
@@ -54,9 +54,9 @@ struct IndexHeroStat: View {
                     .toolMotionTextSwap(id: caption)
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.vertical, 20)
+        .padding(.horizontal, ToolMetrics.Spacing.xxxl)
+        .padding(.vertical, ToolMetrics.Spacing.xxl)
         .frame(maxWidth: .infinity, alignment: .center)
-        .padding(.vertical, 26)
+        .padding(.vertical, ToolMetrics.Spacing.xxxl)
     }
 }

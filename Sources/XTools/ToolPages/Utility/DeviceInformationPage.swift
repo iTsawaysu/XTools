@@ -26,7 +26,7 @@ struct IndexDeviceInfoPage: View {
                         Label("刷新", systemImage: IndexActionSymbol.refresh)
                             .font(ToolTypography.buttonSmall)
                     }
-                    .buttonStyle(IndexSmallButtonStyle())
+                    .buttonStyle(IndexButtonStyle(compact: true))
                     .accessibilityLabel("刷新设备信息")
 
                     IndexCopyButton(text: copySummary, title: "复制全部")

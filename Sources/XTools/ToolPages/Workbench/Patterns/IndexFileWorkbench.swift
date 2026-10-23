@@ -328,7 +328,7 @@ private struct IndexWorkbenchHeader<Accessory: View>: View {
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(ToolTheme.border)
-                .frame(height: 0.5)
+                .frame(height: ToolMetrics.Spacing.hairline)
         }
     }
 }
@@ -343,8 +343,8 @@ struct IndexWorkbenchFooter: View {
     let trailingText: String
 
     var body: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 6) {
+        HStack(spacing: ToolMetrics.Spacing.compact) {
+            HStack(spacing: ToolMetrics.Spacing.fine) {
                 if let statusTone {
                     Circle()
                         .fill(statusTone)

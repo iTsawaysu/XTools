@@ -40,27 +40,28 @@ struct WindowToolbarContent: ToolbarContent {
                 // this is AppKit toolbar chrome, not an in-page control.
                 Button(action: onToggleFavorite) {
                     Image(systemName: isFavorite ? IndexActionSymbol.favoriteFill : IndexActionSymbol.favorite)
-                        .font(.system(size: ToolMetrics.IconSize.medium, weight: .medium))
+                        .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .medium))
                         .frame(
                             width: WindowToolbarMetrics.iconButtonSize,
                             height: WindowToolbarMetrics.iconButtonSize
                         )
                         .toolMotionIconSwap(id: isFavorite)
                 }
-                .buttonStyle(QuietTitlebarButtonStyle())
+                .buttonStyle(IndexQuietChromeStyle(ink: .pressAccent))
                 .environment(\.colorScheme, colorScheme)
                 .foregroundStyle(isFavorite ? ToolTheme.accent : ToolTheme.textSecondary)
                 .help(isFavorite ? "取消收藏" : "加入收藏")
                 .accessibilityLabel(isFavorite ? "取消收藏" : "加入收藏")
             }
 
-            // 样式忽略 configuration.label（占位 EmptyView），自行构造会观察
-            // presentation 的 CommandTriggerLabel——压暗状态因此不经过工具栏
-            // 内容重估就能更新。
+            // label 自绘 chip 观感（底色/描边/按压态全部在 CommandTriggerLabel），
+            // 按压态经 `\indexButtonIsPressed` 环境下发——压暗状态因此不经过
+            // 工具栏内容重估就能更新（design-foundation C1：原私有
+            // CommandTriggerButtonStyle 并入 IndexQuietChromeStyle(.labelOnly)）。
             Button(action: onCommandPalette) {
-                EmptyView()
+                CommandTriggerLabel(presentation: presentation)
             }
-            .buttonStyle(CommandTriggerButtonStyle(presentation: presentation))
+            .buttonStyle(IndexQuietChromeStyle(look: .labelOnly))
             .environment(\.colorScheme, colorScheme)
             .accessibilityLabel("跳转工具")
             .accessibilityHint("打开命令面板，快捷键 Command-K")
@@ -79,8 +80,6 @@ private struct SidebarToggleButton: View {
     let action: () -> Void
     let colorScheme: ColorScheme
 
-    @State private var isHovered = false
-
     private var presentation: SidebarTogglePresentation {
         isSidebarVisible ? .hide : .show
     }
@@ -88,7 +87,7 @@ private struct SidebarToggleButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: "sidebar.left")
-                .font(.system(size: ToolMetrics.IconSize.large, weight: .regular))
+                .font(ToolTypography.icon(ToolMetrics.IconSize.large, .regular))
                 .symbolRenderingMode(.monochrome)
                 .frame(
                     width: WindowToolbarMetrics.iconButtonSize,
@@ -96,13 +95,12 @@ private struct SidebarToggleButton: View {
                 )
                 .toolMotionIconSwap(id: isSidebarVisible)
         }
-        .buttonStyle(SidebarChromeButtonStyle(isHovered: isHovered))
+        .buttonStyle(IndexQuietChromeStyle(ink: .quiet))
         .environment(\.colorScheme, colorScheme)
         .help(presentation.help)
         .accessibilityLabel(presentation.title)
         .accessibilityHint(SidebarTogglePresentation.accessibilityHint)
         .accessibilityIdentifier("window.sidebar-toggle")
-        .onHover { isHovered = $0 }
     }
 }
 
@@ -113,18 +111,18 @@ private struct SidebarToggleButton: View {
 /// 打开时把按钮自身压暗淡化（`presentation.shows` → opacity 0.4、去描边），
 /// 视觉上与"被蒙层罩住"一致。观察放在本视图而非工具栏内容上：模型与
 /// RootViewModel 刻意隔离（rootBody=0 契约），面板开关只重估这个 label，
-/// App shell 不受牵连。（internal：`CommandTriggerButtonStyle` 在
-/// TitlebarButtonStyles.swift 内构造它。）
+/// App shell 不受牵连。按压态由安静钮统一样式
+/// （`IndexQuietChromeStyle(look: .labelOnly)`）经环境注入。
 struct CommandTriggerLabel: View {
     @ObservedObject var presentation: CommandPalettePresentationModel
-    let isPressed: Bool
+    @Environment(\.indexButtonIsPressed) private var isPressed
 
     private var isDimmed: Bool { presentation.shows }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: ToolMetrics.IconSize.small, weight: .medium))
+                .font(ToolTypography.icon(ToolMetrics.IconSize.small, .medium))
 
             Text("跳转工具…")
                 .font(ToolTypography.compactBody)

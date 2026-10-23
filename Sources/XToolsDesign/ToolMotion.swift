@@ -76,7 +76,9 @@ public enum ToolMotion {
 
     public enum Scale {
         public static let modal: CGFloat = 0.98
-        public static let pressed: CGFloat = 0.98
+        /// 全库统一按压缩放（design-foundation D/C2：按钮族 0.98 与壳层
+        /// 0.97 两套参数收敛为单套；配对 `ToolTheme.Opacity.pressed`）。
+        public static let pressed: CGFloat = 0.97
         public static let iconInserted: CGFloat = 0.98
         public static let iconRemoved: CGFloat = 1.02
         /// Page-arrival depth: incoming tool pages settle from 99.5% scale.
@@ -90,8 +92,12 @@ public enum ToolMotion {
     }
 
     public enum ResultPresence {
-        public static let appearanceDuration = Duration.medium
-        public static let exitDuration = Duration.fast
+        /// 结果出现并入 contentReveal 单时长（design-foundation D1：
+        /// 0.35 → 0.24，与折叠/内容出现同一节奏）。
+        public static let appearanceDuration = Duration.arrival
+        /// 退出快于出现（契约：exit < appearance；加速收尾不拖尾）。
+        /// 随出现时长 0.35→0.24 同步由 0.25 收紧到 quick 0.15。
+        public static let exitDuration = Duration.quick
     }
 
     public enum OrderedDirection {
@@ -193,13 +199,20 @@ public enum ToolMotion {
         /// ~120ms easeInOut: hover, press, toggle.
         public static let controlFeedback = Curve.inOut(duration: Duration.micro)
         /// ~240ms smoothOut: result appearance, empty-state swap, mode content.
+        /// 唯一的「内容出现」时长（design-foundation D1）：折叠、结果出现、
+        /// 诊断卡入场全部并入本值，不再存在 0.15/0.24/0.35 三档并存。
         public static let contentReveal = Curve.smoothOut(duration: Duration.arrival)
-        /// ~150ms easeInOut: diagnostic slot expand/collapse.
+        /// ~150ms easeInOut: 诊断横幅/状态条的瞬时出现与收回。
+        /// 语义边界（design-foundation D1）：仅限 banner/status 这类贴边
+        /// 瞬时反馈；诊断卡等「内容出现」类入场一律走 contentReveal 0.24。
         public static let diagnostic = Curve.inOut(duration: Duration.quick)
         /// Spring settle: menus, panels, page-header finish.
         public static let settle = Curve.gentleSpring()
 
         // Legacy aliases — resolve to the four semantics above.
+        // 迁移期别名（design-foundation D3）：以下 8 个旧名只是四语义的
+        // 转发，阶段④统一清理调用点后删除；新代码一律使用四语义本名
+        // （controlFeedback / contentReveal / diagnostic / settle）。
         public static let textSwap = controlFeedback
         public static let iconSwap = controlFeedback
         public static let orderedContent = contentReveal
@@ -208,8 +221,8 @@ public enum ToolMotion {
         public static let shellResize = contentReveal
         public static let panelReveal = contentReveal
         public static let modal = settle
-        /// v3: tool-switch page arrival (host-owned whitelist; see
-        /// `MotionSourceContractTests`). 01 景深沉降: 300ms smoothOut — the
+        /// v3: tool-switch page arrival (host-owned: applied by
+        /// `ToolPageStage`, never by tool pages). 01 景深沉降: 300ms smoothOut — the
         /// incoming page sinks from y+10/99.5% while the outgoing layer runs
         /// its own 220ms productiveExit (`pageDeparture`). Timing is driven by
         /// `ToolPageStage`'s two explicit transactions, one per direction.
@@ -301,16 +314,17 @@ public enum ToolMotion {
     }
 
     /// Wave 2 command-palette choreography (prototype MOTION d/x/s.cmdk*):
-    /// open = ~150ms near-critical spring rise (8pt) + fade; close rides a
-    /// ~140ms critically damped spring. Open and close share ONE continuous
-    /// rise/sink distance and opacity mapping driven by the single panel
+    /// open = quiet ~130ms easeOut fade; close = slightly faster ~120ms fade.
+    /// Zero positional travel by design (`riseDistance = 0`): open and close
+    /// share ONE continuous opacity mapping driven by the single panel
     /// progress (the scrim dims through the same progress at a 0.30 ceiling),
     /// so rapid reversals never hard-switch the presentation geometry
     /// (contract: `CommandPaletteVisibilityGeometry`). Deliberately no scale
     /// channel: scaling the panel would resample its retained native-view
     /// subtree (~45 NSViews) on every interpolated frame. Rows mount visible
-    /// with no per-row stagger; the keyboard selection highlight snaps on the
-    /// 0.2/1.0 fast spring with no stretch.
+    /// with no per-row stagger; the keyboard selection highlight snaps with
+    /// ZERO animation (see `CommandPaletteSelectionHighlightLayer` — 键盘
+    /// 导航的确定性零延迟跳位是有意设计，任何插值都会落后于按键)。
     public enum PaletteMotion {
         /// Panel open: quiet ~130ms fade — the palette is the densest
         /// reading surface, so restraint (no movement) is the smooth feel.
@@ -358,8 +372,9 @@ public enum ToolMotion {
     /// d.labelXfade + s.segCursorStretch + MOTION.springFast): the selected
     /// fill detaches from the segments into one shared cursor that springs to
     /// the newly selected segment on the fast variant of the selection-slide
-    /// spring family (0.3/0.85 sidebar pill and palette highlight → 0.22
-    /// here, ≈220ms), stretching ≈1.10 horizontally mid-flight and settling
+    /// spring family (0.3/0.85 sidebar pill → 0.22 here, ≈220ms；命令面板
+    /// 高光是零动画跳位，不属本弹簧家族), stretching ≈1.10 horizontally
+    /// mid-flight and settling
     /// on arrival. The active label cross-fades its color over 120ms on the
     /// smoothOut family. Reduce Motion drops the cursor onto the new segment
     /// and cuts the label directly.
@@ -379,10 +394,9 @@ public enum ToolMotion {
 
     /// Wave 2 difference-block locating wash (prototype MOTION d.diffPulse /
     /// d.diffWashPeak): when a difference jump lands, the target block's
-    /// background sweeps one soft accent wash — opacity 0 → 10% → 0 across a
-    /// single 360ms arc (rise on smoothOut to a 40% peak, fall on the exit
-    /// arc) — while the pane's line-number slot marker deepens on the same
-    /// arc (2pt accent → 3pt accentHover → 2pt). One layer, one animated
+    /// background sweeps one soft accent wash — opacity 0 → 6% → 0 across a
+    /// single 900ms arc (quick smoothOut attack, then a long readable decay
+    /// on the exit arc). One layer, one animated
     /// property, one arc: outline and enclose treatments were explicitly
     /// rejected. Reduce Motion skips the wash entirely; the jump still
     /// scrolls and selects.
@@ -433,10 +447,13 @@ public enum ToolMotion {
     }
 
     public enum AppKitPreset {
+        /// AppKit 侧折叠轨道与 SwiftUI `Preset.accordion` 同为 0.24 单时长
+        /// （design-foundation D1：原 0.35 与行头 0.24 同帧错拍，收敛为
+        /// contentReveal 一个节奏）。
         public static var accordion: AppKitMotion {
             let points = Curve.smoothOutControlPoints
             return AppKitMotion(
-                duration: Duration.medium,
+                duration: Duration.arrival,
                 timingFunction: CAMediaTimingFunction(
                     controlPoints: Float(points.x1),
                     Float(points.y1),
@@ -561,7 +578,7 @@ public enum ToolMotion {
         }
 
         /// Short copy that rises into an empty editor slot
-        /// (IndexCodeViewerSurface placeholder).
+        /// (IndexOutputSurface placeholder).
         public static var emptyArrivalText: AnyTransition {
             AnyTransition.opacity.combined(with: .offset(y: EmptyArrival.textRiseDistance))
         }

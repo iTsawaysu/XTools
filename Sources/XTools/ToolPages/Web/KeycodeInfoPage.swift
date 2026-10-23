@@ -108,7 +108,7 @@ private struct IndexKeycodeWorkspaceContent: View {
                         .frame(width: ToolMetrics.Control.swatchTiny, height: ToolMetrics.Control.swatchTiny)
                         .padding(.top, ToolMetrics.Spacing.xs)
 
-                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.tiny) {
+                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
                         Text(isListening ? "正在监听" : "监听已暂停")
                             .font(ToolTypography.bodyMedium)
                             .foregroundStyle(ToolTheme.textPrimary)

@@ -79,7 +79,7 @@ struct IndexGeneratedValueRowList: View {
             .foregroundStyle(ToolTheme.textTertiary)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, minHeight: 70, alignment: .center)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, ToolMetrics.Spacing.md)
     }
 
     private func staggerDelay(for index: Int) -> TimeInterval {
@@ -114,7 +114,7 @@ private struct IndexGeneratedValueRowView: View {
 
     var body: some View {
         Button(action: copyValue) {
-            HStack(spacing: 12) {
+            HStack(spacing: ToolMetrics.Spacing.md) {
                 Text("\(index + 1)")
                     .font(ToolTypography.monoCaption)
                     .monospacedDigit()
@@ -133,18 +133,18 @@ private struct IndexGeneratedValueRowView: View {
                 IndexCopyButton(text: row.value, title: row.copyHelp, iconOnly: true)
                     .opacity(showsActions ? 1 : 0)
             }
-            .padding(.horizontal, 14)
-            .frame(minHeight: 44)
+            .padding(.horizontal, ToolMetrics.Spacing.md)
+            .frame(minHeight: ToolMetrics.Control.thumb)
             .contentShape(Rectangle())
         }
-        .buttonStyle(IndexBareButtonStyle())
-        .background(isHovering ? ToolTheme.hoverFill : Color.clear)
+        .buttonStyle(IndexQuietChromeStyle(look: .bare))
+        .indexRowHoverBackground(isHovering)
         .onHover { isHovering = $0 }
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: isHovering)
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(ToolTheme.border)
-                .frame(height: 0.5)
+                .frame(height: ToolMetrics.Spacing.hairline)
         }
         .opacity(revealed ? 1 : 0)
         .scaleEffect(revealed ? 1 : 0.96, anchor: .top)

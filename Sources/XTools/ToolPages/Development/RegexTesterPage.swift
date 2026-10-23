@@ -164,14 +164,14 @@ private struct IndexRegexWorkspaceContent: View {
                                 .toolMotionTextSwap(id: activePresetTitle)
 
                             Image(systemName: "chevron.down")
-                                .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
+                                .font(ToolTypography.icon(ToolMetrics.IconSize.micro, .semibold))
                                 .foregroundStyle(ToolTheme.textSecondary)
                                 .accessibilityHidden(true)
                         }
                         .font(ToolTypography.buttonSmall)
                     }
                     .menuIndicator(.hidden)
-                    .buttonStyle(IndexSmallButtonStyle())
+                    .buttonStyle(IndexButtonStyle(compact: true))
                     .fixedSize(horizontal: true, vertical: false)
                     .accessibilityLabel("正则预设，当前为\(activePresetTitle == "预设" ? "自定义" : activePresetTitle)")
 
@@ -418,19 +418,19 @@ private struct IndexRegexWorkspaceContent: View {
             Toggle("点号匹配换行 (s)", isOn: flagBinding("s"))
             Toggle("允许注释与空白 (x)", isOn: flagBinding("x"))
         } label: {
-            HStack(spacing: ToolMetrics.Spacing.micro) {
+            HStack(spacing: ToolMetrics.Spacing.xs) {
                 Text(activeFlagsLabel)
                     .font(ToolTypography.monoLabel)
                     .foregroundStyle(ToolTheme.textPrimary)
 
                 Image(systemName: "chevron.down")
-                    .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.micro, .semibold))
                     .foregroundStyle(ToolTheme.textSecondary)
                     .accessibilityHidden(true)
             }
         }
         .menuIndicator(.hidden)
-        .buttonStyle(IndexSmallButtonStyle())
+        .buttonStyle(IndexButtonStyle(compact: true))
         .fixedSize(horizontal: true, vertical: false)
         .accessibilityLabel("正则标志，当前为 \(activeFlagsLabel)")
     }

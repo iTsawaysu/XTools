@@ -26,7 +26,7 @@ struct IndexProgressLabel: View {
     var body: some View {
         switch layout {
         case .inline:
-            HStack(spacing: 8) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 spinner
                 Text(message)
                     .font(ToolTypography.caption)
@@ -35,7 +35,7 @@ struct IndexProgressLabel: View {
             }
             .frame(maxWidth: .infinity, alignment: Alignment(horizontal: alignment, vertical: .center))
         case .centered:
-            VStack(spacing: 10) {
+            VStack(spacing: ToolMetrics.Spacing.compact) {
                 spinner
                 Text(message)
                     .font(ToolTypography.label)

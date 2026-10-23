@@ -36,8 +36,8 @@ struct IndexKeycap: View {
             .font(ToolTypography.keycap)
             .tracking(0.6)
             .foregroundStyle(foreground)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2.5)
+            .padding(.horizontal, ToolMetrics.Spacing.sm)
+            .padding(.vertical, ToolMetrics.Spacing.xxs)
             .background(
                 RoundedRectangle(
                     cornerRadius: ToolMetrics.CornerRadius.keycap,

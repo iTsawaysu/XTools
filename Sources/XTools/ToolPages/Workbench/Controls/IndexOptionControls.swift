@@ -39,7 +39,7 @@ private struct IndexSwitchTrack: View {
             Circle()
                 .fill(isOn ? ToolTheme.accent : offThumb)
                 .frame(width: 14, height: 14)
-                .padding(3)
+                .padding(ToolMetrics.Spacing.xs)
         }
         .frame(width: 34, height: 20)
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: isOn)
@@ -73,12 +73,12 @@ struct IndexOptionGroup<Content: View>: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: ToolMetrics.Spacing.compact) {
             content
         }
         .fixedSize(horizontal: true, vertical: false)
-        .padding(.horizontal, 8)
-        .frame(height: 36)
+        .padding(.horizontal, ToolMetrics.Spacing.sm)
+        .frame(height: ToolMetrics.Control.row)
         .background(ToolTheme.utilityBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
@@ -128,10 +128,10 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
         Group {
             if style == .standalone {
                 toggleLabel(configuration)
-                    .buttonStyle(.plain)
+                    .buttonStyle(IndexQuietChromeStyle(look: .bare))
             } else {
                 toggleLabel(configuration)
-                    .buttonStyle(IndexOptionPressableButtonStyle())
+                    .buttonStyle(IndexQuietChromeStyle(look: .pressOnly))
             }
         }
     }
@@ -143,7 +143,7 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
         } label: {
             switch style {
             case .standalone:
-                HStack(spacing: 9) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
                     IndexSwitchTrack(
                         isOn: configuration.isOn,
                         offBackground: ToolTheme.editorBackground,
@@ -158,7 +158,7 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
                 .contentShape(Rectangle())
 
             case .switchToggle:
-                HStack(spacing: 6) {
+                HStack(spacing: ToolMetrics.Spacing.fine) {
                     IndexSwitchTrack(
                         isOn: configuration.isOn,
                         offBackground: ToolTheme.panelBackground,
@@ -172,8 +172,8 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
                 }
-                .padding(.horizontal, 4)
-                .frame(height: 28)
+                .padding(.horizontal, ToolMetrics.Spacing.xs)
+                .frame(height: ToolMetrics.Control.medium)
                 .background(
                     Color.clear,
                     in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
@@ -190,22 +190,9 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
     }
 }
 
-/// Press feedback for option toggles: the same 0.98 settle the button and
-/// icon families use, so every pressable control in the spine shares one
-/// physical vocabulary (Reduce Motion collapses to identity).
-private struct IndexOptionPressableButtonStyle: ButtonStyle {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? ToolMotion.Scale.pressed : 1)
-            .animation(
-                ToolMotion.animation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion),
-                value: configuration.isPressed
-            )
-    }
-}
-
+/// Press feedback for option toggles lives in the shared quiet-chrome family
+/// (`IndexQuietChromeStyle(look: .pressOnly)` → 统一按压反馈), so every
+/// pressable control in the spine shares one physical vocabulary.
 private struct IndexEmbeddedSwitchLabel: View {
     let configuration: ToggleStyle.Configuration
     @State private var isHovering = false
@@ -261,7 +248,7 @@ private struct IndexEmbeddedSwitchLabel: View {
                 }
                 .padding(.horizontal, trackPadding)
         }
-        .frame(height: 26)
+        .frame(height: ToolMetrics.Control.segmentItem)
         .background(
             trackBackground,
             in: Capsule(style: .continuous)
@@ -311,8 +298,8 @@ private struct IndexOptionButtonLabel: View {
             .foregroundStyle(foreground)
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
-            .padding(.horizontal, 8)
-            .frame(height: 26)
+            .padding(.horizontal, ToolMetrics.Spacing.sm)
+            .frame(height: ToolMetrics.Control.segmentItem)
             .background(
                 background,
                 in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
@@ -349,20 +336,22 @@ struct IndexOptionMenu: View {
         .font(ToolTypography.controlLabel(weight: .semibold))
         .buttonStyle(.plain)
         .tint(tone?.tint ?? ToolTheme.accentHover)
-        .padding(.leading, 7)
-        .padding(.trailing, 24)
+        .padding(.leading, ToolMetrics.Spacing.sm)
+        .padding(.trailing, ToolMetrics.Spacing.xxxl)
         .frame(minWidth: 116)
-        .frame(height: 38)
+        // 控件行高对齐 Control.row（design-foundation C5：38 → 36，与
+        // 分段/开关族同一行高；描边按控件规则保持 1）。
+        .frame(height: ToolMetrics.Control.row)
         .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                .strokeBorder(tone?.tint.opacity(0.7) ?? ToolTheme.border, lineWidth: 1)
+                .strokeBorder(tone?.borderTint ?? ToolTheme.border, lineWidth: 1)
         }
         .overlay(alignment: .trailing) {
             Image(systemName: "chevron.down")
-                .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
+                .font(ToolTypography.icon(ToolMetrics.IconSize.micro, .semibold))
                 .foregroundStyle(ToolTheme.textSecondary)
-                .padding(.trailing, 9)
+                .padding(.trailing, ToolMetrics.Spacing.sm)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
         }

@@ -6,7 +6,7 @@ import XToolsDesign
 /// Rendered Markdown preview backed by the in-house GFM renderer
 /// (swift-cmark parsing + IndexMarkdownPreviewContent Clay views). This is the
 /// `.markdownPreview` output presentation; monospaced source reading stays on
-/// `IndexReadOnlyTextSurface`.
+/// `IndexOutputSurface(presentation: .plain)`.
 struct IndexMarkdownPreviewSurface: View {
     let text: String
     // SwiftUI must re-evaluate this view for NFC/NFD-only changes even when no
@@ -59,7 +59,7 @@ struct IndexMarkdownPreviewSurface: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
             if containsRemoteImages, !remoteImagesAuthorized {
                 remoteImageAuthorizationBanner
             }
@@ -85,7 +85,7 @@ struct IndexMarkdownPreviewSurface: View {
                     .id(remoteImagesAuthorized ? remoteImageLoader?.id : nil)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .padding(14)
+                    .padding(ToolMetrics.Spacing.base)
                 }
                 .opacity(text.isEmpty ? 0 : 1)
                 .accessibilityHidden(text.isEmpty)
@@ -96,7 +96,7 @@ struct IndexMarkdownPreviewSurface: View {
                     Text(placeholder)
                         .font(ToolTypography.body)
                         .foregroundStyle(ToolTheme.textTertiary)
-                        .padding(12)
+                        .padding(ToolMetrics.Spacing.md)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                         .accessibilityLabel(placeholder)
                 }
@@ -144,7 +144,7 @@ struct IndexMarkdownPreviewSurface: View {
     }
 
     private var remoteImageAuthorizationBanner: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             Image(systemName: "photo")
                 .font(ToolTypography.caption)
                 .foregroundStyle(ToolTheme.textSecondary)
@@ -158,11 +158,11 @@ struct IndexMarkdownPreviewSurface: View {
                 remoteImageLoader = MarkdownRemoteImageSession()
                 remoteImageAuthorization.authorize(authorizationScope)
             }
-            .buttonStyle(IndexSmallButtonStyle())
+            .buttonStyle(IndexButtonStyle(compact: true))
             .accessibilityLabel("加载当前 Markdown 结果中的远程图片")
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, ToolMetrics.Spacing.md)
+        .padding(.vertical, ToolMetrics.Spacing.sm)
         .background(ToolTheme.accentSoft, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)

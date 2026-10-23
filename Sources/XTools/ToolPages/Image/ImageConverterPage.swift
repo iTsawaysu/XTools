@@ -320,7 +320,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                 Label(saveButtonTitle, systemImage: IndexActionSymbol.save)
                     .font(ToolTypography.buttonSmall)
             }
-            .buttonStyle(IndexSmallButtonStyle())
+            .buttonStyle(IndexButtonStyle(compact: true))
             .disabled(session.completedCount == 0 || session.isProcessing || session.isSaving)
         }
     }
@@ -339,7 +339,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                     Label(saveButtonTitle, systemImage: IndexActionSymbol.save)
                         .font(ToolTypography.buttonSmall)
                 }
-                .buttonStyle(IndexSmallButtonStyle())
+                .buttonStyle(IndexButtonStyle(compact: true))
                 .disabled(session.completedCount == 0 || session.isProcessing || session.isSaving)
             }
 

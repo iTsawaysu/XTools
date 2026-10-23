@@ -211,7 +211,7 @@ private struct IndexTextEncryptionWorkspaceContent: View {
     /// Paper-head row: mode + algorithm + secret + run, one line, exactly the
     /// 44pt rail every other tool uses.
     private var encryptionHeadControls: some View {
-        HStack(spacing: ToolMetrics.Spacing.tight) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             modeControl
             algorithmControlGroup
             widePasswordInput
@@ -228,7 +228,7 @@ private struct IndexTextEncryptionWorkspaceContent: View {
                 algorithmControlGroup
             }
 
-            HStack(spacing: ToolMetrics.Spacing.tight) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 compactPasswordInput
                 primaryActionButton
             }

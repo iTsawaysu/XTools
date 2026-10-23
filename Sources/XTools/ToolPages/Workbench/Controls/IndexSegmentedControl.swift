@@ -56,7 +56,7 @@ struct IndexSegmentedControl<Value: Hashable>: View {
     // MARK: Floating cursor selection
 
     private var cursorBody: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: ToolMetrics.Spacing.xxs) {
             ForEach(items, id: \.0) { item in
                 Item(label: item.1, isSelected: selection == item.0, density: density) {
                     selection = item.0
@@ -67,7 +67,7 @@ struct IndexSegmentedControl<Value: Hashable>: View {
                 ) { [item.0: $0] }
             }
         }
-        .padding(2)
+        .padding(ToolMetrics.Spacing.xxs)
         // 分段控件是一个 AX 组：子段保持各自可达，但组有统一标签语义
         //（调用方可用 .accessibilityLabel 命名，同 EmojiPickerPage 先例）。
         .accessibilityElement(children: .contain)
@@ -102,11 +102,6 @@ struct IndexSegmentedControl<Value: Hashable>: View {
 
         @State private var isHovering = false
 
-        private var background: Color {
-            if isSelected { return Color.clear }
-            return isHovering ? ToolTheme.hoverFill : Color.clear
-        }
-
         var body: some View {
             Button(action: action) {
                 Text(label)
@@ -116,7 +111,12 @@ struct IndexSegmentedControl<Value: Hashable>: View {
                     .fixedSize(horizontal: true, vertical: false)
                     .padding(.horizontal, density.itemHorizontalPadding)
                     .frame(height: density.itemHeight)
-                    .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
+                    // 未选中段的 hover 用 opacity 插值范式（design-foundation
+                    // D2）：选中段保持透明，光标层拥有选中填充。
+                    .indexRowHoverBackground(
+                        isHovering && !isSelected,
+                        cornerRadius: ToolMetrics.CornerRadius.nestedControl
+                    )
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

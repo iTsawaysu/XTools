@@ -76,7 +76,7 @@ private struct IndexFileTypeDetectorWorkspaceContent: View {
                         )
                         .font(ToolTypography.buttonSmall)
                     }
-                    .buttonStyle(IndexSmallButtonStyle())
+                    .buttonStyle(IndexButtonStyle(compact: true))
                     .disabled(session.isInspecting)
 
                     if !session.fileName.isEmpty {

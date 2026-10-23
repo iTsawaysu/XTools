@@ -148,7 +148,7 @@ private struct IndexDateTimeWorkspaceContent: View {
             Label("现在", systemImage: "clock")
                 .font(ToolTypography.buttonSmall)
         }
-        .buttonStyle(IndexSmallButtonStyle())
+        .buttonStyle(IndexButtonStyle(compact: true))
         .accessibilityLabel("使用当前时间")
         .fixedSize(horizontal: true, vertical: false)
     }

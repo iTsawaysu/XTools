@@ -73,7 +73,7 @@ struct IndexFavoriteButton: View {
     private var compactBody: some View {
         Button(action: action) {
             Image(systemName: isFavorite ? IndexActionSymbol.favoriteFill : IndexActionSymbol.favorite)
-                .font(.system(size: ToolMetrics.IconSize.micro))
+                .font(ToolTypography.icon(ToolMetrics.IconSize.micro, .regular))
                 .foregroundStyle(isFavorite ? ToolTheme.accent : ToolTheme.textSecondary)
                 .frame(width: 24, height: 24)
                 .contentShape(Rectangle())

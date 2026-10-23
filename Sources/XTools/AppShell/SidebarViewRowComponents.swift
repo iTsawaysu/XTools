@@ -34,16 +34,16 @@ struct SidebarGroupHeader: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: ToolMetrics.IconSize.micro, weight: .bold))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.micro, .semibold))
                     .foregroundStyle(foreground)
                     .frame(width: 10, height: 12)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
 
                 Image(systemName: systemImage)
                     .symbolRenderingMode(.monochrome)
-                    .font(.system(size: ToolMetrics.IconSize.medium, weight: .medium))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .medium))
                     .foregroundStyle(iconForeground)
                     .frame(width: SidebarMetrics.iconSize, height: SidebarMetrics.iconSize)
 
@@ -57,11 +57,11 @@ struct SidebarGroupHeader: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, ToolMetrics.Spacing.sm)
             .frame(height: SidebarMetrics.groupHeaderHeight)
-            .background(
-                backgroundFill,
-                in: RoundedRectangle(cornerRadius: SidebarMetrics.rowCornerRadius, style: .continuous)
+            .indexRowHoverBackground(
+                hoverState.isHovered,
+                cornerRadius: SidebarMetrics.rowCornerRadius
             )
             .contentShape(Rectangle())
         }
@@ -87,13 +87,6 @@ struct SidebarGroupHeader: View {
         }
         return "\(isExpanded ? "折叠" : "展开")\(title)"
     }
-
-    private var backgroundFill: Color {
-        if hoverState.isHovered {
-            return ToolTheme.hoverFill
-        }
-        return .clear
-    }
 }
 
 struct BrandMark: View {
@@ -101,7 +94,7 @@ struct BrandMark: View {
         // Terminal prompt glyph. Solid accent, no glow (Ink Terminal Pro avoids
         // the Linear-style purple gradient + bloom — SPEC §7, anti-slop).
         Image(systemName: "chevron.right")
-            .font(.system(size: ToolMetrics.IconSize.small, weight: .bold))
+            .font(ToolTypography.icon(ToolMetrics.IconSize.small, .semibold))
             .foregroundStyle(ToolTheme.onAccent)
             .frame(width: 22, height: 22)
             .background(ToolTheme.accent, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
@@ -117,9 +110,9 @@ struct SidebarFooterButton: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 Image(systemName: systemImage)
-                    .font(.system(size: ToolMetrics.IconSize.medium, weight: .regular))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .regular))
                     .frame(width: 15)
 
                 Text(title)
@@ -130,10 +123,8 @@ struct SidebarFooterButton: View {
             .foregroundStyle(hoverState.isHovered ? ToolTheme.textPrimary : ToolTheme.textSecondary)
             .frame(maxWidth: .infinity)
             .frame(height: 30)
-            .background(
-                hoverState.isHovered ? ToolTheme.hoverFill : Color.clear,
-                in: RoundedRectangle(cornerRadius: SidebarMetrics.rowCornerRadius, style: .continuous)
-            )
+            // hover 通道 opacity 插值（design-foundation D2，与 SidebarToolRow 同范式）。
+            .indexRowHoverBackground(hoverState.isHovered, cornerRadius: SidebarMetrics.rowCornerRadius)
         }
         .buttonStyle(.plain)
         .toolInteractionFeedback()
@@ -160,10 +151,10 @@ struct SidebarToolRow: View {
     var body: some View {
         HStack(spacing: 0) {
             Button(action: action) {
-                HStack(spacing: 8) {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
                     Image(systemName: systemImage)
                         .symbolRenderingMode(.monochrome)
-                        .font(.system(size: ToolMetrics.IconSize.large, weight: .regular))
+                        .font(ToolTypography.icon(ToolMetrics.IconSize.large, .regular))
                         .foregroundStyle(shouldHighlight ? ToolTheme.accentHover : ToolTheme.textSecondary)
                         .frame(width: 18, height: SidebarMetrics.iconSize)
 
@@ -218,16 +209,12 @@ struct SidebarToolRow: View {
         // (SidebarSelectionIndicatorView); the row keeps only its text/icon
         // color states, which flip instantly while the indicator springs
         // between rows.
-        .background(rowBackground, in: RoundedRectangle(cornerRadius: SidebarMetrics.rowCornerRadius, style: .continuous))
+        .indexRowHoverBackground(hoverState.isHovered, cornerRadius: SidebarMetrics.rowCornerRadius)
         .contentShape(RoundedRectangle(cornerRadius: SidebarMetrics.rowCornerRadius, style: .continuous))
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: hoverState.isHovered)
         .contextMenu {
             Button(isFavorite ? "取消收藏" : "加入收藏", action: onToggleFavorite)
         }
-    }
-
-    private var rowBackground: Color {
-        hoverState.isHovered ? ToolTheme.hoverFill : .clear
     }
 }
 

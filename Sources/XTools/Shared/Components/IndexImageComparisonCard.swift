@@ -37,7 +37,7 @@ struct IndexImageComparisonCard<Footer: View>: View {
 
  var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 Text(title)
                     .font(ToolTypography.label)
                     .foregroundStyle(ToolTheme.textPrimary)
@@ -47,12 +47,12 @@ struct IndexImageComparisonCard<Footer: View>: View {
                 }
             }
             .frame(minHeight: 34)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, ToolMetrics.Spacing.md)
             .background(ToolTheme.panelBackground)
 
             Rectangle()
                 .fill(ToolTheme.border)
-                .frame(height: 0.5)
+                .frame(height: ToolMetrics.Spacing.hairline)
 
             ZStack {
                 IndexImagePreviewStage(
@@ -74,12 +74,12 @@ struct IndexImageComparisonCard<Footer: View>: View {
             
             Rectangle()
                 .fill(ToolTheme.border)
-                .frame(height: 0.5)
+                .frame(height: ToolMetrics.Spacing.hairline)
             
             footer
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
                 .background(ToolTheme.panelBackground)
         }
         .background(ToolTheme.editorBackground)

@@ -184,7 +184,7 @@ final class IndexEditorLineNumberGutterView: IndexLineNumberColumnView {
         let attributes = IndexLineNumberColumnView.labelAttributes(color: NSColor(ToolTheme.textTertiary))
 
         if nsText.length == 0 {
-            let defaultLineHeight = layoutManager.defaultLineHeight(for: textView.font ?? .monospacedSystemFont(ofSize: 12.5, weight: .regular))
+            let defaultLineHeight = layoutManager.defaultLineHeight(for: textView.font ?? ToolTypography.AppKitMirror.codeBody())
             let y = origin.y - visibleRect.minY
             let label = "1" as NSString
             label.draw(

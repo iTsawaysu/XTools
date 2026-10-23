@@ -81,7 +81,7 @@ struct IndexStepperInput: View {
                     .background(background, in: Rectangle())
                     .contentShape(Rectangle())
             }
-            .buttonStyle(IndexBareButtonStyle())
+            .buttonStyle(IndexQuietChromeStyle(look: .bare))
             .disabled(isDisabled)
             .help(help)
             .accessibilityLabel(help)

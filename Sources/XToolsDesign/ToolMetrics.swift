@@ -27,28 +27,26 @@ public enum ToolMetrics {
         public static let paperMaxWidth: CGFloat = 1080
     }
 
-    // MARK: - Spacing (4x scale)
+    // MARK: - Spacing
+    //
+    // 11-step ladder (design-foundation, 2026-10): 1, 2, 4, 6, 8, 10, 12,
+    // 14, 16, 20, 24. Retired neighbours snap by proximity: 3/5→4, 7/9→8,
+    // 11/13→12, 15/18→16, 26/30/32→24, 1.5/2.5→2 (equidistant takes the
+    // lower step). Pages must not spell these numbers; `spacing: 0` stays
+    // legal for explicitly tight stacks.
 
     public enum Spacing {
         public static let hair: CGFloat = 1
         public static let xxs: CGFloat = 2
-        public static let tiny: CGFloat = 3
         public static let xs: CGFloat = 4
-        public static let micro: CGFloat = 5
         public static let fine: CGFloat = 6
-        public static let snug: CGFloat = 7
         public static let sm: CGFloat = 8
-        public static let tight: CGFloat = 9
         public static let compact: CGFloat = 10
-        public static let relaxed: CGFloat = 11
         public static let md: CGFloat = 12
         public static let base: CGFloat = 14      // Default panel padding & spacing
         public static let lg: CGFloat = 16
-        public static let xl: CGFloat = 18
         public static let xxl: CGFloat = 20
         public static let xxxl: CGFloat = 24
-        public static let page: CGFloat = 30      // Page horizontal/vertical padding
-        public static let hero: CGFloat = 32
 
         // Shared panel geometry. Keeping these named prevents individual
         // workspaces from inventing slightly different header/content insets.
@@ -65,7 +63,7 @@ public enum ToolMetrics {
     //
     // Clay Warmth ladder (Arc/Craft-grade softness): panels and modals are
     // generously rounded; controls and fields share one softer step. The ladder
-    // is {6, 8, 10, 12} plus Capsule for pills.
+    // is {4, 6, 8, 10} plus Capsule for pills.
 
     /// Four fixed steps (rules §3.2): paper 10 · editor/input 8 · small
     /// control 8 · keycap 4. `card`/`modal` are legacy aliases that resolve
@@ -99,6 +97,11 @@ public enum ToolMetrics {
         public static let swatch: CGFloat = 48
         public static let row: CGFloat = 36
         public static let strip: CGFloat = 92
+        /// Regular option-group control height — the IndexSegmentedControl
+        /// "regular" step (design.md §3.4). Switch tracks and option rows in
+        /// the same group align on this value; the compact 22 step stays
+        /// density-local to the segmented control.
+        public static let segmentItem: CGFloat = 26
         /// Label column for "label + value" rows (chmod, Basic Auth, math).
         public static let labelColumn: CGFloat = 70
         /// Number field / slider column widths used by option groups.

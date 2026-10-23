@@ -94,7 +94,7 @@ private struct IndexColorWorkspaceContent: View {
                         Label("取色", systemImage: "eyedropper")
                             .font(ToolTypography.buttonSmall)
                     }
-                    .buttonStyle(IndexSmallButtonStyle())
+                    .buttonStyle(IndexButtonStyle(compact: true))
                     .help("打开系统取色器（包含透明度）")
                     .accessibilityLabel("打开系统取色器")
                     .popover(isPresented: $showsSystemColorPicker, arrowEdge: .bottom) {

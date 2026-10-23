@@ -250,7 +250,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                 Label("保存", systemImage: IndexActionSymbol.save)
                     .font(ToolTypography.buttonSmall)
             }
-            .buttonStyle(IndexSmallButtonStyle())
+            .buttonStyle(IndexButtonStyle(compact: true))
             .accessibilityLabel("保存水印图片")
             .help("保存与当前水印设置一致的原尺寸图片")
         )
@@ -582,16 +582,16 @@ private struct WatermarkAnchorOption: View {
                     .lineLimit(1)
 
                 Image(systemName: "chevron.down")
-                    .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.micro, .semibold))
                     .accessibilityHidden(true)
             }
             .font(ToolTypography.controlLabel(weight: .semibold))
             .foregroundStyle(ToolTheme.textPrimary)
-            .padding(.horizontal, ToolMetrics.Spacing.tight)
+            .padding(.horizontal, ToolMetrics.Spacing.sm)
             .frame(height: ToolMetrics.Control.small)
             .indexSurface(.control, fill: ToolTheme.editorBackground, border: ToolTheme.border)
         }
-        .buttonStyle(IndexBareButtonStyle())
+        .buttonStyle(IndexQuietChromeStyle(look: .bare))
         .accessibilityLabel("水印位置")
         .accessibilityValue(position.displayName)
         .popover(isPresented: $isPickerPresented, arrowEdge: .bottom) {
@@ -646,7 +646,7 @@ private struct WatermarkAnchorCell: View {
                         .fill(isSelected ? ToolTheme.accentHover : ToolTheme.textSecondary)
                         .frame(width: ToolMetrics.Control.dot, height: ToolMetrics.Control.dot)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: item.alignment)
-                        .padding(ToolMetrics.Spacing.micro)
+                        .padding(ToolMetrics.Spacing.xs)
                 }
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
@@ -654,7 +654,7 @@ private struct WatermarkAnchorCell: View {
                 }
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
         }
-        .buttonStyle(IndexBareButtonStyle())
+        .buttonStyle(IndexQuietChromeStyle(look: .bare))
         .onHover { hovering in
             withToolAnimation(ToolMotion.Preset.controlFeedback) { isHovering = hovering }
         }

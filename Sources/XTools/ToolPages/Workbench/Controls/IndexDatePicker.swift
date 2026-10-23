@@ -23,20 +23,20 @@ struct IndexDatePicker: View {
         Button {
             showPopover.toggle()
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 Image(systemName: "calendar")
-                    .font(.system(size: ToolMetrics.IconSize.medium))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .regular))
                     .foregroundStyle(ToolTheme.textSecondary)
                 Text(formatted(selection))
                     .font(ToolTypography.body)
                     .foregroundStyle(ToolTheme.textPrimary)
                 Spacer()
                 Image(systemName: "chevron.down")
-                    .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.micro, .semibold))
                     .foregroundStyle(ToolTheme.textTertiary)
             }
-            .padding(.horizontal, 11)
-            .frame(height: 38)
+            .padding(.horizontal, ToolMetrics.Spacing.md)
+            .frame(height: ToolMetrics.Control.large)
             .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
@@ -112,7 +112,7 @@ struct IndexCalendarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 12) {
+            HStack(spacing: ToolMetrics.Spacing.md) {
                 IndexCalendarNavButton(systemImage: "chevron.left", help: "上一个月") {
                     navigation.navigate(by: -1, calendar: calendar)
                 }
@@ -135,8 +135,8 @@ struct IndexCalendarView: View {
                     navigation.navigate(by: 1, calendar: calendar)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, ToolMetrics.Spacing.lg)
+            .padding(.vertical, ToolMetrics.Spacing.md)
 
             HStack(spacing: 0) {
                 ForEach(weekdaySymbols, id: \.self) { symbol in
@@ -144,13 +144,13 @@ struct IndexCalendarView: View {
                         .font(ToolTypography.fieldLabel)
                         .foregroundStyle(ToolTheme.textSecondary)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 28)
+                        .frame(height: ToolMetrics.Control.medium)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, ToolMetrics.Spacing.lg)
 
             ZStack(alignment: .top) {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 4) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: ToolMetrics.Spacing.xs) {
                     ForEach(Array(navigation.daySlots(calendar: calendar).enumerated()), id: \.offset) { _, date in
                         if let date = date {
                             IndexCalendarDayCell(
@@ -163,7 +163,7 @@ struct IndexCalendarView: View {
                             }
                         } else {
                             Color.clear
-                                .frame(height: 32)
+                                .frame(height: ToolMetrics.Control.regular)
                         }
                     }
                 }
@@ -176,8 +176,8 @@ struct IndexCalendarView: View {
             .frame(height: Self.gridHeight)
             .clipped()
             .toolAnimation(ToolMotion.Preset.orderedContent, value: navigation.generation)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 12)
+            .padding(.horizontal, ToolMetrics.Spacing.lg)
+            .padding(.bottom, ToolMetrics.Spacing.md)
         }
         .background(ToolTheme.panelBackground)
         .onAppear {
@@ -199,13 +199,10 @@ private struct IndexCalendarNavButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: ToolMetrics.IconSize.small, weight: .semibold))
+                .font(ToolTypography.icon(ToolMetrics.IconSize.small, .semibold))
                 .foregroundStyle(ToolTheme.textSecondary)
                 .frame(width: 28, height: 28)
-                .background(
-                    isHovering ? ToolTheme.hoverFill : Color.clear,
-                    in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
-                )
+                .indexRowHoverBackground(isHovering)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -236,14 +233,16 @@ private struct IndexCalendarDayCell: View {
                     ToolTheme.textPrimary
                 )
                 .frame(maxWidth: .infinity)
-                .frame(height: 32)
+                .frame(height: ToolMetrics.Control.regular)
                 .background(
                     isSelected ? ToolTheme.accent :
-                    isHovering ? ToolTheme.hoverFill :
                     isToday ? ToolTheme.accentSoft :
                     Color.clear,
                     in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
                 )
+                // hover 通道走 opacity 插值（design-foundation D2）：选中格
+                // 保持 accent，今日格在 accentSoft 上叠 hover。
+                .indexRowHoverBackground(isHovering && !isSelected)
                 .overlay {
                     if !isSelected && isHovering {
                         RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)

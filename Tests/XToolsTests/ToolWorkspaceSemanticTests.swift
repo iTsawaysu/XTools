@@ -188,14 +188,18 @@ struct ToolWorkspaceSemanticTests {
             minHeight: 84,
             workspaceSemantic: .longTextNaturalInput
         )
-        let headerSurface = IndexWorkspaceOutputSurface(
+        let headerSurface = IndexOutputSurface(
             text: "{}",
             placeholder: "解析后显示 Header",
+            lineNumbers: false,
+            syntax: nil,
             workspaceSemantic: .structuredOutputReading
         )
-        let payloadSurface = IndexWorkspaceOutputSurface(
+        let payloadSurface = IndexOutputSurface(
             text: "{}",
             placeholder: "解析后显示 Payload",
+            lineNumbers: false,
+            syntax: nil,
             workspaceSemantic: .structuredOutputReading
         )
         let verificationSurface = IndexWorkspaceResultSurface(workspaceSemantic: .naturalHeightShortResultPanel) {

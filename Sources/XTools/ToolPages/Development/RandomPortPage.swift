@@ -50,7 +50,7 @@ private struct IndexPortWorkspaceContent: View {
                     Label("重新生成", systemImage: IndexActionSymbol.refresh)
                         .font(ToolTypography.buttonSmall)
                 }
-                .buttonStyle(IndexSmallButtonStyle())
+                .buttonStyle(IndexButtonStyle(compact: true))
             } content: {
                 IndexResultSurface(
                     content: .hero(

@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XToolsDesign
 
 struct SidebarSearchTextField: NSViewRepresentable {
     let placeholder: String
@@ -11,7 +12,7 @@ struct SidebarSearchTextField: NSViewRepresentable {
     private var configuration: AppKitSearchFieldConfiguration {
         AppKitSearchFieldConfiguration(
             placeholder: placeholder,
-            font: .systemFont(ofSize: 12.5),
+            font: ToolTypography.AppKitMirror.body(),
             contentInsets: contentInsets
         )
     }

@@ -12,6 +12,17 @@ import SwiftUI
 ///
 /// Existing semantic token *names* are kept so all 34 tools restyle by value;
 /// SPEC §7.1's suggested names are noted in comments for cross-reference.
+///
+/// ## Stroke-width semantics (design-foundation)
+///
+/// Border weights carry meaning by width — pick the role, not a number:
+/// - `0.5` (`ToolMetrics.Spacing.hairline`): surface-part hairlines —
+///   panels, KV surfaces, badges, cards, resting inputs.
+/// - `1`: interactive control borders — button family, segmented tracks,
+///   menu triggers, input resting edges that belong to a control.
+/// - `1.5`: keyboard focus rings only (`IndexFocusRing` / focused inputs).
+/// Tone-colored hairlines use the `*Border` tokens (shared 0.32/0.38 alpha
+/// pair), never per-caller `tint.opacity(...)` values.
 public enum ToolTheme {
     /// V3 workbench aliases. The home layout has its own geometry, while its
     /// color language deliberately remains inside the established app theme.
@@ -147,6 +158,37 @@ public enum ToolTheme {
     public static let successSoft = dynamicColor(light: 0x4F7A4F, dark: 0x8FBC8F, alpha: 0.12, darkAlpha: 0.14)
     public static let warningSoft = dynamicColor(light: 0xB58105, dark: 0xD8B156, alpha: 0.11, darkAlpha: 0.13)
     public static let errorSoft = dynamicColor(light: 0xC4362E, dark: 0xE5635C, alpha: 0.11, darkAlpha: 0.13)
+
+    // MARK: - Tone borders（语义色 hairline 描边 · design-foundation）
+    //
+    // 同一用途「tone 色细描边」（badge / toast / 诊断轮廓 / 分组条）此前在
+    // 调用侧自造 0.25–0.7 七种透明度；现在统一为一对 darkAlpha（light 0.32 /
+    // dark 0.38），跟随 `accentBorder` 的双模式先例，0.5pt hairline 权重下
+    // 浅纸与暖炭读感一致。
+
+    public static let infoBorder = dynamicColor(light: 0xB5532F, dark: 0xD97757, alpha: 0.32, darkAlpha: 0.38)
+    public static let successBorder = dynamicColor(light: 0x4F7A4F, dark: 0x8FBC8F, alpha: 0.32, darkAlpha: 0.38)
+    public static let warningBorder = dynamicColor(light: 0xB58105, dark: 0xD8B156, alpha: 0.32, darkAlpha: 0.38)
+    public static let errorBorder = dynamicColor(light: 0xC4362E, dark: 0xE5635C, alpha: 0.32, darkAlpha: 0.38)
+
+    // MARK: - Opacity（外观感知的共享透明度）
+
+    /// `.opacity()` 常量本身不跟随外观；共享 chrome 的透明度语义在此收口，
+    /// 命名必须表达用途，调用侧不再拼写裸值。
+    public enum Opacity {
+        /// 禁用/弱化态的整体压暗：浅色纸面降到 0.40，深色暖炭保留 0.45 的
+        /// 存在感。覆盖此前按钮族 0.40/0.35/0.55 等自造值。
+        public static let disabledLight: CGFloat = 0.40
+        public static let disabledDark: CGFloat = 0.45
+
+        public static func disabled(_ scheme: ColorScheme) -> CGFloat {
+            scheme == .dark ? disabledDark : disabledLight
+        }
+
+        /// 统一按压透明度（design-foundation C2）：与 `ToolMotion.Scale.pressed`
+        /// 0.97 配对，Reduce Motion 下只降透明度不缩放。全库按压反馈单套参数。
+        public static let pressed: Double = 0.88
+    }
 
     // MARK: - Diff 行内片段强调(三层差异标记的片段层,比 soft 强一档)
 

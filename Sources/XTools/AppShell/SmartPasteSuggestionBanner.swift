@@ -21,9 +21,9 @@ struct SmartPasteSuggestionBanner: View {
     @State private var dismissalRemaining: TimeInterval?
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: ToolMetrics.Spacing.compact) {
             Image(systemName: "lightbulb")
-                .font(.system(size: ToolMetrics.IconSize.medium, weight: .medium))
+                .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .medium))
                 .foregroundStyle(ToolTheme.accent)
                 .accessibilityHidden(true)
 
@@ -35,7 +35,7 @@ struct SmartPasteSuggestionBanner: View {
             Button(action: onOpen) {
                 Text("打开 \(suggestion.toolTitle)")
             }
-            .buttonStyle(IndexSmallButtonStyle())
+            .buttonStyle(IndexButtonStyle(compact: true))
             .accessibilityHint("切换到该工具")
 
             IndexIconButton(

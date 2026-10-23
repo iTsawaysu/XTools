@@ -43,7 +43,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                 Label("全部保存", systemImage: IndexActionSymbol.save)
                     .font(ToolTypography.buttonSmall)
             }
-            .buttonStyle(IndexSmallButtonStyle())
+            .buttonStyle(IndexButtonStyle(compact: true))
             .accessibilityLabel("保存全部五个 Favicon 部署文件")
             .help("选择文件夹保存五个部署文件")
         )

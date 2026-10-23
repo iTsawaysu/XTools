@@ -97,36 +97,9 @@ struct IndexWorkspaceTextArea: View {
     }
 }
 
-struct IndexWorkspaceOutputSurface: View {
-    let text: String
-    let placeholder: String
-    var minHeight: CGFloat = 220
-    var fillsHeight = false
-    var lineNumbers = false
-    var colorize: ((String) -> AttributedString)? = nil
-    /// Prototype v3 embedded-code presentation: drop the surface's own field
-    /// box so the owning workbench panel supplies the surface edge to edge.
-    var embedsFlat = false
-    var workspaceSemantic: IndexWorkspaceSemantic = .unmigratedPageDefault
-
-    private var behavior: IndexWorkspaceBehaviorContract {
-        workspaceSemantic.behavior
-    }
-
-    var body: some View {
-        IndexOutputSurface(
-            text: text,
-            placeholder: placeholder,
-            minHeight: minHeight,
-            fillsHeight: fillsHeight,
-            scrollsInternally: behavior.outputScrollsInternally,
-            lineBreakMode: behavior.semanticLineBreakMode,
-            lineNumbers: lineNumbers,
-            colorize: colorize,
-            embedsFlat: embedsFlat
-        )
-    }
-}
+// 原纯转发门面 IndexWorkspaceOutputSurface 已删除（design-foundation C3）：
+// 调用点直接使用唯一实现 `IndexOutputSurface`，工作区语义
+// （outputScrollsInternally / semanticLineBreakMode）由其内部解析。
 
 struct IndexWorkspaceResultSurface<Content: View>: View {
     var workspaceSemantic: IndexWorkspaceSemantic = .naturalHeightShortResultPanel
@@ -150,7 +123,7 @@ struct IndexWorkspaceResultSurface<Content: View>: View {
     }
 }
 
-private extension IndexWorkspaceBehaviorContract {
+extension IndexWorkspaceBehaviorContract {
     var semanticLineBreakMode: NSLineBreakMode {
         wrapsLongTokensToAvailableWidth ? .byCharWrapping : .byWordWrapping
     }
@@ -207,7 +180,7 @@ struct IndexInputHeaderAccessory: View {
     }
 
     private func row(clearIconOnly: Bool) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             if showsInputCount {
                 IndexInputCountLabel(text: countText)
             }
