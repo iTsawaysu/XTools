@@ -81,16 +81,12 @@ struct IndexSlider: View {
             )
         }
         .frame(height: knobDiameter)
-        .accessibilityElement()
-        .accessibilityValue(Text(accessibilityText))
-        .accessibilityAdjustableAction { direction in
-            guard accessibilityStep > 0 else { return }
-            switch direction {
-            case .increment: setValue(value + accessibilityStep)
-            case .decrement: setValue(value - accessibilityStep)
-            @unknown default: break
-            }
-        }
+        .modifier(IndexSliderAccessibility(
+            value: $value,
+            range: range,
+            step: max(step, 0.0001),
+            text: accessibilityText
+        ))
     }
 
     @ViewBuilder
@@ -256,5 +252,24 @@ struct IndexNumberInput: View {
 
     private func normalizedValue(_ newValue: Int) -> Int {
         min(max(newValue, range.lowerBound), range.upperBound)
+    }
+}
+
+
+/// Projects the custom-drawn track as a native slider for assistive tech.
+/// The drawing stays SwiftUI; AX reads a real adjustable control with a
+/// stable value (audit A-08).
+private struct IndexSliderAccessibility: ViewModifier {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    let text: String
+
+    func body(content: Content) -> some View {
+        content.accessibilityRepresentation {
+            Slider(value: $value, in: range, step: step)
+                .labelsHidden()
+                .accessibilityValue(Text(text))
+        }
     }
 }

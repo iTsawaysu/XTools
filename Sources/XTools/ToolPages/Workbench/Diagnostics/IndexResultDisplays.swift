@@ -239,15 +239,23 @@ struct IndexShortResultKV: View {
 struct IndexSurfaceRow<Content: View>: View {
     var horizontalPadding: CGFloat = 12
     var verticalPadding: CGFloat = 8
+    /// Rows that are themselves clickable opt into a hover wash. Passive rows
+    /// keep the resting surface so a static information list does not look
+    /// interactive (audit I-06).
+    var isInteractive = false
     private let content: Content
+
+    @State private var isHovering = false
 
     init(
         horizontalPadding: CGFloat = 12,
         verticalPadding: CGFloat = 8,
+        isInteractive: Bool = false,
         @ViewBuilder content: () -> Content
     ) {
         self.horizontalPadding = horizontalPadding
         self.verticalPadding = verticalPadding
+        self.isInteractive = isInteractive
         self.content = content()
     }
 
@@ -258,8 +266,22 @@ struct IndexSurfaceRow<Content: View>: View {
             .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                    .strokeBorder(ToolTheme.border, lineWidth: 0.5)
+                    .strokeBorder(
+                        isHovering && isInteractive ? ToolTheme.strongBorder : ToolTheme.border,
+                        lineWidth: 0.5
+                    )
             }
+            .background {
+                if isInteractive && isHovering {
+                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                        .fill(ToolTheme.hoverFill)
+                }
+            }
+            .onHover { hovering in
+                guard isInteractive else { return }
+                isHovering = hovering
+            }
+            .toolAnimation(ToolMotion.Preset.controlFeedback, value: isHovering)
     }
 }
 

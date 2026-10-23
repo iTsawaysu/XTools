@@ -302,6 +302,7 @@ private struct IndexPageHeaderLetterTitle: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(text)
+        .accessibilityAddTraits(.isHeader)
         .onAppear { arrived = true }
     }
 }

@@ -119,7 +119,7 @@ struct IndexTimezoneViewerPage: View {
     private func timezoneGroupCard(group: TimezoneGroup, currentTime: Date) -> some View {
         let isFavorite = group.favoriteKeys.isSubset(of: favoriteStore.favoriteKeys)
 
-        return IndexSurfaceRow(horizontalPadding: ToolMetrics.Spacing.panelInset, verticalPadding: ToolMetrics.Spacing.md) {
+        return IndexSurfaceRow(horizontalPadding: ToolMetrics.Spacing.panelInset, verticalPadding: ToolMetrics.Spacing.md, isInteractive: true) {
             HStack(spacing: ToolMetrics.Spacing.md) {
                 VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xs) {
                     HStack(spacing: ToolMetrics.Spacing.fine) {

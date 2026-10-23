@@ -39,4 +39,20 @@ struct ToolMotionTests {
         #expect(ToolMotion.Duration.pageSharedAxisExit < ToolMotion.Duration.pageSharedAxisEnter)
         #expect(ToolMotion.Duration.pageBloomExit < ToolMotion.Duration.pageBloomEnter)
     }
+
+    /// v6: page-level effects resolve to four semantics only. Legacy preset
+    /// names must alias one of them so no fifth timing family can reappear.
+    @Test func inPagePresetsCollapseToFourSemantics() {
+        #expect(ToolMotion.Preset.textSwap == ToolMotion.Preset.controlFeedback)
+        #expect(ToolMotion.Preset.iconSwap == ToolMotion.Preset.controlFeedback)
+        #expect(ToolMotion.Preset.orderedContent == ToolMotion.Preset.contentReveal)
+        #expect(ToolMotion.Preset.tabs == ToolMotion.Preset.contentReveal)
+        #expect(ToolMotion.Preset.accordion == ToolMotion.Preset.contentReveal)
+        #expect(ToolMotion.Preset.panelReveal == ToolMotion.Preset.contentReveal)
+        #expect(ToolMotion.Preset.modal == ToolMotion.Preset.settle)
+        #expect(ToolMotion.animation(ToolMotion.Preset.contentReveal, reduceMotion: true) == nil)
+        #expect(ToolMotion.animation(ToolMotion.Preset.controlFeedback, reduceMotion: true) == nil)
+        #expect(ToolMotion.animation(ToolMotion.Preset.diagnostic, reduceMotion: true) == nil)
+        #expect(ToolMotion.animation(ToolMotion.Preset.settle, reduceMotion: true) == nil)
+    }
 }

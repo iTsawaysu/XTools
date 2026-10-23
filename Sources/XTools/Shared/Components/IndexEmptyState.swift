@@ -83,6 +83,8 @@ struct IndexEmptyState: View {
         .frame(maxWidth: density == .panel ? 360 : .infinity)
         .frame(maxWidth: .infinity, maxHeight: density == .list ? nil : .infinity)
         .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(message.map { "\(title)。\($0)" } ?? title)
         .onAppear {
             arrivalStage = true
         }

@@ -571,6 +571,9 @@
     "保存优化结果": {
       "extractionState": "manual"
     },
+    "安全输入": {
+      "extractionState": "manual"
+    },
     "保存前可修改文件名": {
       "extractionState": "manual"
     },

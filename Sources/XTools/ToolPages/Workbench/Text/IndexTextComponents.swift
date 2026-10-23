@@ -246,6 +246,16 @@ struct IndexUndoableTextField: NSViewRepresentable {
             alignment: nsAlignment,
             contentInsets: contentInsets
         )
+        // Audit A-02: single-line fields had no AX label when callers did not
+        // attach one; the placeholder is the field's user-facing name.
+        if !placeholder.isEmpty, (textField.accessibilityLabel() ?? "").isEmpty {
+            textField.setAccessibilityLabel(placeholder)
+        }
+        if secure {
+            // Secure fields are already subclasses of NSSecureTextField; keep
+            // the native secure role and only ensure a stable label exists.
+            textField.setAccessibilityLabel(placeholder.isEmpty ? "安全输入" : placeholder)
+        }
     }
 
     private var nsAlignment: NSTextAlignment {

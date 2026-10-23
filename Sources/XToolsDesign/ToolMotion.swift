@@ -187,15 +187,27 @@ public enum ToolMotion {
     }
 
     public enum Preset {
+        // Four in-page semantics (rules §4.2). Every page-level effect must
+        // resolve to one of these; the legacy names below are aliases so old
+        // call sites keep their current feel without introducing new timing.
+        /// ~120ms easeInOut: hover, press, toggle.
         public static let controlFeedback = Curve.inOut(duration: Duration.micro)
-        public static let textSwap = Curve.inOut(duration: Duration.quick)
-        public static let iconSwap = Curve.inOut(duration: Duration.quick)
-        public static let orderedContent = Curve.smoothOut(duration: Duration.fast)
-        public static let tabs = Curve.smoothOut(duration: Duration.fast)
-        public static let accordion = Curve.smoothOut(duration: Duration.medium)
-        public static let shellResize = Curve.smoothOut(duration: Duration.fast)
-        public static let modal = Animation.spring(response: 0.25, dampingFraction: 0.86, blendDuration: 0)
-        public static let panelReveal = Curve.smoothOut(duration: Duration.medium)
+        /// ~240ms smoothOut: result appearance, empty-state swap, mode content.
+        public static let contentReveal = Curve.smoothOut(duration: Duration.arrival)
+        /// ~150ms easeInOut: diagnostic slot expand/collapse.
+        public static let diagnostic = Curve.inOut(duration: Duration.quick)
+        /// Spring settle: menus, panels, page-header finish.
+        public static let settle = Curve.gentleSpring()
+
+        // Legacy aliases — resolve to the four semantics above.
+        public static let textSwap = controlFeedback
+        public static let iconSwap = controlFeedback
+        public static let orderedContent = contentReveal
+        public static let tabs = contentReveal
+        public static let accordion = contentReveal
+        public static let shellResize = contentReveal
+        public static let panelReveal = contentReveal
+        public static let modal = settle
         /// v3: tool-switch page arrival (host-owned whitelist; see
         /// `MotionSourceContractTests`). 01 景深沉降: 300ms smoothOut — the
         /// incoming page sinks from y+10/99.5% while the outgoing layer runs
@@ -224,15 +236,12 @@ public enum ToolMotion {
         public static let headerFollow = Curve.smoothOut(duration: Duration.arrival)
         public static let resultPresenceAppearance = Curve.smoothOut(duration: ResultPresence.appearanceDuration)
         public static let resultPresenceExit = Curve.productiveExit(duration: ResultPresence.exitDuration)
-        public static let diagnostic = Curve.inOut(duration: Duration.quick)
         /// Wave 2 theme crossfade (prototype MOTION d.themeXfade): the whole
         /// SwiftUI colorScheme dissolves through one 320ms envelope; AppKit
         /// chrome (WindowAppearanceOwner) still flips natively.
         public static let themeCrossfade = Curve.inOut(duration: Duration.themeCrossfade)
         /// Output breath: one-shot accent pulse when an explicit run lands
         /// (output pane chrome). Terminal envelope lives in `OutputBreath`.
-        /// Container settle: no-overshoot spring for selection pills and reveals.
-        public static let settle = Curve.gentleSpring()
         /// Delight: slight-overshoot spring for success/result-arrival moments only.
         public static let delight = Curve.playfulSpring()
         /// Indeterminate hairline progress: continuous back-and-forth sweep for
