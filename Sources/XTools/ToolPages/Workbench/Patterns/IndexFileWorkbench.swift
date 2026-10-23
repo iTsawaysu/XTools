@@ -21,6 +21,12 @@ struct IndexFileWorkbench<Leading: View, Trailing: View>: View {
     /// workflow the reverse error) instead of per-pane diagnostic slots.
     let diagnostic: String?
 
+    /// Optional paper head. Workflows whose parameters do not fit a pane head
+    /// (text encryption: mode + algorithm + secret + run) put them here so the
+    /// paper still starts at the same rail as every other tool instead of
+    /// growing a separate band above it (audit S-09).
+    private let head: AnyView?
+
     private let leading: Leading
     private let trailing: Trailing
 
@@ -42,12 +48,28 @@ struct IndexFileWorkbench<Leading: View, Trailing: View>: View {
     init(
         diagnostic: String?,
         splitMode: SplitMode = .file,
+        @ViewBuilder head: () -> some View,
         @ViewBuilder leading: () -> Leading,
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.diagnostic = diagnostic
         self.splitMode = splitMode
         self.layoutPolicy = IndexFileWorkbenchLayoutPolicy()
+        self.head = AnyView(head())
+        self.leading = leading()
+        self.trailing = trailing()
+    }
+
+    init(
+        diagnostic: String?,
+        splitMode: SplitMode = .file,
+        @ViewBuilder leading: () -> Leading,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.diagnostic = diagnostic
+        self.splitMode = splitMode
+        self.layoutPolicy = IndexFileWorkbenchLayoutPolicy()
+        self.head = nil
         self.leading = leading()
         self.trailing = trailing()
     }
@@ -62,6 +84,16 @@ struct IndexFileWorkbench<Leading: View, Trailing: View>: View {
                         tone: diagnostic.tone
                     )
                 }
+            }
+
+            if let head {
+                head
+                    .padding(.horizontal, ToolMetrics.Spacing.panelInset)
+                    .padding(.vertical, ToolMetrics.Spacing.xs)
+                    .frame(maxWidth: .infinity, minHeight: ToolMetrics.Workbench.paperHeadHeight, alignment: .leading)
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(ToolTheme.border).frame(height: ToolMetrics.Spacing.hairline)
+                    }
             }
 
             content

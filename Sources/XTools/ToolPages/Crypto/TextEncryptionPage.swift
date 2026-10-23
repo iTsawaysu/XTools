@@ -185,12 +185,6 @@ private struct IndexTextEncryptionWorkspaceContent: View {
 
     var body: some View {
         IndexPage("文本加密", subtitle: "默认使用 AES-GCM 认证加密，并保留 OpenSSL 旧格式兼容。", workspaceSemantic: .securityTransformWorkspace) {
-            IndexWorkbenchControlBar {
-                wideControls
-            } compactControls: {
-                compactControls
-            }
-
             IndexTextConversionWorkbench(
                 inputTitle: mode == "enc" ? "明文" : "密文",
                 outputTitle: mode == "enc" ? "密文" : "明文",
@@ -200,7 +194,8 @@ private struct IndexTextEncryptionWorkspaceContent: View {
                 inputError: error,
                 onClear: clearSensitiveState,
                 clearDisabled: input.isEmpty && output.isEmpty && error == nil && password.isEmpty,
-                workspaceSemantic: .securityTransformWorkspace
+                workspaceSemantic: .securityTransformWorkspace,
+                headControls: AnyView(encryptionHeadControls)
             )
         }
         .onChange(of: entryGeneration) { generation in
@@ -213,7 +208,9 @@ private struct IndexTextEncryptionWorkspaceContent: View {
         }
     }
 
-    private var wideControls: some View {
+    /// Paper-head row: mode + algorithm + secret + run, one line, exactly the
+    /// 44pt rail every other tool uses.
+    private var encryptionHeadControls: some View {
         HStack(spacing: ToolMetrics.Spacing.tight) {
             modeControl
             algorithmControlGroup
@@ -267,7 +264,15 @@ private struct IndexTextEncryptionWorkspaceContent: View {
         Button { run() } label: { Label(primaryActionTitle, systemImage: "play.fill") }
             .buttonStyle(IndexButtonStyle(primary: true))
             .frame(minWidth: ToolMetrics.Control.actionMinWidth)
+            .disabled(primaryActionDisabled)
             .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
+    }
+
+    /// The operation needs both a payload and a password; without either the
+    /// button must read as unavailable instead of accepting a silent no-op
+    /// (audit C-03 / I-01).
+    private var primaryActionDisabled: Bool {
+        workspace.input.isEmpty || workspace.password.isEmpty
     }
 
     private var widePasswordInput: some View {

@@ -79,9 +79,12 @@ struct IndexImageWorkbench<Parameters: View, Content: View>: View {
 
             if hasParameters {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    parameters
-                        .padding(.leading, ToolMetrics.Spacing.sm)
-                        .frame(height: ToolMetrics.Workbench.paperHeadHeight)
+                    // One row on purpose: a parameter tuple must not become a
+                    // vertical stack inside the 44pt head (audit H-02).
+                    HStack(spacing: ToolMetrics.Spacing.sm) {
+                        parameters
+                    }
+                    .padding(.leading, ToolMetrics.Spacing.sm)
                 }
                 .scrollBounceBehavior(.basedOnSize)
             }

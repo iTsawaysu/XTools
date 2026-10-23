@@ -207,17 +207,6 @@ private struct IndexStringObfuscatorWorkspaceContent: View {
 
     var body: some View {
         IndexPage("字符串遮蔽", subtitle: "保留首尾指定位数并遮蔽中部；遮蔽不是加密，仍可能泄露长度和结构。", workspaceSemantic: .securityTransformWorkspace) {
-            IndexWorkbenchControlBar {
-                HStack(spacing: ToolMetrics.Spacing.sm) {
-                    obfuscationControls
-                }
-                .fixedSize(horizontal: true, vertical: false)
-            } compactControls: {
-                IndexFlowLayout(spacing: ToolMetrics.Spacing.sm, lineSpacing: 8) {
-                    obfuscationControls
-                }
-            }
-
             IndexTextConversionWorkbench(
                 inputTitle: "输入",
                 outputTitle: "遮蔽后",
@@ -232,7 +221,13 @@ private struct IndexStringObfuscatorWorkspaceContent: View {
                 onClear: clear,
                 clearDisabled: workspace.input.isEmpty && workspace.output.isEmpty,
                 inputRenderingMode: .textKit2Viewport,
-                workspaceSemantic: .securityTransformWorkspace
+                workspaceSemantic: .securityTransformWorkspace,
+                headControls: AnyView(
+                    HStack(spacing: ToolMetrics.Spacing.sm) {
+                        obfuscationControls
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                )
             )
         }
     }

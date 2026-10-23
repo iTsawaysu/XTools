@@ -62,6 +62,7 @@ struct DashboardView: View {
                 Text("工作台")
                     .font(ToolTypography.Workbench.title)
                     .foregroundStyle(ToolTheme.Workbench.textPrimary)
+                    .accessibilityAddTraits(.isHeader)
                 Text("\(greetingText) · 打开常用工具，或按 ⌘K 搜索全部工具。")
                     .font(ToolTypography.Workbench.subtitle)
                     .foregroundStyle(ToolTheme.Workbench.textSecondary)

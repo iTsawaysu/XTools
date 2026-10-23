@@ -102,6 +102,10 @@ struct IndexTextConversionWorkbench: View {
     var showsOutputSave = false
     var workspaceSemantic: IndexWorkspaceSemantic = .copyTransformWorkspace
     var saveClient: any IndexTextConversionTextSaving = AppKitIndexTextConversionTextSaver()
+    /// Optional paper-head controls. Pages whose workflow needs mode/secret
+    /// parameters (text encryption) mount them here so the paper keeps the
+    /// single 44pt rail used everywhere else.
+    var headControls: AnyView? = nil
 
     private var isClearDisabled: Bool {
         clearDisabled ?? (input.isEmpty && output.isEmpty && inputError == nil && inputWarning == nil)
@@ -151,25 +155,45 @@ struct IndexTextConversionWorkbench: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    @ViewBuilder
     private var workbenchBody: some View {
-        IndexFileWorkbench(diagnostic: inputDiagnosticText, splitMode: .pair(threshold: IndexPairWorkbenchLayoutPolicy.defaultThreshold)) {
-            IndexWorkbenchPane(title: inputTitle, terminalTag: "STDIN", accessory: { inputHeaderAccessory }) {
-                IndexWorkspaceTextArea(
-                    placeholder: placeholder,
-                    text: $input,
-                    fillsHeight: true,
-                    autoFocus: autoFocus,
-                    caretPlacementRequestToken: inputCaretPlacementRequestToken,
-                    inputRenderingMode: inputRenderingMode,
-                    workspaceSemantic: workspaceSemantic
-                )
+        if let headControls {
+            IndexFileWorkbench(
+                diagnostic: inputDiagnosticText,
+                splitMode: .pair(threshold: IndexPairWorkbenchLayoutPolicy.defaultThreshold),
+                head: { headControls },
+                leading: { inputPane },
+                trailing: { outputPane }
+            )
+        } else {
+            IndexFileWorkbench(
+                diagnostic: inputDiagnosticText,
+                splitMode: .pair(threshold: IndexPairWorkbenchLayoutPolicy.defaultThreshold),
+                leading: { inputPane },
+                trailing: { outputPane }
+            )
+        }
+    }
+
+    private var inputPane: some View {
+        IndexWorkbenchPane(title: inputTitle, terminalTag: "STDIN", accessory: { inputHeaderAccessory }) {
+            IndexWorkspaceTextArea(
+                placeholder: placeholder,
+                text: $input,
+                fillsHeight: true,
+                autoFocus: autoFocus,
+                caretPlacementRequestToken: inputCaretPlacementRequestToken,
+                inputRenderingMode: inputRenderingMode,
+                workspaceSemantic: workspaceSemantic
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private var outputPane: some View {
+        IndexWorkbenchPane(title: outputTitle, terminalTag: "STDOUT", accessory: { outputHeaderActions }) {
+            outputSurface
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            }
-        } trailing: {
-            IndexWorkbenchPane(title: outputTitle, terminalTag: "STDOUT", accessory: { outputHeaderActions }) {
-                outputSurface
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            }
         }
     }
 

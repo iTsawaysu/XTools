@@ -99,7 +99,7 @@ struct IndexGeneratorWorkbench<Parameters: View>: View {
         HStack(spacing: ToolMetrics.Spacing.sm) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: ToolMetrics.Spacing.md) {
-                    parameters
+                    HStack(spacing: ToolMetrics.Spacing.sm) { parameters }
                     if let metaText {
                         Text(metaText)
                             .font(ToolTypography.caption)
@@ -110,7 +110,6 @@ struct IndexGeneratorWorkbench<Parameters: View>: View {
                     }
                 }
                 .padding(.leading, ToolMetrics.Spacing.panelInset)
-                .frame(height: ToolMetrics.Workbench.paperHeadHeight)
             }
             .scrollBounceBehavior(.basedOnSize)
 
