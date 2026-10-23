@@ -140,7 +140,10 @@ private struct ToolPageParkingModifier: ViewModifier {
             .opacity(pose == .visible ? 1 : 0)
             .offset(y: offset)
             .scaleEffect(scale, anchor: anchor)
-            .animation(reduceMotion ? nil : animation, value: pose)
+            .animation(
+                animation.flatMap { ToolMotion.animation($0, reduceMotion: reduceMotion) },
+                value: pose
+            )
     }
 
     private var usesSharedAxis: Bool {

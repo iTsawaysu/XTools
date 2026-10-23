@@ -369,8 +369,7 @@ struct Base64FileWorkflowClient: Sendable {
 
     struct PasteboardWriter: Sendable {
         var write: @Sendable (Data) -> Bool = { data in
-            NSPasteboard.general.clearContents()
-            return NSPasteboard.general.setData(data, forType: .string)
+            IndexPasteboard.copyData(data)
         }
         func writeUTF8(_ data: Data) -> Bool {
             write(data)

@@ -159,13 +159,11 @@ private struct IndexDateTimeWorkspaceContent: View {
     }
 
     private var clearAllButton: some View {
-        Button(action: clearAll) {
-            Label("全部清空", systemImage: IndexActionSymbol.clear)
-                .font(ToolTypography.buttonSmall)
-        }
-        .buttonStyle(IndexSmallButtonStyle())
-        .disabled(workspace.timestamp.isEmpty && workspace.humanTimeInput.isEmpty && workspace.rows.isEmpty && workspace.timestampError == nil && workspace.humanError == nil)
-        .accessibilityLabel("全部清空")
+        IndexClearButton(
+            isDisabled: workspace.timestamp.isEmpty && workspace.humanTimeInput.isEmpty && workspace.rows.isEmpty && workspace.timestampError == nil && workspace.humanError == nil,
+            title: "全部清空",
+            action: clearAll
+        )
     }
 
     private func applyFromHumanTimeInput(_ date: Date) {

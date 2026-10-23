@@ -222,8 +222,8 @@ private struct IndexSegmentedCursorLayer<Value: Hashable>: View {
         .allowsHitTesting(false)
         .accessibilityHidden(true)
         .animation(
-            !reduceMotion && settledFrame != nil && selectionChanged
-                ? ToolMotion.SegmentedCursor.slide
+            selectionChanged && settledFrame != nil
+                ? ToolMotion.animation(ToolMotion.SegmentedCursor.slide, reduceMotion: reduceMotion)
                 : nil,
             value: activeFrame
         )

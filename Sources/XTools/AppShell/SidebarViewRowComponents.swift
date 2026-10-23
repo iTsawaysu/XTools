@@ -194,20 +194,17 @@ struct SidebarToolRow: View {
 
             // Favorite toggle: keep the favorite action as a sibling of the tool button. Nested
             // SwiftUI Buttons have ambiguous event and accessibility behavior.
-            Button(action: onToggleFavorite) {
-                Image(systemName: isFavorite ? "star.fill" : "star")
-                    .font(.system(size: ToolMetrics.IconSize.micro))
-                    .foregroundStyle(isFavorite ? ToolTheme.accent : ToolTheme.textSecondary)
-                    .frame(width: 14, height: 14)
-                    .toolMotionIconSwap(id: isFavorite)
+            // The shared `IndexFavoriteButton` owns star semantics + accent
+            // active tint; the sidebar keeps its reveal-on-hover behavior by
+            // hanging opacity/hit-testing outside the component.
+            IndexFavoriteButton(
+                isFavorite: isFavorite,
+                density: .compact,
+                help: isFavorite ? "取消收藏\(title)" : "收藏\(title)"
+            ) {
+                onToggleFavorite()
             }
-            .frame(width: 24, height: 24)
-            .contentShape(Rectangle())
-            .buttonStyle(.plain)
-            .toolInteractionFeedback()
             .accessibilityIdentifier("sidebar.favorite.\(toolID.rawValue)")
-            .help(isFavorite ? "取消收藏" : "加入收藏")
-            .accessibilityLabel(isFavorite ? "取消收藏\(title)" : "收藏\(title)")
             .opacity(isFavorite || hoverState.isHovered ? 1 : 0)
             .allowsHitTesting(isFavorite || hoverState.isHovered)
             .accessibilityHidden(!(isFavorite || hoverState.isHovered))

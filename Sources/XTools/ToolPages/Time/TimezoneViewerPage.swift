@@ -138,11 +138,9 @@ struct IndexTimezoneViewerPage: View {
                         .foregroundStyle(ToolTheme.textSecondary)
                 }
                 Spacer()
-                IndexIconButton(
-                    systemImage: isFavorite ? "star.fill" : "star",
-                    help: "\(isFavorite ? "取消收藏" : "收藏") \(group.offsetString)",
-                    isActive: isFavorite,
-                    activeTint: ToolTheme.warning
+                IndexFavoriteButton(
+                    isFavorite: isFavorite,
+                    help: "\(isFavorite ? "取消收藏" : "收藏") \(group.offsetString)"
                 ) {
                     toggleFavorite(keys: group.favoriteKeys)
                 }

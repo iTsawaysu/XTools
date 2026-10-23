@@ -81,7 +81,7 @@ struct IndexKVSurface<Content: View>: View {
 
     var body: some View {
         content
-            .background(ToolTheme.strongBorder)
+            .background(ToolTheme.panelBackground)
             .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
@@ -99,7 +99,7 @@ struct IndexKV: View {
 
     var body: some View {
         IndexKVSurface {
-            VStack(spacing: 1) {
+            VStack(spacing: 0) {
                 if rows.isEmpty {
                     Text(emptyText)
                         .font(ToolTypography.bodyPlain)
@@ -107,7 +107,7 @@ struct IndexKV: View {
                         .frame(maxWidth: .infinity, minHeight: 70, alignment: .center)
                         .background(ToolTheme.panelBackground)
                 } else {
-                    ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                    ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                         IndexKVRow(
                             key: row.0,
                             value: row.1,
@@ -116,6 +116,14 @@ struct IndexKV: View {
                             valueLineBreakMode: valueLineBreakMode,
                             valueMotion: valueMotion
                         )
+                        if index < rows.count - 1 {
+                            // 0.5pt hairline 分隔（与侧栏/工作台行一致），
+                            // 取代原先 1px strongBorder 底缝——深色宽缝在
+                            // 暖纸上读成"每行独立卡片"，观感突兀。
+                            Rectangle()
+                                .fill(ToolTheme.border)
+                                .frame(height: ToolMetrics.Spacing.hairline)
+                        }
                     }
                 }
             }
@@ -168,8 +176,8 @@ struct IndexScrollableKV: View {
         animatesRowInsertion: Bool
     ) -> some View {
         let surface = IndexKVSurface {
-            VStack(spacing: 1) {
-                ForEach(snapshot) { row in
+            VStack(spacing: 0) {
+                ForEach(Array(snapshot.enumerated()), id: \.element.id) { index, row in
                     IndexKVRow(
                         key: row.key,
                         value: row.value,
@@ -182,6 +190,11 @@ struct IndexScrollableKV: View {
                         animatesRowInsertion ? ToolMotion.Transition.topRowInsertion : .identity,
                         reduceMotion: reduceMotion
                     )
+                    if index < snapshot.count - 1 {
+                        Rectangle()
+                            .fill(ToolTheme.border)
+                            .frame(height: ToolMetrics.Spacing.hairline)
+                    }
                 }
             }
         }
@@ -337,7 +350,12 @@ struct IndexShortResultCardList: View {
                 IndexResultCardStack(items: snapshot, revealsItems: false)
                     .padding(8)
             } empty: {
-                IndexResultCardEmptyState(emptyText: emptyText)
+                IndexEmptyState(
+                    title: emptyText,
+                    systemImage: nil,
+                    message: nil,
+                    density: .output
+                )
             }
         }
     }
@@ -376,26 +394,6 @@ private struct IndexResultCardStack: View {
                 .toolAnimation(ToolMotion.Preset.panelReveal, value: revealSignature)
         } else {
             stack
-        }
-    }
-}
-
-private struct IndexResultCardEmptyState: View {
-    let emptyText: String
-
-    var body: some View {
-        VStack(spacing: 6) {
-            Text(emptyText)
-                .font(ToolTypography.bodyPlain)
-                .foregroundStyle(ToolTheme.textTertiary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, minHeight: 70, alignment: .center)
-        .padding(.horizontal, 12)
-        .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                .strokeBorder(ToolTheme.border, lineWidth: 0.5)
         }
     }
 }

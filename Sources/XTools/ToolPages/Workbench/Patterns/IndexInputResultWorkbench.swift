@@ -73,6 +73,7 @@ struct IndexInputResultWorkbench<
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous)
                 .strokeBorder(ToolTheme.border, lineWidth: 0.5)
         }
+        .toolErrorTint(active: workspaceDiagnostic?.tone == .error, cornerRadius: ToolMetrics.CornerRadius.panel)
         .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.panel, style: .continuous))
         .toolAnimation(ToolMotion.Preset.diagnostic, value: workspaceDiagnostic != nil)
         .onPreferenceChange(IndexWorkspaceDiagnosticPreferenceKey.self) { diagnostic in

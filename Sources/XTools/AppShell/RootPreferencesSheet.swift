@@ -39,12 +39,14 @@ struct RootPreferencesSheet: View {
                     Text("外观")
                         .font(ToolTypography.label)
                         .foregroundStyle(ToolTheme.textSecondary)
-                    Picker("主题", selection: $themeName) {
-                        Text("跟随系统").tag(AppThemePreference.system.rawValue)
-                        Text("浅色").tag(AppThemePreference.light.rawValue)
-                        Text("深色").tag(AppThemePreference.dark.rawValue)
-                    }
-                    .pickerStyle(.segmented)
+                    IndexSegmentedControl(
+                        items: [
+                            (AppThemePreference.system.rawValue, "跟随系统"),
+                            (AppThemePreference.light.rawValue, "浅色"),
+                            (AppThemePreference.dark.rawValue, "深色")
+                        ],
+                        selection: $themeName
+                    )
                     .accessibilityLabel("主题")
                 }
 

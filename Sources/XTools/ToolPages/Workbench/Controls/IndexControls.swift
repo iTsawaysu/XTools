@@ -11,6 +11,8 @@ enum IndexActionSymbol {
     static let refresh = "arrow.clockwise"
     static let save = "square.and.arrow.down"
     static let copy = "doc.on.doc"
+    static let favorite = "star"
+    static let favoriteFill = "star.fill"
 }
 
 // MARK: - IndexButtonStyle
@@ -232,6 +234,19 @@ enum IndexPasteboard {
     static func copyString(_ string: String) -> Bool {
         NSPasteboard.general.clearContents()
         return NSPasteboard.general.setString(string, forType: .string)
+    }
+
+    /// Data copy path for workflows that write raw `Data` (e.g. Base64 file
+    /// output) rather than a `String`. Single pasteboard write entry so no
+    /// page hand-rolls `NSPasteboard.general` directly.
+    ///
+    /// Deliberately non-isolated: `Base64FileWorkflowClient.PasteboardWriter`
+    /// calls this from a `@Sendable (Data) -> Bool` closure, so it must not
+    /// carry MainActor isolation. `NSPasteboard.general` writes are thread-safe.
+    @discardableResult
+    static func copyData(_ data: Data) -> Bool {
+        NSPasteboard.general.clearContents()
+        return NSPasteboard.general.setData(data, forType: .string)
     }
 }
 

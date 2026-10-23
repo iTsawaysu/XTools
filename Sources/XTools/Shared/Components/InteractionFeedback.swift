@@ -29,6 +29,24 @@ extension View {
         buttonStyle(ToolInteractionFeedbackStyle())
     }
 
+    /// 行级 hover 背景（丝滑范式）：固定渲染一个圆角色片 + opacity 插值。
+    ///
+    /// 与 `isHovering ? color : Color.clear` 的三元颜色硬切不同，`opacity`
+    /// 是 SwiftUI 最稳定的可动画通道，不会出现透明↔不透明的中间态闪烁。
+    /// 调用方必须用 `withToolAnimation(...) { isHovering = $0 }` 把状态变更
+    /// 包进显式动画事务，让 opacity 在同一事务内插值。
+    func indexRowHoverBackground(
+        _ isHovering: Bool,
+        color: Color = ToolTheme.hoverFill,
+        cornerRadius: CGFloat = ToolMetrics.CornerRadius.control
+    ) -> some View {
+        background {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(color)
+                .opacity(isHovering ? 1 : 0)
+        }
+    }
+
     /// Pane-level hover chrome: deepens the pane border to `strongBorder`
     /// while the pointer is inside, so the editing surface answers the cursor
     /// before any control does. Border-color transition only — no movement,

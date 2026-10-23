@@ -53,7 +53,7 @@ struct IndexEmptyState: View {
                     .toolMotionIconSwap(id: systemImage)
                     .opacity(arrivalStage ? 1 : 0)
                     .offset(y: arrivalStage ? 0 : ToolMotion.EmptyArrival.iconRiseDistance)
-                    .animation(reduceMotion ? nil : ToolMotion.EmptyArrival.iconRise, value: arrivalStage)
+                    .animation(ToolMotion.animation(ToolMotion.EmptyArrival.iconRise, reduceMotion: reduceMotion), value: arrivalStage)
             }
 
             VStack(alignment: .center, spacing: 4) {
@@ -63,7 +63,7 @@ struct IndexEmptyState: View {
                     .toolMotionTextSwap(id: title)
                     .opacity(arrivalStage ? 1 : 0)
                     .offset(y: arrivalStage ? 0 : ToolMotion.EmptyArrival.textRiseDistance)
-                    .animation(reduceMotion ? nil : ToolMotion.EmptyArrival.textFollow, value: arrivalStage)
+                    .animation(ToolMotion.animation(ToolMotion.EmptyArrival.textFollow, reduceMotion: reduceMotion), value: arrivalStage)
 
                 if let message {
                     Text(message)
@@ -74,7 +74,7 @@ struct IndexEmptyState: View {
                         .toolMotionTextSwap(id: message)
                         .opacity(arrivalStage ? 1 : 0)
                         .offset(y: arrivalStage ? 0 : ToolMotion.EmptyArrival.textRiseDistance)
-                        .animation(reduceMotion ? nil : ToolMotion.EmptyArrival.messageFollow, value: arrivalStage)
+                        .animation(ToolMotion.animation(ToolMotion.EmptyArrival.messageFollow, reduceMotion: reduceMotion), value: arrivalStage)
                 }
             }
         }

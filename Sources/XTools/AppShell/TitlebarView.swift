@@ -34,8 +34,12 @@ struct WindowToolbarContent: ToolbarContent {
 
         ToolbarItemGroup(placement: .primaryAction) {
             if selectedTool != nil {
+                // Favorite toggle in native toolbar chrome. The star glyph and
+                // active accent tint mirror `IndexFavoriteButton`; only the
+                // chrome button style and 28pt toolbar size stay local because
+                // this is AppKit toolbar chrome, not an in-page control.
                 Button(action: onToggleFavorite) {
-                    Image(systemName: isFavorite ? "star.fill" : "star")
+                    Image(systemName: isFavorite ? IndexActionSymbol.favoriteFill : IndexActionSymbol.favorite)
                         .font(.system(size: ToolMetrics.IconSize.medium, weight: .medium))
                         .frame(
                             width: WindowToolbarMetrics.iconButtonSize,
