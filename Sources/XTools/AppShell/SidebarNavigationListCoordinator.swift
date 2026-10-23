@@ -720,9 +720,11 @@ final class SidebarNavigationListCoordinator {
             selectionIndicator.prepareForStructuralMotion()
             if let frame = selectionIndicatorFrame(configuration: configuration, plan: plan) {
                 if selectionIndicator.alphaValue < 0.01 {
-                    selectionIndicator.frame = frame
-                    selectionIndicator.layoutSubtreeIfNeeded()
-                    selectionIndicator.alphaValue = 1
+                    // 首次显现：先落位再 fade in，但两者都经 animator 继承当前
+                    // 动画组的时长/曲线，避免在 accordion 动画中途"瞬移"出现
+                    // （P1-1：原实现直接赋值 frame+alpha，造成选中条突兀弹出）。
+                    selectionIndicator.animator().frame = frame
+                    selectionIndicator.animator().alphaValue = 1
                 } else {
                     selectionIndicator.animator().frame = frame
                 }

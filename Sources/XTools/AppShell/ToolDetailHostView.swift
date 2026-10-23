@@ -9,6 +9,9 @@ import XToolsDesign
 @MainActor
 protocol DetailActionRouting: AnyObject {
     func selectTool(_ toolID: ToolID)
+    func openCommandPalette()
+    @discardableResult
+    func toggleFavorite(_ toolID: ToolID) -> Bool?
 }
 
 struct ToolDetailHostView: View {
@@ -16,6 +19,7 @@ struct ToolDetailHostView: View {
     let selectedToolID: ToolID?
     let transitionIntent: ToolPageTransitionIntent
     let dashboardStore: DashboardStore?
+    let favorites: FavoritesStore
     let routing: any DetailActionRouting
 
     init(
@@ -23,12 +27,14 @@ struct ToolDetailHostView: View {
         selectedToolID: ToolID?,
         transitionIntent: ToolPageTransitionIntent = .depth,
         dashboardStore: DashboardStore? = nil,
+        favorites: FavoritesStore,
         routing: any DetailActionRouting
     ) {
         self.registry = registry
         self.selectedToolID = selectedToolID
         self.transitionIntent = transitionIntent
         self.dashboardStore = dashboardStore
+        self.favorites = favorites
         self.routing = routing
     }
 
@@ -41,6 +47,7 @@ struct ToolDetailHostView: View {
                 key: key,
                 registry: registry,
                 dashboardStore: dashboardStore,
+                favorites: favorites,
                 routing: routing
             )
             .equatable()
@@ -69,14 +76,16 @@ private struct ToolPageHostedItem: View, Equatable {
     let key: ToolPageKey
     let registry: ToolRegistry
     let dashboardStore: DashboardStore?
+    let favorites: FavoritesStore
     let routing: any DetailActionRouting
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         // registry 不参与比较：ToolRegistry 是不可变值（RootView 持有
-        // ToolRegistry.default），页面内容只随 key/dashboardStore/routing 变化。
+        // ToolRegistry.default），页面内容只随 key/dashboardStore/favorites/routing 变化。
         // 若未来 registry 变为多实例或可变，必须把它的身份纳入比较。
         lhs.key == rhs.key &&
         lhs.dashboardStore === rhs.dashboardStore &&
+        lhs.favorites === rhs.favorites &&
         MainActor.assumeIsolated { lhs.routing === rhs.routing }
     }
 
@@ -95,8 +104,9 @@ private struct ToolPageHostedItem: View, Equatable {
             if let dashboardStore {
                 DashboardView(
                     store: dashboardStore,
+                    favorites: favorites,
                     registry: registry,
-                    onSelectTool: { routing.selectTool($0) }
+                    routing: routing
                 )
             }
         case .emptySelection:

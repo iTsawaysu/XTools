@@ -1,60 +1,179 @@
 import SwiftUI
 import XToolsDesign
 
+/// 工作台首页（Cmd+0）。Raycast Home 式卡片流：继续工作 / 收藏 / 最近打开 /
+/// 分类 / 全部工具。所有区块复用共享组件与 `ToolMotion` 动效。
+///
+/// 动效原则：工作台是"一眼可扫、立即点"的入口页，**不做逐卡入场动画**——
+/// 每次从工具页切回都会重新挂载，逐卡淡入会读成"闪烁"。hover 只做表面色
+/// 平滑过渡，不做位移/缩放。
 @MainActor
 struct DashboardView: View {
-    private struct Shortcut: Identifiable {
-        let id: ToolID
-        let detail: String
-    }
+    /// `store` 用 let 而非 @ObservedObject：最近打开/frecency 数据只在进入
+    /// 工作台时刷新一次即可，不需要订阅每次 recordLaunch（切换工具）的变化。
+    /// 否则停靠中的工作台会在每次切工具时跟着重估，拖慢切页热路径。
+    /// `favorites` 必须 @ObservedObject：工作台内点击收藏星要实时增删。
+    let store: DashboardStore
+    @ObservedObject var favorites: FavoritesStore
+    let registry: ToolRegistry
+    let routing: any DetailActionRouting
 
-    private struct RecentItem: Identifiable {
-        let recent: DashboardRecentTool
-        let tool: RegisteredTool
+    /// 进入工作台时自增，强制 body 重估一次读最新 store 数据（最近打开/
+    /// frecency）。store 用 let 不订阅，靠这个 token 在 onAppear 刷新。
+    @State private var refreshToken = 0
 
-        var id: ToolID { tool.id }
-    }
-
-    private static let shortcuts: [Shortcut] = [
-        Shortcut(id: "formatter", detail: "JSON · XML · YAML · SQL"),
-        Shortcut(id: "text-encoding", detail: "Base64 · URL · ASCII · Unicode"),
-        Shortcut(id: "regex-tester", detail: "验证文本匹配"),
-        Shortcut(id: "date-time-converter", detail: "转换日期与时间"),
-        Shortcut(id: "color-picker", detail: "查看常用颜色格式")
-    ]
-
-    @ObservedObject private var store: DashboardStore
-    private let registry: ToolRegistry
-    private let onSelectTool: (ToolID) -> Void
-
-    init(
-        store: DashboardStore,
-        registry: ToolRegistry,
-        onSelectTool: @escaping (ToolID) -> Void = { _ in }
-    ) {
-        self.store = store
-        self.registry = registry
-        self.onSelectTool = onSelectTool
-    }
+    /// 最近打开展示上限（不含"继续工作"那张卡）。
+    private let recentLimit = 5
+    /// 快捷工具（frecency 动态）展示上限。
+    private let shortcutLimit = 5
 
     var body: some View {
+        // refreshToken 参与 body 依赖：onAppear 自增时重估读最新 store。
+        let _ = refreshToken
+        // 一次计算全部派生数据，body 内多处引用不再各自重算。
+        // knownToolIDs 也只算一次。
+        let snapshot = computeSnapshot()
+
         ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.lg) {
                 pageHeader
-                if let recent = recentTools.first {
-                    continueSection(recent).padding(.top, ToolMetrics.Workbench.sectionGap)
+
+                if let resume = snapshot.continueTool {
+                    resumeCard(resume)
                 }
-                shortcutSection.padding(.top, ToolMetrics.Workbench.sectionGap)
-                recentSection.padding(.top, ToolMetrics.Workbench.sectionGap)
+
+                // 收藏 / 快捷 / 最近：一张卡内的三个 section，瓷砖两列布局，
+                // 同屏可见条目数是单列行的两倍以上。
+                if !snapshot.favoriteTools.isEmpty || !snapshot.shortcutTools.isEmpty || !snapshot.recentTools.isEmpty {
+                    DashboardCard(title: "工具", detail: "收藏 · 常用 · 最近") {
+                        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+                            if !snapshot.favoriteTools.isEmpty {
+                                tileSection(title: "收藏", tools: snapshot.favoriteTools, detail: { _ in nil })
+                            }
+                            if !snapshot.shortcutTools.isEmpty {
+                                tileSection(title: "常用", tools: snapshot.shortcutTools, detail: { _ in nil })
+                            }
+                            if !snapshot.recentTools.isEmpty {
+                                tileSection(title: "最近", tools: snapshot.recentTools.map(\.tool), detail: { id in
+                                    snapshot.recentTools.first { $0.tool.id == id }.map { "上次使用 \($0.lastOpenedAt.relativeText())" }
+                                })
+                            }
+                        }
+                    }
+                }
+
+                DashboardCard(title: "分类", detail: "\(registry.categoryGroups().count) 个分类") {
+                    categoryGrid
+                }
+
+                DashboardCard(title: nil, detail: nil) {
+                    allToolsRow
+                }
             }
             .frame(maxWidth: ToolMetrics.Workbench.mainMaxWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .top)
             .padding(.horizontal, ToolMetrics.Workbench.horizontalInset)
-            .padding(.top, ToolMetrics.Workbench.topInset)
+            .padding(.top, ToolMetrics.Spacing.xl)
             .padding(.bottom, 30)
         }
         .background(ToolTheme.Workbench.canvas)
+        .onAppear {
+            // 回访工作台时读一次最新 store（最近打开/frecency 随切换更新）。
+            refreshToken += 1
+        }
     }
+
+    /// 一个瓷砖 section：小节标题 + 两列瓷砖网格。
+    private func tileSection(
+        title: String,
+        tools: [RegisteredTool],
+        detail: @escaping (ToolID) -> String?
+    ) -> some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+            Text(title)
+                .font(ToolTypography.Workbench.caption)
+                .foregroundStyle(ToolTheme.Workbench.textFaint)
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: ToolMetrics.Spacing.sm), GridItem(.flexible(), spacing: ToolMetrics.Spacing.sm)],
+                alignment: .leading,
+                spacing: ToolMetrics.Spacing.sm
+            ) {
+                ForEach(tools) { tool in
+                    DashboardTile(
+                        tool: tool,
+                        detail: detail(tool.id),
+                        isFavorite: isFavorite(tool.id)
+                    ) {
+                        routing.selectTool(tool.id)
+                    } onToggleFavorite: {
+                        _ = routing.toggleFavorite(tool.id)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - 继续工作大卡片
+
+    private func resumeCard(_ item: RecentItem) -> some View {
+        Button {
+            routing.selectTool(item.tool.id)
+        } label: {
+            HStack(spacing: ToolMetrics.Spacing.md) {
+                Image(systemName: item.tool.systemImage)
+                    .font(.system(size: ToolMetrics.IconSize.display, weight: .medium))
+                    .foregroundStyle(ToolTheme.accent)
+                    .frame(width: 40, height: 40)
+                    .background(
+                        ToolTheme.selectionFill,
+                        in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("继续工作")
+                        .font(ToolTypography.Workbench.caption)
+                        .foregroundStyle(ToolTheme.Workbench.textFaint)
+                    Text(item.tool.title)
+                        .font(ToolTypography.Workbench.title)
+                        .foregroundStyle(ToolTheme.Workbench.textPrimary)
+                        .lineLimit(1)
+                    Text("上次使用 \(relativeTime(for: item.lastOpenedAt))")
+                        .font(ToolTypography.Workbench.caption)
+                        .foregroundStyle(ToolTheme.Workbench.textSecondary)
+                }
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    Text("继续")
+                        .font(ToolTypography.Workbench.body.weight(.medium))
+                        .foregroundStyle(ToolTheme.onAccent)
+                    Image(systemName: "arrow.right")
+                        .font(ToolTypography.Workbench.icon)
+                        .foregroundStyle(ToolTheme.onAccent)
+                }
+                .padding(.horizontal, ToolMetrics.Spacing.lg)
+                .frame(height: 32)
+                .background(ToolTheme.accent, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
+            }
+            .padding(ToolMetrics.Spacing.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(IndexBareButtonStyle())
+        .indexRowHoverBackground(
+            true,
+            color: ToolTheme.Workbench.surface,
+            cornerRadius: ToolMetrics.Workbench.groupCorner
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: ToolMetrics.Workbench.groupCorner, style: .continuous)
+                .strokeBorder(ToolTheme.Workbench.border, lineWidth: 1)
+        }
+        .accessibilityLabel("继续使用\(item.tool.title)")
+        .accessibilityIdentifier("dashboard.resume.\(item.tool.id.rawValue)")
+    }
+
+    // MARK: - 页头
 
     private var pageHeader: some View {
         HStack(alignment: .top, spacing: 24) {
@@ -70,12 +189,15 @@ struct DashboardView: View {
 
             Spacer(minLength: 12)
 
-            Text(Self.headerDateFormatter.string(from: Date()))
-                .font(ToolTypography.Workbench.caption)
-                .foregroundStyle(ToolTheme.Workbench.textFaint)
-                .fixedSize(horizontal: true, vertical: false)
+            // 日期用 TimelineView 每 60s 重估，避免取一次后过时。
+            TimelineView(.periodic(from: Date(), by: 60)) { context in
+                Text(Self.headerDateFormatter.string(from: context.date))
+                    .font(ToolTypography.Workbench.caption)
+                    .foregroundStyle(ToolTheme.Workbench.textFaint)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
         }
-        .padding(.bottom, 24)
+        .padding(.bottom, ToolMetrics.Spacing.lg)
     }
 
     private var greetingText: String {
@@ -89,87 +211,142 @@ struct DashboardView: View {
         }
     }
 
-    private var shortcutSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            WorkbenchSectionHeader(title: "快捷工具", detail: "常用本地工具")
+    // MARK: - 分类网格
 
-            VStack(spacing: 0) {
-                ForEach(Array(Self.shortcuts.enumerated()), id: \.element.id) { index, shortcut in
-                    if let tool = registry.tool(for: shortcut.id) {
-                        WorkbenchShortcutButton(
-                            tool: tool,
-                            detail: shortcut.detail,
-                            action: { onSelectTool(tool.id) }
-                        )
-                        if index < Self.shortcuts.count - 1 {
-                            ToolDivider()
-                        }
+    private var categoryGrid: some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 160), spacing: ToolMetrics.Spacing.sm)],
+            alignment: .leading,
+            spacing: ToolMetrics.Spacing.sm
+        ) {
+            ForEach(registry.categoryGroups(), id: \.category.id) { group in
+                Button {
+                    if let firstTool = group.tools.first {
+                        routing.selectTool(firstTool.id)
                     }
+                } label: {
+                    HStack(spacing: ToolMetrics.Spacing.sm) {
+                        Image(systemName: group.category.systemImage)
+                            .font(ToolTypography.Workbench.icon)
+                            .foregroundStyle(ToolTheme.Workbench.textSecondary)
+                            .frame(width: 22)
+                        Text(group.category.title)
+                            .font(ToolTypography.Workbench.body.weight(.medium))
+                            .foregroundStyle(ToolTheme.Workbench.textPrimary)
+                        Spacer(minLength: 0)
+                        Text("\(group.tools.count)")
+                            .font(ToolTypography.Workbench.caption)
+                            .foregroundStyle(ToolTheme.Workbench.textFaint)
+                    }
+                    .padding(.horizontal, ToolMetrics.Spacing.md)
+                    .frame(height: 36)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(IndexBareButtonStyle())
+                .background(ToolTheme.panelBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous)
+                        .strokeBorder(ToolTheme.Workbench.border, lineWidth: 1)
+                }
+                .toolInteractionFeedback()
+                .accessibilityLabel("打开\(group.category.title)分类")
             }
         }
     }
 
-    private func shortcutRow(_ shortcuts: [Shortcut]) -> some View {
-        HStack(spacing: 0) {
-            ForEach(shortcuts.indices, id: \.self) { index in
-                let shortcut = shortcuts[index]
-                if let tool = registry.tool(for: shortcut.id) {
-                    WorkbenchShortcutButton(
-                        tool: tool,
-                        detail: shortcut.detail,
-                        action: { onSelectTool(tool.id) }
-                    )
-                    .frame(maxWidth: .infinity)
+    // MARK: - 全部工具
 
-                    if index < shortcuts.count - 1 {
-                        Rectangle()
-                            .fill(ToolTheme.Workbench.border)
-                            .frame(width: 1, height: ToolMetrics.Workbench.shortcutRowHeight)
-                    }
-                }
-            }
-        }
-    }
-
-    private var recentSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            WorkbenchSectionHeader(title: "最近打开", detail: "本机使用记录")
-
-            if remainingRecentTools.isEmpty {
-                Text("打开工具后会显示在这里。")
-                    .font(ToolTypography.Workbench.body)
+    private var allToolsRow: some View {
+        Button {
+            routing.openCommandPalette()
+        } label: {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
+                Image(systemName: "magnifyingglass")
+                    .font(ToolTypography.Workbench.icon)
                     .foregroundStyle(ToolTheme.Workbench.textSecondary)
-                    .frame(minHeight: 34, alignment: .leading)
-            } else {
-                HStack(spacing: 8) {
-                    ForEach(remainingRecentTools) { item in
-                        WorkbenchRecentButton(
-                            tool: item.tool,
-                            lastOpenedAt: item.recent.lastOpenedAt,
-                            action: { onSelectTool(item.tool.id) }
-                        )
-                    }
-                }
-                .frame(minHeight: 34, alignment: .leading)
+                Text("全部工具")
+                    .font(ToolTypography.Workbench.body.weight(.medium))
+                    .foregroundStyle(ToolTheme.Workbench.textPrimary)
+                Spacer(minLength: 0)
+                IndexKeycap(label: "⌘K")
             }
+            .padding(.horizontal, ToolMetrics.Spacing.md)
+            .frame(height: 36)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(IndexBareButtonStyle())
+        .background(ToolTheme.panelBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous)
+                .strokeBorder(ToolTheme.Workbench.border, lineWidth: 1)
+        }
+        .toolInteractionFeedback()
+        .accessibilityLabel("打开全部工具")
+        .accessibilityHint("打开命令面板，快捷键 Command-K")
     }
 
-    private func continueSection(_ item: RecentItem) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            WorkbenchSectionHeader(title: "继续工作", detail: "上次打开")
+    // MARK: - 数据投影
 
-            WorkbenchContinueButton(
-                tool: item.tool,
-                lastOpenedAt: item.recent.lastOpenedAt,
-                action: { onSelectTool(item.tool.id) }
-            )
-        }
+    private struct DashboardSnapshot {
+        var continueTool: RecentItem?
+        var favoriteTools: [RegisteredTool] = []
+        var shortcutTools: [RegisteredTool] = []
+        var recentTools: [RecentItem] = []
     }
 
-    private var remainingRecentTools: [RecentItem] {
-        Array(recentTools.dropFirst())
+    private struct RecentItem: Identifiable {
+        let tool: RegisteredTool
+        let lastOpenedAt: Date
+        var id: ToolID { tool.id }
+    }
+
+    /// 一次性派生全部工作台数据：knownToolIDs 算一次，recent/frecency/favorite
+    /// 各算一次。body 只读这个快照，避免每次 body 重估时多算 6+ 次。
+    ///
+    /// 收藏语义：收藏星只做标记，**不迁移工具位置**。工具停留在"最近/常用"
+    /// 原区，星标变实心/空心；收藏区独立展示全部收藏。这样点击收藏星不会
+    /// 让工具在区块间跳飞，避免布局跳动（成熟 app 的 pinned/recent 是独立
+    /// 维度，允许同一工具同时出现）。
+    private func computeSnapshot() -> DashboardSnapshot {
+        let knownToolIDs = Set(registry.categoryGroups().flatMap { $0.tools.map(\.id) })
+
+        let favoriteTools = favorites.favoriteIDs.compactMap { registry.tool(for: $0) }
+
+        let allRecent = store.recentTools(knownToolIDs: knownToolIDs)
+            .prefix(recentLimit + 1)
+            .compactMap { recent in
+                registry.tool(for: recent.toolID).map {
+                    RecentItem(tool: $0, lastOpenedAt: recent.lastOpenedAt)
+                }
+            }
+
+        let continueTool = allRecent.first
+        // 只排除"继续工作"已展示的第一个，不排除收藏（收藏留在原区）。
+        let recentTools = allRecent.dropFirst()
+
+        let shortcutTools = store.frecencyRankedToolIDs(
+            knownToolIDs: knownToolIDs,
+            limit: shortcutLimit + (continueTool.map { _ in 1 } ?? 0)
+        )
+        .compactMap { registry.tool(for: $0) }
+        .filter { $0.id != continueTool?.tool.id }
+        .prefix(shortcutLimit)
+        .map { $0 }
+
+        return DashboardSnapshot(
+            continueTool: continueTool,
+            favoriteTools: favoriteTools,
+            shortcutTools: Array(shortcutTools),
+            recentTools: Array(recentTools)
+        )
+    }
+
+    private func isFavorite(_ toolID: ToolID) -> Bool {
+        favorites.isFavorite(toolID)
+    }
+
+    private func relativeTime(for date: Date) -> String {
+        WorkbenchRelativeTime.text(for: date)
     }
 
     @MainActor private static let headerDateFormatter: DateFormatter = {
@@ -178,133 +355,134 @@ struct DashboardView: View {
         formatter.dateFormat = "MMM d EEE"
         return formatter
     }()
-
-    private var recentTools: [RecentItem] {
-        let knownToolIDs = Set(
-            registry.categoryGroups().flatMap { group in group.tools.map(\.id) }
-        )
-        return store.recentTools(knownToolIDs: knownToolIDs)
-            .prefix(3)
-            .compactMap { recent in
-                registry.tool(for: recent.toolID).map {
-                    RecentItem(recent: recent, tool: $0)
-                }
-            }
-    }
 }
 
-private struct WorkbenchSectionHeader: View {
-    let title: String
-    let detail: String
+// MARK: - 卡片壳
+
+/// 工作台首页统一卡片：44pt 纸头 + hairline + 14pt 内边距 + panel 表面。
+/// 所有区块共用同一壳，卡片有清晰视觉边界（区别于裸 VStack）。
+private struct DashboardCard<Content: View>: View {
+    let title: String?
+    let detail: String?
+    private let content: Content
+
+    init(
+        title: String?,
+        detail: String?,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.detail = detail
+        self.content = content()
+    }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(ToolTypography.Workbench.sectionTitle)
-                .foregroundStyle(ToolTheme.Workbench.textPrimary)
-            Spacer()
-            Text(detail)
-                .font(ToolTypography.Workbench.caption)
-                .foregroundStyle(ToolTheme.Workbench.textFaint)
+        VStack(alignment: .leading, spacing: 0) {
+            if let title {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(title)
+                        .font(ToolTypography.Workbench.sectionTitle)
+                        .foregroundStyle(ToolTheme.Workbench.textPrimary)
+                    Spacer()
+                    if let detail {
+                        Text(detail)
+                            .font(ToolTypography.Workbench.caption)
+                            .foregroundStyle(ToolTheme.Workbench.textFaint)
+                    }
+                }
+                .padding(.horizontal, ToolMetrics.Spacing.panelInset)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(ToolTheme.Workbench.border)
+                        .frame(height: ToolMetrics.Spacing.hairline)
+                }
+            }
+
+            content
+                .padding(.horizontal, ToolMetrics.Spacing.panelInset)
+                .padding(.vertical, ToolMetrics.Spacing.sm)
+        }
+        .background(
+            ToolTheme.Workbench.surface,
+            in: RoundedRectangle(cornerRadius: ToolMetrics.Workbench.groupCorner, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: ToolMetrics.Workbench.groupCorner, style: .continuous)
+                .strokeBorder(ToolTheme.Workbench.border, lineWidth: 1)
         }
     }
 }
 
-private struct WorkbenchShortcutButton: View {
+// MARK: - 工具瓷砖
+
+/// 工作台工具瓷砖（Raycast Home 式双列网格单元）：图标 + 标题(+副行)，
+/// 收藏星右上角独立命中。整块是单一 Button，hover 状态挂整块外层，
+/// `withToolAnimation` 包状态 + opacity 插值背景——无嵌套抖动、无颜色硬切。
+private struct DashboardTile: View {
     let tool: RegisteredTool
-    let detail: String
-    let action: () -> Void
+    let detail: String?
+    let isFavorite: Bool
+    let onOpen: () -> Void
+    let onToggleFavorite: () -> Void
 
     @State private var isHovering = false
-    @FocusState private var isFocused: Bool
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 9) {
+        Button(action: onOpen) {
+            HStack(spacing: ToolMetrics.Spacing.sm) {
                 Image(systemName: tool.systemImage)
                     .font(ToolTypography.Workbench.icon)
-                    .foregroundStyle(ToolTheme.Workbench.textSecondary)
-                    .frame(width: 22)
-                VStack(alignment: .leading, spacing: 2) {
+                    .foregroundStyle(ToolTheme.accent)
+                    .frame(width: 28, height: 28)
+                    .background(
+                        ToolTheme.selectionFill,
+                        in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 1) {
                     Text(tool.title)
                         .font(ToolTypography.Workbench.body.weight(.semibold))
                         .foregroundStyle(ToolTheme.Workbench.textPrimary)
-                    Text(detail)
-                        .font(ToolTypography.Workbench.caption)
-                        .foregroundStyle(ToolTheme.Workbench.textSecondary)
+                        .lineLimit(1)
+                    if let detail {
+                        Text(detail)
+                            .font(ToolTypography.Workbench.caption)
+                            .foregroundStyle(ToolTheme.Workbench.textSecondary)
+                            .lineLimit(1)
+                    }
                 }
-                .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.right")
-                    .font(ToolTypography.Workbench.chevron)
-                    .foregroundStyle(ToolTheme.Workbench.textFaint)
             }
-            .padding(.horizontal, 13)
-            .frame(height: ToolMetrics.Workbench.shortcutRowHeight)
+            .padding(.leading, ToolMetrics.Spacing.md)
+            .padding(.trailing, 32) // 给右上收藏星留独立命中区
+            .frame(height: ToolMetrics.Control.thumb)
             .contentShape(Rectangle())
-            .background(isHovering ? ToolTheme.Workbench.surfaceSecondary : Color.clear)
         }
         .buttonStyle(IndexBareButtonStyle())
-        .focused($isFocused)
-        .indexFocusRing(active: isFocused, cornerRadius: ToolMetrics.Workbench.compactCorner)
-        .onHover { isHovering = $0 }
         .accessibilityLabel("打开\(tool.title)")
-        .accessibilityIdentifier("dashboard.shortcut.\(tool.id.rawValue)")
-    }
-}
-
-private struct WorkbenchContinueButton: View {
-    let tool: RegisteredTool
-    let lastOpenedAt: Date
-    let action: () -> Void
-
-    @State private var isHovering = false
-    @FocusState private var isFocused: Bool
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: tool.systemImage)
-                    .font(ToolTypography.Workbench.icon)
-                    .foregroundStyle(ToolTheme.textSecondary)
-                    .frame(width: 24)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(tool.title)
-                        .font(ToolTypography.bodyMedium.weight(.semibold))
-                        .foregroundStyle(ToolTheme.textPrimary)
-                    Text("上次使用 \(WorkbenchRelativeTime.text(for: lastOpenedAt))")
-                        .font(ToolTypography.Workbench.caption)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                }
-
-                Spacer(minLength: 12)
-
-                Text("继续")
-                    .font(ToolTypography.Workbench.caption)
-                    .foregroundStyle(ToolTheme.textTertiary)
-                    .fixedSize(horizontal: true, vertical: false)
-
-                Image(systemName: "chevron.right")
-                    .font(ToolTypography.Workbench.chevron)
-                    .foregroundStyle(ToolTheme.Workbench.textFaint)
+        .overlay(alignment: .topTrailing) {
+            IndexFavoriteButton(isFavorite: isFavorite, density: .compact) {
+                onToggleFavorite()
             }
-            .padding(.horizontal, ToolMetrics.Spacing.base)
-            .frame(height: 54)
-            .contentShape(Rectangle())
-            .background(
-                isHovering ? ToolTheme.hoverFill : Color.clear,
-                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.card, style: .continuous)
-            )
+            .padding(.top, ToolMetrics.Spacing.fine)
+            .padding(.trailing, ToolMetrics.Spacing.fine)
         }
-        .buttonStyle(IndexBareButtonStyle())
-        .focused($isFocused)
-        .indexFocusRing(active: isFocused, cornerRadius: ToolMetrics.CornerRadius.card)
-        .onHover { isHovering = $0 }
-        .accessibilityLabel("继续使用\(tool.title)")
-        .accessibilityIdentifier("dashboard.continue.\(tool.id.rawValue)")
+        .indexRowHoverBackground(
+            isHovering,
+            color: ToolTheme.hoverFill,
+            cornerRadius: ToolMetrics.Workbench.compactCorner
+        )
+        .onHover { hovering in
+            withToolAnimation(ToolMotion.Preset.controlFeedback) {
+                isHovering = hovering
+            }
+        }
+        .accessibilityIdentifier("dashboard.tile.\(tool.id.rawValue)")
     }
 }
+
+// MARK: - 相对时间
 
 private enum WorkbenchRelativeTime {
     @MainActor private static let formatter: RelativeDateTimeFormatter = {
@@ -319,59 +497,9 @@ private enum WorkbenchRelativeTime {
     }
 }
 
-private struct WorkbenchRecentButton: View {
-    let tool: RegisteredTool
-    let lastOpenedAt: Date
-    let action: () -> Void
-
-    @State private var isHovering = false
-    @FocusState private var isFocused: Bool
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: tool.systemImage).font(ToolTypography.Workbench.smallIcon)
-                Text(tool.title).lineLimit(1)
-                Text(relativeTimeText)
-                    .foregroundStyle(ToolTheme.Workbench.textFaint)
-                    .lineLimit(1)
-            }
-            .font(ToolTypography.Workbench.caption)
-            .foregroundStyle(ToolTheme.Workbench.textSecondary)
-            .padding(.horizontal, 9)
-            .frame(height: 28)
-            .background(
-                isHovering ? ToolTheme.Workbench.surfaceSecondary : ToolTheme.Workbench.surface,
-                in: RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous)
-                    .strokeBorder(ToolTheme.Workbench.border, lineWidth: 1)
-            }
-            .contentShape(
-                RoundedRectangle(cornerRadius: ToolMetrics.Workbench.compactCorner, style: .continuous)
-            )
-        }
-        .buttonStyle(IndexBareButtonStyle())
-        .focused($isFocused)
-        .indexFocusRing(active: isFocused, cornerRadius: ToolMetrics.Workbench.compactCorner)
-        .onHover { isHovering = $0 }
-        .accessibilityLabel("打开\(tool.title)，\(lastOpenedAt.formatted(date: .abbreviated, time: .shortened))")
-        .accessibilityIdentifier("dashboard.recent.\(tool.id.rawValue)")
+@MainActor
+private extension Date {
+    func relativeText() -> String {
+        WorkbenchRelativeTime.text(for: self)
     }
-
-    /// RelativeDateTimeFormatter construction is expensive; the dashboard
-    /// renders a handful of rows per body pass, so one shared instance serves
-    /// them all. UI reads stay on the main actor.
-    private static let relativeTimeFormatter: RelativeDateTimeFormatter = {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.dateTimeStyle = .named
-        formatter.unitsStyle = .full
-        return formatter
-    }()
-
-    private var relativeTimeText: String {
-        Self.relativeTimeFormatter.localizedString(for: lastOpenedAt, relativeTo: Date())
-    }
-
 }

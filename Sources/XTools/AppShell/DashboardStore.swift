@@ -69,6 +69,58 @@ final class DashboardStore: ObservableObject {
         recentTools.filter { knownToolIDs.contains($0.toolID) }
     }
 
+    /// Exponential-decay frecency over the full launch activity (sidebar,
+    /// dashboard and palette navigation alike): each launch contributes
+    /// `0.5^(age / 7 days)`, so a tool used twice today outranks one used once
+    /// last week. Same formula as `PaletteRecentsStore` so the two reads agree
+    /// numerically; the dashboard is the richer source because it sees every
+    /// navigation path, not just ⌘K activations.
+    func frecencyScore(for toolID: ToolID, now: Date = Date()) -> Double {
+        let nowSeconds = now.timeIntervalSince1970
+        let halfLifeSeconds = 7.0 * 24 * 3600
+        return preferences.activity.reduce(into: 0.0) { score, event in
+            guard event.toolID == toolID else { return }
+            let age = max(0, nowSeconds - event.timestamp.timeIntervalSince1970)
+            score += pow(0.5, age / halfLifeSeconds)
+        }
+    }
+
+    /// Distinct tool IDs ordered by frecency (descending), filtered to the
+    /// current registry. Ties break by most-recent launch.
+    ///
+    /// 性能：先在单次遍历里为每个 toolID 预计算 frecency 总分与最近时间戳，
+    /// 再排序——避免 `sorted` 闭包对每对元素重复调用 O(activity) 的
+    /// `frecencyScore`（那会退化成 O(n² · activity)）。activity 攒到几百条
+    /// 后每帧卡顿就来自这里。
+    func frecencyRankedToolIDs(knownToolIDs: Set<ToolID>, limit: Int, now: Date = Date()) -> [ToolID] {
+        guard limit > 0 else { return [] }
+
+        let nowSeconds = now.timeIntervalSince1970
+        let halfLifeSeconds = 7.0 * 24 * 3600
+
+        // 单次遍历聚合：score 累加 + latest 取最大时间戳。
+        var scoreByID: [ToolID: Double] = [:]
+        var latestByID: [ToolID: Date] = [:]
+        for event in preferences.activity {
+            guard knownToolIDs.contains(event.toolID) else { continue }
+            let age = max(0, nowSeconds - event.timestamp.timeIntervalSince1970)
+            scoreByID[event.toolID, default: 0] += pow(0.5, age / halfLifeSeconds)
+            if let prev = latestByID[event.toolID], prev >= event.timestamp {
+                continue
+            }
+            latestByID[event.toolID] = event.timestamp
+        }
+
+        return scoreByID.keys.sorted { lhs, rhs in
+            let lhsScore = scoreByID[lhs] ?? 0
+            let rhsScore = scoreByID[rhs] ?? 0
+            if lhsScore != rhsScore { return lhsScore > rhsScore }
+            return (latestByID[lhs] ?? .distantPast) > (latestByID[rhs] ?? .distantPast)
+        }
+        .prefix(limit)
+        .map { $0 }
+    }
+
     func recordLaunch(toolID: ToolID, at date: Date? = nil) {
         let timestamp = date ?? now()
         // Retention is anchored to the current local day; an imported or

@@ -182,6 +182,7 @@ struct RootView: View {
                 selectedToolID: viewModel.selectedToolID,
                 transitionIntent: viewModel.pageTransitionIntent,
                 dashboardStore: dashboardStore,
+                favorites: favorites,
                 routing: detailRouting
             )
         }
@@ -339,9 +340,10 @@ struct RootView: View {
         case .copyGeneratedUUID:
             // The value is generated at activation: every run copies a fresh
             // UUID with the shared copy toast feedback.
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(UUID().uuidString.lowercased(), forType: .string)
+            guard IndexPasteboard.copyString(UUID().uuidString.lowercased()) else {
+                toastCenter.show(ToolFeedbackCopy.clipboardWriteFailure, tone: .error)
+                return
+            }
             toastCenter.show(ToolFeedbackCopy.copied, tone: .success)
         }
     }
@@ -469,5 +471,13 @@ private final class DetailActionRoutingBox: DetailActionRouting {
 
     func selectTool(_ toolID: ToolID) {
         _ = actions?.selectTool(toolID)
+    }
+
+    func openCommandPalette() {
+        actions?.openCommandPalette()
+    }
+
+    func toggleFavorite(_ toolID: ToolID) -> Bool? {
+        actions?.toggleFavorite(toolID)
     }
 }
