@@ -53,22 +53,26 @@ final class SystemAppearanceSource: ObservableObject {
     }
 }
 
-/// Keeps SwiftUI's environment synchronized with the same preference that
-/// WindowAppearanceOwner applies to native controls. The explicit system
-/// value is necessary because a prior preferredColorScheme override can stay
-/// cached in a hosting view after the preference returns to system.
+/// 外观链单挂点（阶段③ C2 收敛，design.md §3）：本修改器是外观偏好的
+/// **唯一解析位**（preference × 系统外观 → ColorScheme），并内聚
+/// `WindowAppearanceOwner` 作为 **唯一窗口应用器** —— 解析结果经环境下发
+/// （RootView / 偏好设置 sheet / 工具页只消费），窗口原生外观应用不再由
+/// 调用侧单独挂 `.background(WindowAppearanceOwner(...))`。每个独立窗口
+/// （主窗口、设置 sheet、Batch D 的多窗口）各挂一次本修改器即可。
 struct AppThemeEnvironment: ViewModifier {
     let preference: AppThemePreference
     @ObservedObject var systemAppearanceSource: SystemAppearanceSource
 
     func body(content: Content) -> some View {
-        content.environment(
-            \.colorScheme,
-            SystemAppearanceSource.resolvedColorScheme(
-                preference: preference,
-                systemColorScheme: systemAppearanceSource.colorScheme
+        content
+            .environment(
+                \.colorScheme,
+                SystemAppearanceSource.resolvedColorScheme(
+                    preference: preference,
+                    systemColorScheme: systemAppearanceSource.colorScheme
+                )
             )
-        )
+            .background(WindowAppearanceOwner(preference: preference))
     }
 }
 
@@ -88,6 +92,9 @@ extension View {
 /// `NSWindow`. Keeping the ownership in one stable AppKit view makes the
 /// system case explicit and also covers windows created later (such as a
 /// settings sheet).
+///
+/// C2 收敛后调用侧不再直接挂载本 representable：唯一挂点在
+/// `AppThemeEnvironment` 内部（单应用器契约，见 ShellGovernance 合同测试）。
 struct WindowAppearanceOwner: NSViewRepresentable {
     let preference: AppThemePreference
 

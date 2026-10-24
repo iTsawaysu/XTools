@@ -30,6 +30,11 @@ private struct IndexBase64FileWorkspaceContent: View {
     /// 「用作输入」写入解码输入后的光标放置请求（token 变化时光标置于
     /// 文本末尾并滚动可见；`IndexTextAreaCaretPlacementState` 消费）。
     @State private var decodeInputCaretRequestToken = 0
+    /// 焦点契约请求计数（阶段③ C3，design.md §4）：页面首个输入（解码
+    /// 方向的 Base64 输入区）的主动聚焦请求，经 WorkbenchSurface 的
+    /// focusRequestToken 槽下发；「用作输入」写入后递增，与页面到达
+    /// （代际）共用同一 token 机制。
+    @State private var firstInputFocusToken = 0
 
     private var projection: Base64FileWorkspaceProjection {
         Base64FileWorkspaceProjection.make(
@@ -106,7 +111,7 @@ private struct IndexBase64FileWorkspaceContent: View {
                 )
             }
         ) {
-            WorkbenchSurface(title: nil, shape: .inputOutput) {
+            WorkbenchSurface(title: nil, shape: .inputOutput, focusRequestToken: firstInputFocusToken) {
                 ioPair
                     // 诊断单轨发布（旧 IndexFileWorkbench 参数轨的等价迁移：
                     // 同一文本、同一纸顶槽、同一 toast 门控）。
@@ -195,7 +200,8 @@ private struct IndexBase64FileWorkspaceContent: View {
 
     /// 写回路径：完整输出经静态 `Base64FileWorkflow.fullOutput` 在 detached
     /// 任务计算（几十 MB 编码不落主线程），随后按会话公开接口写入反向
-    /// 输入并换向；写入前请求把光标放到解码输入末尾。
+    /// 输入并换向；写入前请求把光标放到解码输入末尾，并经焦点契约 token
+    /// 请求聚焦首个输入（同一机制，不另开聚焦通道）。
     private func sendEncodedOutputToDecodeInput() {
         guard let selectedFile = session.selectedFile else { return }
         let mode = session.outputMode
@@ -203,6 +209,7 @@ private struct IndexBase64FileWorkspaceContent: View {
             let text = await Base64FileWorkflow.fullOutput(for: selectedFile, mode: mode)
             guard session.selectedFile == selectedFile, session.outputMode == mode else { return }
             decodeInputCaretRequestToken += 1
+            firstInputFocusToken += 1
             session.updateReverseInput(text)
             session.changeDirection(to: .decode)
         }
@@ -271,6 +278,9 @@ private struct IndexBase64FileWorkspaceContent: View {
             ),
             workspaceSemantic: .base64FileWorkspace
         )
+        // 焦点契约（阶段③ C3）：解码方向的 Base64 输入区是页面首个输入；
+        // 编码方向该区未挂载，到达请求自然落空（有界补试到期即停）。
+        .workbenchFocusTarget()
     }
 
     private var decodedResultContent: some View {

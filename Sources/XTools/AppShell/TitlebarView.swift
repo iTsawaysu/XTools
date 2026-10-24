@@ -19,7 +19,21 @@ struct WindowToolbarContent: ToolbarContent {
     let onToggleSidebar: () -> Void
     let onToggleFavorite: () -> Void
     let onCommandPalette: () -> Void
-    let colorScheme: ColorScheme
+    /// 外观链收敛（阶段③ C2）：接收解析**输入**（偏好 + 系统外观源）而非
+    /// RootView 预解析的 colorScheme——RootView 不再有第二处解析挂点，
+    /// 工具栏与 `AppThemeEnvironment` 消费同一解析函数。原生工具栏 chrome
+    /// 在 SwiftUI 环境传播之外，条目仍需显式拿到解析结果。
+    let themePreference: AppThemePreference
+    let systemAppearanceSource: SystemAppearanceSource
+
+    /// 与 `AppThemeEnvironment` 同一唯一解析函数；失效由 RootView 的
+    /// `@StateObject` 订阅承接（系统外观变化 → Root body → 工具栏内容重建）。
+    private var colorScheme: ColorScheme {
+        SystemAppearanceSource.resolvedColorScheme(
+            preference: themePreference,
+            systemColorScheme: systemAppearanceSource.colorScheme
+        )
+    }
 
     @ToolbarContentBuilder
     var body: some ToolbarContent {

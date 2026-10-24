@@ -74,7 +74,9 @@ struct RootPreferencesSheet: View {
         .padding(ToolMetrics.Spacing.xxxl)
         .frame(width: 440, height: 300)
         .background(ToolTheme.panelBackground)
-        .background(WindowAppearanceOwner(preference: themePreference))
+        // 外观链单挂点（C2 收敛）：sheet 是独立窗口，只经 AppThemeEnvironment
+        // 消费——解析 + 环境注入 + 窗口应用器（内聚）一次到位，不再单独挂
+        // WindowAppearanceOwner。
         .appThemeEnvironment(preference: themePreference, source: systemAppearanceSource)
     }
 }

@@ -213,6 +213,8 @@ private struct IndexRegexWorkspaceContent: View {
                 text: $workspace.pattern,
                 height: ToolMetrics.Control.row
             )
+            // 焦点契约（阶段③ C3）：页面首个输入 = 参数区的表达式字段。
+            .workbenchFocusTarget()
 
             Text("/")
                 .font(ToolTypography.body)

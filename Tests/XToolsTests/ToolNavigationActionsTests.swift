@@ -208,7 +208,7 @@ struct ToolNavigationActionsTests {
                 tool(.jwt, title: "Token Inspector", categoryID: .web)
             ]
         )
-        let viewModel = RootViewModel()
+        let viewModel = ShellNavigationModel()
         let favorites = FavoritesStore(defaults: defaults())
         let sidebarSections = SidebarSectionExpansionStore(defaults: defaults())
         return Fixture(
@@ -218,7 +218,7 @@ struct ToolNavigationActionsTests {
             sidebarSections: sidebarSections,
             actions: ToolNavigationActions(
                 registry: registry,
-                viewModel: viewModel,
+                navigation: viewModel,
                 favorites: favorites,
                 sidebarSections: sidebarSections
             )
@@ -251,7 +251,7 @@ struct ToolNavigationActionsTests {
     @MainActor
     private struct Fixture {
         let registry: ToolRegistry
-        let viewModel: RootViewModel
+        let viewModel: ShellNavigationModel
         let favorites: FavoritesStore
         let sidebarSections: SidebarSectionExpansionStore
         let actions: ToolNavigationActions

@@ -39,24 +39,66 @@ struct ToolAccessibilityAnnouncer: ToolAccessibilityAnnouncing {
 
 /// Window-scoped toast queue. Injected into the environment at the shell so any
 /// tool can surface copy/paste/clear feedback through one consistent surface.
+///
+/// Toast/HUD 双通道（阶段③ C4，design.md §5 / PRD 决策 10）：`show` 时刻做
+/// 呈现判定——宿主窗口 isKeyWindow 且应用激活 → 现状 Toast 队列；窗口非 key
+/// 或应用未激活 → 同 payload 降级右下 HUD（`ToolHUDHost`，单条、无边框、
+/// 固定 2s 自动隐藏、无动作钮）。判定只发生在入队时刻，通道不随窗口状态
+/// 迁移；无障碍播报两条通道同文案（不新建文案体系）。
 @MainActor
 final class ToolToastCenter: ObservableObject {
     static let maxVisibleMessages = 4
+    /// HUD 降级通道的固定自动隐藏时长（design.md §5）。
+    static let hudAutoHideDuration: Duration = .seconds(2)
 
     @Published private(set) var messages: [ToolToastMessage] = []
+    /// HUD 降级通道当前 payload（同 `ToolToastMessage` 结构，单条顶替）。
+    @Published private(set) var hudMessage: ToolToastMessage?
 
     private let announcer: any ToolAccessibilityAnnouncing
+    /// 呈现判定注入点（测试用）；缺省按宿主窗口 key 态 + 应用激活态判定。
+    private let isHUDPresentationOverride: (@MainActor () -> Bool)?
+    /// 宿主窗口（ToolToastWindowBinder 注入）；未绑定时不参与判定。
+    fileprivate weak var window: NSWindow?
     private var dismissTasks: [UUID: Task<Void, Never>] = [:]
+    private var hudDismissTask: Task<Void, Never>?
     private var remainingDurations: [UUID: TimeInterval] = [:]
     private var startedAt: [UUID: Date] = [:]
     private var pausedIDs: Set<UUID> = []
 
-    init(announcer: any ToolAccessibilityAnnouncing = ToolAccessibilityAnnouncer()) {
+    init(
+        announcer: any ToolAccessibilityAnnouncing = ToolAccessibilityAnnouncer(),
+        isHUDPresentation: (@MainActor () -> Bool)? = nil
+    ) {
         self.announcer = announcer
+        self.isHUDPresentationOverride = isHUDPresentation
     }
 
     func show(_ text: String, tone: ToolToastMessage.Tone = .success) {
         let message = ToolToastMessage(text: text, tone: tone)
+        if self.presentsAsHUD() {
+            presentHUD(message)
+        } else {
+            presentToast(message)
+        }
+        announcer.announceStatus(message.accessibilityLabel)
+    }
+
+    /// 呈现判定（design.md §5）：宿主窗口非 key 或应用未激活（macOS 侧以
+    /// `NSApp.isActive` 表达 activationState == .active）→ HUD 降级。
+    /// 无窗口绑定时按应用激活态兜底；测试可经 init 注入固定判定。
+    private func presentsAsHUD() -> Bool {
+        if let isHUDPresentationOverride {
+            return isHUDPresentationOverride()
+        }
+        if let window {
+            return !window.isKeyWindow || !NSApp.isActive
+        }
+        return !NSApp.isActive
+    }
+
+    /// 现状 Toast 队列（前台 key 窗口通道，语义不变）。
+    private func presentToast(_ message: ToolToastMessage) {
         var removedIDs: [UUID] = []
 
         applyToolMotion {
@@ -69,8 +111,19 @@ final class ToolToastCenter: ObservableObject {
         }
 
         removedIDs.forEach(cleanupMessage)
-        scheduleDismissal(for: message.id, after: tone.defaultToastDuration)
-        announcer.announceStatus(message.accessibilityLabel)
+        scheduleDismissal(for: message.id, after: message.tone.defaultToastDuration)
+    }
+
+    /// HUD 降级通道：单条槽位，新 payload 顶替旧条并重置自动隐藏；
+    /// 无 hover/动作交互（动作仅 Toast 支持）。
+    private func presentHUD(_ message: ToolToastMessage) {
+        applyToolMotion { hudMessage = message }
+        hudDismissTask?.cancel()
+        hudDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: Self.hudAutoHideDuration)
+            guard !Task.isCancelled else { return }
+            applyToolMotion { hudMessage = nil }
+        }
     }
 
     func dismiss(_ id: UUID) {
@@ -239,6 +292,108 @@ private struct ToolToastCard: View {
                 center.resumeDismissal(for: message.id)
             }
         }
+        .accessibilityElement(children: .contain)
+    }
+}
+
+// MARK: - HUD 降级通道（阶段③ C4，design.md §5）
+
+/// 把宿主实际 `NSWindow` 交给 toast center（呈现判定的输入）。与
+/// `WindowAppearanceOwner` / `FileInputPanelWindowBinder` 同一
+/// `viewDidMoveToWindow` 绑定模式，挂 RootView background 层。
+struct ToolToastWindowBinder: NSViewRepresentable {
+    let center: ToolToastCenter
+
+    func makeNSView(context: Context) -> NSView {
+        BinderView(center: center)
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? BinderView)?.center = center
+    }
+
+    @MainActor
+    private final class BinderView: NSView {
+        weak var center: ToolToastCenter?
+
+        init(center: ToolToastCenter) {
+            self.center = center
+            super.init(frame: .zero)
+            isHidden = true
+            setContentHuggingPriority(.required, for: .horizontal)
+            setContentHuggingPriority(.required, for: .vertical)
+        }
+
+        required init?(coder: NSCoder) {
+            super.init(coder: coder)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            center?.window = window
+        }
+    }
+}
+
+/// 窗口非 key / 应用未激活时的降级呈现（C4 双通道）：右下系统风浮层，
+/// 只展示 title/tone、无边框、无动作钮（动作仅 Toast 支持）；自动隐藏
+/// 由 center 的 2s 固定时长驱动。走阶段①组件：opaque `indexSurface(.modal)`
+/// + `toolShadow(.floating)`，与 Toast 卡同宽（320）同节奏（toastPanel 过渡）。
+struct ToolHUDHost: View {
+    @ObservedObject var center: ToolToastCenter
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Color.clear
+                .allowsHitTesting(false)
+
+            if let message = center.hudMessage {
+                ToolHUDCard(message: message)
+                    .toolTransition(ToolMotion.Transition.toastPanel, reduceMotion: reduceMotion)
+                    .padding(.bottom, ToolMetrics.Spacing.lg)
+                    .padding(.trailing, ToolMetrics.Spacing.lg)
+            }
+        }
+        .animation(
+            ToolMotion.animation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion),
+            value: center.hudMessage
+        )
+    }
+}
+
+private struct ToolHUDCard: View {
+    let message: ToolToastMessage
+
+    var body: some View {
+        HStack(alignment: .top, spacing: ToolMetrics.Spacing.compact) {
+            Image(systemName: message.tone.systemImage)
+                .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .semibold))
+                .foregroundStyle(message.tone.tint)
+                .frame(width: 16, height: 16)
+                .padding(.top, ToolMetrics.Spacing.hair)
+                .accessibilityHidden(true)
+
+            Text(message.text)
+                .font(ToolTypography.label)
+                .foregroundStyle(ToolTheme.textPrimary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel(message.accessibilityLabel)
+        }
+        .padding(.horizontal, ToolMetrics.Spacing.md)
+        .padding(.vertical, ToolMetrics.Spacing.compact)
+        .frame(width: 320, alignment: .leading)
+        // Opaque surface，无边框（与 Toast 卡的唯一视觉差：无 tone 描边、
+        // 无关闭钮）——transient 系统材质的亮框闪烁与 palette 同根。
+        .indexSurface(
+            .modal,
+            fill: ToolTheme.popoverBackground,
+            border: .clear,
+            borderWidth: 0
+        )
+        .toolShadow(ToolTheme.Shadow.floating)
         .accessibilityElement(children: .contain)
     }
 }

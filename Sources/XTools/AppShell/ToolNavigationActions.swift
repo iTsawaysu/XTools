@@ -3,23 +3,23 @@ import Foundation
 @MainActor
 struct ToolNavigationActions {
     let registry: ToolRegistry
-    let viewModel: RootViewModel
+    let navigation: ShellNavigationModel
     let favorites: FavoritesStore
     let sidebarSections: SidebarSectionExpansionStore
     let dashboardStore: DashboardStore?
 
-    init(registry: ToolRegistry, viewModel: RootViewModel, favorites: FavoritesStore,
+    init(registry: ToolRegistry, navigation: ShellNavigationModel, favorites: FavoritesStore,
          sidebarSections: SidebarSectionExpansionStore, dashboardStore: DashboardStore? = nil) {
         self.registry = registry
-        self.viewModel = viewModel
+        self.navigation = navigation
         self.favorites = favorites
         self.sidebarSections = sidebarSections
         self.dashboardStore = dashboardStore
     }
 
     func selectDefaultToolIfNeeded(_ registryDefaultToolID: ToolID?) {
-        if viewModel.autoResumeLastTool,
-           let selectedToolID = viewModel.selectedToolID,
+        if navigation.autoResumeLastTool,
+           let selectedToolID = navigation.selectedToolID,
            registry.tool(for: selectedToolID) != nil { return }
 
         // 收藏优先的默认落点（注册表序首个收藏 → 注册表序首个工具）。
@@ -28,8 +28,8 @@ struct ToolNavigationActions {
         let defaultToolID = registry.tools(for: favorites.favoriteIDs).first?.id
             ?? registryDefaultToolID
 
-        guard viewModel.autoResumeLastTool, let defaultToolID else {
-            viewModel.selectedToolID = nil
+        guard navigation.autoResumeLastTool, let defaultToolID else {
+            navigation.selectedToolID = nil
             return
         }
         _ = selectTool(defaultToolID)
@@ -44,19 +44,19 @@ struct ToolNavigationActions {
         guard let tool = registry.tool(for: toolID),
               let section = section(for: toolID) else { return false }
 
-        let previousToolID = viewModel.selectedToolID
+        let previousToolID = navigation.selectedToolID
         let previousCategory = previousToolID.flatMap { registry.tool(for: $0)?.categoryID }
-        viewModel.pageTransitionIntent = intent ?? .resolved(
+        navigation.pageTransitionIntent = intent ?? .resolved(
             previousCategory: previousCategory,
             nextCategory: tool.categoryID
         )
         ToolPageEntryTrace.toolSelected(tool)
-        viewModel.selectedToolID = toolID
+        navigation.selectedToolID = toolID
         dashboardStore?.recordLaunchIfChanged(toolID: toolID, previousToolID: previousToolID)
         sidebarSections.expand(section.groupID)
 
         if dismissCommandPalette {
-            viewModel.closeCommandPalette()
+            navigation.closeCommandPalette()
         }
 
         return true
@@ -109,20 +109,20 @@ struct ToolNavigationActions {
     }
 
     func openCommandPalette() {
-        viewModel.openCommandPalette()
+        navigation.openCommandPalette()
     }
 
     func toggleCommandPalette() {
-        viewModel.toggleCommandPalette()
+        navigation.toggleCommandPalette()
     }
 
     func openDashboard() {
-        viewModel.closeCommandPalette()
-        viewModel.selectedToolID = nil
+        navigation.closeCommandPalette()
+        navigation.selectedToolID = nil
     }
 
     func closeCommandPalette() {
-        viewModel.closeCommandPalette()
+        navigation.closeCommandPalette()
     }
 
     private func section(for toolID: ToolID) -> ToolNavigationSection? {

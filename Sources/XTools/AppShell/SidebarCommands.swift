@@ -22,33 +22,33 @@ enum SidebarTogglePresentation: Equatable {
 }
 
 struct SidebarMenuCommands: Commands {
-    @FocusedObject private var viewModel: RootViewModel?
+    @FocusedObject private var navigation: ShellNavigationModel?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some Commands {
         CommandGroup(before: .sidebar) {
-            Button(viewModel?.sidebarTogglePresentation.title ?? SidebarTogglePresentation.show.title) {
-                viewModel?.toggleSidebar(reduceMotion: reduceMotion)
+            Button(navigation?.sidebarTogglePresentation.title ?? SidebarTogglePresentation.show.title) {
+                navigation?.toggleSidebar(reduceMotion: reduceMotion)
             }
             .keyboardShortcut("b", modifiers: .command)
-            .disabled(viewModel == nil)
+            .disabled(navigation == nil)
         }
     }
 }
 
 struct CommandPaletteMenuCommands: Commands {
-    @FocusedObject private var viewModel: RootViewModel?
+    @FocusedObject private var navigation: ShellNavigationModel?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some Commands {
         CommandGroup(after: .sidebar) {
             Button("命令面板…") {
                 withToolAnimation(ToolMotion.Preset.modal, reduceMotion: reduceMotion) {
-                    viewModel?.toggleCommandPalette()
+                    navigation?.toggleCommandPalette()
                 }
             }
             .keyboardShortcut("k", modifiers: .command)
-            .disabled(viewModel == nil)
+            .disabled(navigation == nil)
         }
     }
 }

@@ -64,6 +64,11 @@ struct WorkbenchSurface<
     /// `.inputOutput` 形态的操作条挂输出 pane（经 `WorkbenchIOPair` 的
     /// trailingActions）；`.canvas` 形态由宿主自行嵌入。
     var actions: [WorkbenchActionBarAction] = []
+    /// 首个输入聚焦声明槽（阶段③ C3 焦点契约，design.md §4）：页面持有
+    /// `@State` 请求计数并在需要聚焦时递增（Base64File「用作输入」；⌘K
+    /// 「别名+空格」直达在 Batch D 接同一 token）。nil = 页面无首位文本输入
+    /// （如 UUID 生成器），壳不注入活跃请求。
+    var focusRequestToken: Int? = nil
 
     private let titleAccessory: TitleAccessory
     private let parameters: Parameters
@@ -82,6 +87,7 @@ struct WorkbenchSurface<
         primaryAction: WorkbenchPrimaryAction?,
         shape: WorkbenchContentShape,
         actions: [WorkbenchActionBarAction],
+        focusRequestToken: Int?,
         titleAccessory: TitleAccessory,
         hasTitleAccessory: Bool,
         parameters: Parameters,
@@ -92,6 +98,7 @@ struct WorkbenchSurface<
         self.primaryAction = primaryAction
         self.shape = shape
         self.actions = actions
+        self.focusRequestToken = focusRequestToken
         self.titleAccessory = titleAccessory
         self.hasTitleAccessory = hasTitleAccessory
         self.parameters = parameters
@@ -104,6 +111,7 @@ struct WorkbenchSurface<
         primaryAction: WorkbenchPrimaryAction?,
         shape: WorkbenchContentShape,
         actions: [WorkbenchActionBarAction] = [],
+        focusRequestToken: Int? = nil,
         @ViewBuilder titleAccessory: () -> TitleAccessory,
         @ViewBuilder parameters: () -> Parameters,
         content: () -> Content
@@ -113,6 +121,7 @@ struct WorkbenchSurface<
             primaryAction: primaryAction,
             shape: shape,
             actions: actions,
+            focusRequestToken: focusRequestToken,
             titleAccessory: titleAccessory(),
             hasTitleAccessory: true,
             parameters: parameters(),
@@ -153,6 +162,17 @@ struct WorkbenchSurface<
         // 壳直系层挂零尺寸代理钮，视觉仍由 ActionBar 呈现（代理钮 opacity 0）。
         // 门控语义不变：entryGeneration=0（停靠/失活）传 nil 注销。
         .overlay { pageLevelShortcuts }
+        // 焦点契约下发（阶段③ C3）：值 = 页面代际 + 页内 token；页面经
+        // `.workbenchFocusTarget()` 声明的首个输入在请求变化时消费聚焦。
+        .environment(\.workbenchFocusRequest, workbenchFocusRequest)
+    }
+
+    /// 焦点契约请求值（C3）：页面声明了首位输入（focusRequestToken 非 nil）
+    /// 才注入活跃请求；停靠/失活（代际 0）与未声明页面都收敛到 inactive，
+    /// 组件族的请求消费在入口处被压住。
+    private var workbenchFocusRequest: WorkbenchFocusRequest {
+        guard let focusRequestToken else { return .inactive }
+        return WorkbenchFocusRequest(generation: entryGeneration, token: focusRequestToken)
     }
 
     /// 页面级快捷键代理（design.md §5-6 的实现位）：每个持快捷键的动作在此
@@ -338,6 +358,7 @@ extension WorkbenchSurface where TitleAccessory == EmptyView {
         primaryAction: WorkbenchPrimaryAction? = nil,
         shape: WorkbenchContentShape,
         actions: [WorkbenchActionBarAction] = [],
+        focusRequestToken: Int? = nil,
         @ViewBuilder parameters: () -> Parameters,
         content: () -> Content
     ) {
@@ -346,6 +367,7 @@ extension WorkbenchSurface where TitleAccessory == EmptyView {
             primaryAction: primaryAction,
             shape: shape,
             actions: actions,
+            focusRequestToken: focusRequestToken,
             titleAccessory: EmptyView(),
             hasTitleAccessory: false,
             parameters: parameters(),
@@ -362,6 +384,7 @@ extension WorkbenchSurface where Parameters == EmptyView {
         primaryAction: WorkbenchPrimaryAction? = nil,
         shape: WorkbenchContentShape,
         actions: [WorkbenchActionBarAction] = [],
+        focusRequestToken: Int? = nil,
         @ViewBuilder titleAccessory: () -> TitleAccessory,
         content: () -> Content
     ) {
@@ -370,6 +393,7 @@ extension WorkbenchSurface where Parameters == EmptyView {
             primaryAction: primaryAction,
             shape: shape,
             actions: actions,
+            focusRequestToken: focusRequestToken,
             titleAccessory: titleAccessory(),
             hasTitleAccessory: true,
             parameters: EmptyView(),
@@ -387,6 +411,7 @@ extension WorkbenchSurface where TitleAccessory == EmptyView, Parameters == Empt
         primaryAction: WorkbenchPrimaryAction? = nil,
         shape: WorkbenchContentShape,
         actions: [WorkbenchActionBarAction] = [],
+        focusRequestToken: Int? = nil,
         content: () -> Content
     ) {
         self.init(
@@ -394,6 +419,7 @@ extension WorkbenchSurface where TitleAccessory == EmptyView, Parameters == Empt
             primaryAction: primaryAction,
             shape: shape,
             actions: actions,
+            focusRequestToken: focusRequestToken,
             titleAccessory: EmptyView(),
             hasTitleAccessory: false,
             parameters: EmptyView(),

@@ -12,9 +12,9 @@ struct PageNavigationRetentionRegressionTests {
     @Test func rootNavigationPreservesAllAcceptedImageSlotsAndPendingOutput() async throws {
         let defaults = UserDefaults(suiteName: "PageNavigationRetention.\(UUID())")!
         let repository = ToolWorkspaceRepository(defaults: defaults)
-        let model = RootViewModel()
+        let model = ShellNavigationModel()
         model.selectedToolID = "image-tools"
-        let host = NSHostingView(rootView: RootView(viewModel: model, defaults: defaults, workspaceRepository: repository))
+        let host = NSHostingView(rootView: RootView(navigation: model, defaults: defaults, workspaceRepository: repository))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800), styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentView = host

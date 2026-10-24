@@ -2,8 +2,17 @@ import AppKit
 import SwiftUI
 import XToolsDesign
 
+/// 壳层导航模型（阶段③ C1 分家，design.md §3）：RootView 的 5 个导航状态
+/// （selectedToolID / searchText / pageTransitionIntent / sidebarVisibility /
+/// autoResume）与侧栏搜索聚焦 token 全部下沉于此，RootView 只组合。
+/// 持久化 didSet 语义自 RootViewModel 原样平移（tools.shell.*.v1 键全部不变）。
+///
+/// `commandPalettePresentation` 刻意以不转发的 let 引用住在这里（与分家前
+/// RootViewModel 同一隔离契约）：面板开关只发布 presentation 自身，
+/// ShellNavigationModel.objectWillChange 不受牵连，Root body 不因 ⌘K 重估
+/// （rootBody=0 契约）。Batch D 多窗口时本模型保持每窗口独立。
 @MainActor
-final class RootViewModel: ObservableObject {
+final class ShellNavigationModel: ObservableObject {
     @Published var selectedToolID: ToolID? {
         didSet {
             guard oldValue != selectedToolID else { return }

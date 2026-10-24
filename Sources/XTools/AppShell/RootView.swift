@@ -3,7 +3,9 @@ import SwiftUI
 import XToolsDesign
 
 struct RootView: View {
-    @StateObject private var viewModel: RootViewModel
+    // 导航 5 状态 + 侧栏搜索聚焦 token 下沉 ShellNavigationModel（C1 分家）；
+    // 面板/Toast 已是独立模型（rootBody=0 隔离契约），此处只组合。
+    @StateObject private var navigation: ShellNavigationModel
     @StateObject private var toastCenter = ToolToastCenter()
     @StateObject private var fileInputPanelCoordinator = FileInputPanelCoordinator()
     @StateObject private var fileOutputPanelCoordinator = FileOutputPanelCoordinator()
@@ -37,7 +39,7 @@ struct RootView: View {
     private let registry = ToolRegistry.default
 
     init(
-        viewModel: RootViewModel? = nil,
+        navigation: ShellNavigationModel? = nil,
         defaults: UserDefaults = .standard,
         workspaceRepository: ToolWorkspaceRepository? = nil,
         systemAppearanceSource: SystemAppearanceSource? = nil
@@ -48,7 +50,7 @@ struct RootView: View {
             store: defaults
         )
         let preferences = ToolPreferenceStore(defaults: defaults)
-        _viewModel = StateObject(wrappedValue: viewModel ?? RootViewModel(preferences: preferences))
+        _navigation = StateObject(wrappedValue: navigation ?? ShellNavigationModel(preferences: preferences))
         // frecency 单源（阶段③）：仪表盘与 ⌘K 面板共用同一事件环与衰减
         // 公式，两消费方各持通道门面委托读写（导航 = .navigation，⌘K = .palette）。
         let usageFrequency = ToolUsageFrequencyStore(defaults: defaults)
@@ -71,71 +73,112 @@ struct RootView: View {
         AppThemePreference(preferenceValue: themeName)
     }
 
-    private var resolvedColorScheme: ColorScheme {
-        SystemAppearanceSource.resolvedColorScheme(
-            preference: themePreference,
-            systemColorScheme: systemAppearanceSource.colorScheme
-        )
+    /// 侧栏 + detail 双列（C1 分家：body 拆子表达式，控制类型检查复杂度；
+    /// 布局与观察面不变）。
+    private var shellColumns: some View {
+        HStack(spacing: 0) {
+            SidebarView(
+                projection: sidebarProjection,
+                registry: registry,
+                favorites: favorites,
+                sidebarSections: sidebarSections,
+                recentToolIDs: sidebarRecentToolIDs,
+                selectedToolID: navigation.selectedToolID,
+                searchText: $navigation.searchText,
+                searchFocusToken: navigation.searchFocusToken,
+                onSelectTool: { _ = navigationActions.selectTool($0) },
+                onOpenDashboard: { navigationActions.openDashboard() },
+                onToggleFavorite: { toggleFavorite($0, showsToast: false) },
+                onMoveFavorites: { navigationActions.moveFavorites($0, toOffset: $1) },
+                onToggleSection: { navigationActions.toggleSection($0, exclusive: $1) },
+                onToggleTheme: toggleTheme,
+                onPreferences: showPreferences,
+                themeTitle: themePreference.title,
+                themeIcon: themePreference.icon
+            )
+            .frame(width: navigation.sidebarVisibility == .visible ? SidebarView.idealWidth : 0)
+            .clipped()
+            .allowsHitTesting(navigation.sidebarVisibility == .visible)
+            .accessibilityHidden(navigation.sidebarVisibility == .hidden)
+
+            detailColumn
+        }
     }
 
-    var body: some View {
-        let _ = CommandPaletteTrace.count(.rootBody)
+    /// 浮层组：命令面板 / 隐藏快捷键 / Toast+HUD 双通道（C4）。
+    private var shellOverlayLayer: some View {
         ZStack {
-            HStack(spacing: 0) {
-                SidebarView(
-                    projection: sidebarProjection,
-                    registry: registry,
-                    favorites: favorites,
-                    sidebarSections: sidebarSections,
-                    recentToolIDs: sidebarRecentToolIDs,
-                    selectedToolID: viewModel.selectedToolID,
-                    searchText: $viewModel.searchText,
-                    searchFocusToken: viewModel.searchFocusToken,
-                    onSelectTool: { _ = navigationActions.selectTool($0) },
-                    onOpenDashboard: { navigationActions.openDashboard() },
-                    onToggleFavorite: { toggleFavorite($0, showsToast: false) },
-                    onMoveFavorites: { navigationActions.moveFavorites($0, toOffset: $1) },
-                    onToggleSection: { navigationActions.toggleSection($0, exclusive: $1) },
-                    onToggleTheme: toggleTheme,
-                    onPreferences: showPreferences,
-                    themeTitle: themePreference.title,
-                    themeIcon: themePreference.icon
-                )
-                .frame(width: viewModel.sidebarVisibility == .visible ? SidebarView.idealWidth : 0)
-                .clipped()
-                .allowsHitTesting(viewModel.sidebarVisibility == .visible)
-                .accessibilityHidden(viewModel.sidebarVisibility == .hidden)
-
-                detailColumn
-            }
-
-
             CommandPaletteOverlayHost(
-                presentation: viewModel.commandPalettePresentation,
+                presentation: navigation.commandPalettePresentation,
                 registry: registry,
                 baseActions: commandBaseActions,
                 reduceMotion: reduceMotion,
                 usage: paletteRecents,
                 onSelectTool: launchFromPalette,
                 onRunCommand: runPaletteCommand,
-                onRequestFocus: viewModel.focusCommandPalette,
+                onRequestFocus: navigation.focusCommandPalette,
                 onDismiss: closeCommandPaletteAnimated
             )
             .zIndex(2)
 
             keyboardShortcuts
 
+            // Toast/HUD 双通道（C4）：前台 key 窗口走 Toast 队列；窗口非 key
+            // 或应用未激活时同 payload 降级右下 HUD（呈现判定在 center.show）。
             ToolToastHost(center: toastCenter)
+            ToolHUDHost(center: toastCenter)
                 .zIndex(3)
         }
-        .focusedSceneObject(viewModel)
+    }
+
+    var body: some View {
+        let _ = CommandPaletteTrace.count(.rootBody)
+        shellRoot
+            .focusedSceneObject(navigation)
+            .toolbar { windowToolbar }
+            .sheet(isPresented: $showsPreferences) {
+                RootPreferencesSheet(
+                    themeName: $themeName,
+                    autoResumeLastTool: $navigation.autoResumeLastTool,
+                    systemAppearanceSource: systemAppearanceSource
+                )
+            }
+            .onAppear {
+                smartPaste.noteSelectedTool(navigation.selectedToolID)
+                navigationActions.selectDefaultToolIfNeeded(sidebarProjection.defaultToolID)
+                ToolPageEntryBenchmark.runIfRequested(
+                    registry: registry,
+                    navigationActions: navigationActions
+                )
+            }
+            .onChange(of: scenePhase) { phase in
+                // Sample the clipboard only when the app comes forward — never in
+                // the background.
+                guard phase == .active else { return }
+                smartPaste.refresh(registry: registry)
+            }
+            .onChange(of: navigation.selectedToolID) { newToolID in
+                smartPaste.noteSelectedTool(newToolID)
+            }
+    }
+
+    /// 壳层根视图（C1 分家：body 拆子表达式控制类型检查复杂度；挂点顺序
+    /// 与拆分前逐字一致）。
+    private var shellRoot: some View {
+        ZStack {
+            shellColumns
+            shellOverlayLayer
+        }
         // min 尺寸单源：与 XToolsApp Scene 层共用 ToolMetrics.Window 常量。
         .frame(minWidth: ToolMetrics.Window.minimumWidth, minHeight: ToolMetrics.Window.minimumHeight)
         .background(ToolTheme.windowBackground)
-        .background(WindowAppearanceOwner(preference: themePreference))
+        // 外观链单挂点（C2 收敛）：AppThemeEnvironment 唯一解析并内聚
+        // WindowAppearanceOwner 单应用器，RootView 不再单独挂窗口应用器。
         .background(WindowChromeConfigurator())
         .background(FileInputPanelWindowBinder(coordinator: fileInputPanelCoordinator))
         .background(FileOutputPanelWindowBinder(coordinator: fileOutputPanelCoordinator))
+        // Toast/HUD 双通道（C4）：呈现判定所需的宿主窗口经 binder 注入 center。
+        .background(ToolToastWindowBinder(center: toastCenter))
         .tint(ToolTheme.accent)
         .environment(\.toolToastCenter, toastCenter)
         .environment(\.fileInputPanelClient, fileInputPanelCoordinator.client)
@@ -143,47 +186,28 @@ struct RootView: View {
         .environmentObject(workspaceRepository)
         .environmentObject(hubSegmentEntryHint)
         .appThemeEnvironment(preference: themePreference, source: systemAppearanceSource)
-        .toolbar {
-            WindowToolbarContent(
-                selectedTool: selectedTool,
-                isSidebarVisible: viewModel.sidebarVisibility == .visible,
-                // 传收藏 store 引用（不读 isFavorite）：收藏星观察下沉到
-                // FavoriteToolbarLabel 自身，收藏切换不重估 Root（B4 契约）。
-                favorites: favorites,
-                // 传模型引用（let 常量，不读计算属性）：读取 showsCommandPalette
-                // 会在 body 里依赖面板状态，而面板开关不触发 body 重估——压暗
-                // 观察在 CommandTriggerLabel 内完成。
-                presentation: viewModel.commandPalettePresentation,
-                onToggleSidebar: toggleSidebar,
-                onToggleFavorite: toggleFavorite,
-                onCommandPalette: { toggleCommandPaletteAnimated() },
-                colorScheme: resolvedColorScheme
-            )
-        }
-        .sheet(isPresented: $showsPreferences) {
-            RootPreferencesSheet(
-                themeName: $themeName,
-                autoResumeLastTool: $viewModel.autoResumeLastTool,
-                systemAppearanceSource: systemAppearanceSource
-            )
-        }
-        .onAppear {
-            smartPaste.noteSelectedTool(viewModel.selectedToolID)
-            navigationActions.selectDefaultToolIfNeeded(sidebarProjection.defaultToolID)
-            ToolPageEntryBenchmark.runIfRequested(
-                registry: registry,
-                navigationActions: navigationActions
-            )
-        }
-        .onChange(of: scenePhase) { phase in
-            // Sample the clipboard only when the app comes forward — never in
-            // the background.
-            guard phase == .active else { return }
-            smartPaste.refresh(registry: registry)
-        }
-        .onChange(of: viewModel.selectedToolID) { newToolID in
-            smartPaste.noteSelectedTool(newToolID)
-        }
+    }
+
+    private var windowToolbar: some ToolbarContent {
+        WindowToolbarContent(
+            selectedTool: selectedTool,
+            isSidebarVisible: navigation.sidebarVisibility == .visible,
+            // 传收藏 store 引用（不读 isFavorite）：收藏星观察下沉到
+            // FavoriteToolbarLabel 自身，收藏切换不重估 Root（B4 契约）。
+            favorites: favorites,
+            // 传模型引用（let 常量，不读计算属性）：读取 showsCommandPalette
+            // 会在 body 里依赖面板状态，而面板开关不触发 body 重估——压暗
+            // 观察在 CommandTriggerLabel 内完成。
+            presentation: navigation.commandPalettePresentation,
+            onToggleSidebar: toggleSidebar,
+            onToggleFavorite: toggleFavorite,
+            onCommandPalette: { toggleCommandPaletteAnimated() },
+            // 外观链收敛（C2）：RootView 不再自行解析 colorScheme，工具栏
+            // 拿解析输入在本体消费同一解析函数（原生 chrome 在 SwiftUI 环境
+            // 之外，环境注入到不了工具栏条目）。
+            themePreference: themePreference,
+            systemAppearanceSource: systemAppearanceSource
+        )
     }
 
     private var detailColumn: some View {
@@ -191,8 +215,8 @@ struct RootView: View {
         return VStack(spacing: 0) {
             ToolDetailHostView(
                 registry: registry,
-                selectedToolID: viewModel.selectedToolID,
-                transitionIntent: viewModel.pageTransitionIntent,
+                selectedToolID: navigation.selectedToolID,
+                transitionIntent: navigation.pageTransitionIntent,
                 dashboardStore: dashboardStore,
                 favorites: favorites,
                 routing: detailRouting
@@ -206,7 +230,7 @@ struct RootView: View {
         // originates outside the host (palette, sidebar, shortcuts).
         // 阶段③ 决策 9：兜底与 ToolPageStage 的泊车到达对齐同一 0.18s
         // crossfade（原 pageArrival 景深编排已退役）。
-        .toolAnimation(ToolMotion.Preset.contentCrossfade, value: viewModel.selectedToolID)
+        .toolAnimation(ToolMotion.Preset.contentCrossfade, value: navigation.selectedToolID)
         // Floating suggestion: overlay keeps page layout, scroll ownership, and
         // control positions untouched while the hint is visible. The entrance/
         // exit transaction comes from the monitor's applyToolMotion writes; the
@@ -244,7 +268,7 @@ struct RootView: View {
     private var navigationActions: ToolNavigationActions {
         ToolNavigationActions(
             registry: registry,
-            viewModel: viewModel,
+            navigation: navigation,
             favorites: favorites,
             sidebarSections: sidebarSections,
             dashboardStore: dashboardStore
@@ -255,8 +279,8 @@ struct RootView: View {
         CommandPaletteTrace.count(.sidebarProjection)
         return sidebarProjectionCache.projection(
             registry: registry,
-            selectedToolID: viewModel.selectedToolID,
-            query: viewModel.searchText
+            selectedToolID: navigation.selectedToolID,
+            query: navigation.searchText
         )
     }
 
@@ -274,7 +298,7 @@ struct RootView: View {
     }
 
     private var selectedTool: RegisteredTool? {
-        viewModel.selectedToolID.flatMap(registry.tool(for:))
+        navigation.selectedToolID.flatMap(registry.tool(for:))
     }
 
     // MARK: - Palette launches
@@ -332,7 +356,7 @@ struct RootView: View {
             ),
             CommandActionEntry(
                 id: .toggleSidebar,
-                title: viewModel.sidebarTogglePresentation.title,
+                title: navigation.sidebarTogglePresentation.title,
                 subtitle: "侧边栏",
                 systemImage: "sidebar.left",
                 keywords: ["侧栏", "sidebar"]
@@ -432,17 +456,17 @@ struct RootView: View {
     }
 
     private func toggleSidebar() {
-        viewModel.toggleSidebar(reduceMotion: reduceMotion)
+        navigation.toggleSidebar(reduceMotion: reduceMotion)
     }
 
     private func cancelCurrentMode() {
-        if viewModel.showsCommandPalette {
+        if navigation.showsCommandPalette {
             closeCommandPaletteAnimated()
             return
         }
 
-        if !viewModel.searchText.isEmpty {
-            viewModel.searchText = ""
+        if !navigation.searchText.isEmpty {
+            navigation.searchText = ""
         }
     }
 }

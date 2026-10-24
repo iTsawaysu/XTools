@@ -115,6 +115,9 @@ private struct IndexDateTimeWorkspaceContent: View {
             text: $workspace.timestamp,
             onSubmit: parseTimestamp
         )
+            // 焦点契约（阶段③ C3）：页面首个输入 = Unix 时间戳字段，到达
+            // （含 ⌘K 直达）自动聚焦。
+            .workbenchFocusTarget()
             .onChange(of: workspace.timestamp) {
                 handleTimestampChange()
             }

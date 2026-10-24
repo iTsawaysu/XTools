@@ -3,7 +3,7 @@ import Testing
 
 struct SidebarCommandTests {
     @Test @MainActor func titleAndToggleTrackVisibleAndHiddenStates() {
-        let viewModel = RootViewModel()
+        let viewModel = ShellNavigationModel()
 
         #expect(viewModel.sidebarTogglePresentation == .hide)
         #expect(viewModel.sidebarTogglePresentation.title == "隐藏侧边栏")

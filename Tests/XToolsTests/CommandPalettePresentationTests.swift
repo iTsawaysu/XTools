@@ -699,17 +699,17 @@ struct CommandPalettePresentationTests {
 final class CommandPaletteWindowFixture {
     let suiteName: String
     let defaults: UserDefaults
-    let viewModel: RootViewModel
+    let viewModel: ShellNavigationModel
     let hostingView: NSHostingView<AnyView>
     let window: NSWindow
 
     init(reduceMotion: Bool = false) throws {
         suiteName = "CommandPalettePresentationTests.\(UUID().uuidString)"
         defaults = try #require(UserDefaults(suiteName: suiteName))
-        viewModel = RootViewModel()
+        viewModel = ShellNavigationModel()
         viewModel.selectedToolID = ToolID(rawValue: "base64-file-converter")
         hostingView = NSHostingView(rootView: AnyView(
-            RootView(viewModel: viewModel, defaults: defaults)
+            RootView(navigation: viewModel, defaults: defaults)
                 .environment(\._accessibilityReduceMotion, reduceMotion)
         ))
         hostingView.frame = NSRect(x: 0, y: 0, width: 1_200, height: 800)

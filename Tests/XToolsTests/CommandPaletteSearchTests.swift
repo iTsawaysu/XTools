@@ -44,11 +44,11 @@ struct CommandPaletteSearchTests {
         ).utf8))
     }
 
-    // MARK: - RootViewModel focus requests
+    // MARK: - ShellNavigationModel focus requests
 
     @MainActor
     @Test func commandPaletteToggleAlternatesVisibilityAcrossRepeatedCommandKPresses() {
-        let viewModel = RootViewModel()
+        let viewModel = ShellNavigationModel()
 
         viewModel.toggleCommandPalette()
         #expect(viewModel.showsCommandPalette)
@@ -67,7 +67,7 @@ struct CommandPaletteSearchTests {
 
     @MainActor
     @Test func commandPaletteOpenRefocusesWithoutStartingAnotherSession() {
-        let viewModel = RootViewModel()
+        let viewModel = ShellNavigationModel()
 
         viewModel.openCommandPalette()
 
@@ -92,7 +92,7 @@ struct CommandPaletteSearchTests {
 
     @MainActor
     @Test func palettePresentationPublishesAtomicallyWithoutForwardingThroughRoot() {
-        let viewModel = RootViewModel()
+        let viewModel = ShellNavigationModel()
         var rootPublications = 0
         var presentationPublications = 0
         let rootCancellable = viewModel.objectWillChange.sink { rootPublications += 1 }

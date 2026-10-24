@@ -9,7 +9,7 @@ struct RootViewPersistenceTests {
     @Test func rootModelRestoresSelectedToolAndSidebarVisibilityWhenPreferencesAreInjected() {
         let defaults = Self.defaults()
         let preferences = ToolPreferenceStore(defaults: defaults)
-        let model = RootViewModel(preferences: preferences)
+        let model = ShellNavigationModel(preferences: preferences)
 
         #expect(model.selectedToolID == nil)
         #expect(model.sidebarVisibility == .visible)
@@ -17,7 +17,7 @@ struct RootViewPersistenceTests {
         model.selectedToolID = .persistedTool
         model.sidebarVisibility = .hidden
 
-        let reloaded = RootViewModel(preferences: ToolPreferenceStore(defaults: defaults))
+        let reloaded = ShellNavigationModel(preferences: ToolPreferenceStore(defaults: defaults))
         #expect(reloaded.selectedToolID == .persistedTool)
         #expect(reloaded.sidebarVisibility == .hidden)
     }
@@ -56,7 +56,7 @@ struct RootViewPersistenceTests {
         let defaults = Self.defaults()
         defaults.set("future-case", forKey: AppShellPreferenceKeys.sidebarVisibility.rawKey)
 
-        let model = RootViewModel(preferences: ToolPreferenceStore(defaults: defaults))
+        let model = ShellNavigationModel(preferences: ToolPreferenceStore(defaults: defaults))
 
         #expect(model.sidebarVisibility == .visible)
     }
@@ -75,14 +75,14 @@ struct RootViewPersistenceTests {
                 tool(.secondaryTool, title: "Secondary")
             ]
         )
-        let viewModel = RootViewModel(preferences: preferences)
+        let viewModel = ShellNavigationModel(preferences: preferences)
         let favorites = FavoritesStore(defaults: defaults)
         let sidebarSections = SidebarSectionExpansionStore(defaults: defaults)
         return Fixture(
             viewModel: viewModel,
             actions: ToolNavigationActions(
                 registry: registry,
-                viewModel: viewModel,
+                navigation: viewModel,
                 favorites: favorites,
                 sidebarSections: sidebarSections
             )
@@ -110,7 +110,7 @@ struct RootViewPersistenceTests {
 
     @MainActor
     private struct Fixture {
-        let viewModel: RootViewModel
+        let viewModel: ShellNavigationModel
         let actions: ToolNavigationActions
     }
 }

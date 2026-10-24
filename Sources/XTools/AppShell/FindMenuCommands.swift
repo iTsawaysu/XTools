@@ -43,7 +43,7 @@ enum AppKitFindCommandRouter {
 }
 
 struct FindMenuCommands: Commands {
-    @FocusedObject private var viewModel: RootViewModel?
+    @FocusedObject private var navigation: ShellNavigationModel?
 
     var body: some Commands {
         CommandGroup(after: .textEditing) {
@@ -52,11 +52,11 @@ struct FindMenuCommands: Commands {
             // meaning of jumping to the sidebar tool search.
             Button("查找…") {
                 guard !AppKitFindCommandRouter.perform(.showFindInterface) else { return }
-                guard let viewModel else { return }
-                if viewModel.sidebarVisibility == .hidden {
-                    viewModel.sidebarVisibility = .visible
+                guard let navigation else { return }
+                if navigation.sidebarVisibility == .hidden {
+                    navigation.sidebarVisibility = .visible
                 }
-                viewModel.focusSearch()
+                navigation.focusSearch()
             }
             .keyboardShortcut("f", modifiers: .command)
 

@@ -363,6 +363,9 @@ private struct IndexControlledSegmentInputAdapter {
 private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
     // 停靠保活后回访不再重建视图；进入聚焦以代际驱动保持「每次进入聚焦」语义。
     @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
+    // 焦点契约（阶段③ C3）：声明了首个输入的页面经环境接收壳层请求。
+    @Environment(\.workbenchFocusRequest) private var workbenchFocusRequest
+    @Environment(\.workbenchFocusTarget) private var isWorkbenchFocusTarget
 
     let adapter: IndexControlledSegmentInputAdapter
     let placeholder: String
@@ -393,6 +396,9 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
         configure(textField)
         textField.stringValue = adapter.displayText()
         context.coordinator.focus(textField, entryGeneration: entryGeneration, autoFocus: autoFocus)
+        if isWorkbenchFocusTarget {
+            context.coordinator.requestFocus(textField, request: workbenchFocusRequest)
+        }
         return textField
     }
 
@@ -408,6 +414,9 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
         configure(textField)
         context.coordinator.syncTextField(textField)
         context.coordinator.focus(textField, entryGeneration: entryGeneration, autoFocus: autoFocus)
+        if isWorkbenchFocusTarget {
+            context.coordinator.requestFocus(textField, request: workbenchFocusRequest)
+        }
     }
 
     func sizeThatFits(
@@ -475,6 +484,40 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
                 textField.window?.makeFirstResponder(textField)
             }
         }
+
+        /// 焦点契约请求（阶段③ C3）：请求恒等（代际 + 页内 token）门控，
+        /// 一请求只处理一次；窗口未挂载时按共用预算有界补试，成功或页面
+        /// 停靠/请求被取代即停（纪律同单行字段与 palette searchFocusToken）。
+        /// 分段字段的成功判据与既有一致：firstResponder 落到字段（分段
+        /// 选区由 syncTextField 在编辑开始时设置）。
+        func requestFocus(_ textField: NSTextField, request: WorkbenchFocusRequest) {
+            guard request.generation > 0,
+                  processedWorkbenchFocusRequest != request else { return }
+            processedWorkbenchFocusRequest = request
+            attemptWorkbenchFocus(textField, attempt: 0, request: request)
+        }
+
+        private func attemptWorkbenchFocus(
+            _ textField: NSTextField,
+            attempt: Int,
+            request: WorkbenchFocusRequest
+        ) {
+            let delay: TimeInterval = attempt == 0 ? 0 : WorkbenchFocusRequest.focusRetryInterval
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak textField] in
+                guard let self, let textField,
+                      self.processedWorkbenchFocusRequest == request,
+                      request.generation == self.currentEntryGeneration else { return }
+                if let window = textField.window,
+                   window.makeFirstResponder(textField),
+                   window.firstResponder === textField || window.firstResponder === textField.currentEditor() {
+                    return
+                }
+                guard attempt + 1 < WorkbenchFocusRequest.maxFocusAttempts else { return }
+                self.attemptWorkbenchFocus(textField, attempt: attempt + 1, request: request)
+            }
+        }
+
+        private var processedWorkbenchFocusRequest: WorkbenchFocusRequest?
 
         func controlTextDidBeginEditing(_ notification: Notification) {
             if let textField = notification.object as? NSTextField {

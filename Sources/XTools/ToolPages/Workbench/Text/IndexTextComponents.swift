@@ -171,6 +171,10 @@ struct IndexUndoableTextField: NSViewRepresentable {
     let onFocusChange: ((Bool) -> Void)?
     // 停靠保活后回访不再重建视图；进入聚焦以代际驱动保持「每次进入聚焦」语义。
     @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
+    // 焦点契约（阶段③ C3）：声明了首个输入的页面经环境接收壳层请求，
+    // 请求变化时走 makeFirstResponder（有界重试，纪律同 palette searchFocusToken）。
+    @Environment(\.workbenchFocusRequest) private var workbenchFocusRequest
+    @Environment(\.workbenchFocusTarget) private var isWorkbenchFocusTarget
 
     func makeCoordinator() -> Coordinator {
         Coordinator(
@@ -197,6 +201,9 @@ struct IndexUndoableTextField: NSViewRepresentable {
         )
         if let focusRequestToken {
             context.coordinator.requestFocus(textField, token: focusRequestToken)
+        }
+        if isWorkbenchFocusTarget {
+            context.coordinator.requestFocus(textField, request: workbenchFocusRequest)
         }
         return textField
     }
@@ -227,6 +234,9 @@ struct IndexUndoableTextField: NSViewRepresentable {
         )
         if let focusRequestToken {
             context.coordinator.requestFocus(textField, token: focusRequestToken)
+        }
+        if isWorkbenchFocusTarget {
+            context.coordinator.requestFocus(textField, request: workbenchFocusRequest)
         }
     }
 
@@ -279,6 +289,7 @@ struct IndexUndoableTextField: NSViewRepresentable {
         var onFocusChange: ((Bool) -> Void)?
 
         private var processedFocusRequestToken: Int?
+        private var processedWorkbenchFocusRequest: WorkbenchFocusRequest?
 
         init(
             text: Binding<String>,
@@ -339,6 +350,37 @@ struct IndexUndoableTextField: NSViewRepresentable {
                       self.currentEntryGeneration == generation,
                       let window = textField.window else { return }
                 _ = self.focusEditor(textField, in: window)
+            }
+        }
+
+        /// 焦点契约请求（阶段③ C3）：请求恒等（代际 + 页内 token）门控，
+        /// 一请求只处理一次；窗口未挂载/字段编辑器未就绪时按 palette
+        /// searchFocusToken 的重试纪律有界补试——makeFirstResponder 成功
+        /// （字段编辑器接管）后余下补试全部 no-op，不会在用户移焦后抢回；
+        /// 页面停靠（代际归零）或请求被更新值取代时立即放弃。
+        func requestFocus(_ textField: NSTextField, request: WorkbenchFocusRequest) {
+            guard request.generation > 0,
+                  processedWorkbenchFocusRequest != request else { return }
+            processedWorkbenchFocusRequest = request
+            attemptWorkbenchFocus(textField, attempt: 0, request: request)
+        }
+
+        private func attemptWorkbenchFocus(
+            _ textField: NSTextField,
+            attempt: Int,
+            request: WorkbenchFocusRequest
+        ) {
+            let delay: TimeInterval = attempt == 0 ? 0 : WorkbenchFocusRequest.focusRetryInterval
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak textField] in
+                guard let self, let textField,
+                      self.processedWorkbenchFocusRequest == request,
+                      request.generation == self.currentEntryGeneration else { return }
+                if let window = textField.window,
+                   self.focusEditor(textField, in: window) {
+                    return
+                }
+                guard attempt + 1 < WorkbenchFocusRequest.maxFocusAttempts else { return }
+                self.attemptWorkbenchFocus(textField, attempt: attempt + 1, request: request)
             }
         }
 
@@ -777,6 +819,9 @@ struct IndexTextAreaInputRejection {
 struct IndexTextKit2ViewportTextView: NSViewRepresentable {
     // 停靠保活后回访不再重建视图；进入聚焦以代际驱动保持「每次进入聚焦」语义。
     @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
+    // 焦点契约（阶段③ C3）：声明了首个输入的页面经环境接收壳层请求。
+    @Environment(\.workbenchFocusRequest) private var workbenchFocusRequest
+    @Environment(\.workbenchFocusTarget) private var isWorkbenchFocusTarget
 
     @Binding var text: String
     var accessibilityLabel: String = ""
@@ -835,6 +880,9 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
             IndexTextAreaScrollPositioning.revealInsertionPoint(in: textView, growsWithContent: false)
         }
         context.coordinator.focus(textView, entryGeneration: entryGeneration, autoFocus: autoFocus)
+        if isWorkbenchFocusTarget {
+            context.coordinator.requestFocus(textView, request: workbenchFocusRequest)
+        }
         return scrollView
     }
 
@@ -864,6 +912,9 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
             IndexTextAreaScrollPositioning.revealInsertionPoint(in: textView, growsWithContent: false)
         }
         context.coordinator.focus(textView, entryGeneration: entryGeneration, autoFocus: autoFocus)
+        if isWorkbenchFocusTarget {
+            context.coordinator.requestFocus(textView, request: workbenchFocusRequest)
+        }
     }
 
     private func configure(_ textView: NSTextView) {
@@ -902,6 +953,7 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
         private var focusedEntryGeneration: Int?
         private var currentEntryGeneration = 0
         private var caretPlacementState = IndexTextAreaCaretPlacementState(processedRequestToken: nil)
+        private var processedWorkbenchFocusRequest: WorkbenchFocusRequest?
         private let privateUndo = IndexPrivateUndoStack()
 
         init(text: Binding<String>, inputPolicy: IndexTextAreaInputPolicy?) {
@@ -927,6 +979,36 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
                 guard let self, let textView,
                       self.currentEntryGeneration == entryGeneration else { return }
                 textView.window?.makeFirstResponder(textView)
+            }
+        }
+
+        /// 焦点契约请求（阶段③ C3）：请求恒等（代际 + 页内 token）门控，
+        /// 一请求只处理一次；窗口未挂载时按共用预算有界补试，成功或页面
+        /// 停靠/请求被取代即停（纪律同单行字段与 palette searchFocusToken）。
+        func requestFocus(_ textView: NSTextView, request: WorkbenchFocusRequest) {
+            guard request.generation > 0,
+                  processedWorkbenchFocusRequest != request else { return }
+            processedWorkbenchFocusRequest = request
+            attemptWorkbenchFocus(textView, attempt: 0, request: request)
+        }
+
+        private func attemptWorkbenchFocus(
+            _ textView: NSTextView,
+            attempt: Int,
+            request: WorkbenchFocusRequest
+        ) {
+            let delay: TimeInterval = attempt == 0 ? 0 : WorkbenchFocusRequest.focusRetryInterval
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak textView] in
+                guard let self, let textView,
+                      self.processedWorkbenchFocusRequest == request,
+                      request.generation == self.currentEntryGeneration else { return }
+                if let window = textView.window,
+                   window.makeFirstResponder(textView),
+                   window.firstResponder === textView {
+                    return
+                }
+                guard attempt + 1 < WorkbenchFocusRequest.maxFocusAttempts else { return }
+                self.attemptWorkbenchFocus(textView, attempt: attempt + 1, request: request)
             }
         }
 
@@ -1015,6 +1097,9 @@ private final class IndexTextKit2ViewportScrollView: IndexTextViewportScrollView
 struct IndexUndoableTextView: NSViewRepresentable {
     // 停靠保活后回访不再重建视图；进入聚焦以代际驱动保持「每次进入聚焦」语义。
     @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
+    // 焦点契约（阶段③ C3）：声明了首个输入的页面经环境接收壳层请求。
+    @Environment(\.workbenchFocusRequest) private var workbenchFocusRequest
+    @Environment(\.workbenchFocusTarget) private var isWorkbenchFocusTarget
 
     @Binding var text: String
     var accessibilityLabel: String = ""
@@ -1084,6 +1169,9 @@ struct IndexUndoableTextView: NSViewRepresentable {
             IndexTextAreaScrollPositioning.revealInsertionPoint(in: textView, growsWithContent: growsWithContent)
         }
         context.coordinator.focus(textView, entryGeneration: entryGeneration, autoFocus: autoFocus)
+        if isWorkbenchFocusTarget {
+            context.coordinator.requestFocus(textView, request: workbenchFocusRequest)
+        }
         return scrollView
     }
 
@@ -1128,6 +1216,9 @@ struct IndexUndoableTextView: NSViewRepresentable {
         context.coordinator.measure(textView)
         keepContentGrowingScrollOriginStable(in: scrollView)
         context.coordinator.focus(textView, entryGeneration: entryGeneration, autoFocus: autoFocus)
+        if isWorkbenchFocusTarget {
+            context.coordinator.requestFocus(textView, request: workbenchFocusRequest)
+        }
     }
 
     private func installLineNumberGutter(
@@ -1202,6 +1293,37 @@ struct IndexUndoableTextView: NSViewRepresentable {
         private var lastAppliedTemporaryHighlights: IndexTextAreaTemporaryHighlights?
         private var lastTemporaryHighlightApplyReachedTarget = false
         private var processedScrollToken: Int?
+        private var processedWorkbenchFocusRequest: WorkbenchFocusRequest?
+
+        /// 焦点契约请求（阶段③ C3）：请求恒等（代际 + 页内 token）门控，
+        /// 一请求只处理一次；窗口未挂载时按共用预算有界补试，成功或页面
+        /// 停靠/请求被取代即停（纪律同单行字段与 palette searchFocusToken）。
+        func requestFocus(_ textView: NSTextView, request: WorkbenchFocusRequest) {
+            guard request.generation > 0,
+                  processedWorkbenchFocusRequest != request else { return }
+            processedWorkbenchFocusRequest = request
+            attemptWorkbenchFocus(textView, attempt: 0, request: request)
+        }
+
+        private func attemptWorkbenchFocus(
+            _ textView: NSTextView,
+            attempt: Int,
+            request: WorkbenchFocusRequest
+        ) {
+            let delay: TimeInterval = attempt == 0 ? 0 : WorkbenchFocusRequest.focusRetryInterval
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak textView] in
+                guard let self, let textView,
+                      self.processedWorkbenchFocusRequest == request,
+                      request.generation == self.currentEntryGeneration else { return }
+                if let window = textView.window,
+                   window.makeFirstResponder(textView),
+                   window.firstResponder === textView {
+                    return
+                }
+                guard attempt + 1 < WorkbenchFocusRequest.maxFocusAttempts else { return }
+                self.attemptWorkbenchFocus(textView, attempt: attempt + 1, request: request)
+            }
+        }
 
         /// token 变化时把目标范围滚入可视区；异步补一次，规避刚布局完
         /// 时 scrollRangeToVisible 早退的情况（与 caret 揭示同一手法）。
