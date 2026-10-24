@@ -44,7 +44,10 @@ struct RootView: View {
         )
         let preferences = ToolPreferenceStore(defaults: defaults)
         _viewModel = StateObject(wrappedValue: viewModel ?? RootViewModel(preferences: preferences))
-        self.paletteRecents = PaletteRecentsStore(preferences: preferences)
+        // frecency 单源（阶段③）：仪表盘与 ⌘K 面板共用同一事件环与衰减
+        // 公式，两消费方各持通道门面委托读写（导航 = .navigation，⌘K = .palette）。
+        let usageFrequency = ToolUsageFrequencyStore(defaults: defaults)
+        self.paletteRecents = PaletteRecentsStore(usage: usageFrequency)
         let validToolIDs = Set(
             ToolRegistry.default.categoryGroups().flatMap { $0.tools.map(\.id) }
         )
@@ -54,7 +57,7 @@ struct RootView: View {
         _workspaceRepository = StateObject(
             wrappedValue: workspaceRepository ?? ToolWorkspaceRepository(preferences: preferences)
         )
-        _dashboardStore = StateObject(wrappedValue: DashboardStore(defaults: defaults))
+        _dashboardStore = StateObject(wrappedValue: DashboardStore(usage: usageFrequency))
         _systemAppearanceSource = StateObject(
             wrappedValue: systemAppearanceSource ?? SystemAppearanceSource()
         )
@@ -120,7 +123,8 @@ struct RootView: View {
                 .zIndex(3)
         }
         .focusedSceneObject(viewModel)
-        .frame(minWidth: 960, minHeight: 640)
+        // min 尺寸单源：与 XToolsApp Scene 层共用 ToolMetrics.Window 常量。
+        .frame(minWidth: ToolMetrics.Window.minimumWidth, minHeight: ToolMetrics.Window.minimumHeight)
         .background(ToolTheme.windowBackground)
         .background(WindowAppearanceOwner(preference: themePreference))
         .background(WindowChromeConfigurator())
@@ -192,7 +196,9 @@ struct RootView: View {
         // owns the id-driven transition; this root-level animation keyed on
         // the selection guarantees the crossfade plays even when the switch
         // originates outside the host (palette, sidebar, shortcuts).
-        .toolAnimation(ToolMotion.Preset.pageArrival, value: viewModel.selectedToolID)
+        // 阶段③ 决策 9：兜底与 ToolPageStage 的泊车到达对齐同一 0.18s
+        // crossfade（原 pageArrival 景深编排已退役）。
+        .toolAnimation(ToolMotion.Preset.contentCrossfade, value: viewModel.selectedToolID)
         // Floating suggestion: overlay keeps page layout, scroll ownership, and
         // control positions untouched while the hint is visible. The entrance/
         // exit transaction comes from the monitor's applyToolMotion writes; the

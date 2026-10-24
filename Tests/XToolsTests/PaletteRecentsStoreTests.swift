@@ -4,14 +4,20 @@ import Testing
 
 /// Palette frecency: decay scoring, recents ordering, ring cap, persistence
 /// round-trip, and the landing-page/boost composition built on top of it.
+/// 阶段③ frecency 单源后，事件环与公式都在 `ToolUsageFrequencyStore`，
+/// 这里锁定 ⌘K 通道门面的行为等价性。
 @MainActor
 struct PaletteRecentsStoreTests {
     private static func makeDefaults() -> UserDefaults {
         UserDefaults(suiteName: "PaletteRecentsStoreTests.\(UUID().uuidString)")!
     }
 
+    private static func frequencyStore() -> ToolUsageFrequencyStore {
+        ToolUsageFrequencyStore(defaults: makeDefaults())
+    }
+
     private static func store() -> PaletteRecentsStore {
-        PaletteRecentsStore(preferences: ToolPreferenceStore(defaults: makeDefaults()))
+        PaletteRecentsStore(usage: frequencyStore())
     }
 
     private static func daysAgo(_ days: Double, from now: Date) -> Date {
@@ -93,14 +99,18 @@ struct PaletteRecentsStoreTests {
 
     @Test func launchesPersistAcrossStoreInstances() throws {
         let defaults = Self.makeDefaults()
-        let preferences = ToolPreferenceStore(defaults: defaults)
         let now = Date()
 
-        let first = PaletteRecentsStore(preferences: preferences)
-        first.recordLaunch(.json, at: now)
-        first.recordLaunch(.regex, at: Self.daysAgo(1, from: now))
+        // 持久化走后台串行 writer：显式释放第一个实例（deinit flush 排空
+        // 待写快照），再以同 defaults 重建，模拟一次真实重启。
+        var first: PaletteRecentsStore? = PaletteRecentsStore(
+            usage: ToolUsageFrequencyStore(defaults: defaults)
+        )
+        first?.recordLaunch(.json, at: now)
+        first?.recordLaunch(.regex, at: Self.daysAgo(1, from: now))
+        first = nil
 
-        let restored = PaletteRecentsStore(preferences: preferences)
+        let restored = PaletteRecentsStore(usage: ToolUsageFrequencyStore(defaults: defaults))
         #expect(restored.recentToolIDs(limit: 5, now: now) == [.json, .regex])
         #expect(restored.frecencyScore(for: .json, now: now) == 1)
     }
@@ -108,15 +118,14 @@ struct PaletteRecentsStoreTests {
     @Test func corruptedStorageFallsBackToEmpty() {
         let defaults = Self.makeDefaults()
         defaults.set("not-json", forKey: AppShellPreferenceKeys.paletteRecents.rawKey)
-        let preferences = ToolPreferenceStore(defaults: defaults)
 
-        let store = PaletteRecentsStore(preferences: preferences)
+        let store = PaletteRecentsStore(usage: ToolUsageFrequencyStore(defaults: defaults))
 
         #expect(store.recentToolIDs(limit: 5, now: Date()).isEmpty)
     }
 
-    @Test func missingPreferencesKeepTheStoreInMemoryOnly() {
-        let store = PaletteRecentsStore(preferences: nil)
+    @Test func missingDefaultsKeepTheStoreInMemoryOnly() {
+        let store = PaletteRecentsStore(usage: ToolUsageFrequencyStore(defaults: nil))
         store.recordLaunch(.json)
 
         #expect(store.recentToolIDs(limit: 5, now: Date()) == [.json])

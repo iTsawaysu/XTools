@@ -14,23 +14,12 @@ public enum ToolMotion {
         public static let arrival: TimeInterval = 0.24
         public static let fast: TimeInterval = 0.25
         public static let medium: TimeInterval = 0.35
-        /// 01 景深沉降 (PAGE-TRANSITIONS t-1): incoming page settles over
-        /// 300ms on smoothOut.
-        public static let pageSinkEnter: TimeInterval = 0.30
-        /// 01 景深沉降: outgoing page leaves over 220ms on productiveExit —
-        /// faster than the arrival so the exit never lags the new page.
-        public static let pageSinkExit: TimeInterval = 0.22
-        public static let pageSharedAxisEnter: TimeInterval = 0.32
-        public static let pageSharedAxisExit: TimeInterval = 0.26
-        public static let pageBloomEnter: TimeInterval = 0.42
+        /// 阶段③ 决策 9：页面切换的唯一到达/离开包络——0.18s easeInOut
+        /// crossfade（depth/sharedAxis 的位移缩放编排已退役）。
+        public static let contentCrossfade: TimeInterval = 0.18
+        /// ⌘K originBloom（精简版）：420→300ms 进 / 200ms 出。
+        public static let pageBloomEnter: TimeInterval = 0.30
         public static let pageBloomExit: TimeInterval = 0.20
-        /// Page-header letter arrival: one character's rise arc on smoothOut
-        /// (prototype .lt 480ms); delay comes from `letterStagger`.
-        public static let letter: TimeInterval = 0.48
-        /// Page-header letter arrival: delay added per title character.
-        public static let letterStagger: TimeInterval = 0.032
-        /// Subtitle follow-up beat after the letter choreography starts.
-        public static let headerFollowDelay: TimeInterval = 0.16
         /// Indeterminate hairline sweep: one back-and-forth traversal of the
         /// rail. Loops sit outside the one-shot feedback envelope because the
         /// steady rhythm itself is the liveness cue — a shorter sweep reads
@@ -62,16 +51,8 @@ public enum ToolMotion {
         public static let base: CGFloat = 8
         public static let medium: CGFloat = 12
         public static let large: CGFloat = 18
-        /// Page-header arrival rise (≈0.6em of the 18pt page title)
-        /// and the subtitle follow-up offset.
-        public static let letterRise: CGFloat = 11
-        public static let headerFollow: CGFloat = 4
-        /// 01 景深沉降: incoming page rises 10pt while settling (prototype
-        /// translateY(10px)).
-        public static let pageSinkRise: CGFloat = 10
-        public static let pageSharedAxisRise: CGFloat = 18
-        public static let pageSharedAxisDrop: CGFloat = 12
-        public static let pageBloomDrop: CGFloat = 6
+        /// ⌘K originBloom（精简版）：顶锚 4pt 上移入场（原 6pt）。
+        public static let pageBloomDrop: CGFloat = 4
     }
 
     public enum Scale {
@@ -81,14 +62,8 @@ public enum ToolMotion {
         public static let pressed: CGFloat = 0.97
         public static let iconInserted: CGFloat = 0.98
         public static let iconRemoved: CGFloat = 1.02
-        /// Page-arrival depth: incoming tool pages settle from 99.5% scale.
-        public static let pageArrivalSink: CGFloat = 0.995
-        /// 01 景深沉降: outgoing pages sink to 99.2% while fading — depth on
-        /// the exit without a readable zoom.
-        public static let pageDepartureSink: CGFloat = 0.992
-        public static let pageSharedAxisArrival: CGFloat = 1.04
-        public static let pageSharedAxisDeparture: CGFloat = 0.96
-        public static let pageBloomArrival: CGFloat = 0.94
+        /// ⌘K originBloom（精简版）：自顶锚 0.96 扩展到 1（原 0.94）。
+        public static let pageBloomArrival: CGFloat = 0.96
     }
 
     public enum ResultPresence {
@@ -221,32 +196,16 @@ public enum ToolMotion {
         public static let shellResize = contentReveal
         public static let panelReveal = contentReveal
         public static let modal = settle
-        /// v3: tool-switch page arrival (host-owned: applied by
-        /// `ToolPageStage`, never by tool pages). 01 景深沉降: 300ms smoothOut — the
-        /// incoming page sinks from y+10/99.5% while the outgoing layer runs
-        /// its own 220ms productiveExit (`pageDeparture`). Timing is driven by
-        /// `ToolPageStage`'s two explicit transactions, one per direction.
-        public static let pageArrival = Curve.smoothOut(duration: Duration.pageSinkEnter)
-        /// 01 景深沉降: outgoing page exit timing — 220ms productiveExit so
-        /// leaving content accelerates away while the arrival still settles.
-        public static let pageDeparture = Curve.productiveExit(duration: Duration.pageSinkExit)
-        public static let pageSharedAxisArrival = Curve.smoothOut(duration: Duration.pageSharedAxisEnter)
-        public static let pageSharedAxisDeparture = Curve.smoothOut(duration: Duration.pageSharedAxisExit)
+        /// 阶段③ 决策 9：工具切换页面的唯一到达/离开动画（host-owned：由
+        /// `ToolPageStage` 应用，工具页永不自用）。进/出共用同一 0.18s
+        /// easeInOut 包络、纯 opacity 无位移；depth/sharedAxis 的位移缩放
+        /// 编排已退役。`ToolPageStage` 仍按方向各自开显式事务，停靠簿记
+        /// 不变。
+        public static let contentCrossfade = Curve.inOut(duration: Duration.contentCrossfade)
+        /// ⌘K originBloom（精简版）：300ms smoothOut 自顶锚 0.96/4pt 上移
+        /// 扩展到 1；离开 200ms 对称收回。仅面板启动路径使用。
         public static let pageBloomArrival = Curve.smoothOut(duration: Duration.pageBloomEnter)
         public static let pageBloomDeparture = Curve.productiveExit(duration: Duration.pageBloomExit)
-        /// Page-header letter choreography: each title character rises on the
-        /// shared 480ms smoothOut arc (prototype .lt), one stagger step apart.
-        /// Consumed by `IndexPageHeader` only; tool pages never apply it
-        /// themselves.
-        public static func letterArrival(index: Int) -> Animation {
-            Curve.smoothOut(duration: Duration.letter).delay(letterArrivalDelay(index: index))
-        }
-
-        public static func letterArrivalDelay(index: Int) -> TimeInterval {
-            Double(index) * Duration.letterStagger
-        }
-        /// Subtitle follow-up beat after the letter choreography starts.
-        public static let headerFollow = Curve.smoothOut(duration: Duration.arrival)
         public static let resultPresenceAppearance = Curve.smoothOut(duration: ResultPresence.appearanceDuration)
         public static let resultPresenceExit = Curve.productiveExit(duration: ResultPresence.exitDuration)
         /// Wave 2 theme crossfade (prototype MOTION d.themeXfade): the whole
@@ -495,24 +454,6 @@ public enum ToolMotion {
             .opacity
         }
 
-        /// 01 景深沉降 (PAGE-TRANSITIONS t-1): incoming page fades in while
-        /// rising 10pt and settling from 99.5% scale; the outgoing page sinks
-        /// to 99.2% while fading. Insertion and removal intentionally ride
-        /// different timings (300ms smoothOut in / 220ms productiveExit out),
-        /// which one implicit `.animation` cannot split — `ToolPageStage` drives
-        /// each direction through its own explicit transaction. Host-owned;
-        /// Reduce Motion collapses to identity through the shared transition
-        /// helper.
-        public static var pageArrival: AnyTransition {
-            AnyTransition.asymmetric(
-                insertion: .opacity
-                    .combined(with: .offset(y: Distance.pageSinkRise))
-                    .combined(with: .scale(scale: Scale.pageArrivalSink)),
-                removal: .opacity
-                    .combined(with: .scale(scale: Scale.pageDepartureSink))
-            )
-        }
-
         public static var modal: AnyTransition {
             AnyTransition.opacity
                 .combined(with: .scale(scale: Scale.modal))
@@ -693,18 +634,6 @@ public extension View {
         reduceMotion: Bool
     ) -> some View {
         self.transition(ToolMotion.transition(transition, reduceMotion: reduceMotion))
-    }
-
-    /// v3: tool-switch page arrival. Identity-driven so the outgoing page fades
-    /// while the incoming page rises; the shared modifier owns Reduce Motion.
-    func toolPageArrival<ID: Hashable>(id: ID) -> some View {
-        modifier(
-            ToolMotionIdentityTransitionModifier(
-                id: id,
-                transition: ToolMotion.Transition.pageArrival,
-                animation: ToolMotion.Preset.pageArrival
-            )
-        )
     }
 
     func toolMotionIconSwap<ID: Hashable>(id: ID) -> some View {

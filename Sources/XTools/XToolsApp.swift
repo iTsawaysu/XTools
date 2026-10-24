@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XToolsCore
+import XToolsDesign
 
 @MainActor
 enum AppKitUndoCommandRouter {
@@ -115,7 +116,9 @@ struct XToolsApp: App {
     var body: some Scene {
         Window("Tools", id: "main") {
             RootView()
-                .frame(minWidth: 960, minHeight: 640)
+                // min 尺寸单源：与 RootView 内容层 frame 共用 ToolMetrics.Window
+                // 常量（阶段③ 治理速赢，原两处 960×640 字面量收敛）。
+                .frame(minWidth: ToolMetrics.Window.minimumWidth, minHeight: ToolMetrics.Window.minimumHeight)
                 .onAppear {
                     appDelegate.openWindowAction = openWindow
                 }

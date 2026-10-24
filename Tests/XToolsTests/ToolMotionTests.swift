@@ -20,12 +20,11 @@ struct ToolMotionTests {
         }
     }
 
+    /// 阶段③ 决策 9：页面切换只剩 crossfade（普通）与 originBloom（⌘K）
+    /// 两个 preset 家族；depth/sharedAxis 的位移缩放编排已随 token 退役。
     @Test func pageTransitionPresetsRespectReduceMotion() {
         for preset in [
-            ToolMotion.Preset.pageArrival,
-            ToolMotion.Preset.pageDeparture,
-            ToolMotion.Preset.pageSharedAxisArrival,
-            ToolMotion.Preset.pageSharedAxisDeparture,
+            ToolMotion.Preset.contentCrossfade,
             ToolMotion.Preset.pageBloomArrival,
             ToolMotion.Preset.pageBloomDeparture
         ] {
@@ -34,10 +33,19 @@ struct ToolMotionTests {
         }
     }
 
-    @Test func pageTransitionDurationsStayOrdered() {
-        #expect(ToolMotion.Duration.pageSinkExit < ToolMotion.Duration.pageSinkEnter)
-        #expect(ToolMotion.Duration.pageSharedAxisExit < ToolMotion.Duration.pageSharedAxisEnter)
+    @Test func pageBloomDurationsStayOrdered() {
+        // 出场不拖累新页到达：bloom 离开弧必须短于到达弧。
         #expect(ToolMotion.Duration.pageBloomExit < ToolMotion.Duration.pageBloomEnter)
+    }
+
+    /// 阶段③ 决策 9：普通页面切换的唯一包络 = 0.18s easeInOut crossfade
+    /// （纯 opacity、无位移；RM 折叠为直切）。锁定时长与曲线来源，防止
+    /// 调用侧再冒出第二套切页时长。
+    @Test func contentCrossfadeIsTheSinglePageSwitchEnvelope() {
+        #expect(ToolMotion.Duration.contentCrossfade == 0.18)
+        #expect(ToolMotion.Preset.contentCrossfade == ToolMotion.Curve.inOut(duration: ToolMotion.Duration.contentCrossfade))
+        #expect(ToolMotion.animation(ToolMotion.Preset.contentCrossfade, reduceMotion: true) == nil)
+        #expect(ToolMotion.animation(ToolMotion.Preset.contentCrossfade, reduceMotion: false) != nil)
     }
 
     /// v6: page-level effects resolve to four semantics only. Legacy preset

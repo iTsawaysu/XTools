@@ -176,7 +176,9 @@ enum AppShellPreferenceKeys {
         allowedValues: ["visible", "hidden"]
     )
 
-    /// JSON-encoded palette launch ring (`PaletteRecentsStore`).
+    /// JSON-encoded usage event log（阶段③ frecency 单源后由
+    /// `ToolUsageFrequencyStore` 统一读写：palette + navigation 双通道
+    /// 合并落此键，旧格式无 channel 字段解码缺省为 palette 通道）。
     static let paletteRecents = ToolPreferenceKey<String>.string(
         "tools.palette.recents.v1",
         default: "[]"

@@ -150,7 +150,6 @@ struct IndexPageHeader<Accessory: View>: View {
     let subtitle: String
     let chrome: IndexPageChrome
     let contentWidth: CGFloat
-    @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
     private let accessory: Accessory
     private let hasAccessory: Bool
 
@@ -190,10 +189,9 @@ struct IndexPageHeader<Accessory: View>: View {
             leadingPadding: chrome.headerLeadingPadding,
             railWidth: chrome.headerRailWidth
         )
-        // 以「标题 + 进入代际」为身份重建 arrival 头:整页重建时代每次
-        // 进入都重播逐字编排;页面停靠保活后由代际驱动等价重播(停靠页
-        // 代际恒为 0,环境翻转仅重建页头这一小块,代价可忽略)。
-        .id("\(title)\u{1}\(entryGeneration)")
+        // 阶段③ 决策 9：逐字入场退役后页头不再以「标题 + 进入代际」重建
+        // 身份——停靠回访直接呈现已到达的页头，进场表现交给页面级
+        // crossfade；新页面首次挂载时由 IndexPageHeaderText 播一次淡入。
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -223,10 +221,10 @@ struct IndexPageHeader<Accessory: View>: View {
     }
 }
 
-/// v3 页头到入场效:标题逐字弹簧升起、副标题延迟跟随、accent 竖轨自顶部
-/// 生长。常量全部来自 `ToolMotion`(letterArrival / headerFollow / settle),
-/// Reduce Motion 下直接呈现最终布局。头部以标题为身份(`.id(title)`)重建,
-/// 每次工具切换恰好重播一次。
+/// v3 页头到入场效（阶段③ 决策 9 收敛）：标题/副标题/accent 竖轨整块一次性
+/// 0.18s 纯 opacity 淡入。原「逐字弹簧 + 副标题延迟跟随 + 轨生长」的 0.48s
+/// 编排已退役——它与停靠保活模型相抵（每次切换重播、与全库 ≤0.35 节奏
+/// 割裂）。仅页面首次挂载播放一次；Reduce Motion 直接呈现最终布局。
 private struct IndexPageHeaderText: View {
     let title: String
     let subtitle: String
@@ -238,10 +236,11 @@ private struct IndexPageHeaderText: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xxs) {
-            IndexPageHeaderLetterTitle(text: title)
+            Text(title)
                 .font(ToolTypography.pageTitle)
                 .foregroundStyle(ToolTheme.textPrimary)
                 .lineLimit(1)
+                .accessibilityAddTraits(.isHeader)
             Text(subtitle)
                 .font(ToolTypography.pageSubtitle)
                 .foregroundStyle(ToolTheme.textSecondary)
@@ -249,15 +248,6 @@ private struct IndexPageHeaderText: View {
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: 720, alignment: .leading)
-                .opacity(arrived ? 1 : 0)
-                .offset(y: arrived ? 0 : ToolMotion.Distance.headerFollow)
-                .animation(
-                    ToolMotion.animation(
-                        ToolMotion.Preset.headerFollow.delay(ToolMotion.Duration.headerFollowDelay),
-                        reduceMotion: reduceMotion
-                    ),
-                    value: arrived
-                )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.leading, leadingPadding)
@@ -265,44 +255,15 @@ private struct IndexPageHeaderText: View {
             Capsule(style: .continuous)
                 .fill(ToolTheme.accent)
                 .frame(width: railWidth)
-                .scaleEffect(y: arrived ? 1 : 0, anchor: .top)
                 .padding(.vertical, ToolMetrics.Spacing.xs)
-                .animation(
-                    ToolMotion.animation(ToolMotion.Preset.settle, reduceMotion: reduceMotion),
-                    value: arrived
-                )
         }
-        .onAppear { arrived = true }
-    }
-}
-
-/// 页头标题的逐字入场(见 `ToolMotion.Preset.letterArrival`)。
-/// 对 VoiceOver 呈现为完整标题字符串,逐字仅为视觉编排。
-private struct IndexPageHeaderLetterTitle: View {
-    let text: String
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var arrived = false
-
-    var body: some View {
-        HStack(spacing: 0) {
-            let characters = Array(text)
-            ForEach(characters.indices, id: \.self) { index in
-                Text(String(characters[index]))
-                    .opacity(arrived ? 1 : 0)
-                    .offset(y: arrived ? 0 : ToolMotion.Distance.letterRise)
-                    .animation(
-                        ToolMotion.animation(
-                            ToolMotion.Preset.letterArrival(index: index),
-                            reduceMotion: reduceMotion
-                        ),
-                        value: arrived
-                    )
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(text)
-        .accessibilityAddTraits(.isHeader)
+        // 整块纯 opacity（无位移/缩放）：accent 轨与文字同一淡入，
+        // 不再单独走 settle 生长弧。
+        .opacity(arrived ? 1 : 0)
+        .animation(
+            ToolMotion.animation(ToolMotion.Preset.contentCrossfade, reduceMotion: reduceMotion),
+            value: arrived
+        )
         .onAppear { arrived = true }
     }
 }

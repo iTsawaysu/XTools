@@ -25,12 +25,10 @@ struct ToolPageKey: Hashable {
 }
 
 /// Page stage choreography, selected by `ToolPageTransitionIntent`:
-/// - `depth`: incoming rises 10pt from 99.5% (300ms smoothOut), outgoing sinks
-///   to 99.2% while fading (220ms productiveExit).
-/// - `sharedAxis`: cross-category pages swap on one axis (incoming 18pt below at
-///   1.04, outgoing 12pt above at 0.96).
-/// - `originBloom`: palette launches expand from the top edge (0.94 -> 1,
-///   420ms smoothOut).
+/// - 普通（depth/sharedAxis 归并）：进/出共用 0.18s crossfade、纯 opacity
+///   无位移（阶段③ 决策 9，位移缩放编排已退役）。
+/// - `originBloom`: palette launches expand from the top edge (0.96 -> 1,
+///   顶锚 4pt 上移，300ms 进 / 200ms 出)。
 /// Reduce Motion and the first mount swap immediately.
 ///
 /// Pages keep the same modifier structure while only pose values change.
@@ -146,10 +144,10 @@ private struct ToolPageParkingModifier: ViewModifier {
             )
     }
 
-    private var usesSharedAxis: Bool {
-        intent == .sharedAxis
-    }
-
+    // intent 参数保留枚举（ToolPageTransitionIntent 是导航起因的公开语义，
+    // RootViewModel 仍写入），但 depth 与 sharedAxis 不再区分：两者共用同一
+    // crossfade 姿态（阶段③ 决策 9 已授权退役位移缩放），只有 originBloom
+    // 保留独立的扩展编排。
     private var usesBloom: Bool {
         intent == .originBloom
     }
@@ -162,11 +160,10 @@ private struct ToolPageParkingModifier: ViewModifier {
         switch pose {
         case .visible:
             return 0
-        case .arrivalStart:
-            if usesBloom { return -ToolMotion.Distance.pageBloomDrop }
-            return usesSharedAxis ? ToolMotion.Distance.pageSharedAxisRise : ToolMotion.Distance.pageSinkRise
-        case .parked:
-            return usesSharedAxis ? -ToolMotion.Distance.pageSharedAxisDrop : 0
+        case .arrivalStart, .parked:
+            // 非 bloom 姿态零位移：crossfade 纯 opacity；bloom 进/出对称
+            // 收放到顶锚 -4pt。
+            return usesBloom ? -ToolMotion.Distance.pageBloomDrop : 0
         }
     }
 
@@ -174,24 +171,19 @@ private struct ToolPageParkingModifier: ViewModifier {
         switch pose {
         case .visible:
             return 1
-        case .arrivalStart:
-            if usesBloom { return ToolMotion.Scale.pageBloomArrival }
-            return usesSharedAxis ? ToolMotion.Scale.pageSharedAxisArrival : ToolMotion.Scale.pageArrivalSink
-        case .parked:
-            return usesSharedAxis ? ToolMotion.Scale.pageSharedAxisDeparture : ToolMotion.Scale.pageDepartureSink
+        case .arrivalStart, .parked:
+            return usesBloom ? ToolMotion.Scale.pageBloomArrival : 1
         }
     }
 
     private var animation: Animation? {
         switch pose {
         case .visible:
-            if usesBloom { return ToolMotion.Preset.pageBloomArrival }
-            return usesSharedAxis ? ToolMotion.Preset.pageSharedAxisArrival : ToolMotion.Preset.pageArrival
+            return usesBloom ? ToolMotion.Preset.pageBloomArrival : ToolMotion.Preset.contentCrossfade
         case .arrivalStart:
             return nil
         case .parked:
-            if usesBloom { return ToolMotion.Preset.pageBloomDeparture }
-            return usesSharedAxis ? ToolMotion.Preset.pageSharedAxisDeparture : ToolMotion.Preset.pageDeparture
+            return usesBloom ? ToolMotion.Preset.pageBloomDeparture : ToolMotion.Preset.contentCrossfade
         }
     }
 }

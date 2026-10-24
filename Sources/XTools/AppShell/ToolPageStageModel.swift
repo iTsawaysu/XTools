@@ -2,8 +2,8 @@ import SwiftUI
 
 /// ToolPageStage 的挂载簿记：显示中的页面 + 有界 LRU 停靠页。
 ///
-/// 01 景深沉降 的编排（离开 220ms productiveExit / 到达 300ms smoothOut）
-/// 由视图层按原语义驱动；本类型只决定「谁在树上、谁停靠、何时静默淘汰」。
+/// 到达/离开动画（0.18s crossfade；⌘K 为 originBloom 精简编排）由视图层
+/// 按语义驱动；本类型只决定「谁在树上、谁停靠、何时静默淘汰」。
 /// 停靠页留在 ZStack 里（透明、不可命中、无障碍隐藏、环境代际恒为 0），
 /// 再次进入时复用原有页面身份，避免重建页面的本地状态与原生视图。
 /// 淘汰按最久显示优先，在禁用动画的事务里静默进行，不重播任何过渡。
@@ -47,7 +47,7 @@ final class ToolPageStageModel: ObservableObject {
         }
     }
 
-    /// 离开事务（pageDeparture）内调用：旧页从显示转为停靠。
+    /// 离开事务（crossfade/bloom 出场）内调用：旧页从显示转为停靠。
     func depart(_ key: ToolPageKey) {
         guard key == displayed else { return }
         displayed = nil

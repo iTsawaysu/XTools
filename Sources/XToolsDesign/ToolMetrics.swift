@@ -153,6 +153,15 @@ public enum ToolMetrics {
         public static let pairCollapseFormatter: CGFloat = 860
     }
 
+    // MARK: - Window
+
+    /// 主窗口几何单源：XToolsApp（Scene 层 window frame）与 RootView（内容
+    /// 层 frame）双处引用同一常量，防止两处 min 尺寸漂移（阶段③ 治理速赢）。
+    public enum Window {
+        public static let minimumWidth: CGFloat = 960
+        public static let minimumHeight: CGFloat = 640
+    }
+
     // MARK: - Legacy Animation Duration
 
     /// Compatibility shim for older shared controls. New motion work should use
