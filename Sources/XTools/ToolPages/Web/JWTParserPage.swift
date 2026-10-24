@@ -63,7 +63,9 @@ private struct IndexJWTWorkspaceContent: View {
             // each input/output surface declares its own semantic contract.
             layout: .scroll,
             headerAccessory: {
-                // ADR-0028「标题+模式」：操作模式分段与全局清空驻留页头。
+                // ADR-0028「标题+模式」：操作模式分段与全局清空驻留页头。双纸
+                // 方案下保留页头原位（若迁统一壳 titleAccessory，分段会随双纸
+                // 切换动画移动；页头承载保持切换期间控件稳定，等价优先）。
                 HStack(spacing: ToolMetrics.Spacing.sm) {
                     IndexSegmentedControl(
                         items: IndexGenerateParseMode.segmentedItems,
@@ -77,25 +79,25 @@ private struct IndexJWTWorkspaceContent: View {
             }
         ) {
             IndexGenerateParseModeContent(mode: modeBinding.wrappedValue) {
-                generateContent
+                generateSurface
             } parse: {
-                parseContent
+                parseSurface
             }
         }
         .onAppear(perform: refreshGeneration)
         // Observe the owner before mode-content diffing can equate canonically
         // equivalent Strings whose signing bytes are different.
-        .onChange(of: session.generateAlgorithm) { _ in refreshVisibleGeneration() }
-        .onChange(of: ExactUTF8Identity(session.generatePayload)) { _ in refreshVisibleGeneration() }
-        .onChange(of: ExactUTF8Identity(session.generateSecret)) { _ in refreshVisibleGeneration() }
-        .onChange(of: session.generateSecretEncoding) { _ in refreshVisibleGeneration() }
-        .onChange(of: ExactUTF8Identity(session.parseSecret)) { _ in
+        .onChange(of: session.generateAlgorithm) { refreshVisibleGeneration() }
+        .onChange(of: ExactUTF8Identity(session.generatePayload)) { refreshVisibleGeneration() }
+        .onChange(of: ExactUTF8Identity(session.generateSecret)) { refreshVisibleGeneration() }
+        .onChange(of: session.generateSecretEncoding) { refreshVisibleGeneration() }
+        .onChange(of: ExactUTF8Identity(session.parseSecret)) {
             guard session.mode == .parse else { return }
             verify()
             localCheckDisclosureState.secretChanged(isEmpty: session.parseSecret.isEmpty)
         }
-        .onChange(of: entryGeneration) { generation in
-            if generation == 0 {
+        .onChange(of: entryGeneration) {
+            if entryGeneration == 0 {
                 showsGenerateSecret = false
                 showsParseSecret = false
             }
@@ -104,106 +106,114 @@ private struct IndexJWTWorkspaceContent: View {
 
     // MARK: - Generate
 
-    @ViewBuilder
-    private var generateContent: some View {
-        // 单张自然高度纸：签名配置 / Header·Payload 双栏 / JWT 输出。
-        IndexStackedWorkbench {
-            IndexWorkbenchPane(title: "签名配置") {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                    IndexFlowLayout(spacing: ToolMetrics.Spacing.sm, lineSpacing: 8) {
-                        IndexOptionGroup {
-                            IndexOptionLabel("算法")
-                            IndexSegmentedControl(
-                                items: JWTAlgorithm.allCases.map { ($0.rawValue, $0.rawValue) },
-                                selection: generateAlgorithmBinding,
-                            )
+    /// 生成模式纸（page-rollout D2）：IndexStackedWorkbench 的三段 bands 归位
+    /// 到 .canvas 内容区——纸几何与诊断槽职责归 WorkbenchSurface，各 pane 的
+    /// 诊断发布（generationSecret/Header/PayloadError）经 preference 单轨聚到
+    /// 本纸顶槽（旧壳本就是 preference 轨，等价平移）；bands 结构、签名配置、
+    /// Header·Payload 恒双栏（IndexPairLayout collapseWidth: 0）与转移/复制
+    /// 附件逐字保留。
+    private var generateSurface: some View {
+        WorkbenchSurface(title: nil, shape: .canvas) {
+            VStack(alignment: .leading, spacing: 0) {
+                IndexWorkbenchPane(title: "签名配置") {
+                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+                        IndexFlowLayout(spacing: ToolMetrics.Spacing.sm, lineSpacing: 8) {
+                            IndexOptionGroup {
+                                IndexOptionLabel("算法")
+                                IndexSegmentedControl(
+                                    items: JWTAlgorithm.allCases.map { ($0.rawValue, $0.rawValue) },
+                                    selection: generateAlgorithmBinding,
+                                )
+                            }
+                            IndexOptionGroup {
+                                IndexOptionLabel("密钥格式")
+                                IndexSegmentedControl(
+                                    items: Self.secretEncodingItems,
+                                    selection: generateSecretEncodingBinding,
+                                )
+                            }
                         }
-                        IndexOptionGroup {
-                            IndexOptionLabel("密钥格式")
-                            IndexSegmentedControl(
-                                items: Self.secretEncodingItems,
-                                selection: generateSecretEncodingBinding,
-                            )
-                        }
+
+                        IndexSecureInput(
+                            placeholder: "输入 HMAC Secret",
+                            text: $workspace.session.generateSecret,
+                            showsSecret: $showsGenerateSecret,
+                            secretNoun: "Secret"
+                        )
+                        .indexWorkspaceDiagnostic(session.generationSecretError)
+
+                        Text(secretEncodingHelp(session.generateSecretEncoding))
+                            .font(ToolTypography.caption)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-
-                    IndexSecureInput(
-                        placeholder: "输入 HMAC Secret",
-                        text: $workspace.session.generateSecret,
-                        showsSecret: $showsGenerateSecret,
-                        secretNoun: "Secret"
-                    )
-                    .indexWorkspaceDiagnostic(session.generationSecretError)
-
-                    Text(secretEncodingHelp(session.generateSecretEncoding))
-                        .font(ToolTypography.caption)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
-            }
 
-            IndexPairLayout(collapseWidth: 0) {
+                IndexPairLayout(collapseWidth: 0) {
+                    IndexWorkbenchPane(
+                        title: "Header",
+                        accessory: {
+                            IndexCopyButton(text: session.generatedHeader)
+                        },
+                        content: {
+                            IndexOutputSurface(
+                                text: session.generatedHeader,
+                                placeholder: "Header 将显示在这里",
+                                lineNumbers: true,
+                                syntax: nil,
+                                fillsHeight: true,
+                                minHeight: 84,
+                                colorize: jsonColorize(for: session.generatedHeader),
+                                workspaceSemantic: .structuredOutputReading
+                            )
+                            .indexWorkspaceDiagnostic(session.generationHeaderError)
+                        }
+                    )
+                } trailing: {
+                    IndexWorkbenchPane(
+                        title: "Payload",
+                        content: {
+                            IndexWorkspaceTextArea(
+                                placeholder: #"例如 {"sub":"1234567890"}"#,
+                                text: $workspace.session.generatePayload,
+                                minHeight: 84,
+                                fillsHeight: true,
+                                autoFocus: true,
+                                workspaceSemantic: .longTextNaturalInput
+                            )
+                            .indexWorkspaceDiagnostic(session.generationPayloadError)
+                            // 焦点契约（阶段③ C3）：生成模式首个输入 = Payload 编辑器。
+                            .workbenchFocusTarget()
+                        }
+                    )
+                }
+
                 IndexWorkbenchPane(
-                    title: "Header",
+                    title: "JWT",
                     accessory: {
-                        IndexCopyButton(text: session.generatedHeader)
+                        HStack(spacing: ToolMetrics.Spacing.fine) {
+                            Button(action: transferGeneratedToParse) {
+                                Label("在解析中检查", systemImage: "arrow.right.circle")
+                                    .font(ToolTypography.buttonSmall)
+                            }
+                            .buttonStyle(IndexButtonStyle(compact: true))
+                            .disabled(session.generatedToken.isEmpty)
+
+                            IndexCopyButton(text: session.generatedToken)
+                        }
                     },
                     content: {
                         IndexOutputSurface(
-                            text: session.generatedHeader,
-                            placeholder: "Header 将显示在这里",
-                            lineNumbers: true,
+                            text: session.generatedToken,
+                            placeholder: "填写有效 Payload 和 Secret 后自动生成",
+                            lineNumbers: false,
                             syntax: nil,
-                            fillsHeight: true,
                             minHeight: 84,
-                            colorize: jsonColorize(for: session.generatedHeader),
                             workspaceSemantic: .structuredOutputReading
                         )
-                        .indexWorkspaceDiagnostic(session.generationHeaderError)
-                    }
-                )
-            } trailing: {
-                IndexWorkbenchPane(
-                    title: "Payload",
-                    content: {
-                        IndexWorkspaceTextArea(
-                            placeholder: #"例如 {"sub":"1234567890"}"#,
-                            text: $workspace.session.generatePayload,
-                            minHeight: 84,
-                            fillsHeight: true,
-                            autoFocus: true,
-                            workspaceSemantic: .longTextNaturalInput
-                        )
-                        .indexWorkspaceDiagnostic(session.generationPayloadError)
                     }
                 )
             }
-
-            IndexWorkbenchPane(
-                title: "JWT",
-                accessory: {
-                    HStack(spacing: ToolMetrics.Spacing.fine) {
-                        Button(action: transferGeneratedToParse) {
-                            Label("在解析中检查", systemImage: "arrow.right.circle")
-                                .font(ToolTypography.buttonSmall)
-                        }
-                        .buttonStyle(IndexButtonStyle(compact: true))
-                        .disabled(session.generatedToken.isEmpty)
-
-                        IndexCopyButton(text: session.generatedToken)
-                    }
-                },
-                content: {
-                    IndexOutputSurface(
-                        text: session.generatedToken,
-                        placeholder: "填写有效 Payload 和 Secret 后自动生成",
-                        lineNumbers: false,
-                        syntax: nil,
-                        minHeight: 84,
-                        workspaceSemantic: .structuredOutputReading
-                    )
-                }
-            )
         }
     }
 
@@ -232,37 +242,41 @@ private struct IndexJWTWorkspaceContent: View {
 
     // MARK: - Parse
 
-    @ViewBuilder
-    private var parseContent: some View {
-        // 单张自然高度纸：JWT 输入 / 解码结果（Header·Payload 双栏 +
-        // 免责文案 + 本地检查 Disclosure）。
-        IndexStackedWorkbench {
-            IndexWorkbenchPane(title: "JWT") {
-                IndexWorkspaceTextArea(
-                    placeholder: "粘贴 JWT（eyJ...）",
-                    text: $workspace.session.parseInput,
-                    minHeight: 84,
-                    autoFocus: true,
-                    workspaceSemantic: .longTextNaturalInput
-                )
-                .onChange(of: session.parseInput) { _ in parse() }
-                .indexWorkspaceDiagnostic(session.parseError)
-            }
+    /// 解析模式纸（page-rollout D2）：两段 bands 归位到 .canvas 内容区；
+    /// parseInput/parseError 诊断经 preference 单轨聚到本纸顶槽，本地检查
+    /// Disclosure 与解码结果双栏逐字保留。
+    private var parseSurface: some View {
+        WorkbenchSurface(title: nil, shape: .canvas) {
+            VStack(alignment: .leading, spacing: 0) {
+                IndexWorkbenchPane(title: "JWT") {
+                    IndexWorkspaceTextArea(
+                        placeholder: "粘贴 JWT（eyJ...）",
+                        text: $workspace.session.parseInput,
+                        minHeight: 84,
+                        autoFocus: true,
+                        workspaceSemantic: .longTextNaturalInput
+                    )
+                    .onChange(of: session.parseInput) { parse() }
+                    .indexWorkspaceDiagnostic(session.parseError)
+                    // 焦点契约（阶段③ C3）：解析模式首个输入 = JWT 输入编辑器。
+                    .workbenchFocusTarget()
+                }
 
-            IndexWorkbenchPane(title: "解码结果") {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
-                    IndexPairLayout(collapseWidth: 0) {
-                        decodedHeaderPane
-                    } trailing: {
-                        decodedPayloadPane
+                IndexWorkbenchPane(title: "解码结果") {
+                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+                        IndexPairLayout(collapseWidth: 0) {
+                            decodedHeaderPane
+                        } trailing: {
+                            decodedPayloadPane
+                        }
+
+                        Text("Header 和 Payload 仅为解码内容，不代表可信输入或具体应用会接受此 Token。")
+                            .font(ToolTypography.caption)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        localCheckDisclosure
                     }
-
-                    Text("Header 和 Payload 仅为解码内容，不代表可信输入或具体应用会接受此 Token。")
-                        .font(ToolTypography.caption)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    localCheckDisclosure
                 }
             }
         }
@@ -436,7 +450,7 @@ private struct IndexJWTWorkspaceContent: View {
             .indexWorkspaceDiagnostic(session.transferError)
         }
         .onAppear(perform: prepareLocalCheckDisclosure)
-        .onChange(of: localCheckAttentionUpdateID) { _ in
+        .onChange(of: localCheckAttentionUpdateID) {
             localCheckDisclosureState.presentationChanged(
                 isPresent: session.localCheckPresentation != nil,
                 issueID: localCheckAttentionID

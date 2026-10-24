@@ -56,10 +56,12 @@ struct IndexTimezoneViewerPage: View {
     }
 
     private func page(currentTime: Date) -> some View {
+        // 统一壳装配（page-rollout D3）：.result 形态，标题行「时区列表」由
+        // 壳 title 承载；旧 controls 槽的 EmptyView() 填槽清理（本页无页级
+        // 动作，壳标题行不再渲染空槽）；折叠区/收藏卡片/TimelineView 每秒
+        // 节拍逐字保留。
         IndexPage("时区查看器", subtitle: "显示精选全球城市的当前时间，按大洲折叠并按 UTC 偏移量分组。", workspaceSemantic: .queryListWorkspace) {
-            IndexResultWorkbench(title: "时区列表") {
-                EmptyView()
-            } content: {
+            WorkbenchSurface(title: "时区列表", shape: .result) {
                 ScrollView {
                     VStack(spacing: ToolMetrics.Spacing.lg) {
                         let projection = TimezoneViewerProjection(favoriteKeys: favoriteStore.favoriteKeys, date: currentTime)

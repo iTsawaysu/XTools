@@ -126,6 +126,16 @@ struct IndexTextEncryptionPage: View {
     }
 }
 
+/// 统一壳装配（page-rollout D1）：加密/解密方向分段是页面级模式（changeMode
+/// 自带回填语义：有输出时密文回填为反向输入），归标题行 titleAccessory
+/// （Base64File 编码/解码分段先例）；算法菜单 + 弱算法提示 + 口令字段是
+/// 影响当下加解密的即时参数，归弹性参数区（SecureInput 唯一安全输入面保留）；
+/// 「加密/解密 ⌘↩」走壳级 primaryAction（enabled 门控同旧 disabled 按钮）；
+/// 方向互换动作（design-system 挂账「.swap 已建待接入」的兑现）接入输出
+/// pane ActionBar 的 `.swap`——与分段同走 changeMode（回填语义一致），方向
+/// 状态仍由分段持续可见；清空归输入 pane 尾 ActionBar，复制归输出 pane 尾
+/// ActionBar（⇧⌘C 由 IOPair 根部代理持有，页面只在 IOPair 声明一次）；转换
+/// 错误走 preference 单轨（旧 IndexTextConversionWorkbench 的纸顶槽等价平移）。
 private struct IndexTextEncryptionWorkspaceContent: View {
     @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @ObservedObject var workspace: TextEncryptionToolWorkspaceModel
@@ -170,6 +180,10 @@ private struct IndexTextEncryptionWorkspaceContent: View {
         mode == "enc" ? "加密" : "解密"
     }
 
+    private var primaryActionHelp: String {
+        mode == "enc" ? "加密（⌘↩）" : "解密（⌘↩）"
+    }
+
     private var showsWeakAlgorithmWarning: Bool {
         mode == "enc" && selectedAlgorithm.isInsecure
     }
@@ -183,59 +197,77 @@ private struct IndexTextEncryptionWorkspaceContent: View {
         )
     }
 
+    /// 旧 clearDisabled 表达式（显式传入旧壳的同条件）：输入、输出、错误与
+    /// 口令全部为空时清空不可用。
+    private var clearDisabled: Bool {
+        input.isEmpty && output.isEmpty && error == nil && password.isEmpty
+    }
+
     var body: some View {
         IndexPage("文本加密", subtitle: "默认使用 AES-GCM 认证加密，并保留 OpenSSL 旧格式兼容。", workspaceSemantic: .securityTransformWorkspace) {
-            IndexTextConversionWorkbench(
-                inputTitle: mode == "enc" ? "明文" : "密文",
-                outputTitle: mode == "enc" ? "密文" : "明文",
-                placeholder: inputPlaceholder,
-                input: $workspace.input,
-                output: output,
-                inputError: error,
-                onClear: clearSensitiveState,
-                clearDisabled: input.isEmpty && output.isEmpty && error == nil && password.isEmpty,
-                workspaceSemantic: .securityTransformWorkspace,
-                headControls: AnyView(encryptionHeadControls)
-            )
+            WorkbenchSurface(
+                title: nil,
+                primaryAction: WorkbenchPrimaryAction(
+                    title: primaryActionTitle,
+                    help: primaryActionHelp,
+                    enabled: !primaryActionDisabled,
+                    perform: run
+                ),
+                shape: .inputOutput,
+                titleAccessory: { modeControl },
+                parameters: { parameterFlow }
+            ) {
+                WorkbenchIOPair(
+                    leadingTitle: mode == "enc" ? "明文" : "密文",
+                    trailingTitle: mode == "enc" ? "密文" : "明文",
+                    leadingActions: [
+                        .clear(enabled: !clearDisabled, onPerform: clearSensitiveState)
+                    ],
+                    trailingActions: [
+                        .swap(onPerform: swapDirection, directionLabel: "加密 ↔ 解密"),
+                        .copy(text: output)
+                    ],
+                    leadingAccessory: { stdinCluster },
+                    leading: { inputPane },
+                    trailingAccessory: { stdoutBadge },
+                    trailing: { outputPane }
+                )
+                // 诊断单轨：加解密错误（旧壳 inputError 纸顶槽等价平移）。
+                .indexWorkspaceDiagnostic(error, tone: .error)
+            }
         }
-        .onChange(of: entryGeneration) { generation in
-            if generation == 0 { showsPassword = false }
+        .onChange(of: entryGeneration) {
+            if entryGeneration == 0 { showsPassword = false }
         }
-        .onChange(of: weakAlgorithmDiagnostic) { diagnostic in
-            if let announcement = weakAlgorithmPresentation.update(to: diagnostic) {
+        .onChange(of: weakAlgorithmDiagnostic) {
+            if let announcement = weakAlgorithmPresentation.update(to: weakAlgorithmDiagnostic) {
                 toastCenter?.show(announcement.text, tone: announcement.tone)
             }
         }
     }
 
-    /// Paper-head row: mode + algorithm + secret + run, one line, exactly the
-    /// 44pt rail every other tool uses.
-    private var encryptionHeadControls: some View {
-        HStack(spacing: ToolMetrics.Spacing.sm) {
-            modeControl
-            algorithmControlGroup
-            widePasswordInput
-                .layoutPriority(1)
-            primaryActionButton
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var compactControls: some View {
-        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
-            HStack(spacing: ToolMetrics.Spacing.sm) {
-                modeControl
-                algorithmControlGroup
-            }
-
-            HStack(spacing: ToolMetrics.Spacing.sm) {
-                compactPasswordInput
-                primaryActionButton
+    /// 弹性参数区：算法菜单（弱算法时 tone 警告描边）与条件在场的弱算法
+    /// 状态钮同组（旧 headControls 算法簇等价平移）；口令字段随行（放不下
+    /// 换行，永不横滚）。
+    private var parameterFlow: some View {
+        WorkbenchParameterFlow {
+            WorkbenchParameterGroup {
+                WorkbenchParameterItem {
+                    algorithmControlGroup
+                }
+                WorkbenchParameterItem {
+                    passwordInput
+                        .frame(
+                            minWidth: ToolMetrics.Control.fieldMinWidth,
+                            idealWidth: ToolMetrics.Control.passwordIdealWidth,
+                            maxWidth: ToolMetrics.Control.passwordMaxWidth
+                        )
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// 加密/解密方向分段（页面级模式，标题行承载；当前方向状态持续可见）。
     private var modeControl: some View {
         IndexSegmentedControl(items: [("enc", "加密"), ("dec", "解密")], selection: modeSelection)
             .frame(width: ToolMetrics.Control.modeSegment, height: ToolMetrics.Control.modeSegmentHeight)
@@ -260,29 +292,11 @@ private struct IndexTextEncryptionWorkspaceContent: View {
         }
     }
 
-    private var primaryActionButton: some View {
-        Button { run() } label: { Label(primaryActionTitle, systemImage: "play.fill") }
-            .buttonStyle(IndexButtonStyle(primary: true))
-            .frame(minWidth: ToolMetrics.Control.actionMinWidth)
-            .disabled(primaryActionDisabled)
-            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
-    }
-
     /// The operation needs both a payload and a password; without either the
     /// button must read as unavailable instead of accepting a silent no-op
     /// (audit C-03 / I-01).
     private var primaryActionDisabled: Bool {
         workspace.input.isEmpty || workspace.password.isEmpty
-    }
-
-    private var widePasswordInput: some View {
-        passwordInput
-            .frame(minWidth: ToolMetrics.Control.fieldMinWidth, idealWidth: ToolMetrics.Control.passwordIdealWidth, maxWidth: .infinity)
-    }
-
-    private var compactPasswordInput: some View {
-        passwordInput
-            .frame(minWidth: ToolMetrics.Control.fieldMinWidth, idealWidth: ToolMetrics.Control.passwordIdealWidth, maxWidth: ToolMetrics.Control.passwordMaxWidth)
     }
 
     private var passwordInput: some View {
@@ -292,6 +306,54 @@ private struct IndexTextEncryptionWorkspaceContent: View {
             showsSecret: $showsPassword,
             secretNoun: "加密口令"
         )
+    }
+
+    /// 输入 pane 头附件：STDIN 徽章 + 实时字符计数（旧 pane terminalTag 与
+    /// IndexInputHeaderAccessory 计数等价平移）。
+    private var stdinCluster: some View {
+        HStack(spacing: ToolMetrics.Spacing.fine) {
+            IndexBadge("STDIN", tone: .neutral, isCapsule: true)
+            IndexInputCountLabel(
+                text: IndexInputCountPresentation.characters.label(for: input)
+            )
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var stdoutBadge: some View {
+        IndexBadge("STDOUT", tone: .neutral, isCapsule: true)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    /// 输入 pane 内容（旧壳 input 槽投影）：受控 AppKit 编辑器填满 pane。
+    private var inputPane: some View {
+        IndexWorkspaceTextArea(
+            placeholder: inputPlaceholder,
+            text: $workspace.input,
+            fillsHeight: true,
+            autoFocus: true,
+            workspaceSemantic: .securityTransformWorkspace
+        )
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // 焦点契约（阶段③ C3）：页面首个输入 = 输入编辑器。
+        .workbenchFocusTarget()
+    }
+
+    /// 输出 pane 内容（旧壳 output 槽投影）：standard 呈现（无行号/无着色）。
+    private var outputPane: some View {
+        IndexOutputSurface(
+            text: output,
+            placeholder: IndexEmptyStateCopy.outputWillShowHere,
+            lineNumbers: false,
+            fillsHeight: true,
+            workspaceSemantic: .securityTransformWorkspace
+        )
+    }
+
+    /// 方向互换（ActionBar .swap 入口）：与分段同走 changeMode，回填语义
+    /// （有输出时密文回填为反向输入）一致。
+    private func swapDirection() {
+        changeMode(to: mode == "enc" ? "dec" : "enc")
     }
 
     private func changeMode(to newMode: String) {

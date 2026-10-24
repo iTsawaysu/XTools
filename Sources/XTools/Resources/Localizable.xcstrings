@@ -802,6 +802,17 @@
     "加密": {
       "extractionState": "manual"
     },
+    "加密 ↔ 解密": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypt ↔ Decrypt"
+          }
+        }
+      }
+    },
     "加密与生成": {
       "extractionState": "manual"
     },
@@ -813,6 +824,17 @@
     },
     "加密操作失败。": {
       "extractionState": "manual"
+    },
+    "加密（⌘↩）": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypt (⌘↩)"
+          }
+        }
+      }
     },
     "加载设备信息中…": {
       "extractionState": "manual"
@@ -2653,6 +2675,17 @@
     },
     "解密操作失败。": {
       "extractionState": "manual"
+    },
+    "解密（⌘↩）": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decrypt (⌘↩)"
+          }
+        }
+      }
     },
     "解析": {
       "extractionState": "manual"
