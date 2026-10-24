@@ -329,6 +329,17 @@ write_info_plist_if_needed() {
     /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$INFO_PLIST" 2>/dev/null || true
     /usr/libexec/PlistBuddy -c "Set :NSAppTransportSecurity:NSAllowsArbitraryLoads true" "$INFO_PLIST" 2>/dev/null || true
   }
+  # xtools:// 深链 scheme 注册（阶段③ D3，design.md §8）：
+  # xtools://tool/<id>?segment=<s>&input=<text>。幂等 ensure 语义同上——
+  # 既有 plist（增量打包路径）也要补上，否则旧包重打包后 deeplink 失联。
+  ensure_url_scheme() {
+    /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" "$INFO_PLIST" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" "$INFO_PLIST" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLName string $BUNDLE_ID" "$INFO_PLIST" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$INFO_PLIST" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string xtools" "$INFO_PLIST" 2>/dev/null || true
+    /usr/libexec/PlistBuddy -c "Set :CFBundleURLTypes:0:CFBundleURLSchemes:0 xtools" "$INFO_PLIST" 2>/dev/null || true
+  }
   if [[ -f "$INFO_PLIST" ]]; then
     local current_bundle_id current_min_version
     current_min_version="$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$INFO_PLIST" 2>/dev/null || true)"
@@ -336,6 +347,7 @@ write_info_plist_if_needed() {
       # Keep the hot path byte-for-byte stable when identity and minimum OS match.
       if [[ "$current_bundle_id" == "$BUNDLE_ID" && "$current_min_version" == "$MIN_SYSTEM_VERSION" ]]; then
         ensure_ats_exception
+        ensure_url_scheme
         return 0
       fi
       if [[ "$current_bundle_id" != "$BUNDLE_ID" ]]; then
@@ -350,6 +362,7 @@ write_info_plist_if_needed() {
       /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string $MIN_SYSTEM_VERSION" "$INFO_PLIST"
     fi
     ensure_ats_exception
+    ensure_url_scheme
     return 0
   fi
 
@@ -374,6 +387,17 @@ write_info_plist_if_needed() {
   <string>1.0.0</string>
   <key>CFBundleVersion</key>
   <string>1</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>$BUNDLE_ID</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>xtools</string>
+      </array>
+    </dict>
+  </array>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>NSAppTransportSecurity</key>

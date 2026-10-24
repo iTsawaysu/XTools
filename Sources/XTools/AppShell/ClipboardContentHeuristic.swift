@@ -99,6 +99,8 @@ public enum ClipboardContentHeuristic {
 
     /// ≥16 字符、仅标准字符集（padding `=` 只允许结尾）、长度 4 的倍数
     /// （padding 语义成立）、且 `Data(base64Encoded:)` 真的能解。
+    /// 纯十六进制串（MD5/SHA 摘要形态）拒判：它们同时落在 Base64 字符集内
+    /// 且常满足 4 倍长度，会误报「剪贴板中有 Base64」。
     private static func isBase64(_ text: String) -> Bool {
         guard text.count >= 16 else { return false }
         var body = Substring(text)
@@ -111,6 +113,7 @@ public enum ClipboardContentHeuristic {
               body.unicodeScalars.allSatisfy(base64Alphabet.contains)
         else { return false }
         guard (body.count + paddingCount) % 4 == 0 else { return false }
+        if body.unicodeScalars.allSatisfy(hexDigits.contains) { return false }
         return Data(base64Encoded: text) != nil
     }
 

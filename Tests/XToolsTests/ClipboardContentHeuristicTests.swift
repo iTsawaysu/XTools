@@ -73,6 +73,10 @@ struct ClipboardContentHeuristicTests {
         #expect(ClipboardContentHeuristic.detect("SGVsbG8sIHdvcmxkIQ===") == nil)
         // 字符集外。
         #expect(ClipboardContentHeuristic.detect("SGVs!G8sIHdvcmxkIQ==") == nil)
+        // 纯十六进制串（MD5/SHA 摘要形态）拒判：同落 Base64 字符集且 4 倍长，
+        // 但语义是哈希而非 Base64（trellis-check 发现的误判面）。
+        #expect(ClipboardContentHeuristic.detect("d41d8cd98f00b204e9800998ecf8427e") == nil)
+        #expect(ClipboardContentHeuristic.detect("1234567890abcdef1234567890abcdef") == nil)
         // padding 位置错误（中段等号）。
         #expect(ClipboardContentHeuristic.detect("SG=sbG8sIHdvcmxkIQ==") == nil)
         // 普通长英文句子：可编码字符集内但不满足 4 倍数或解码失败。
