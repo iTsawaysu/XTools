@@ -21,12 +21,31 @@ struct WorkbenchActionBarAction: @unchecked Sendable {
     enum Kind {
         case copy(text: String, title: String, successToast: String?, help: String?, enabled: Bool)
         case save(payload: String, fileName: String)
+        case fileSave(title: String, accessibilityLabel: String, help: String?, onPerform: () -> Void)
         case useAsInput(onPerform: () -> Void)
         case swap(onPerform: () -> Void, directionLabel: String)
         case clear(title: String, enabled: Bool, onPerform: () -> Void)
     }
 
     let kind: Kind
+
+    /// 异步文件面板保存（page-rollout Batch C）：图片族的产物保存走会话
+    /// 自持的 filePanel/outputPanel 客户端与 `ImageSaveOutcomeToasts` 回执，
+    /// 不落 `.save` 的文本写盘通道；动作条只承载触发与观感，条件在场由
+    /// 宿主构造动作数组表达（旧壳 trailingActions 的 nil 分支等价）。
+    static func fileSave(
+        title: String,
+        accessibilityLabel: String,
+        help: String? = nil,
+        onPerform: @escaping () -> Void
+    ) -> WorkbenchActionBarAction {
+        WorkbenchActionBarAction(kind: .fileSave(
+            title: title,
+            accessibilityLabel: accessibilityLabel,
+            help: help,
+            onPerform: onPerform
+        ))
+    }
 
     /// 复制主输出（第一个 copy 动作挂 ⇧⌘C）。`title` 为按钮文案（默认
     /// 「复制」，批量动作传「全部复制」保持旧页文案等价）；`successToast`
@@ -182,6 +201,17 @@ struct WorkbenchActionBar: View {
                 showsIcon: false,
                 framed: true
             )
+
+        case let .fileSave(title, accessibilityLabel, help, onPerform):
+            quietButton(
+                title: title,
+                systemImage: IndexActionSymbol.save,
+                help: help ?? accessibilityLabel,
+                action: onPerform
+            )
+            // AX 标签独立于悬停说明（旧壳保存钮同构：可见文案/AX/help 三者
+            // 各自逐字保留）。
+            .accessibilityLabel(accessibilityLabel)
 
         case let .useAsInput(onPerform):
             quietButton(

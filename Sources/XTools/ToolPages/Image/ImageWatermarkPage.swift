@@ -220,40 +220,47 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         previewSession.image ?? session.outputImage
     }
 
-    /// Hub 分段内容：一张纸，纸头是横向滚动的参数条与固定保存动作，
-    /// 纸内按源图状态切换共享空态与单张成品预览。实时预览契约不变——
-    /// 预览替换即时生效、状态行保持 18pt 稳定高度、连续控件走双轨防抖，
-    /// 画布在有界预览区（720×480 上限）内等比呈现。
+    /// Hub 分段内容：统一壳 canvas 形态（page-rollout Batch C），即时参数
+    /// 进弹性参数区（窄窗换行，根治旧壳 44pt 纸头的横向滚动），保存动作
+    /// 收进内容区底部声明式 ActionBar（trailingActions 逃生口退役）。纸内
+    /// 按源图状态切换共享空态与单张成品预览。实时预览契约不变——预览替换
+    /// 即时生效、状态行保持 18pt 稳定高度、连续控件走双轨防抖，画布在有
+    /// 界预览区（720×480 上限）内等比呈现。
     var body: some View {
-        IndexImageWorkbench(
+        WorkbenchSurface(
             title: "水印设置",
-            trailingActions: saveButton
+            shape: .canvas,
+            parameters: { watermarkParameters }
         ) {
-            watermarkParameters
-        } content: {
-            watermarkContent
-                .indexWorkspaceDiagnostic(session.error ?? previewSession.error)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .indexDropZone(
-                    isTargeted: $isDropTargeted,
-                    onFile: receiveImageURL,
-                    onMultipleFiles: rejectMultipleImageDrop
-                )
+            VStack(spacing: 0) {
+                watermarkContent
+                    .indexWorkspaceDiagnostic(session.error ?? previewSession.error)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .indexDropZone(
+                        isTargeted: $isDropTargeted,
+                        onFile: receiveImageURL,
+                        onMultipleFiles: rejectMultipleImageDrop
+                    )
+
+                saveActionBar
+                    .padding(.top, ToolMetrics.Spacing.sm)
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private var saveButton: AnyView? {
-        guard session.output != nil, !session.isProcessing else { return nil }
-        return AnyView(
-            Button(action: saveImage) {
-                Label("保存", systemImage: IndexActionSymbol.save)
-                    .font(ToolTypography.buttonSmall)
-            }
-            .buttonStyle(IndexButtonStyle(compact: true))
-            .accessibilityLabel("保存水印图片")
-            .help("保存与当前水印设置一致的原尺寸图片")
-        )
+    /// 保存动作条（条件在场 = 旧壳 trailingActions 的 nil 分支）。
+    @ViewBuilder
+    private var saveActionBar: some View {
+        if session.output != nil, !session.isProcessing {
+            WorkbenchActionBar(actions: [
+                .fileSave(
+                    title: "保存",
+                    accessibilityLabel: "保存水印图片",
+                    help: "保存与当前水印设置一致的原尺寸图片",
+                    onPerform: saveImage
+                )
+            ])
+        }
     }
 
     @ViewBuilder
@@ -307,44 +314,49 @@ private struct IndexImageWatermarkWorkspaceContent: View {
 
     @ViewBuilder
     private var watermarkParameters: some View {
-        IndexOptionGroup {
-            IndexOptionLabel("透明度")
-            IndexSlider(value: $opacity, range: 0.1...1.0, step: 0)
-                .frame(width: ToolMetrics.Control.slider)
-                .accessibilityLabel("水印透明度")
-                .accessibilityValue("\(Int(opacity * 100))%")
-                .onChange(of: opacity) { _, _ in recipeDidChange(previewCadence: .debounced) }
+        WorkbenchParameterFlow {
+            WorkbenchParameterGroup {
+                WorkbenchParameterItem("透明度") {
+                    IndexSlider(value: $opacity, range: 0.1...1.0, step: 0)
+                        .frame(width: ToolMetrics.Control.slider)
+                        .accessibilityLabel("水印透明度")
+                        .accessibilityValue("\(Int(opacity * 100))%")
+                        .onChange(of: opacity) { recipeDidChange(previewCadence: .debounced) }
+                }
+                WorkbenchParameterItem("大小") {
+                    HStack(spacing: ToolMetrics.Spacing.fine) {
+                        IndexSlider(value: $sizeRatio, range: ImageWatermarkSizing.ratioRange, step: 0.01)
+                            .frame(width: ToolMetrics.Control.slider)
+                            .accessibilityLabel("水印大小")
+                            .accessibilityValue("\(sizePercent)%")
+                            .help("按图片宽度比例设置水印大小")
+                            .onChange(of: sizeRatio) { recipeDidChange(previewCadence: .debounced) }
+                        Text("\(sizePercent)%")
+                            .font(ToolTypography.monoCaption)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                            .frame(width: ToolMetrics.Control.regular, alignment: .trailing)
+                            .accessibilityHidden(true)
+                    }
+                }
+            }
 
-            IndexOptionDivider()
-            IndexOptionLabel("大小")
-            IndexSlider(value: $sizeRatio, range: ImageWatermarkSizing.ratioRange, step: 0.01)
-                .frame(width: ToolMetrics.Control.slider)
-                .accessibilityLabel("水印大小")
-                .accessibilityValue("\(sizePercent)%")
-                .help("按图片宽度比例设置水印大小")
-                .onChange(of: sizeRatio) { _, _ in recipeDidChange(previewCadence: .debounced) }
-            Text("\(sizePercent)%")
-                .font(ToolTypography.monoCaption)
-                .foregroundStyle(ToolTheme.textSecondary)
-                .frame(width: ToolMetrics.Control.regular, alignment: .trailing)
-                .accessibilityHidden(true)
-        }
+            WorkbenchParameterGroup {
+                WorkbenchParameterItem("颜色") {
+                    IndexSegmentedControl(
+                        items: [
+                            (ImageWatermarkTextColor.white, "白色"),
+                            (.black, "黑色")
+                        ],
+                        selection: $textColor,
+                    )
+                    .onChange(of: textColor) { recipeDidChange(previewCadence: .immediate) }
+                }
 
-        IndexOptionGroup {
-            IndexOptionLabel("颜色")
-            IndexSegmentedControl(
-                items: [
-                    (ImageWatermarkTextColor.white, "白色"),
-                    (.black, "黑色")
-                ],
-                selection: $textColor,
-            )
-            .onChange(of: textColor) { _, _ in recipeDidChange(previewCadence: .immediate) }
-
-            IndexOptionDivider()
-
-            WatermarkAnchorOption(position: $position) {
-                recipeDidChange(previewCadence: .immediate)
+                WorkbenchParameterItem("位置") {
+                    WatermarkAnchorOption(position: $position) {
+                        recipeDidChange(previewCadence: .immediate)
+                    }
+                }
             }
         }
     }
@@ -388,6 +400,9 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         )
         .frame(minWidth: ToolMetrics.Control.passwordIdealWidth, idealWidth: ToolMetrics.Control.textWideWidth, maxWidth: .infinity)
         .accessibilityLabel("水印文字")
+        // 焦点契约（阶段③ C3）：本页唯一文本输入（空态与有图态、
+        // ViewThatFits 双分支共用同一字段声明）。
+        .workbenchFocusTarget()
         .onChange(of: watermarkText) { _, _ in recipeDidChange(previewCadence: .debounced) }
     }
 
@@ -559,8 +574,8 @@ private struct IndexImageWatermarkWorkspaceContent: View {
 }
 
 /// Compact spatial-position trigger. Rendered inside the shared watermark
-/// option group row, so the trigger keeps the group's inner-control surface
-/// instead of framing its own container.
+/// parameter row, so the trigger keeps the parameter item's inner-control
+/// surface instead of framing its own container.
 private struct WatermarkAnchorOption: View {
     @Binding var position: ImageWatermarkPosition
     let onChange: () -> Void
@@ -569,8 +584,6 @@ private struct WatermarkAnchorOption: View {
     private let columns = Array(repeating: GridItem(.fixed(28), spacing: ToolMetrics.Spacing.xs), count: 3)
 
     var body: some View {
-        IndexOptionLabel("位置")
-
         Button {
             isPickerPresented.toggle()
         } label: {

@@ -21,32 +21,43 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     @State private var isDropTargeted = false
 
     var body: some View {
-        IndexImageWorkbench(
+        // 统一壳（page-rollout Batch C）：canvas 形态承载部署包滚动内容，
+        // 无即时参数（旧壳同样只有标题）；「全部保存」从旧壳 44pt 纸头
+        // trailingActions 逃生口收进内容区底部声明式 ActionBar，滚动内容
+        // 时保存动作固定可见的语义不变（fill 布局 + 内滚 ScrollView）。
+        WorkbenchSurface(
             title: "Favicon 部署包",
-            trailingActions: saveAllButton
+            shape: .canvas
         ) {
-            faviconContent
-                .indexWorkspaceDiagnostic(session.error)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .indexDropZone(
-                    isTargeted: $isDropTargeted,
-                    onFile: receiveImageURL,
-                    onMultipleFiles: rejectMultipleImageDrop
-                )
+            VStack(spacing: 0) {
+                faviconContent
+                    .indexWorkspaceDiagnostic(session.error)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .indexDropZone(
+                        isTargeted: $isDropTargeted,
+                        onFile: receiveImageURL,
+                        onMultipleFiles: rejectMultipleImageDrop
+                    )
+
+                saveActionBar
+                    .padding(.top, ToolMetrics.Spacing.sm)
+            }
         }
     }
 
-    private var saveAllButton: AnyView? {
-        guard session.package != nil, !session.isProcessing else { return nil }
-        return AnyView(
-            Button(action: saveAll) {
-                Label("全部保存", systemImage: IndexActionSymbol.save)
-                    .font(ToolTypography.buttonSmall)
-            }
-            .buttonStyle(IndexButtonStyle(compact: true))
-            .accessibilityLabel("保存全部五个 Favicon 部署文件")
-            .help("选择文件夹保存五个部署文件")
-        )
+    /// 保存动作条（条件在场 = 旧壳 trailingActions 的 nil 分支）。
+    @ViewBuilder
+    private var saveActionBar: some View {
+        if session.package != nil, !session.isProcessing {
+            WorkbenchActionBar(actions: [
+                .fileSave(
+                    title: "全部保存",
+                    accessibilityLabel: "保存全部五个 Favicon 部署文件",
+                    help: "选择文件夹保存五个部署文件",
+                    onPerform: saveAll
+                )
+            ])
+        }
     }
 
     @ViewBuilder

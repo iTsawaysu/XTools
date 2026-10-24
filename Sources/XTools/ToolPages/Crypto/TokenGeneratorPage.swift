@@ -101,63 +101,87 @@ struct IndexTokenGeneratorSegment: View {
     }
 }
 
-/// Prototype v3 generator body (UUID-style): one wrapping parameter card with
-/// the recipe facts and generation actions, above wrapped value rows. Token
-/// values reach 512 characters, so rows wrap instead of truncating.
+/// 统一壳 body（page-rollout Batch C，配方对齐 UUIDGeneratorPage）：弹性
+/// 参数区（格式分段 + 长度/字节数 + 数量 + 字符集类别开关，条件组随模式
+/// 在场）在上，生成值行列表在下并于壳级 `actions:` 挂「全部复制」（首个
+/// copy 持 ⇧⌘C——.generator 形态走壳级 actions，⇧⌘C 挂载契约）；「生成」
+/// 主操作持 ⌘↩。每次生成重播交错弹出（30ms/行）。
 private struct IndexTokenWorkspaceContent: View {
-    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @ObservedObject var workspace: TokenGeneratorToolWorkspaceModel
     @State private var motionGeneration = 0
 
     var body: some View {
-        IndexGeneratorWorkbench(
-            copyText: allTokensText,
-            copySuccessToast: ToolFeedbackCopy.copiedAll(noun: "Token"),
-            rows: resultRows,
-            emptyText: workspace.error ?? resultEmptyText,
-            motionGeneration: motionGeneration,
-            wrapsValues: true,
-            generateHelp: "生成 Token（⌘↩）",
-            shortcutEnabled: entryGeneration > 0,
-            generate: generate
+        WorkbenchSurface(
+            title: nil,
+            primaryAction: WorkbenchPrimaryAction(
+                title: "生成",
+                help: "生成 Token（⌘↩）",
+                perform: generate
+            ),
+            shape: .generator,
+            actions: [
+                .copy(
+                    text: allTokensText,
+                    title: "全部复制",
+                    successToast: ToolFeedbackCopy.copiedAll(noun: "Token")
+                )
+            ],
+            parameters: { parameters }
         ) {
-            parameters
+            IndexGeneratedValueRowList(
+                rows: resultRows,
+                emptyText: workspace.error ?? resultEmptyText,
+                motionGeneration: motionGeneration,
+                wrapsValues: true
+            )
         }
         .onAppear {
             if !workspace.hasAttemptedGeneration { generate() }
         }
     }
 
+    /// 弹性参数区：配方与数量都是影响当下生成的即时参数，换行承载（窄窗
+    /// 不再横向滚动）；字符集类别开关仅字符集模式在场（旧壳同条件）。
     private var parameters: some View {
-        IndexFlowLayout(spacing: ToolMetrics.Spacing.sm, lineSpacing: ToolMetrics.Spacing.sm) {
-            IndexOptionLabel("格式")
-            IndexSegmentedControl(
-                items: [
-                    (TokenGenerationMode.characterSet.rawValue, "字符集"),
-                    (TokenGenerationMode.base64URL.rawValue, "Base64url"),
-                    (TokenGenerationMode.hex.rawValue, "Hex")
-                ],
-                selection: modeBinding
-            )
-            .onChange(of: workspace.mode) { _ in generate() }
-
-            IndexOptionLabel(workspace.mode == .characterSet ? "长度" : "字节数")
-            IndexNumberInput(value: $workspace.length, range: 1...512)
-                .onChange(of: workspace.length) { _ in generate() }
-
-            IndexOptionLabel("数量")
-            IndexStepperInput(value: $workspace.quantity, range: 1...20)
-                .onChange(of: workspace.quantity) { _ in generate() }
-
-            if workspace.mode == .characterSet {
-                IndexOptionSwitch(title: "a-z", isOn: $workspace.lower)
-                    .onChange(of: workspace.lower) { _ in generate() }
-                IndexOptionSwitch(title: "A-Z", isOn: $workspace.upper)
-                    .onChange(of: workspace.upper) { _ in generate() }
-                IndexOptionSwitch(title: "0-9", isOn: $workspace.numbers)
-                    .onChange(of: workspace.numbers) { _ in generate() }
-                IndexOptionSwitch(title: "符号", isOn: $workspace.symbols)
-                    .onChange(of: workspace.symbols) { _ in generate() }
+        WorkbenchParameterFlow {
+            WorkbenchParameterGroup {
+                WorkbenchParameterItem("格式") {
+                    IndexSegmentedControl(
+                        items: [
+                            (TokenGenerationMode.characterSet.rawValue, "字符集"),
+                            (TokenGenerationMode.base64URL.rawValue, "Base64url"),
+                            (TokenGenerationMode.hex.rawValue, "Hex")
+                        ],
+                        selection: modeBinding
+                    )
+                    .onChange(of: workspace.mode) { generate() }
+                }
+                WorkbenchParameterItem(workspace.mode == .characterSet ? "长度" : "字节数") {
+                    IndexNumberInput(value: $workspace.length, range: 1...512)
+                        .onChange(of: workspace.length) { generate() }
+                }
+                WorkbenchParameterItem("数量") {
+                    IndexStepperInput(value: $workspace.quantity, range: 1...20)
+                        .onChange(of: workspace.quantity) { generate() }
+                }
+                if workspace.mode == .characterSet {
+                    WorkbenchParameterItem {
+                        IndexOptionSwitch(title: "a-z", isOn: $workspace.lower)
+                            .onChange(of: workspace.lower) { generate() }
+                    }
+                    WorkbenchParameterItem {
+                        IndexOptionSwitch(title: "A-Z", isOn: $workspace.upper)
+                            .onChange(of: workspace.upper) { generate() }
+                    }
+                    WorkbenchParameterItem {
+                        IndexOptionSwitch(title: "0-9", isOn: $workspace.numbers)
+                            .onChange(of: workspace.numbers) { generate() }
+                    }
+                    WorkbenchParameterItem {
+                        IndexOptionSwitch(title: "符号", isOn: $workspace.symbols)
+                            .onChange(of: workspace.symbols) { generate() }
+                    }
+                }
             }
         }
         .toolAnimation(ToolMotion.Preset.orderedContent, value: workspace.mode)

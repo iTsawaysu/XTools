@@ -99,52 +99,79 @@ struct IndexPasswordGeneratorSegment: View {
     }
 }
 
-/// Prototype v3 generator body (UUID-style): one wrapping parameter card with
-/// the recipe facts and generation actions, above wrapped password rows.
+/// 统一壳 body（page-rollout Batch C，配方对齐 UUIDGeneratorPage）：弹性
+/// 参数区（长度 + 数量 + 字符类别开关）在上，密码行列表在下并于壳级
+/// `actions:` 挂「全部复制」（首个 copy 持 ⇧⌘C——.generator 形态走壳级
+/// actions，⇧⌘C 挂载契约）；「生成」主操作持 ⌘↩。每次生成重播交错弹出
+/// （30ms/行）。
 private struct IndexPasswordGeneratorWorkspaceContent: View {
-    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @ObservedObject var workspace: PasswordGeneratorToolWorkspaceModel
     @State private var motionGeneration = 0
 
     var body: some View {
-        IndexGeneratorWorkbench(
-            copyText: allPasswordsText,
-            copySuccessToast: ToolFeedbackCopy.copiedAll(noun: "密码"),
-            rows: passwordResultRows,
-            emptyText: workspace.error ?? resultEmptyText,
-            motionGeneration: motionGeneration,
-            wrapsValues: true,
-            generateHelp: "生成密码（⌘↩）",
-            shortcutEnabled: entryGeneration > 0,
-            generate: generate
+        WorkbenchSurface(
+            title: nil,
+            primaryAction: WorkbenchPrimaryAction(
+                title: "生成",
+                help: "生成密码（⌘↩）",
+                perform: generate
+            ),
+            shape: .generator,
+            actions: [
+                .copy(
+                    text: allPasswordsText,
+                    title: "全部复制",
+                    successToast: ToolFeedbackCopy.copiedAll(noun: "密码")
+                )
+            ],
+            parameters: { parameters }
         ) {
-            parameters
+            IndexGeneratedValueRowList(
+                rows: passwordResultRows,
+                emptyText: workspace.error ?? resultEmptyText,
+                motionGeneration: motionGeneration,
+                wrapsValues: true
+            )
         }
         .onAppear {
             if !workspace.hasAttemptedGeneration { generate() }
         }
     }
 
+    /// 弹性参数区：长度与数量都是影响当下生成的即时参数，换行承载（窄窗
+    /// 不再横向滚动）。
     private var parameters: some View {
-        IndexFlowLayout(spacing: ToolMetrics.Spacing.sm, lineSpacing: ToolMetrics.Spacing.sm) {
-            IndexOptionLabel("长度")
-            IndexNumberInput(value: $workspace.length, range: 8...128)
-                .onChange(of: workspace.length) { _ in generate() }
-
-            IndexOptionLabel("数量")
-            IndexStepperInput(value: $workspace.quantity, range: 1...20)
-                .onChange(of: workspace.quantity) { _ in generate() }
-
-            IndexOptionSwitch(title: "a-z", isOn: $workspace.lower)
-                .onChange(of: workspace.lower) { _ in generate() }
-            IndexOptionSwitch(title: "A-Z", isOn: $workspace.upper)
-                .onChange(of: workspace.upper) { _ in generate() }
-            IndexOptionSwitch(title: "0-9", isOn: $workspace.numbers)
-                .onChange(of: workspace.numbers) { _ in generate() }
-            IndexOptionSwitch(title: "符号", isOn: $workspace.symbols)
-                .onChange(of: workspace.symbols) { _ in generate() }
-            IndexOptionSwitch(title: "排除易混淆", isOn: $workspace.excludeAmbiguous)
-                .onChange(of: workspace.excludeAmbiguous) { _ in generate() }
+        WorkbenchParameterFlow {
+            WorkbenchParameterGroup {
+                WorkbenchParameterItem("长度") {
+                    IndexNumberInput(value: $workspace.length, range: 8...128)
+                        .onChange(of: workspace.length) { generate() }
+                }
+                WorkbenchParameterItem("数量") {
+                    IndexStepperInput(value: $workspace.quantity, range: 1...20)
+                        .onChange(of: workspace.quantity) { generate() }
+                }
+                WorkbenchParameterItem {
+                    IndexOptionSwitch(title: "a-z", isOn: $workspace.lower)
+                        .onChange(of: workspace.lower) { generate() }
+                }
+                WorkbenchParameterItem {
+                    IndexOptionSwitch(title: "A-Z", isOn: $workspace.upper)
+                        .onChange(of: workspace.upper) { generate() }
+                }
+                WorkbenchParameterItem {
+                    IndexOptionSwitch(title: "0-9", isOn: $workspace.numbers)
+                        .onChange(of: workspace.numbers) { generate() }
+                }
+                WorkbenchParameterItem {
+                    IndexOptionSwitch(title: "符号", isOn: $workspace.symbols)
+                        .onChange(of: workspace.symbols) { generate() }
+                }
+                WorkbenchParameterItem {
+                    IndexOptionSwitch(title: "排除易混淆", isOn: $workspace.excludeAmbiguous)
+                        .onChange(of: workspace.excludeAmbiguous) { generate() }
+                }
+            }
         }
     }
 

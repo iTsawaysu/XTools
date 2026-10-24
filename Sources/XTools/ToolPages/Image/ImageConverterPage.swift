@@ -134,13 +134,15 @@ private struct IndexImageConverterWorkspaceContent: View {
     }
 
     var body: some View {
-        // 参数条与上传区同在一张纸上：纸顶是横向滚动的参数行，下面接
-        // 诊断槽与拖放/列表内容。拖放命中区仍挂整个内容根容器（参数区、
-        // 列表、空白处均可接收），视觉高亮由输入区内容层经共享
-        // isImageDropTargeted 呈现。
-        IndexImageWorkbench(title: "转换设置") {
-            conversionParameters
-        } content: {
+        // 统一壳（page-rollout Batch C）：转换参数进弹性参数区（窄窗换行，
+        // 根治旧壳 44pt 纸头的横向滚动），canvas 形态承载上传态与批量内容。
+        // 拖放命中区仍挂整个内容根容器（参数区、列表、空白处均可接收），
+        // 视觉高亮由输入区内容层经共享 isImageDropTargeted 呈现。
+        WorkbenchSurface(
+            title: "转换设置",
+            shape: .canvas,
+            parameters: { conversionParameters }
+        ) {
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
                 if session.items.isEmpty {
                     // 空态在铺满的输入区内垂直居中，构成完整的拖放区观感；
@@ -168,7 +170,6 @@ private struct IndexImageConverterWorkspaceContent: View {
             .padding(.vertical, ToolMetrics.Spacing.sm)
             .imageDropHighlight(isActive: isImageDropTargeted)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .multiImageInputDropDestination(
             isTargeted: $isImageDropTargeted,
             onFiles: receiveImageURLs,
@@ -179,91 +180,103 @@ private struct IndexImageConverterWorkspaceContent: View {
 
     @ViewBuilder
     private var conversionParameters: some View {
-        IndexOptionGroup {
-            IndexOptionLabel("目标格式")
-            if outputFormats.isEmpty {
-                Text(session.items.isEmpty ? "选择图片后显示" : "无可转换目标")
-                    .font(ToolTypography.caption)
-                    .foregroundStyle(ToolTheme.textSecondary)
-                    .fixedSize(horizontal: true, vertical: false)
-            } else {
-                IndexSegmentedControl(
-                    items: outputFormats.map { ($0, $0.displayName) },
-                    selection: $targetFormat,
-                )
-                .accessibilityLabel("目标格式")
-                .accessibilityValue(targetFormat.displayName)
-                .onChange(of: targetFormat) { _, _ in
-                    applyDefaultQualityForTarget()
-                    convert()
-                }
-            }
-        }
-
-        if canConvert && targetFormat.supportsLossyQuality {
-            IndexOptionGroup {
-                IndexOptionLabel("质量")
-                IndexSlider(value: $quality, range: 0.1...1.0, step: 0)
-                    .frame(width: ImageConverterMetrics.qualitySliderWidth)
-                    .accessibilityLabel("转换质量")
-                    .accessibilityValue("\(Int(quality * 100))%")
-                    .onChange(of: quality) { _, _ in
-                        qualityDebouncer.schedule(
-                            session.items.count > 1
-                                ? Self.batchQualityDebounceDelay
-                                : Self.singleQualityDebounceDelay
-                        ) {
+        WorkbenchParameterFlow {
+            WorkbenchParameterGroup {
+                WorkbenchParameterItem("目标格式") {
+                    if outputFormats.isEmpty {
+                        Text(session.items.isEmpty ? "选择图片后显示" : "无可转换目标")
+                            .font(ToolTypography.caption)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                            .fixedSize(horizontal: true, vertical: false)
+                    } else {
+                        IndexSegmentedControl(
+                            items: outputFormats.map { ($0, $0.displayName) },
+                            selection: $targetFormat,
+                        )
+                        .accessibilityLabel("目标格式")
+                        .accessibilityValue(targetFormat.displayName)
+                        .onChange(of: targetFormat) {
+                            applyDefaultQualityForTarget()
                             convert()
                         }
                     }
-                Text("\(Int(quality * 100))%")
-                    .font(ToolTypography.monoCaption)
-                    .foregroundStyle(ToolTheme.textSecondary)
-                    .frame(width: ImageConverterMetrics.qualityValueWidth)
+                }
             }
-        }
 
-        if requiresTransparencyFill {
-            IndexOptionGroup {
-                IndexOptionLabel("透明填充")
-                IndexSegmentedControl(
-                    items: [
-                        (ImageTransparencyFillMode.white, "白色"),
-                        (.black, "黑色"),
-                        (.custom, "自定义")
-                    ],
-                    selection: $transparencyFillMode,
-                )
+            if canConvert && targetFormat.supportsLossyQuality {
+                WorkbenchParameterGroup {
+                    WorkbenchParameterItem("质量") {
+                        HStack(spacing: ToolMetrics.Spacing.fine) {
+                            IndexSlider(value: $quality, range: 0.1...1.0, step: 0)
+                                .frame(width: ImageConverterMetrics.qualitySliderWidth)
+                                .accessibilityLabel("转换质量")
+                                .accessibilityValue("\(Int(quality * 100))%")
+                                .onChange(of: quality) {
+                                    qualityDebouncer.schedule(
+                                        session.items.count > 1
+                                            ? Self.batchQualityDebounceDelay
+                                            : Self.singleQualityDebounceDelay
+                                    ) {
+                                        convert()
+                                    }
+                                }
+                            Text("\(Int(quality * 100))%")
+                                .font(ToolTypography.monoCaption)
+                                .foregroundStyle(ToolTheme.textSecondary)
+                                .frame(width: ImageConverterMetrics.qualityValueWidth)
+                        }
+                    }
+                }
+            }
+
+            if requiresTransparencyFill {
+                WorkbenchParameterGroup {
+                    WorkbenchParameterItem("透明填充") {
+                        HStack(spacing: ToolMetrics.Spacing.fine) {
+                            IndexSegmentedControl(
+                                items: [
+                                    (ImageTransparencyFillMode.white, "白色"),
+                                    (.black, "黑色"),
+                                    (.custom, "自定义")
+                                ],
+                                selection: $transparencyFillMode,
+                            )
+                            .accessibilityLabel("透明区域填充颜色")
+                            .accessibilityValue(transparencyFillAccessibilityValue)
+                            .onChange(of: transparencyFillMode) { convert() }
+
+                            if transparencyFillMode == .custom {
+                                IndexTextInput(
+                                    placeholder: "#RGB 或 #RRGGBB",
+                                    text: $customTransparencyFillHex,
+                                    height: 30,
+                                    alignment: .center,
+                                    selectAllOnFocus: true,
+                                    onSubmit: normalizeCustomTransparencyFillHex
+                                )
+                                .frame(width: ImageConverterMetrics.fillHexFieldWidth)
+                                .accessibilityLabel("自定义透明区域填充颜色")
+                                .accessibilityValue(customTransparencyFillAccessibilityValue)
+                                // 焦点契约（阶段③ C3）：本段唯一文本输入
+                                // （条件在场——仅自定义填充时渲染）。
+                                .workbenchFocusTarget()
+                                .onChange(of: customTransparencyFillHex) {
+                                    fillHexDebouncer.schedule(Self.fillHexDebounceDelay) {
+                                        convert()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                .accessibilityElement(children: .contain)
                 .accessibilityLabel("透明区域填充颜色")
                 .accessibilityValue(transparencyFillAccessibilityValue)
-                .onChange(of: transparencyFillMode) { _, _ in convert() }
-
-                if transparencyFillMode == .custom {
-                    IndexTextInput(
-                        placeholder: "#RGB 或 #RRGGBB",
-                        text: $customTransparencyFillHex,
-                        height: 30,
-                        alignment: .center,
-                        selectAllOnFocus: true,
-                        onSubmit: normalizeCustomTransparencyFillHex
-                    )
-                    .frame(width: ImageConverterMetrics.fillHexFieldWidth)
-                    .accessibilityLabel("自定义透明区域填充颜色")
-                    .accessibilityValue(customTransparencyFillAccessibilityValue)
-                    .onChange(of: customTransparencyFillHex) { _, _ in
-                        fillHexDebouncer.schedule(Self.fillHexDebounceDelay) {
-                            convert()
-                        }
-                    }
-                }
+                .help("JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。")
+                // 自定义色无效时就地诊断（壳按优先级合并 workspace 诊断），
+                // 不再让 convert() 静默清空输出。
+                .indexWorkspaceDiagnostic(transparencyFillError)
             }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("透明区域填充颜色")
-            .accessibilityValue(transparencyFillAccessibilityValue)
-            .help("JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。")
-            // 自定义色无效时就地诊断（页面外壳按优先级合并 workspace 诊断），
-            // 不再让 convert() 静默清空输出。
-            .indexWorkspaceDiagnostic(transparencyFillError)
         }
     }
 

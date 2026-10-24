@@ -78,75 +78,99 @@ private struct IndexImageCompressorWorkspaceContent: View {
     }
 
     var body: some View {
-        IndexImageWorkbench(
+        // 统一壳（page-rollout Batch C）：即时参数进弹性参数区（窄窗换行，
+        // 根治旧壳 44pt 纸头的横向滚动），保存动作收进内容区底部声明式
+        // ActionBar（trailingActions 逃生口退役），对比内容件原样保留。
+        WorkbenchSurface(
             title: "优化工作区",
-            trailingActions: canSaveCompressed ? AnyView(saveButton) : nil
+            shape: .canvas,
+            parameters: { parametersBar }
         ) {
-            parametersBar
-        } content: {
-            IndexImageCompareContent(
-                panelTitle: "优化工作区",
-                resultTitle: "优化结果",
-                emptyTitle: "选择图片开始优化",
-                placeholder: previewPlaceholder,
-                sourceAccessibilityLabel: "图片优化原图预览",
-                sourceAccessibilityValue: sourcePreviewAccessibilityValue,
-                resultAccessibilityLabel: "图片优化结果预览",
-                resultAccessibilityValue: resultPreviewAccessibilityValue,
-                selectLabel: "选择要优化的图片",
-                replaceLabel: "更换要优化的图片",
-                clearLabel: "清除当前优化图片",
-                badgeText: compressionChangeText,
-                badgeTone: .neutral,
-                sourceImage: session.sourceImage,
-                resultImage: optimizedPreviewImage,
-                isProcessing: session.isProcessing,
-                diagnostic: session.error,
-                canSave: canSaveCompressed,
-                saveLabel: "保存",
-                onSelect: selectImage,
-                onDropURL: receiveImageURL,
-                onDropMultiple: rejectMultipleImageDrop,
-                onClear: {
-                    withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
-                        session.reset()
-                    }
-                },
-                onSave: saveImage
-            ) {
-                sourceCardFacts
-            } resultFacts: {
-                resultCardFacts
+            VStack(spacing: 0) {
+                IndexImageCompareContent(
+                    panelTitle: "优化工作区",
+                    resultTitle: "优化结果",
+                    emptyTitle: "选择图片开始优化",
+                    placeholder: previewPlaceholder,
+                    sourceAccessibilityLabel: "图片优化原图预览",
+                    sourceAccessibilityValue: sourcePreviewAccessibilityValue,
+                    resultAccessibilityLabel: "图片优化结果预览",
+                    resultAccessibilityValue: resultPreviewAccessibilityValue,
+                    selectLabel: "选择要优化的图片",
+                    replaceLabel: "更换要优化的图片",
+                    clearLabel: "清除当前优化图片",
+                    badgeText: compressionChangeText,
+                    badgeTone: .neutral,
+                    sourceImage: session.sourceImage,
+                    resultImage: optimizedPreviewImage,
+                    isProcessing: session.isProcessing,
+                    diagnostic: session.error,
+                    canSave: canSaveCompressed,
+                    saveLabel: "保存",
+                    onSelect: selectImage,
+                    onDropURL: receiveImageURL,
+                    onDropMultiple: rejectMultipleImageDrop,
+                    onClear: {
+                        withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
+                            session.reset()
+                        }
+                    },
+                    onSave: saveImage
+                ) {
+                    sourceCardFacts
+                } resultFacts: {
+                    resultCardFacts
+                }
+
+                saveActionBar
+                    .padding(.top, ToolMetrics.Spacing.sm)
             }
         }
     }
 
+    /// 弹性参数区：优化偏好分段与「限制尺寸」开关同组换行承载；像素上限
+    /// 输入随开关条件在场（旧 IndexOptionGroup 胶囊组 → 参数组流式布局）。
     private var parametersBar: some View {
-        IndexFlowLayout(spacing: ToolMetrics.Spacing.md, lineSpacing: ToolMetrics.Spacing.sm) {
-            IndexOptionGroup {
-                IndexOptionLabel("优化偏好")
-                IndexSegmentedControl(
-                    items: ImageCompressionPreference.allCases.map { ($0, $0.displayName) },
-                    selection: $compressionPreference,
-                )
-                .onChange(of: compressionPreference) { _ in compress() }
-            }
-
-            IndexOptionGroup {
-                IndexOptionSwitch(title: "限制尺寸", isOn: $limitsDimensions)
-                    .onChange(of: limitsDimensions) { _ in compress() }
+        WorkbenchParameterFlow {
+            WorkbenchParameterGroup {
+                WorkbenchParameterItem("优化偏好") {
+                    IndexSegmentedControl(
+                        items: ImageCompressionPreference.allCases.map { ($0, $0.displayName) },
+                        selection: $compressionPreference,
+                    )
+                    .onChange(of: compressionPreference) { compress() }
+                }
+                WorkbenchParameterItem {
+                    IndexOptionSwitch(title: "限制尺寸", isOn: $limitsDimensions)
+                        .onChange(of: limitsDimensions) { compress() }
+                }
                 if limitsDimensions {
-                    Text("输出尺寸不超过")
-                        .font(ToolTypography.label)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                    IndexNumberInput(value: $maxPixelLength, range: 128...12000, fieldWidth: 62)
-                        .accessibilityLabel("输出最大像素边长")
-                        .onChange(of: maxPixelLength) { _ in compress() }
-                    Text("px")
-                        .font(ToolTypography.monoCaption)
-                        .foregroundStyle(ToolTheme.textSecondary)
+                    WorkbenchParameterItem("输出尺寸不超过") {
+                        HStack(spacing: ToolMetrics.Spacing.fine) {
+                            IndexNumberInput(value: $maxPixelLength, range: 128...12000, fieldWidth: 62)
+                                .accessibilityLabel("输出最大像素边长")
+                                .onChange(of: maxPixelLength) { compress() }
+                            Text("px")
+                                .font(ToolTypography.monoCaption)
+                                .foregroundStyle(ToolTheme.textSecondary)
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    /// 保存动作条（条件在场 = 旧壳 trailingActions 的 nil 分支）。
+    @ViewBuilder
+    private var saveActionBar: some View {
+        if canSaveCompressed {
+            WorkbenchActionBar(actions: [
+                .fileSave(
+                    title: "保存",
+                    accessibilityLabel: "保存优化结果",
+                    onPerform: saveImage
+                )
+            ])
         }
     }
 
@@ -267,14 +291,5 @@ private struct IndexImageCompressorWorkspaceContent: View {
             let outcome = await session.save(workflow: .compression, defaultBasename: "compressed", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
             ImageSaveOutcomeToasts.presentSingleOutput(outcome, toastCenter: toastCenter)
         }
-    }
-
-    private var saveButton: some View {
-        Button(action: saveImage) {
-            Label("保存", systemImage: IndexActionSymbol.save)
-                .font(ToolTypography.buttonSmall)
-        }
-        .buttonStyle(IndexButtonStyle(compact: true))
-        .accessibilityLabel("保存优化结果")
     }
 }

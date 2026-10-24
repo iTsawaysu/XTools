@@ -23,52 +23,65 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
     }
 
     var body: some View {
-        IndexImageWorkbench(
+        // 统一壳（page-rollout Batch C）：canvas 形态承载对比内容件，
+        // 保存动作收进内容区底部声明式 ActionBar（旧壳 44pt 纸头
+        // trailingActions 逃生口退役）；无即时参数，参数带缺席。
+        WorkbenchSurface(
             title: "灰阶工作区",
-            trailingActions: (session.output != nil && !session.isProcessing) ? AnyView(saveButton) : nil
+            shape: .canvas
         ) {
-            IndexImageCompareContent(
-                panelTitle: "灰阶工作区",
-                resultTitle: "灰度图",
-                emptyTitle: "选择图片开始生成灰度图",
-                placeholder: "等待灰度图结果",
-                sourceAccessibilityLabel: "灰阶转换原图预览",
-                sourceAccessibilityValue: sourcePreviewAccessibilityValue,
-                resultAccessibilityLabel: "灰阶转换结果预览",
-                resultAccessibilityValue: resultPreviewAccessibilityValue,
-                selectLabel: "选择要生成灰度图的图片",
-                replaceLabel: "更换要生成灰度图的图片",
-                clearLabel: "清除当前灰阶图片",
-                sourceImage: session.sourceImage,
-                resultImage: session.outputImage,
-                isProcessing: session.isProcessing,
-                diagnostic: session.error,
-                canSave: session.output != nil && !session.isProcessing,
-                saveLabel: saveButtonTitle,
-                onSelect: selectImage,
-                onDropURL: receiveImageURL,
-                onDropMultiple: rejectMultipleImageDrop,
-                onClear: {
-                    withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
-                        session.reset()
-                    }
-                },
-                onSave: saveImage
-            ) {
-                sourceCardFacts
-            } resultFacts: {
-                resultCardFacts
+            VStack(spacing: 0) {
+                IndexImageCompareContent(
+                    panelTitle: "灰阶工作区",
+                    resultTitle: "灰度图",
+                    emptyTitle: "选择图片开始生成灰度图",
+                    placeholder: "等待灰度图结果",
+                    sourceAccessibilityLabel: "灰阶转换原图预览",
+                    sourceAccessibilityValue: sourcePreviewAccessibilityValue,
+                    resultAccessibilityLabel: "灰阶转换结果预览",
+                    resultAccessibilityValue: resultPreviewAccessibilityValue,
+                    selectLabel: "选择要生成灰度图的图片",
+                    replaceLabel: "更换要生成灰度图的图片",
+                    clearLabel: "清除当前灰阶图片",
+                    sourceImage: session.sourceImage,
+                    resultImage: session.outputImage,
+                    isProcessing: session.isProcessing,
+                    diagnostic: session.error,
+                    canSave: session.output != nil && !session.isProcessing,
+                    saveLabel: saveButtonTitle,
+                    onSelect: selectImage,
+                    onDropURL: receiveImageURL,
+                    onDropMultiple: rejectMultipleImageDrop,
+                    onClear: {
+                        withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
+                            session.reset()
+                        }
+                    },
+                    onSave: saveImage
+                ) {
+                    sourceCardFacts
+                } resultFacts: {
+                    resultCardFacts
+                }
+
+                saveActionBar
+                    .padding(.top, ToolMetrics.Spacing.sm)
             }
         }
     }
 
-    private var saveButton: some View {
-        Button(action: saveImage) {
-            Label(saveButtonTitle, systemImage: IndexActionSymbol.save)
-                .font(ToolTypography.buttonSmall)
+    /// 保存动作条（条件在场 = 旧壳 trailingActions 的 nil 分支）。
+    @ViewBuilder
+    private var saveActionBar: some View {
+        if session.output != nil, !session.isProcessing {
+            WorkbenchActionBar(actions: [
+                .fileSave(
+                    title: saveButtonTitle,
+                    accessibilityLabel: "保存灰度图",
+                    onPerform: saveImage
+                )
+            ])
         }
-        .buttonStyle(IndexButtonStyle(compact: true))
-        .accessibilityLabel("保存灰度图")
     }
 
     private var sourceCardFacts: some View {
