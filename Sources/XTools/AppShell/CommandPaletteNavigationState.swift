@@ -5,6 +5,12 @@ enum CommandPaletteRowProjection: Identifiable, Hashable {
     case sectionTitle(String)
     case tool(ToolNavigationCommandEntry)
     case command(CommandActionEntry)
+    /// 直达模式的 segment 行（Batch D）：某工具在「别名+空格」直达列表里
+    /// 的一个分段目标，回车经既有 deepLinkSegment 通道打开对应分段。
+    case directSegment(tool: ToolNavigationCommandEntry, label: String, segment: String)
+    /// Smart Detection 建议行（Batch D）：剪贴板内容类型判定命中的工具，
+    /// 回车/点击由壳层读剪贴板预填（建议状态只存类型判定，不含内容）。
+    case suggestion(ClipboardSuggestionModel.Suggestion)
     case empty
 
     var id: String {
@@ -15,6 +21,10 @@ enum CommandPaletteRowProjection: Identifiable, Hashable {
             return entry.id
         case .command(let entry):
             return "command.\(entry.id.rawValue)"
+        case .directSegment(let tool, _, let segment):
+            return "direct.\(tool.toolID.rawValue).\(segment)"
+        case .suggestion(let suggestion):
+            return "suggestion.\(suggestion.kind.rawValue)"
         case .empty:
             return "empty"
         }
@@ -24,6 +34,10 @@ enum CommandPaletteRowProjection: Identifiable, Hashable {
         switch self {
         case .tool(let entry):
             return entry.toolID
+        case .directSegment(let tool, _, _):
+            return tool.toolID
+        case .suggestion(let suggestion):
+            return suggestion.toolID
         case .sectionTitle, .command, .empty:
             return nil
         }
@@ -33,7 +47,7 @@ enum CommandPaletteRowProjection: Identifiable, Hashable {
         switch self {
         case .command(let entry):
             return entry.id
-        case .sectionTitle, .tool, .empty:
+        case .sectionTitle, .tool, .directSegment, .suggestion, .empty:
             return nil
         }
     }
@@ -113,6 +127,49 @@ struct CommandPaletteRowSnapshot: Equatable {
     func selectableIndex(of row: CommandPaletteRowProjection) -> Int? {
         guard row.isSelectable else { return nil }
         return selectableIndicesByID[row.id]
+    }
+
+    /// ⌘↑/⌘↓ 跨分组的跳转目标：`from`（可选中下标）所在 section 的相邻
+    /// section 首个可选中行下标。direction 1 = 下一 section，−1 = 上一；
+    /// 越界（已在首/末 section）或单 section 返回 nil（原地不动）。
+    func sectionJumpTarget(from currentIndex: Int, direction: Int) -> Int? {
+        guard direction != 0 else { return nil }
+        let bounds = selectableSectionBounds()
+        guard let home = bounds.firstIndex(where: { $0.contains(currentIndex) }) else {
+            return nil
+        }
+        let neighbor = home + direction
+        guard bounds.indices.contains(neighbor) else {
+            return nil
+        }
+        return bounds[neighbor].lowerBound
+    }
+
+    /// 每个 section 在「可选中行下标空间」里的连续区间（按 rows 顺序）。
+    /// ⌘↑/⌘↓ 跨分组跳转（阶段③ Batch D）按此推导相邻 section：落地页
+    /// （最近/动作/分类）与过滤态（动作/工具）从同一 rows 流推导，各自
+    /// 语义天然正确。`.sectionTitle` 行开新组；title 前出现的可选中行
+    /// （防御性兜底，正常组装不产生）归入无标题首组。
+    func selectableSectionBounds() -> [Range<Int>] {
+        var bounds: [Range<Int>] = []
+        var current: Range<Int>?
+        var selectableIndex = 0
+        for row in rows {
+            if case .sectionTitle = row {
+                if let open = current {
+                    bounds.append(open)
+                    current = nil
+                }
+                continue
+            }
+            guard row.isSelectable else { continue }
+            current = (current?.lowerBound ?? selectableIndex)..<(selectableIndex + 1)
+            selectableIndex += 1
+        }
+        if let open = current {
+            bounds.append(open)
+        }
+        return bounds
     }
 
     func titleHighlightRanges(for row: CommandPaletteRowProjection) -> [Range<String.Index>] {
@@ -328,6 +385,26 @@ struct CommandPaletteNavigationState: Equatable {
             movingBy: delta,
             count: snapshot.selectableCount
         )
+    }
+
+    /// ⌘↑/⌘↓ 跨分组跳转（阶段③ Batch D）：跳到相邻 section 的首个可选
+    /// 中行。direction 1 = 下一 section，−1 = 上一 section；已在边界
+    /// section、无活跃行或只有一个 section 时不动（返回 false）。跳转走
+    /// 与箭头同一 active-row API，不旁路任何选择状态。
+    @discardableResult
+    mutating func jumpActiveAcrossSections(
+        by direction: Int,
+        in snapshot: CommandPaletteRowSnapshot
+    ) -> Bool {
+        guard direction != 0,
+              let currentIndex = activeSelectableIndex(in: snapshot),
+              let targetIndex = snapshot.sectionJumpTarget(from: currentIndex, direction: direction)
+        else {
+            return false
+        }
+        guard targetIndex != currentIndex else { return false }
+        setActiveSelectableIndex(targetIndex, in: snapshot)
+        return true
     }
 
     mutating func resetActiveRow() {

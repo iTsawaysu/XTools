@@ -11,7 +11,10 @@ struct CommandPaletteOverlayHost: View {
     let baseActions: [CommandActionEntry]
     let reduceMotion: Bool
     let usage: any PaletteUsageScoring
+    /// Smart Detection「为你建议」（Batch D）：落地页顶部 Section。
+    var clipboardSuggestion: ClipboardSuggestionModel.Suggestion? = nil
     let onSelectTool: (ToolID, String?) -> Void
+    let onSelectSuggestion: (ClipboardSuggestionModel.Suggestion) -> Void
     let onRunCommand: (CommandActionID) -> Void
     let onRequestFocus: () -> Void
     let onDismiss: () -> Void
@@ -49,7 +52,9 @@ struct CommandPaletteOverlayHost: View {
                                     && presentation.session == presentationSession
                             },
                             usage: usage,
+                            clipboardSuggestion: clipboardSuggestion,
                             onSelectTool: onSelectTool,
+                            onSelectSuggestion: onSelectSuggestion,
                             onRunCommand: onRunCommand,
                             onRequestFocus: onRequestFocus,
                             onDismiss: onDismiss

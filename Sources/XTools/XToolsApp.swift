@@ -66,6 +66,9 @@ final class XToolsAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
+            // WindowGroup（D4）下的等价复活：优先唤起已有 "Tools" 窗口；
+            // 完全无窗口时经 openWindow(id:"main") 新建（新窗口默认仪表盘，
+            // 由 ShellSharedStores 的窗口认领序决定）。
             let candidate = sender.windows.first(where: { !($0 is NSPanel) && $0.title == "Tools" })
                 ?? sender.windows.first(where: { !($0 is NSPanel) })
                 ?? sender.windows.first
@@ -92,6 +95,10 @@ final class XToolsAppDelegate: NSObject, NSApplicationDelegate {
 struct XToolsApp: App {
     @NSApplicationDelegateAdaptor(XToolsAppDelegate.self) private var appDelegate
     @Environment(\.openWindow) private var openWindow
+    // 多窗口共享单例束（阶段③ D4，design.md §9）：App 级构造一份，每个
+    // 窗口的 RootView 经 init 注入同一组 store（收藏/使用频率/偏好/侧栏
+    // 折叠/工作台仓库跨窗口一致）；选中/搜索/面板状态每窗口独立。
+    @State private var sharedStores = ShellSharedStores()
 
     init() {
         // Provide a snappy 400ms tooltip delay (default 1.5s is too slow).
@@ -114,8 +121,12 @@ struct XToolsApp: App {
     }
 
     var body: some Scene {
-        Window("Tools", id: "main") {
-            RootView()
+        // WindowGroup（D4）：系统 File > New Window（⌘N）免费获得；reopen
+        // 复活逻辑（XToolsAppDelegate.applicationShouldHandleReopen）按窗口
+        // title "Tools" 匹配已有窗口，无可见窗口时 openWindow(id:"main")
+        // 经本组新建（新窗口默认仪表盘）。选中/搜索/面板状态每窗口独立。
+        WindowGroup("Tools", id: "main") {
+            RootView(shared: sharedStores)
                 // min 尺寸单源：与 RootView 内容层 frame 共用 ToolMetrics.Window
                 // 常量（阶段③ 治理速赢，原两处 960×640 字面量收敛）。
                 .frame(minWidth: ToolMetrics.Window.minimumWidth, minHeight: ToolMetrics.Window.minimumHeight)

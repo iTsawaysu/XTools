@@ -490,6 +490,8 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
         /// 停靠/请求被取代即停（纪律同单行字段与 palette searchFocusToken）。
         /// 分段字段的成功判据与既有一致：firstResponder 落到字段（分段
         /// 选区由 syncTextField 在编辑开始时设置）。
+        /// Batch D：受控分段不接受自由文本预填（写入须走分段解析协议），
+        /// 直达载荷只消费其中的聚焦意图（entryText 刻意忽略）。
         func requestFocus(_ textField: NSTextField, request: WorkbenchFocusRequest) {
             guard request.generation > 0,
                   processedWorkbenchFocusRequest != request else { return }

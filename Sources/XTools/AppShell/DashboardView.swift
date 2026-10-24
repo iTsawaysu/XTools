@@ -16,6 +16,9 @@ struct DashboardView: View {
     let store: DashboardStore
     @ObservedObject var favorites: FavoritesStore
     let registry: ToolRegistry
+    /// Smart Detection「为你建议」（D2）：与 ⌘K 落地页同源的一条，紧随
+    /// 「继续工作」卡。nil = 无建议（不占位）。
+    let clipboardSuggestion: ClipboardSuggestionModel.Suggestion?
     let routing: any DetailActionRouting
 
     /// 进入工作台时自增，强制 body 重估一次读最新 store 数据（最近打开/
@@ -40,6 +43,11 @@ struct DashboardView: View {
 
                 if let resume = snapshot.continueTool {
                     resumeCard(resume)
+                }
+
+                // 「为你建议」（D2）：剪贴板类型判定命中时的同源一条。
+                if let suggestion = clipboardSuggestion {
+                    clipboardSuggestionCard(suggestion)
                 }
 
                 // 收藏 / 快捷 / 最近：一张卡内的三个 section，瓷砖两列布局，
@@ -177,6 +185,72 @@ struct DashboardView: View {
         }
         .accessibilityLabel("继续使用\(item.tool.title)")
         .accessibilityIdentifier("dashboard.resume.\(item.tool.id.rawValue)")
+    }
+
+    // MARK: - Smart Detection 建议卡（D2）
+
+    /// 「为你建议」单条：剪贴板类型判定 → 对应工具 + 类型文案；点击 =
+    /// 打开工具并经 SmartPaste 通道预填。样式对齐 resumeCard 配方
+    /// （quiet chrome + hover 面 + 1pt 描边），尺寸收敛为单行条。
+    private func clipboardSuggestionCard(
+        _ suggestion: ClipboardSuggestionModel.Suggestion
+    ) -> some View {
+        Button {
+            routing.openClipboardSuggestion(suggestion)
+        } label: {
+            HStack(spacing: ToolMetrics.Spacing.md) {
+                Image(systemName: "lightbulb")
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.display, .medium))
+                    .foregroundStyle(ToolTheme.accent)
+                    .frame(width: 40, height: 40)
+                    .background(
+                        ToolTheme.selectionFill,
+                        in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.xxs) {
+                    Text("为你建议")
+                        .font(ToolTypography.Workbench.caption)
+                        .foregroundStyle(ToolTheme.Workbench.textFaint)
+                    Text(suggestion.message)
+                        .font(ToolTypography.Workbench.title)
+                        .foregroundStyle(ToolTheme.Workbench.textPrimary)
+                        .lineLimit(1)
+                    Text("打开\(suggestion.toolTitle)处理")
+                        .font(ToolTypography.Workbench.caption)
+                        .foregroundStyle(ToolTheme.Workbench.textSecondary)
+                }
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    Text("打开")
+                        .font(ToolTypography.bodyMedium)
+                        .foregroundStyle(ToolTheme.onAccent)
+                    Image(systemName: "arrow.right")
+                        .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .medium))
+                        .foregroundStyle(ToolTheme.onAccent)
+                }
+                .labelStyle(.titleAndIcon)
+                .padding(.horizontal, ToolMetrics.Spacing.md)
+                .frame(height: ToolMetrics.Control.regular)
+                .background(ToolTheme.accent, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+            }
+            .padding(ToolMetrics.Spacing.md)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(IndexQuietChromeStyle(look: .bare))
+        .indexRowHoverBackground(
+            true,
+            color: ToolTheme.Workbench.surface,
+            cornerRadius: ToolMetrics.Workbench.groupCorner
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: ToolMetrics.Workbench.groupCorner, style: .continuous)
+                .strokeBorder(ToolTheme.Workbench.border, lineWidth: 1)
+        }
+        .accessibilityLabel("\(suggestion.message)，可以打开\(suggestion.toolTitle)")
+        .accessibilityIdentifier("dashboard.clipboardSuggestion.\(suggestion.kind.rawValue)")
     }
 
     // MARK: - 页头

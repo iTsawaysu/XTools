@@ -403,6 +403,9 @@
     "为图片添加黑色或白色文字水印，并保持原格式与尺寸。": {
       "extractionState": "manual"
     },
+    "为你建议": {
+      "extractionState": "manual"
+    },
     "主屏幕": {
       "extractionState": "manual"
     },
@@ -773,6 +776,21 @@
       "extractionState": "manual"
     },
     "剪贴板里是 XML": {
+      "extractionState": "manual"
+    },
+    "剪贴板中有 Base64": {
+      "extractionState": "manual"
+    },
+    "剪贴板中有 CSS 颜色": {
+      "extractionState": "manual"
+    },
+    "剪贴板中有 JSON": {
+      "extractionState": "manual"
+    },
+    "剪贴板中有 UUID": {
+      "extractionState": "manual"
+    },
+    "剪贴板中有 Unix 时间戳": {
       "extractionState": "manual"
     },
     "加": {
@@ -2389,6 +2407,9 @@
     "目标格式": {
       "extractionState": "manual"
     },
+    "直达": {
+      "extractionState": "manual"
+    },
     "确认 YAML 包含合法的 version 或 services 服务定义块。": {
       "extractionState": "manual"
     },
@@ -2902,6 +2923,9 @@
       "extractionState": "manual"
     },
     "还没有最近使用记录": {
+      "extractionState": "manual"
+    },
+    "返回": {
       "extractionState": "manual"
     },
     "这里只显示有界预览，复制和保存会读取完整输出。": {

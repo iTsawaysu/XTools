@@ -52,8 +52,10 @@ struct ShellGovernanceContractTests {
     }
 
     @Test func rootViewStateObjectInventoryIsPinned() throws {
-        // 分家后的 RootView StateObject 清单（分家前 9 项 → 分家后仍 9 项，
-        // RootViewModel 更名 ShellNavigationModel；Batch D 环境单例化时同步更新本清单）。
+        // 分家后的 RootView StateObject 清单（分家前 9 项 → 分家后 9 项 →
+        // Batch D +1：clipboardSuggestions（Smart Detection「为你建议」，
+        // 低频采样观察面）；workspaceRepository 引用自 ShellSharedStores
+        // 共享单例（D4），仍以 StateObject 包装、观察面不变）。
         let rootView = try Self.read("Sources/XTools/AppShell/RootView.swift")
         let expected = [
             "@StateObject private var navigation: ShellNavigationModel",
@@ -64,6 +66,7 @@ struct ShellGovernanceContractTests {
             "@StateObject private var dashboardStore: DashboardStore",
             "@StateObject private var smartPaste = SmartPasteMonitor()",
             "@StateObject private var hubSegmentEntryHint = HubSegmentEntryHint()",
+            "@StateObject private var clipboardSuggestions = ClipboardSuggestionModel()",
             "@StateObject private var systemAppearanceSource: SystemAppearanceSource",
         ]
         for line in expected {

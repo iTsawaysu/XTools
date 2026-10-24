@@ -71,6 +71,11 @@ struct ToolRegistry {
         toolByID[id]
     }
 
+    /// 全部注册工具（注册表顺序）。⌘K 别名直达解析用它按序取第一个命中。
+    func allTools() -> [RegisteredTool] {
+        tools
+    }
+
     func firstToolIDInCategoryOrder() -> ToolID? {
         categoryGroups()
             .lazy

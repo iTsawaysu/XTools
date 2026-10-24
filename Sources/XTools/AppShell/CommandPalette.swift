@@ -30,9 +30,14 @@ struct CommandPaletteView: View {
     let presentationSession: Int
     let canRequestSearchFocus: AppKitSearchFieldCoordinator.FocusRequestValidity
     let onSelectTool: (ToolID, String?) -> Void
+    /// Smart Detection 建议行激活（Batch D）：壳层读剪贴板预填并打开。
+    let onSelectSuggestion: (ClipboardSuggestionModel.Suggestion) -> Void
     let onRunCommand: (CommandActionID) -> Void
     let onRequestFocus: () -> Void
     let onDismiss: () -> Void
+    /// ⌘K 落地页「为你建议」（Batch D）：由壳层逐次同步（updateActions
+    /// 同模式），落地页顶部 Section。
+    let clipboardSuggestion: ClipboardSuggestionModel.Suggestion?
 
     @StateObject private var sessionModel: CommandPaletteSessionModel
     @State private var revealRequest: CommandPaletteRevealRequest?
@@ -54,7 +59,9 @@ struct CommandPaletteView: View {
         presentationSession: Int,
         canRequestSearchFocus: @escaping AppKitSearchFieldCoordinator.FocusRequestValidity,
         usage: any PaletteUsageScoring = NoPaletteUsage(),
+        clipboardSuggestion: ClipboardSuggestionModel.Suggestion? = nil,
         onSelectTool: @escaping (ToolID, String?) -> Void,
+        onSelectSuggestion: @escaping (ClipboardSuggestionModel.Suggestion) -> Void,
         onRunCommand: @escaping (CommandActionID) -> Void,
         onRequestFocus: @escaping () -> Void,
         onDismiss: @escaping () -> Void
@@ -67,7 +74,9 @@ struct CommandPaletteView: View {
         self.presentationSession = presentationSession
         self.canRequestSearchFocus = canRequestSearchFocus
         self.usage = usage
+        self.clipboardSuggestion = clipboardSuggestion
         self.onSelectTool = onSelectTool
+        self.onSelectSuggestion = onSelectSuggestion
         self.onRunCommand = onRunCommand
         self.onRequestFocus = onRequestFocus
         self.onDismiss = onDismiss
@@ -162,10 +171,10 @@ struct CommandPaletteView: View {
         }
     }
 
-    /// Absolute keyboard jumps (Home/⌘↑ to the first row, End/⌘↓ to the
-    /// last). Unlike arrow moves they bypass the visible-handoff policy — a
-    /// jump always targets its endpoint, and the reveal anchor carries the
-    /// direction so the native scroll settles on the matching edge.
+    /// Absolute keyboard jumps (Home/End to the first/last row). Unlike
+    /// arrow moves they bypass the visible-handoff policy — a jump always
+    /// targets its endpoint, and the reveal anchor carries the direction so
+    /// the native scroll settles on the matching edge.
     private func moveActiveToBoundary(delta: Int, targetIndex: Int) {
         guard isLiveSession() else { return }
         let snapshot = sessionModel.snapshot
@@ -181,6 +190,24 @@ struct CommandPaletteView: View {
             sessionModel.navigationState.setActiveSelectableIndex(target, in: snapshot)
         }
         requestActiveReveal(for: .keyboard(delta: delta), in: snapshot)
+    }
+
+    /// ⌘↑/⌘↓ 跨分组跳转（Batch D）：跳到相邻 section 的首个可选中行。
+    /// 走与箭头同一 active-row API 与 reveal 链；已在边界 section 时不动。
+    /// 落地页（最近/动作/分类）与过滤态（动作/工具）的分组语义由
+    /// snapshot 的 section 边界推导，各自正确。
+    private func jumpActiveToSection(by direction: Int) {
+        guard isLiveSession() else { return }
+        let snapshot = sessionModel.snapshot
+        keyboardDrivenSession = presentationSession
+        let previousActiveID = sessionModel.navigationState.activeRowID(in: snapshot)
+        let moved = sessionModel.navigationState.jumpActiveAcrossSections(
+            by: direction,
+            in: snapshot
+        )
+        if moved, sessionModel.navigationState.activeRowID(in: snapshot) != previousActiveID {
+            requestActiveReveal(for: .keyboard(delta: direction), in: snapshot)
+        }
     }
 
     /// PageUp/PageDown move by the real visible row count, following the
@@ -224,11 +251,17 @@ struct CommandPaletteView: View {
             onRunCommand(commandID)
             return
         }
+        if case .suggestion(let suggestion) = item {
+            requestActiveReveal(for: .directActivation)
+            onSelectSuggestion(suggestion)
+            return
+        }
         guard let toolID = sessionModel.navigationState.toolID(for: item) else { return }
         requestActiveReveal(for: .directActivation)
         // Keyword-tier matches carry the matched alias's hub segment, so a
         // search for "url" selecting 文本编码 lands directly on the URL
-        // segment (same deep-link channel as the SmartPaste banner).
+        // segment (same deep-link channel as the SmartPaste banner). 直达
+        // 模式的 segment 行（Batch D）也经同一通道。
         onSelectTool(toolID, sessionModel.snapshot.deepLinkSegment(for: item))
     }
 
@@ -299,6 +332,32 @@ struct CommandPaletteView: View {
                 subtitle: subtitleAnnotation?.text ?? entry.categoryTitle,
                 subtitleHighlightRanges: subtitleAnnotation?.highlightRanges ?? [],
                 systemImage: entry.systemImage,
+                activeItemID: activeItemID,
+                selectableIndex: selectableIndex
+            )
+        case .directSegment(_, let label, _):
+            // 直达模式的 segment 行（Batch D）：segment 标签为主体，工具名
+            // 作副标题；无高亮范围（直达列表不参与查询匹配）。
+            paletteRow(
+                for: item,
+                title: label,
+                highlightRanges: [],
+                subtitle: Self.directSegmentSubtitle(for: item),
+                subtitleHighlightRanges: [],
+                systemImage: Self.directSegmentSystemImage(for: item),
+                activeItemID: activeItemID,
+                selectableIndex: selectableIndex
+            )
+        case .suggestion(let suggestion):
+            // Smart Detection 建议行（Batch D）：工具为主体，类型判定文案
+            // 作副标题（「剪贴板中有 JSON」——不含内容本体）。
+            paletteRow(
+                for: item,
+                title: suggestion.toolTitle,
+                highlightRanges: [],
+                subtitle: suggestion.message,
+                subtitleHighlightRanges: [],
+                systemImage: suggestion.systemImage,
                 activeItemID: activeItemID,
                 selectableIndex: selectableIndex
             )
@@ -466,9 +525,22 @@ struct CommandPaletteView: View {
         return snapshot.sectionCountsByTitle[title]
     }
 
+    private static func directSegmentSubtitle(for item: CommandPaletteRowProjection) -> String? {
+        guard case .directSegment(let tool, _, _) = item else { return nil }
+        return tool.title
+    }
+
+    private static func directSegmentSystemImage(for item: CommandPaletteRowProjection) -> String {
+        guard case .directSegment(let tool, _, _) = item else { return "wrench.and.screwdriver" }
+        return tool.systemImage
+    }
+
     var body: some View {
         let _ = CommandPaletteTrace.count(.paletteBody, session: presentationSession)
         let _ = contentLifecycle.updateActions(actions)
+        // 「为你建议」逐次同步（Batch D）：与 updateActions 同模式——值
+        // 未变时 updateSuggestions 内部直接返回，不重建快照。
+        let _ = sessionModel.updateSuggestions(clipboardSuggestion)
         let snapshot = sessionModel.snapshot
         let activeItemID = sessionModel.navigationState.activeRowID(in: snapshot)
         let activeRow = sessionModel.navigationState.activeRow(in: snapshot)
@@ -508,6 +580,14 @@ struct CommandPaletteView: View {
                         guard isLiveSession() else { return }
                         moveActiveToBoundary(delta: 1, targetIndex: .max)
                     },
+                    onJumpToPreviousSection: {
+                        guard isLiveSession() else { return }
+                        jumpActiveToSection(by: -1)
+                    },
+                    onJumpToNextSection: {
+                        guard isLiveSession() else { return }
+                        jumpActiveToSection(by: 1)
+                    },
                     onPageUp: {
                         guard isLiveSession() else { return }
                         moveActiveByPage(delta: -1)
@@ -518,7 +598,14 @@ struct CommandPaletteView: View {
                     },
                     onCancel: {
                         guard isLiveSession() else { return }
-                        onDismiss()
+                        // 直达模式（Batch D）：Esc 退回普通搜索（去掉触发
+                        // 直达的尾随空格）；普通态 Esc 关闭面板。
+                        if sessionModel.directEntry != nil {
+                            updateQuery(sessionModel.query.trimmingCharacters(in: .whitespaces))
+                            onRequestFocus()
+                        } else {
+                            onDismiss()
+                        }
                     }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -562,7 +649,10 @@ struct CommandPaletteView: View {
 
             rowsSection(snapshot: snapshot, activeItemID: activeItemID)
 
-            CommandPaletteHintsBar(returnLabel: Self.returnLabel(for: activeRow))
+            CommandPaletteHintsBar(
+                returnLabel: Self.returnLabel(for: activeRow),
+                directToolTitle: sessionModel.directEntry?.tool.title
+            )
         }
         .frame(width: 560)
         // Opaque surface, deliberately NOT the system material: a transient

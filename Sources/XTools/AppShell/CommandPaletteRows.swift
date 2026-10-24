@@ -34,19 +34,31 @@ struct CommandPaletteSectionTitle: View {
 /// Raycast-style bottom hints: the palette's keyboard grammar at a glance.
 /// Bottom hints: the palette's keyboard grammar at a glance. The return
 /// label follows the ACTIVE row's real action — tools jump, commands run —
-/// so the hint never describes a behavior the current selection doesn't have.
+/// so the hint never describes a behavior the current selection doesn't
+/// have. 直达模式（Batch D）整体换成「回车打开 <工具> · Esc 返回」两组
+/// 提示，浏览键提示让位给直达语义。
 struct CommandPaletteHintsBar: View {
     /// ↩ 对当前选中行的实际语义（工具＝跳转，命令＝执行）。
     let returnLabel: String
+    /// 直达模式提示：非 nil 时显示「回车打开 <工具> · Esc 返回」。
+    var directToolTitle: String? = nil
 
     var body: some View {
         VStack(spacing: 0) {
             ToolDivider()
             HStack(spacing: ToolMetrics.Spacing.md) {
-                Self.hint(key: "↑↓", label: "浏览")
-                Self.hint(key: "↩", label: returnLabel)
-                Spacer()
-                Self.hint(key: "esc", label: "关闭")
+                if let directToolTitle {
+                    Self.hint(key: "↩", label: "打开 \(directToolTitle)")
+                    Self.hint(key: "esc", label: "返回")
+                } else {
+                    Self.hint(key: "↑↓", label: "浏览")
+                    Self.hint(key: "↩", label: returnLabel)
+                    Spacer()
+                    Self.hint(key: "esc", label: "关闭")
+                }
+                if directToolTitle != nil {
+                    Spacer()
+                }
             }
             .padding(.horizontal, ToolMetrics.Spacing.md)
             .padding(.vertical, ToolMetrics.Spacing.sm)

@@ -13,6 +13,13 @@ import SwiftUI
 struct WorkbenchFocusRequest: Equatable {
     let generation: Int
     let token: Int
+    /// 壳层直达请求序号（阶段③ Batch D：⌘K「别名+空格」直达回车、SmartPaste
+    /// 建议点击、deeplink input）。0 = 本请求不含外部直达载荷；值变化即视为
+    /// 一次新的外部请求（写文本 + 聚焦原子完成）。进入请求恒等比较，三族
+    /// 消费端无需各自感知新分量。
+    var entry: Int = 0
+    /// 随本次外部直达请求预填进首位输入的文本（nil = 仅聚焦，不写内容）。
+    var entryText: String? = nil
 
     /// 环境缺省：无活跃请求（generation 0 同时压住停靠页与未接入页面）。
     static let inactive = WorkbenchFocusRequest(generation: 0, token: 0)
@@ -53,5 +60,33 @@ extension View {
     /// 合同：每个页面至多一处声明，且必须包裹恰好一个输入组件。
     func workbenchFocusTarget() -> some View {
         environment(\.workbenchFocusTarget, true)
+    }
+}
+
+// MARK: - 壳层直达载荷（阶段③ Batch D，design.md §7/§8）
+
+/// 壳层向目标工具首位输入的一次性投递载荷：⌘K「别名+空格」直达回车（仅
+/// 聚焦）、SmartPaste 建议/deeplink（聚焦 + 预填文本）。`id` 单调递增，是
+/// 幂等消费的恒等门控；`toolID` 供 WorkbenchSurface 校验载荷归属，避免
+/// 广播环境被无关页面误消费。文本只在投递对象显式动作（点击建议 / deeplink
+/// 参数）时携带，驻留内存直至被新投递覆盖或随选择变化作废——不落盘、
+/// 不持久化。
+struct WorkbenchEntryPayload: Equatable {
+    let id: Int
+    let toolID: ToolID
+    /// 预填文本（nil = 仅聚焦）。
+    let text: String?
+}
+
+private struct WorkbenchEntryPayloadKey: EnvironmentKey {
+    static let defaultValue: WorkbenchEntryPayload? = nil
+}
+
+extension EnvironmentValues {
+    /// 壳层投递的直达载荷（RootView 注入；WorkbenchSurface 校验 toolID 后
+    /// 合并进 `.workbenchFocusRequest`，输入组件族消费）。
+    var workbenchEntryPayload: WorkbenchEntryPayload? {
+        get { self[WorkbenchEntryPayloadKey.self] }
+        set { self[WorkbenchEntryPayloadKey.self] = newValue }
     }
 }

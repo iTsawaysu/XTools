@@ -9,18 +9,27 @@ struct RootView: View {
     @StateObject private var toastCenter = ToolToastCenter()
     @StateObject private var fileInputPanelCoordinator = FileInputPanelCoordinator()
     @StateObject private var fileOutputPanelCoordinator = FileOutputPanelCoordinator()
-    // 收藏 / 折叠 / 使用频率是侧栏与页面局部观察状态（阶段③ B4 契约）：
-    // RootView 刻意不订阅——收藏切换只触发侧栏/页面局部重估，Section 折叠
-    // 只触发列表区重估，rootBody 保持 0。所有权沿用 paletteRecents 先例：
-    // init 构造、无观察引用下发；Batch D 多窗口时升级为环境注入共享单例。
+    // 收藏 / 折叠 / 使用频率 / 工作台仓库是多窗口共享单例（阶段③ D4，
+    // design.md §9）：App 层构造一份 ShellSharedStores，经 init 注入每个
+    // 窗口的 RootView。RootView 刻意不订阅 favorites/sidebarSections/
+    // paletteRecents（B4 契约：收藏切换只触发侧栏/页面局部重估）；
+    // workspaceRepository 保持 StateObject 包装（观察面与分家前一致）。
+    private let sharedStores: ShellSharedStores
     private let favorites: FavoritesStore
     private let sidebarSections: SidebarSectionExpansionStore
     @StateObject private var workspaceRepository: ToolWorkspaceRepository
     @StateObject private var dashboardStore: DashboardStore
     @StateObject private var smartPaste = SmartPasteMonitor()
     @StateObject private var hubSegmentEntryHint = HubSegmentEntryHint()
+    @StateObject private var clipboardSuggestions = ClipboardSuggestionModel()
     @StateObject private var systemAppearanceSource: SystemAppearanceSource
     @State private var showsPreferences = false
+    // D4 新窗口默认仪表盘：窗口认领在 onAppear 执行（onAppear 每窗口恰好
+    // 一次；RootView init 会被 SwiftUI 重建多次，init 计数会把首窗误判成
+    // 后续窗口）。首个认领窗口保留恢复/默认落点语义，后续窗口（⌘N/reopen
+    // 新建）清掉恢复选择落到仪表盘。测试构造（独立 store）天然是首窗，
+    // 等价旧单窗口。
+    @State private var windowLaunchClaimed = false
     // 投影记忆化：RootView 会在无关 shell 抖动（toast、建议横幅）时整体重估
     // body；查询、选择未变时重建整个导航树是纯浪费。投影自阶段③ B 起不含
     // 收藏（收藏观察已下沉侧栏），缓存键收敛为（查询、选择）二元组。
@@ -41,6 +50,7 @@ struct RootView: View {
     init(
         navigation: ShellNavigationModel? = nil,
         defaults: UserDefaults = .standard,
+        shared: ShellSharedStores? = nil,
         workspaceRepository: ToolWorkspaceRepository? = nil,
         systemAppearanceSource: SystemAppearanceSource? = nil
     ) {
@@ -49,24 +59,27 @@ struct RootView: View {
             "dt.theme",
             store: defaults
         )
-        let preferences = ToolPreferenceStore(defaults: defaults)
-        _navigation = StateObject(wrappedValue: navigation ?? ShellNavigationModel(preferences: preferences))
+        // 共享单例束（D4）：显式注入（多窗口）或按 defaults 就地构造
+        // （测试/单窗口等价旧路径）。
+        let sharedStores = shared ?? ShellSharedStores(defaults: defaults)
+        self.sharedStores = sharedStores
+        let preferences = sharedStores.preferences
+        // 恢复语义在模型 init 保留（每窗口 StateObject 首建时从偏好读起）；
+        // 「新窗口默认仪表盘」由 onAppear 的窗口认领清掉恢复选择。
+        let shellNavigation = navigation ?? ShellNavigationModel(preferences: preferences)
+        _navigation = StateObject(wrappedValue: shellNavigation)
+        self.paletteRecents = sharedStores.paletteRecents
+        self.favorites = sharedStores.favorites
+        self.sidebarSections = sharedStores.sidebarSections
+        let workspaceRepository = workspaceRepository ?? sharedStores.workspaceRepository
+        _workspaceRepository = StateObject(wrappedValue: workspaceRepository)
         // frecency 单源（阶段③）：仪表盘与 ⌘K 面板共用同一事件环与衰减
-        // 公式，两消费方各持通道门面委托读写（导航 = .navigation，⌘K = .palette）。
-        let usageFrequency = ToolUsageFrequencyStore(defaults: defaults)
-        self.paletteRecents = PaletteRecentsStore(usage: usageFrequency)
-        let validToolIDs = Set(
-            ToolRegistry.default.categoryGroups().flatMap { $0.tools.map(\.id) }
-        )
-        self.favorites = FavoritesStore(defaults: defaults, validToolIDs: validToolIDs)
-        self.sidebarSections = SidebarSectionExpansionStore(defaults: defaults)
-        _workspaceRepository = StateObject(
-            wrappedValue: workspaceRepository ?? ToolWorkspaceRepository(preferences: preferences)
-        )
-        _dashboardStore = StateObject(wrappedValue: DashboardStore(usage: usageFrequency))
-        _systemAppearanceSource = StateObject(
-            wrappedValue: systemAppearanceSource ?? SystemAppearanceSource()
-        )
+        // 公式（D4 后进一步共享同一 ToolUsageFrequencyStore 单例），
+        // DashboardStore 门面每窗口自有（launchToken 发布语义）。
+        let dashboardStore = DashboardStore(usage: sharedStores.usageFrequency)
+        _dashboardStore = StateObject(wrappedValue: dashboardStore)
+        let appearanceSource = systemAppearanceSource ?? SystemAppearanceSource()
+        _systemAppearanceSource = StateObject(wrappedValue: appearanceSource)
     }
 
     private var themePreference: AppThemePreference {
@@ -114,7 +127,9 @@ struct RootView: View {
                 baseActions: commandBaseActions,
                 reduceMotion: reduceMotion,
                 usage: paletteRecents,
+                clipboardSuggestion: clipboardSuggestions.suggestion,
                 onSelectTool: launchFromPalette,
+                onSelectSuggestion: openClipboardSuggestion,
                 onRunCommand: runPaletteCommand,
                 onRequestFocus: navigation.focusCommandPalette,
                 onDismiss: closeCommandPaletteAnimated
@@ -145,7 +160,18 @@ struct RootView: View {
             }
             .onAppear {
                 smartPaste.noteSelectedTool(navigation.selectedToolID)
-                navigationActions.selectDefaultToolIfNeeded(sidebarProjection.defaultToolID)
+                // D4 窗口认领（onAppear 每窗口恰好一次；init 会被视图重建
+                // 多次，不能在 init 计数）：首窗走恢复/默认落点语义（行为
+                // 等价旧单窗口 onAppear）；后续窗口（⌘N/reopen 新建）清掉
+                // 恢复选择，默认落仪表盘。
+                if !windowLaunchClaimed {
+                    windowLaunchClaimed = true
+                    if sharedStores.claimWindowLaunch() {
+                        navigationActions.selectDefaultToolIfNeeded(sidebarProjection.defaultToolID)
+                    } else {
+                        navigation.selectedToolID = nil
+                    }
+                }
                 ToolPageEntryBenchmark.runIfRequested(
                     registry: registry,
                     navigationActions: navigationActions
@@ -156,9 +182,19 @@ struct RootView: View {
                 // the background.
                 guard phase == .active else { return }
                 smartPaste.refresh(registry: registry)
+                // Smart Detection「为你建议」（D2）：同一激活时刻采样；只存
+                // 类型判定，不存内容不落盘。
+                clipboardSuggestions.refresh(registry: registry)
             }
             .onChange(of: navigation.selectedToolID) { newToolID in
                 smartPaste.noteSelectedTool(newToolID)
+            }
+            // xtools://tool/<id>?segment=&input= 深链（D3）：消费去重保证
+            // 多窗口下一次 URL 只被一个窗口处理。
+            .onOpenURL { url in
+                guard XToolsDeeplinkConsumer.shared.claim(url),
+                      let deeplink = XToolsDeeplink.parse(url) else { return }
+                openDeeplink(deeplink)
             }
     }
 
@@ -183,6 +219,9 @@ struct RootView: View {
         .environment(\.toolToastCenter, toastCenter)
         .environment(\.fileInputPanelClient, fileInputPanelCoordinator.client)
         .environment(\.fileOutputPanelClient, fileOutputPanelCoordinator.client)
+        // 直达载荷（D2/D3）：⌘K 直达 / SmartPaste 建议 / deeplink 的预填
+        // 投递经环境下发，WorkbenchSurface 校验归属后并入焦点请求。
+        .environment(\.workbenchEntryPayload, navigation.workbenchEntryPayload)
         .environmentObject(workspaceRepository)
         .environmentObject(hubSegmentEntryHint)
         .appThemeEnvironment(preference: themePreference, source: systemAppearanceSource)
@@ -211,7 +250,10 @@ struct RootView: View {
     }
 
     private var detailColumn: some View {
-        detailRouting.update(actions: navigationActions)
+        detailRouting.update(
+            actions: navigationActions,
+            suggestionOpen: { openClipboardSuggestion($0) }
+        )
         return VStack(spacing: 0) {
             ToolDetailHostView(
                 registry: registry,
@@ -219,6 +261,7 @@ struct RootView: View {
                 transitionIntent: navigation.pageTransitionIntent,
                 dashboardStore: dashboardStore,
                 favorites: favorites,
+                clipboardSuggestion: clipboardSuggestions.suggestion,
                 routing: detailRouting
             )
         }
@@ -245,11 +288,19 @@ struct RootView: View {
                     onOpen: {
                         // 深链目标带分段时先写提示（带 toolID，由目标 Hub 校验
                         // 消费），再切换工具；Hub 出现时一次性消费（覆盖记忆
-                        // 的分段）。
-                        hubSegmentEntryHint.request = suggestion.hubSegment.map {
-                            HubSegmentEntryHint.Request(toolID: suggestion.toolID, segment: $0)
+                        // 的分段）。D2：打开动作同时经 SmartPaste 通道预填
+                        // 首位输入（试点页生效，其余工具降级为仅打开）。
+                        if let segment = suggestion.hubSegment {
+                            hubSegmentEntryHint.request = HubSegmentEntryHint.Request(
+                                toolID: suggestion.toolID,
+                                segment: segment
+                            )
                         }
                         _ = navigationActions.selectTool(suggestion.toolID)
+                        navigation.deliverEntryFocus(
+                            toolID: suggestion.toolID,
+                            text: smartPaste.entryText()
+                        )
                     },
                     onDismiss: smartPaste.dismiss
                 )
@@ -307,6 +358,10 @@ struct RootView: View {
     /// the matched alias's hub segment: write the one-shot segment hint
     /// BEFORE switching (same channel as the SmartPaste banner) so the
     /// arriving hub consumes it and overrides its remembered segment.
+    ///
+    /// 直达/预填投递（Batch D）：选择落定后写 WorkbenchEntryPayload——
+    /// palette 打开动作（普通行与「别名+空格」直达行）只聚焦首位输入
+    /// （text = nil）；带文本的预填只在建议行/SmartPaste/deeplink 路径。
     private func launchFromPalette(_ toolID: ToolID, segment: String?) {
         if let segment {
             hubSegmentEntryHint.request = HubSegmentEntryHint.Request(
@@ -316,7 +371,39 @@ struct RootView: View {
         }
         paletteRecents.recordLaunch(toolID)
         _ = navigationActions.selectTool(toolID, intent: .originBloom)
+        navigation.deliverEntryFocus(toolID: toolID, text: nil)
         closeCommandPaletteAnimated()
+    }
+
+    // MARK: - Smart Detection suggestions (Batch D)
+
+    /// 「为你建议」行/卡激活（⌘K 落地页与仪表盘同源）：打开工具 + 分段
+    /// 深链 + 现读剪贴板预填首位输入。建议状态只存类型判定；文本仅在
+    /// 点击瞬间进入内存投递载荷。
+    func openClipboardSuggestion(_ suggestion: ClipboardSuggestionModel.Suggestion) {
+        openSuggestionTarget(toolID: suggestion.toolID, segment: suggestion.segment)
+    }
+
+    /// xtools:// 深链消费（D3）：非法工具 id / segment 已在解析与 Hub
+    /// 消费端容错丢弃；input 经 SmartPaste 通道（WorkbenchEntryPayload）
+    /// 预填，空/缺省仅打开工具。
+    func openDeeplink(_ deeplink: XToolsDeeplink) {
+        openSuggestionTarget(toolID: deeplink.toolID, segment: deeplink.segment, inputText: deeplink.input)
+    }
+
+    private func openSuggestionTarget(toolID: ToolID, segment: String?, inputText: String? = nil) {
+        guard registry.tool(for: toolID) != nil else { return }
+        if let segment {
+            hubSegmentEntryHint.request = HubSegmentEntryHint.Request(
+                toolID: toolID,
+                segment: segment
+            )
+        }
+        _ = navigationActions.selectTool(toolID)
+        navigation.deliverEntryFocus(
+            toolID: toolID,
+            text: inputText ?? clipboardSuggestions.entryText()
+        )
     }
 
     // MARK: - Animated palette presentation (v3)
@@ -510,9 +597,14 @@ private final class SidebarProjectionCache {
 @MainActor
 private final class DetailActionRoutingBox: DetailActionRouting {
     private var actions: ToolNavigationActions?
+    private var openSuggestion: (ClipboardSuggestionModel.Suggestion) -> Void = { _ in }
 
-    func update(actions: ToolNavigationActions) {
+    func update(
+        actions: ToolNavigationActions,
+        suggestionOpen: @escaping (ClipboardSuggestionModel.Suggestion) -> Void
+    ) {
         self.actions = actions
+        self.openSuggestion = suggestionOpen
     }
 
     func selectTool(_ toolID: ToolID) {
@@ -525,5 +617,12 @@ private final class DetailActionRoutingBox: DetailActionRouting {
 
     func toggleFavorite(_ toolID: ToolID) -> Bool? {
         actions?.toggleFavorite(toolID)
+    }
+
+    /// 「为你建议」卡激活（D2，仪表盘同源一条）：打开 + 分段深链 +
+    /// 现读剪贴板预填。动作闭包随 body 重估刷新（同 selectTool 的
+    /// 重接线模式），盒本体引用稳定。
+    func openClipboardSuggestion(_ suggestion: ClipboardSuggestionModel.Suggestion) {
+        openSuggestion(suggestion)
     }
 }

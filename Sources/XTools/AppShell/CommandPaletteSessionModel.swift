@@ -37,20 +37,26 @@ final class CommandPaletteSessionModel: ObservableObject {
         var snapshot: CommandPaletteRowSnapshot
         var actions: [CommandActionEntry]
         var actionRecords: [ToolSearchRecord]
+        /// 「别名+空格」直达模式（Batch D）：非 nil 时快照是直达列表。
+        var directEntry: CommandPaletteDirectEntry?
+        /// Smart Detection「为你建议」（Batch D）：落地页顶部 Section。
+        var suggestionSections: [CommandPaletteSection]
     }
 
-    /// Landing-page cache. The cache KEY is `(actions, recentToolIDs)` and
-    /// the cached CONTENT is the composed `[CommandPaletteSection]`
-    /// (最近使用 + 动作 + categories).
+    /// Landing-page cache. The cache KEY is `(actions, recentToolIDs,
+    /// suggestionSections)` and the cached CONTENT is the composed
+    /// `[CommandPaletteSection]` (为你建议 + 最近使用 + 动作 + categories).
     ///
-    /// A cache hit therefore requires only that the action list and the
-    /// frecency recents are unchanged; the final snapshot is assembled from
-    /// value-type sections — cheap, with no registry traversal. A real
-    /// rebuild inside the visible open arc quantizes the palette's fade-in
-    /// into a brightness step, which is what this cache removes.
+    /// A cache hit therefore requires only that the action list, the
+    /// frecency recents and the clipboard suggestion are unchanged; the
+    /// final snapshot is assembled from value-type sections — cheap, with
+    /// no registry traversal. A real rebuild inside the visible open arc
+    /// quantizes the palette's fade-in into a brightness step, which is
+    /// what this cache removes.
     private struct LandingCacheKey: Equatable {
         let actions: [CommandActionEntry]
         let recentToolIDs: [ToolID]
+        let suggestionSections: [CommandPaletteSection]
     }
 
     private struct LandingCacheEntry {
@@ -74,6 +80,8 @@ final class CommandPaletteSessionModel: ObservableObject {
     var session: Int { state.session }
     var query: String { state.query }
     var snapshot: CommandPaletteRowSnapshot { state.snapshot }
+    /// 「别名+空格」直达模式状态（Batch D）：非 nil 时面板处于直达列表。
+    var directEntry: CommandPaletteDirectEntry? { state.directEntry }
     var navigationState: CommandPaletteNavigationState {
         get { state.navigationState }
         set {
@@ -111,7 +119,8 @@ final class CommandPaletteSessionModel: ObservableObject {
                 recentToolIDs: usage.recentToolIDs(
                     limit: LandingMetrics.recentsLimit,
                     now: now
-                )
+                ),
+                suggestionSections: []
             ),
             sections: sections
         )
@@ -123,7 +132,9 @@ final class CommandPaletteSessionModel: ObservableObject {
             navigationState: CommandPaletteNavigationState(),
             snapshot: snapshot,
             actions: actions,
-            actionRecords: actionRecords
+            actionRecords: actionRecords,
+            directEntry: nil,
+            suggestionSections: []
         )
         CommandPaletteTrace.count(.commandProjection)
     }
@@ -146,7 +157,9 @@ final class CommandPaletteSessionModel: ObservableObject {
             navigationState: CommandPaletteNavigationState(),
             snapshot: snapshot,
             actions: actions,
-            actionRecords: actionRecords
+            actionRecords: actionRecords,
+            directEntry: nil,
+            suggestionSections: state.suggestionSections
         )
     }
 
@@ -161,10 +174,42 @@ final class CommandPaletteSessionModel: ObservableObject {
         CommandPaletteTrace.count(.commandProjection)
         var next = state
         next.snapshot = snapshot
+        next.directEntry = CommandPaletteDirectEntry.parse(
+            query: newQuery,
+            registry: registry
+        )
         next.navigationState.resetActiveRow()
         next.query = newQuery
         state = next
         return true
+    }
+
+    /// 同步「为你建议」状态（Batch D）：RootView body 内逐次调用（与
+    /// contentLifecycle.updateActions 同模式）。落地页态即时重建快照；
+    /// 过滤态/直达态不展示建议区，仅落状态等下次 open。
+    func updateSuggestions(_ suggestion: ClipboardSuggestionModel.Suggestion?) {
+        var sections: [CommandPaletteSection] = []
+        if let suggestion {
+            sections = [Self.suggestionSection(suggestion)]
+        }
+        guard sections != state.suggestionSections else { return }
+        state.suggestionSections = sections
+        guard state.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        let snapshot = makeLandingSnapshot(actions: state.actions)
+        CommandPaletteTrace.count(.commandProjection)
+        state.snapshot = snapshot
+        state.navigationState.resetActiveRow()
+    }
+
+    /// 「为你建议」Section（Batch D，design.md §7）：落地页顶部，建议行
+    /// 副标题描述剪贴板类型（不含内容本体）。
+    private static func suggestionSection(
+        _ suggestion: ClipboardSuggestionModel.Suggestion
+    ) -> CommandPaletteSection {
+        CommandPaletteSection(
+            title: "为你建议",
+            rows: [.suggestion(suggestion)]
+        )
     }
 
     func replaceActions(_ newActions: [CommandActionEntry]) {
@@ -299,9 +344,10 @@ final class CommandPaletteSessionModel: ObservableObject {
     }
 
     /// Builds the row snapshot for `query`. A blank query composes the
-    /// landing page through the `(actions, recentToolIDs)` cache: a hit
-    /// reuses the cached sections; an actions or recents change recomposes
-    /// and refreshes the cache.
+    /// landing page through the `(actions, recentToolIDs, suggestions)`
+    /// cache; a query ending in "alias + space" that matches a ToolAlias
+    /// switches to the direct-entry list; everything else keeps the ranked
+    /// 动作 + 工具 structure with frecency refinement inside tiers.
     private func makeSnapshot(
         query: String,
         actions: [CommandActionEntry],
@@ -310,6 +356,12 @@ final class CommandPaletteSessionModel: ObservableObject {
         // A blank query composes the landing page instead of a flat list.
         if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return makeLandingSnapshot(actions: actions)
+        }
+
+        // 「别名+空格」直达模式（Batch D）：列表只含该工具（分段工具列出
+        // 各 segment 行），回车经 deepLinkSegment 通道打开。
+        if let directEntry = CommandPaletteDirectEntry.parse(query: query, registry: registry) {
+            return Self.makeDirectSnapshot(directEntry, registry: registry)
         }
 
         CommandPaletteTrace.count(.rowSnapshot)
@@ -409,16 +461,45 @@ final class CommandPaletteSessionModel: ObservableObject {
         )
     }
 
+    /// 直达模式快照（Batch D）：单 section 列出目标工具整体行 + 各 segment
+    /// 行。segment 行的回车语义复用既有 deepLinkSegmentsByID 通道。
+    private static func makeDirectSnapshot(
+        _ entry: CommandPaletteDirectEntry,
+        registry: ToolRegistry
+    ) -> CommandPaletteRowSnapshot {
+        let toolEntry = ToolNavigationCommandEntry(
+            tool: entry.tool,
+            categoryTitle: registry.categoryTitle(for: entry.tool.categoryID)
+        )
+        var rows: [CommandPaletteRowProjection] = [.tool(toolEntry)]
+        var deepLinkSegmentsByID: [String: String] = [:]
+        deepLinkSegmentsByID.reserveCapacity(entry.segmentRows.count)
+        for segment in entry.segmentRows {
+            let projection = CommandPaletteRowProjection.directSegment(
+                tool: toolEntry,
+                label: segment.label,
+                segment: segment.segment
+            )
+            deepLinkSegmentsByID[projection.id] = segment.segment
+            rows.append(projection)
+        }
+        return CommandPaletteNavigationState.snapshot(
+            sections: [CommandPaletteSection(title: "直达", rows: rows)],
+            deepLinkSegmentsByID: deepLinkSegmentsByID
+        )
+    }
+
     /// The blank-query landing snapshot for `actions`: sections come from the
-    /// `(actions, recentToolIDs)` cache and are assembled into the final
-    /// snapshot directly.
+    /// `(actions, recentToolIDs, suggestions)` cache and are assembled into
+    /// the final snapshot directly.
     private func makeLandingSnapshot(actions: [CommandActionEntry]) -> CommandPaletteRowSnapshot {
         let key = LandingCacheKey(
             actions: actions,
             recentToolIDs: usage.recentToolIDs(
                 limit: LandingMetrics.recentsLimit,
                 now: Date()
-            )
+            ),
+            suggestionSections: state.suggestionSections
         )
         let sections: [CommandPaletteSection]
         if let landingCache, landingCache.key == key {
@@ -428,12 +509,14 @@ final class CommandPaletteSessionModel: ObservableObject {
             sections = landingCache.sections
         } else {
             CommandPaletteTrace.count(.rowSnapshot)
-            sections = Self.landingSections(
-                registry: registry,
-                actions: actions,
-                usage: usage,
-                now: Date()
-            )
+            // 「为你建议」置顶（Batch D，design.md §7）：落地页顶部第一组。
+            sections = state.suggestionSections
+                + Self.landingSections(
+                    registry: registry,
+                    actions: actions,
+                    usage: usage,
+                    now: Date()
+                )
             landingCache = LandingCacheEntry(key: key, sections: sections)
         }
         return CommandPaletteNavigationState.snapshot(sections: sections)

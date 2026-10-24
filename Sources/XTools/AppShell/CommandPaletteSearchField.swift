@@ -26,9 +26,20 @@ struct CommandPaletteSearchField: NSViewRepresentable {
     let onMoveDown: () -> Void
     let onMoveToFirst: () -> Void
     let onMoveToLast: () -> Void
+    /// ⌘↑/⌘↓ 跨分组跳转（阶段③ Batch D）：文本系统把 ⌘↑/⌘↓ 与 Home/End
+    /// 一并路由到 moveToBeginning/EndOfDocument，靠回调时刻的事件修饰键
+    /// 分流——带 ⌘ 走跨分组跳相邻 section 首行，不带 ⌘ 保持首/尾行语义。
+    let onJumpToPreviousSection: () -> Void
+    let onJumpToNextSection: () -> Void
     let onPageUp: () -> Void
     let onPageDown: () -> Void
     let onCancel: () -> Void
+
+    /// 搜索框聚焦重试预算（immediate + 两个延迟补试）。参数化说明：palette
+    /// 的 focusToken 每次开面板/重聚焦都重启整条链（token 恒等门控保证不
+    /// 重复），真实窗口里快速合成键（连续 ⌘K）曾实测在固定 0.05/0.15s 预算
+    /// 下失灵——把预算提为常量便于主会话实测调参，无需改架构。
+    static let focusRetryDelays: [TimeInterval] = [0.05, 0.15]
 
     @MainActor
     final class Coordinator {
@@ -65,12 +76,23 @@ struct CommandPaletteSearchField: NSViewRepresentable {
             case #selector(NSResponder.moveDown(_:)):
                 onMoveDown()
                 return true
-            // Home/End also cover ⌘↑/⌘↓ (the text system routes both here).
+            // Home/End 与 ⌘↑/⌘↓ 都被文本系统路由到这里；用回调时刻的
+            // 修饰键分流：⌘ = 跨分组跳相邻 section 首行（Batch D），
+            // 否则保持首/尾行语义。编程式调用（无键盘事件）按无修饰键
+            // 处理，首尾语义不变。
             case #selector(NSResponder.moveToBeginningOfDocument(_:)):
-                onMoveToFirst()
+                if NSEvent.modifierFlags.contains(.command) {
+                    onJumpToPreviousSection()
+                } else {
+                    onMoveToFirst()
+                }
                 return true
             case #selector(NSResponder.moveToEndOfDocument(_:)):
-                onMoveToLast()
+                if NSEvent.modifierFlags.contains(.command) {
+                    onJumpToNextSection()
+                } else {
+                    onMoveToLast()
+                }
                 return true
             // PageUp/PageDown arrive as either selector family depending on
             // the field editor's key binding resolution; claim both.
@@ -100,7 +122,7 @@ struct CommandPaletteSearchField: NSViewRepresentable {
             search: AppKitSearchFieldCoordinator(
                 text: $text,
                 processedFocusToken: nil,
-                focusRetryDelays: [0.05, 0.15],
+                focusRetryDelays: Self.focusRetryDelays,
                 requestFocus: { textField, delayedRetries, isValid in
                     AppKitSearchFieldLifecycle.requestFocus(
                         textField,

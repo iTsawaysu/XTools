@@ -16,6 +16,12 @@ final class ShellNavigationModel: ObservableObject {
     @Published var selectedToolID: ToolID? {
         didSet {
             guard oldValue != selectedToolID else { return }
+            // 直达/预填载荷是一次性投递（Batch D）：投递总发生在选择落定
+            // 之后，选择再变化即作废旧载荷——防止停靠回访/整页重建时把
+            // 旧文本重新写进首位输入。
+            if workbenchEntryPayload != nil {
+                workbenchEntryPayload = nil
+            }
             // Keep the last valid tool available for the optional resume
             // preference while allowing the dashboard to use a nil selection.
             if let selectedToolID {
@@ -37,6 +43,11 @@ final class ShellNavigationModel: ObservableObject {
         }
     }
     @Published private(set) var searchFocusToken = 0
+    /// 壳层直达载荷（Batch D）：⌘K 直达回车（仅聚焦）/ SmartPaste 建议、
+    /// deeplink input（聚焦 + 预填）。每窗口独立；经
+    /// `deliverEntryFocus(toolID:text:)` 投递，WorkbenchSurface 校验归属后
+    /// 消费。内容只驻留内存、随选择变化作废，不落盘。
+    @Published private(set) var workbenchEntryPayload: WorkbenchEntryPayload?
     let commandPalettePresentation = CommandPalettePresentationModel()
 
     var showsCommandPalette: Bool { commandPalettePresentation.shows }
@@ -44,13 +55,14 @@ final class ShellNavigationModel: ObservableObject {
     var commandPalettePresentationSession: Int { commandPalettePresentation.session }
 
     private let preferences: ToolPreferenceStore?
+    private var workbenchEntrySequence = 0
 
-    init(preferences: ToolPreferenceStore? = nil) {
+    init(preferences: ToolPreferenceStore? = nil, resumesSelection: Bool = true) {
         self.preferences = preferences
         let selectedToolRawValue = preferences?.value(for: AppShellPreferenceKeys.selectedToolID) ?? ""
-        self.selectedToolID = selectedToolRawValue.isEmpty
-            ? nil
-            : ToolID(rawValue: selectedToolRawValue)
+        self.selectedToolID = resumesSelection && !selectedToolRawValue.isEmpty
+            ? ToolID(rawValue: selectedToolRawValue)
+            : nil
         self.autoResumeLastTool = preferences?.value(for: AppShellPreferenceKeys.autoResumeLastTool) ?? false
         let sidebarPreference = preferences?.value(for: AppShellPreferenceKeys.sidebarVisibility) ?? "visible"
         self.sidebarVisibility = SidebarVisibility(preferenceValue: sidebarPreference)
@@ -58,6 +70,19 @@ final class ShellNavigationModel: ObservableObject {
 
     func focusSearch() {
         searchFocusToken += 1
+    }
+
+    /// 投递壳层直达载荷（Batch D）。调用方必须先让目标工具的选择落定
+    /// （`selectTool` 先行），本方法在之后写入——既保证新到达页面的代际
+    /// 请求与载荷同帧合成，也不被 selectedToolID didSet 的作废逻辑清掉。
+    /// text = nil 表示仅聚焦（⌘K「别名+空格」直达回车）。
+    func deliverEntryFocus(toolID: ToolID, text: String?) {
+        workbenchEntrySequence += 1
+        workbenchEntryPayload = WorkbenchEntryPayload(
+            id: workbenchEntrySequence,
+            toolID: toolID,
+            text: text
+        )
     }
 
     func focusCommandPalette() {

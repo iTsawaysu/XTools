@@ -108,6 +108,20 @@ final class SmartPasteMonitor: ObservableObject {
         applyToolMotion { suggestion = nil }
     }
 
+    /// 用户显式打开建议的瞬间现读剪贴板文本（预填投递专用，阶段③ D2）：
+    /// 建议状态本身只含类型判定；文本此刻才进入内存投递载荷，随选择变化
+    /// 作废，不落盘。超界（32K 字符）不投。
+    func entryText(pasteboard: NSPasteboard = .general) -> String? {
+        guard let data = pasteboard.data(forType: .string),
+              !data.isEmpty,
+              data.count <= Self.maxInspectedBytes,
+              let text = String(data: data, encoding: .utf8),
+              !text.isEmpty,
+              Self.isWithinInspectionLimit(text)
+        else { return nil }
+        return text
+    }
+
     func noteSelectedTool(_ toolID: ToolID?) {
         currentToolID = toolID
         if suggestion?.toolID == toolID {

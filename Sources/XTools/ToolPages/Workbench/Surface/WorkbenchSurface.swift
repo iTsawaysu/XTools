@@ -81,6 +81,9 @@ struct WorkbenchSurface<
     @State private var diagnosticPresentation = IndexWorkspaceDiagnosticPresentationState()
     @Environment(\.toolToastCenter) private var toastCenter
     @Environment(\.toolPageEntryGeneration) private var entryGeneration
+    // 壳层直达载荷（Batch D）：校验 toolID 归属后并入焦点请求。
+    @Environment(\.workbenchEntryPayload) private var workbenchEntryPayload
+    @Environment(\.toolPageEntryTraceContext) private var entryTraceContext
 
     private init(
         title: String?,
@@ -167,12 +170,22 @@ struct WorkbenchSurface<
         .environment(\.workbenchFocusRequest, workbenchFocusRequest)
     }
 
-    /// 焦点契约请求值（C3）：页面声明了首位输入（focusRequestToken 非 nil）
-    /// 才注入活跃请求；停靠/失活（代际 0）与未声明页面都收敛到 inactive，
-    /// 组件族的请求消费在入口处被压住。
+    /// 焦点契约请求值（C3 + Batch D 直达载荷）：页面声明了首位输入
+    /// （focusRequestToken 非 nil）才注入活跃请求；停靠/失活（代际 0）与
+    /// 未声明页面都收敛到 inactive，组件族的请求消费在入口处被压住。
+    /// 壳层直达载荷（⌘K 直达 / SmartPaste 建议 / deeplink）在页面活跃且
+    /// 归属本工具时并入请求——entry 变化即为一次新的「写文本 + 聚焦」
+    /// 外部请求，载荷随选择变化由 ShellNavigationModel 作废（一次性）。
     private var workbenchFocusRequest: WorkbenchFocusRequest {
         guard let focusRequestToken else { return .inactive }
-        return WorkbenchFocusRequest(generation: entryGeneration, token: focusRequestToken)
+        var request = WorkbenchFocusRequest(generation: entryGeneration, token: focusRequestToken)
+        if entryGeneration > 0,
+           let payload = workbenchEntryPayload,
+           payload.toolID == entryTraceContext?.toolID {
+            request.entry = payload.id
+            request.entryText = payload.text
+        }
+        return request
     }
 
     /// 页面级快捷键代理（design.md §5-6 的实现位）：每个持快捷键的动作在此

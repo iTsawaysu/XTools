@@ -358,11 +358,28 @@ struct IndexUndoableTextField: NSViewRepresentable {
         /// searchFocusToken 的重试纪律有界补试——makeFirstResponder 成功
         /// （字段编辑器接管）后余下补试全部 no-op，不会在用户移焦后抢回；
         /// 页面停靠（代际归零）或请求被更新值取代时立即放弃。
+        /// Batch D：请求携带直达载荷（entry/entryText）时先写文本再聚焦，
+        /// 一次请求原子完成「预填 + 聚焦」。
         func requestFocus(_ textField: NSTextField, request: WorkbenchFocusRequest) {
             guard request.generation > 0,
                   processedWorkbenchFocusRequest != request else { return }
             processedWorkbenchFocusRequest = request
+            if let entryText = request.entryText, !entryText.isEmpty {
+                writeEntryText(textField, entryText)
+            }
             attemptWorkbenchFocus(textField, attempt: 0, request: request)
+        }
+
+        /// 壳层直达预填（Batch D）：同步 binding（页面响应逻辑随 SwiftUI
+        /// 状态更新）与原生字符串；与「用作输入」写回同路径，不触碰 undo
+        /// 合并语义。写入后聚焦链把光标带至末尾。
+        private func writeEntryText(_ textField: NSTextField, _ newText: String) {
+            if !ExactUTF8Identity.isExactlyEqual(textField.stringValue, newText) {
+                textField.stringValue = newText
+            }
+            if !ExactUTF8Identity.isExactlyEqual(text.wrappedValue, newText) {
+                text.wrappedValue = newText
+            }
         }
 
         private func attemptWorkbenchFocus(
@@ -985,11 +1002,27 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
         /// 焦点契约请求（阶段③ C3）：请求恒等（代际 + 页内 token）门控，
         /// 一请求只处理一次；窗口未挂载时按共用预算有界补试，成功或页面
         /// 停靠/请求被取代即停（纪律同单行字段与 palette searchFocusToken）。
+        /// Batch D：请求携带直达载荷（entry/entryText）时先写文本再聚焦，
+        /// 一次请求原子完成「预填 + 聚焦」。
         func requestFocus(_ textView: NSTextView, request: WorkbenchFocusRequest) {
             guard request.generation > 0,
                   processedWorkbenchFocusRequest != request else { return }
             processedWorkbenchFocusRequest = request
+            if let entryText = request.entryText, !entryText.isEmpty {
+                writeEntryText(textView, entryText)
+            }
             attemptWorkbenchFocus(textView, attempt: 0, request: request)
+        }
+
+        /// 壳层直达预填（Batch D）：同步原生文本与 binding（页面响应逻辑
+        /// 随 SwiftUI 状态更新）；写入后聚焦链把插入点带到文本末尾。
+        private func writeEntryText(_ textView: NSTextView, _ newText: String) {
+            if !ExactUTF8Identity.isExactlyEqual(textView.string, newText) {
+                textView.string = newText
+            }
+            if !ExactUTF8Identity.isExactlyEqual(text.wrappedValue, newText) {
+                text.wrappedValue = newText
+            }
         }
 
         private func attemptWorkbenchFocus(
@@ -1298,11 +1331,27 @@ struct IndexUndoableTextView: NSViewRepresentable {
         /// 焦点契约请求（阶段③ C3）：请求恒等（代际 + 页内 token）门控，
         /// 一请求只处理一次；窗口未挂载时按共用预算有界补试，成功或页面
         /// 停靠/请求被取代即停（纪律同单行字段与 palette searchFocusToken）。
+        /// Batch D：请求携带直达载荷（entry/entryText）时先写文本再聚焦，
+        /// 一次请求原子完成「预填 + 聚焦」。
         func requestFocus(_ textView: NSTextView, request: WorkbenchFocusRequest) {
             guard request.generation > 0,
                   processedWorkbenchFocusRequest != request else { return }
             processedWorkbenchFocusRequest = request
+            if let entryText = request.entryText, !entryText.isEmpty {
+                writeEntryText(textView, entryText)
+            }
             attemptWorkbenchFocus(textView, attempt: 0, request: request)
+        }
+
+        /// 壳层直达预填（Batch D）：同步原生文本与 binding（页面响应逻辑
+        /// 随 SwiftUI 状态更新）；写入后聚焦链把插入点带到文本末尾。
+        private func writeEntryText(_ textView: NSTextView, _ newText: String) {
+            if !ExactUTF8Identity.isExactlyEqual(textView.string, newText) {
+                textView.string = newText
+            }
+            if !ExactUTF8Identity.isExactlyEqual(text.wrappedValue, newText) {
+                text.wrappedValue = newText
+            }
         }
 
         private func attemptWorkbenchFocus(

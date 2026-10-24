@@ -12,6 +12,9 @@ protocol DetailActionRouting: AnyObject {
     func openCommandPalette()
     @discardableResult
     func toggleFavorite(_ toolID: ToolID) -> Bool?
+    /// Smart Detection「为你建议」卡激活（阶段③ D2）：打开工具 + 分段
+    /// 深链 + 现读剪贴板预填（动作语义在壳层实现）。
+    func openClipboardSuggestion(_ suggestion: ClipboardSuggestionModel.Suggestion)
 }
 
 struct ToolDetailHostView: View {
@@ -20,6 +23,8 @@ struct ToolDetailHostView: View {
     let transitionIntent: ToolPageTransitionIntent
     let dashboardStore: DashboardStore?
     let favorites: FavoritesStore
+    /// Smart Detection「为你建议」（D2）：仪表盘「继续工作」卡旁同源一条。
+    let clipboardSuggestion: ClipboardSuggestionModel.Suggestion?
     let routing: any DetailActionRouting
 
     init(
@@ -28,6 +33,7 @@ struct ToolDetailHostView: View {
         transitionIntent: ToolPageTransitionIntent = .depth,
         dashboardStore: DashboardStore? = nil,
         favorites: FavoritesStore,
+        clipboardSuggestion: ClipboardSuggestionModel.Suggestion? = nil,
         routing: any DetailActionRouting
     ) {
         self.registry = registry
@@ -35,6 +41,7 @@ struct ToolDetailHostView: View {
         self.transitionIntent = transitionIntent
         self.dashboardStore = dashboardStore
         self.favorites = favorites
+        self.clipboardSuggestion = clipboardSuggestion
         self.routing = routing
     }
 
@@ -48,6 +55,7 @@ struct ToolDetailHostView: View {
                 registry: registry,
                 dashboardStore: dashboardStore,
                 favorites: favorites,
+                clipboardSuggestion: clipboardSuggestion,
                 routing: routing
             )
             .equatable()
@@ -77,15 +85,18 @@ private struct ToolPageHostedItem: View, Equatable {
     let registry: ToolRegistry
     let dashboardStore: DashboardStore?
     let favorites: FavoritesStore
+    let clipboardSuggestion: ClipboardSuggestionModel.Suggestion?
     let routing: any DetailActionRouting
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         // registry 不参与比较：ToolRegistry 是不可变值（RootView 持有
-        // ToolRegistry.default），页面内容只随 key/dashboardStore/favorites/routing 变化。
-        // 若未来 registry 变为多实例或可变，必须把它的身份纳入比较。
+        // ToolRegistry.default），页面内容只随 key/dashboardStore/favorites/
+        // clipboardSuggestion/routing 变化。若未来 registry 变为多实例或可变，
+        // 必须把它的身份纳入比较。
         lhs.key == rhs.key &&
         lhs.dashboardStore === rhs.dashboardStore &&
         lhs.favorites === rhs.favorites &&
+        lhs.clipboardSuggestion == rhs.clipboardSuggestion &&
         MainActor.assumeIsolated { lhs.routing === rhs.routing }
     }
 
@@ -106,6 +117,7 @@ private struct ToolPageHostedItem: View, Equatable {
                     store: dashboardStore,
                     favorites: favorites,
                     registry: registry,
+                    clipboardSuggestion: clipboardSuggestion,
                     routing: routing
                 )
             }

@@ -56,6 +56,34 @@ struct WorkbenchFocusContractTests {
         #expect(base64.contains("firstInputFocusToken += 1"), "「用作输入」递增契约 token")
     }
 
+    @Test func shellDirectEntryRidesTheSameFocusContract() throws {
+        // 阶段③ Batch D：⌘K 直达 / SmartPaste 建议 / deeplink 的「聚焦 +
+        // 预填」不另开通道——载荷经 ShellNavigationModel 投递、
+        // WorkbenchSurface 校验归属后并入 WorkbenchFocusRequest（entry
+        // 分量），三族输入组件在既有请求消费点写文本。
+        let focus = try Self.read("Sources/XTools/ToolPages/Workbench/Surface/WorkbenchFocus.swift")
+        #expect(focus.contains("struct WorkbenchEntryPayload"), "壳层直达载荷类型存在于焦点契约文件")
+        #expect(focus.contains("var workbenchEntryPayload: WorkbenchEntryPayload?"), "载荷经环境下发")
+        #expect(focus.contains("var entry: Int = 0"), "请求携带外部直达序号分量")
+        #expect(focus.contains("var entryText: String? = nil"), "请求携带预填文本分量")
+
+        let surface = try Self.read("Sources/XTools/ToolPages/Workbench/Surface/WorkbenchSurface.swift")
+        #expect(
+            surface.contains("payload.toolID == entryTraceContext?.toolID"),
+            "壳只把归属本工具的载荷并入请求（跨页面广播不误消费）"
+        )
+
+        let field = try Self.read("Sources/XTools/ToolPages/Workbench/Text/IndexTextComponents.swift")
+        #expect(field.contains("writeEntryText"), "文本输入组件族在请求消费点写预填文本")
+
+        let navigation = try Self.read("Sources/XTools/AppShell/ShellNavigationModel.swift")
+        #expect(navigation.contains("func deliverEntryFocus(toolID: ToolID, text: String?)"), "壳层投递入口")
+        #expect(
+            navigation.contains("workbenchEntryPayload = nil"),
+            "选择变化作废载荷（一次性投递，防停靠回访重写）"
+        )
+    }
+
     // MARK: - 真窗口行为
 
     @MainActor
