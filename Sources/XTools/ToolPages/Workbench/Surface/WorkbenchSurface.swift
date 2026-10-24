@@ -210,6 +210,9 @@ struct WorkbenchSurface<
     /// 壳持有的页面级快捷键清单：⇧⌘C（首个 copy）与 ⌘↩（primaryAction）。
     /// 動作执行委托回 ActionBar 动作闭包；copy 的成功 toast 复用
     /// IndexCopyButton 同路径（拷贝 + 播报）。
+    /// 注意：`.inputOutput` 形态下双栏 copy 声明在 `WorkbenchIOPair` 的
+    /// leading/trailingActions 上——IOPair 在自己根部挂同款代理（见其
+    /// paneBody），壳的 `actions` 只覆盖本壳直挂的 copy。
     private var pageShortcutActions: [WorkbenchPageShortcut] {
         var shortcuts: [WorkbenchPageShortcut] = []
         if let primaryAction {

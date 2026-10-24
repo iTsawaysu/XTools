@@ -45,74 +45,77 @@ private struct IndexColorWorkspaceContent: View {
         IndexPage(
             "颜色转换",
             subtitle: "解析现代 CSS 颜色，统一转换为带 Alpha 的多种格式。",
-            workspaceSemantic: .naturalHeightShortResultPanel
+            workspaceSemantic: .queryListWorkspace
         ) {
-            IndexInputResultWorkbench(
-                inputTitle: "输入与预览",
-                resultTitle: "转换结果"
-            ) {
-                EmptyView()
-            } resultControls: {
-                EmptyView()
-            } input: {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: ToolMetrics.Spacing.lg) { pickerBody }
-                    VStack(alignment: .leading, spacing: ToolMetrics.Spacing.lg) { pickerBody }
-                }
-                .padding(.horizontal, ToolMetrics.Spacing.md)
-                .padding(.vertical, ToolMetrics.Spacing.sm)
-            } result: {
-                VStack(alignment: .leading, spacing: 0) {
-                    resultRows(commonValues, emptyText: IndexEmptyStateCopy.autoShow("有效 CSS 颜色"))
+            // 统一壳装配（page-rollout A2，design.md「取色器进参数区（弹性）；
+            // 自绘滑杆保留」）：取色按钮 + CSS 颜色字段归弹性参数区（RegexTester
+            // pattern 行先例，统一轴线 36pt）；预览色板与自绘 HSL/Alpha 滑杆
+            // 留输入 pane（canvas 语义自由内容，组件逐字保留）；格式结果行与
+            // 「更多颜色空间」折叠区留输出 pane。双栏需固定高度，语义切
+            // queryList（DateTime 先例授权）。
+            WorkbenchSurface(title: nil, shape: .inputOutput, parameters: { parameterFlow }) {
+                WorkbenchIOPair(
+                    leadingTitle: "输入与预览",
+                    trailingTitle: "转换结果"
+                ) {
+                    leadingPane
+                } trailing: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        resultRows(commonValues, emptyText: IndexEmptyStateCopy.autoShow("有效 CSS 颜色"))
 
-                    Divider()
+                        Divider()
 
-                    advancedFormatsDisclosure
+                        advancedFormatsDisclosure
+                    }
                 }
-                .padding(.horizontal, ToolMetrics.Spacing.md)
-                .padding(.vertical, ToolMetrics.Spacing.sm)
             }
         }
     }
 
-    private var pickerBody: some View {
-        Group {
-            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                .fill(ToolTheme.editorBackground)
-                .overlay { Rectangle().fill(Color(nsColor: previewColor)).clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)) }
-                .frame(width: ToolMetrics.Control.preview, height: ToolMetrics.Control.preview)
-                .overlay { RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field).strokeBorder(ToolTheme.border, lineWidth: 0.5) }
-                .accessibilityElement()
-                .accessibilityLabel("颜色预览")
-                .accessibilityValue(previewAccessibilityValue)
-
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+    /// 弹性参数区：取色按钮与 CSS 颜色字段（页面首个输入）。
+    private var parameterFlow: some View {
+        WorkbenchParameterFlow {
+            WorkbenchParameterItem {
                 HStack(spacing: ToolMetrics.Spacing.sm) {
-                    Button {
-                        showsSystemColorPicker.toggle()
-                    } label: {
-                        Label("取色", systemImage: "eyedropper")
-                            .font(ToolTypography.buttonSmall)
-                    }
-                    .buttonStyle(IndexButtonStyle(compact: true))
-                    .help("打开系统取色器（包含透明度）")
-                    .accessibilityLabel("打开系统取色器")
-                    .popover(isPresented: $showsSystemColorPicker, arrowEdge: .bottom) {
-                        systemColorPicker
-                    }
+                    colorPickerButton
 
                     IndexTextInput(
                         placeholder: "#7C8CFF、oklch(65% 0.2 40)、color(display-p3 1 0.2 0.1 / 0.8)",
                         text: Binding(
                             get: { workspace.state.draft },
                             set: { workspace.send(.draftChanged($0)) }
-                        )
+                        ),
+                        height: ToolMetrics.Control.row
                     )
                     .accessibilityLabel("CSS 颜色")
                     .accessibilityHint("输入 HEX、命名颜色或现代 CSS 颜色函数")
                     .indexWorkspaceDiagnostic(workspace.state.diagnostic?.message)
+                    .workbenchFocusTarget()
                 }
+            }
+        }
+    }
 
+    /// 输入 pane 内容（canvas 语义自由内容）：预览色板 + 提示 + 自绘滑杆。
+    private var leadingPane: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: ToolMetrics.Spacing.lg) { canvasBody }
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.lg) { canvasBody }
+        }
+    }
+
+    private var canvasBody: some View {
+        Group {
+            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                .fill(ToolTheme.editorBackground)
+                .overlay { Rectangle().fill(Color(nsColor: previewColor)).clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)) }
+                .frame(width: ToolMetrics.Control.preview, height: ToolMetrics.Control.preview)
+                .overlay { RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field).strokeBorder(ToolTheme.border, lineWidth: ToolMetrics.Spacing.hairline) }
+                .accessibilityElement()
+                .accessibilityLabel("颜色预览")
+                .accessibilityValue(previewAccessibilityValue)
+
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
                 if workspace.state.isUsingLastValidResult {
                     Text("结果基于上次有效颜色，当前输入仍未完成或无效。")
                         .font(ToolTypography.caption)
@@ -123,6 +126,22 @@ private struct IndexColorWorkspaceContent: View {
                 hslControls
             }
             .frame(maxWidth: ToolMetrics.Control.readingWide)
+        }
+    }
+
+    /// 系统取色器触发钮（原 pickerBody 内行首控件，随取色器进参数区）。
+    private var colorPickerButton: some View {
+        Button {
+            showsSystemColorPicker.toggle()
+        } label: {
+            Label("取色", systemImage: "eyedropper")
+                .font(ToolTypography.buttonSmall)
+        }
+        .buttonStyle(IndexButtonStyle(compact: true))
+        .help("打开系统取色器（包含透明度）")
+        .accessibilityLabel("打开系统取色器")
+        .popover(isPresented: $showsSystemColorPicker, arrowEdge: .bottom) {
+            systemColorPicker
         }
     }
 

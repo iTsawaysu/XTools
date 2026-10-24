@@ -53,6 +53,11 @@ struct IndexDateCalcPage: View {
     }
 }
 
+/// 统一壳装配（page-rollout A1）：模式分段是页面级模式（间隔/加减，切换
+/// 整页内容并持久化偏好），归标题行 titleAccessory（Base64File 编码/解码
+/// 分段先例）；「复制结果」归输出 pane 尾部 ActionBar（首个 copy 同步壳级
+/// actions 注册 ⇧⌘C）；双栏需固定高度，语义切 queryList（DateTime 先例
+/// 授权）。输入/结果两组内容投影逐字保留。
 private struct IndexDateCalcWorkspaceContent: View {
     @Binding var mode: DateCalcToolWorkspaceModel.Mode
     @Binding var session: DateCalcWorkspace
@@ -69,35 +74,32 @@ private struct IndexDateCalcWorkspaceContent: View {
         mode == .interval ? session.totalDaysText : session.resultCopyText
     }
 
+    private var copyAction: WorkbenchActionBarAction {
+        .copy(text: resultCopyText, title: "复制结果")
+    }
+
     var body: some View {
-        IndexPage("日期计算", subtitle: "计算两个日期之间的间隔，或在某个日期上加减时间。", workspaceSemantic: .naturalHeightShortResultPanel) {
-            IndexInputResultWorkbench(
-                inputTitle: mode.panelTitle,
-                resultTitle: "结果"
-            ) {
-                HStack(spacing: ToolMetrics.Spacing.sm) {
-                    IndexSegmentedControl(
-                        items: DateCalcToolWorkspaceModel.Mode.allCases.map { ($0, $0.title) },
-                        selection: $mode
-                    )
-                    Spacer(minLength: ToolMetrics.Spacing.sm)
-                }
-            } resultControls: {
-                IndexCopyButton(text: resultCopyText, title: "复制结果")
-            } input: {
-                Group {
-                    if mode == .interval {
-                        intervalInput
-                    } else {
-                        offsetInput
+        IndexPage("日期计算", subtitle: "计算两个日期之间的间隔，或在某个日期上加减时间。", workspaceSemantic: .queryListWorkspace) {
+            WorkbenchSurface(title: nil, shape: .inputOutput, actions: [copyAction]) {
+                WorkbenchIOPair(
+                    leadingTitle: mode.panelTitle,
+                    trailingTitle: "结果",
+                    trailingActions: [copyAction]
+                ) {
+                    Group {
+                        if mode == .interval {
+                            intervalInput
+                        } else {
+                            offsetInput
+                        }
                     }
-                }
-            } result: {
-                Group {
-                    if mode == .interval {
-                        intervalResult
-                    } else {
-                        offsetResult
+                } trailing: {
+                    Group {
+                        if mode == .interval {
+                            intervalResult
+                        } else {
+                            offsetResult
+                        }
                     }
                 }
             }
@@ -136,8 +138,6 @@ private struct IndexDateCalcWorkspaceContent: View {
                 isOn: $session.includeEndDate
             )
         }
-        .padding(.horizontal, ToolMetrics.Spacing.md)
-        .padding(.vertical, ToolMetrics.Spacing.sm)
         .indexWorkspaceDiagnostic(session.diffError)
     }
 
@@ -151,8 +151,6 @@ private struct IndexDateCalcWorkspaceContent: View {
             IndexStatGrid(stats: session.breakdownStats, valueMotion: .immediate)
             IndexKV(rows: intervalDetailRows, copyable: false, valueMotion: .immediate)
         }
-        .padding(.horizontal, ToolMetrics.Spacing.md)
-        .padding(.vertical, ToolMetrics.Spacing.sm)
     }
 
     private var offsetInput: some View {
@@ -169,8 +167,6 @@ private struct IndexDateCalcWorkspaceContent: View {
                 }
             }
         }
-        .padding(.horizontal, ToolMetrics.Spacing.md)
-        .padding(.vertical, ToolMetrics.Spacing.sm)
         .indexWorkspaceDiagnostic(session.baseInputError)
     }
 
@@ -182,8 +178,6 @@ private struct IndexDateCalcWorkspaceContent: View {
                 footnote: session.resultRelativeToTodayText()
             )
         }
-        .padding(.horizontal, ToolMetrics.Spacing.md)
-        .padding(.vertical, ToolMetrics.Spacing.sm)
     }
 
     @ViewBuilder
@@ -211,6 +205,7 @@ private struct IndexDateCalcWorkspaceContent: View {
             input: $session.startInput,
             date: session.start,
             weekdayText: session.startWeekdayText,
+            isFocusTarget: true,
             onCommit: { session.commitStartInputDate($0) },
             onInvalidPaste: { session.markStartInvalidPaste() },
             onSelectDate: { session.applyStartDate($0) },
@@ -239,11 +234,27 @@ private struct IndexDateCalcWorkspaceContent: View {
             input: $session.baseInput,
             date: session.base,
             weekdayText: session.baseWeekdayText,
+            isFocusTarget: true,
             onCommit: { session.commitBaseInputDate($0) },
             onInvalidPaste: { session.markBaseInvalidPaste() },
             onSelectDate: { session.applyBaseDate($0) },
             onToday: { session.setBaseToday() }
         )
+    }
+}
+
+/// 首个聚焦声明只落页面当前模式的第一个日期字段（间隔 = 开始日期，
+/// 加减 = 基准日期）；声明与请求正交，非目标字段不消费请求。
+private struct DateCalculatorConditionalFocusTarget: ViewModifier {
+    let active: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if active {
+            content.workbenchFocusTarget()
+        } else {
+            content
+        }
     }
 }
 
@@ -253,6 +264,7 @@ private struct DateCalculatorDateField: View {
     let date: Date
     let weekdayText: String
     var autoFocus = false
+    var isFocusTarget = false
     let onCommit: (Date) -> Void
     let onInvalidPaste: () -> Void
     let onSelectDate: (Date) -> Void
@@ -284,6 +296,7 @@ private struct DateCalculatorDateField: View {
                     }
                     .padding(.trailing, ToolMetrics.Spacing.fine)
                 }
+                .modifier(DateCalculatorConditionalFocusTarget(active: isFocusTarget))
             }
 
             Text(weekdayText)

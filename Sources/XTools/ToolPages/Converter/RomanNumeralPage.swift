@@ -21,6 +21,11 @@ struct IndexRomanPage: View {
     }
 }
 
+/// 统一壳装配（page-rollout A1）：单行输入 + hero 结果 → .result 形态。
+/// 换向分段是页面级模式（数字→罗马 / 罗马→数字，双向回填），归标题行
+/// titleAccessory（Base64File 编码/解码分段先例）；数值字段归弹性参数区
+/// （统一轴线 36pt）；清空归内容区底部 ActionBar。hero 呈现与空态逐字
+/// 保留，语义不变。
 private struct IndexRomanWorkspaceContent: View {
     @ObservedObject var workspace: RomanNumeralToolWorkspaceModel
 
@@ -42,29 +47,21 @@ private struct IndexRomanWorkspaceContent: View {
 
     var body: some View {
         IndexPage("罗马数字", subtitle: "阿拉伯数字与罗马数字互转。", workspaceSemantic: .naturalHeightShortResultPanel) {
-            IndexInputResultWorkbench(
-                inputTitle: "输入",
-                resultTitle: "结果"
-            ) {
-                HStack(spacing: ToolMetrics.Spacing.sm) {
+            WorkbenchSurface(
+                title: nil,
+                primaryAction: nil,
+                shape: .result,
+                actions: [
+                    .clear(enabled: !workspace.input.isEmpty, onPerform: clear)
+                ],
+                titleAccessory: {
                     IndexSegmentedControl(
                         items: [("toRoman", "数字→罗马"), ("toNum", "罗马→数字")],
                         selection: modeSelection
                     )
-                    Spacer(minLength: ToolMetrics.Spacing.sm)
-                    IndexClearButton(isDisabled: workspace.input.isEmpty) {
-                        clear()
-                    }
-                }
-            } resultControls: {
-                EmptyView()
-            } input: {
-                IndexTextInput(placeholder: "例如 2024 或 MMXXIV", text: $workspace.input, height: 42, autoFocus: true)
-                    .onChange(of: workspace.input) { _ in normalizeRomanCase(); validate() }
-                    .indexWorkspaceDiagnostic(workspace.error)
-                    .padding(.horizontal, ToolMetrics.Spacing.md)
-                    .padding(.vertical, ToolMetrics.Spacing.sm)
-            } result: {
+                },
+                parameters: { parameterFlow }
+            ) {
                 IndexResultSurface(
                     content: .hero(
                         IndexResultHeroItem(
@@ -74,6 +71,18 @@ private struct IndexRomanWorkspaceContent: View {
                     ),
                     emptyText: "输入数字后显示结果"
                 )
+            }
+        }
+    }
+
+    /// 弹性参数区：数值输入行（参数区统一轴线 36pt）。
+    private var parameterFlow: some View {
+        WorkbenchParameterFlow {
+            WorkbenchParameterItem {
+                IndexTextInput(placeholder: "例如 2024 或 MMXXIV", text: $workspace.input, height: ToolMetrics.Control.row, autoFocus: true)
+                    .onChange(of: workspace.input) { normalizeRomanCase(); validate() }
+                    .indexWorkspaceDiagnostic(workspace.error)
+                    .workbenchFocusTarget()
             }
         }
     }

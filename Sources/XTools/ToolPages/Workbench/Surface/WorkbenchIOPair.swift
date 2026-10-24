@@ -65,6 +65,9 @@ struct WorkbenchIOPair<
     let trailingTitle: String
     var splitPolicy: WorkbenchIOPairSplitPolicy = .default
 
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
+    @Environment(\.toolToastCenter) private var toastCenter
+
     /// 输入 pane 尾部动作（通常为空；输入侧操作如清空按需声明）。
     var leadingActions: [WorkbenchActionBarAction] = []
     /// 输出 pane 尾部动作（ ActionBar 的标准挂载点：copy/save/swap…）。
@@ -116,6 +119,31 @@ struct WorkbenchIOPair<
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // 页面级 ⇧⌘C 代理（page-rollout Batch A 发现的缺口）：双栏页的主输出
+        // copy 声明在 trailingActions 上，宿主壳的 pageLevelShortcuts 只聚合
+        // 壳自身 `actions`，看不到这里——IOPair 在自己根部挂同款隐藏代理钮
+        //（形制同壳：真实标题 + opacity(0)；RootView 隐藏按钮组成熟先例）。
+        // 门控同壳：entryGeneration=0（停靠/失活）不挂载。
+        .overlay { pageLevelShortcuts }
+    }
+
+    /// 双栏动作的页面级快捷键代理：首个 copy 取 trailingActions 优先（输出
+    /// pane 即主输出），退而 leadingActions。执行语义与可见复制钮一致。
+    @ViewBuilder
+    private var pageLevelShortcuts: some View {
+        if entryGeneration > 0, let copy = primaryCopyAction {
+            Button(copy.copyTitle) {
+                copy.performCopyViaToastCenter(toastCenter)
+            }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .opacity(0)
+            .frame(width: .zero, height: .zero)
+            .accessibilityHidden(true)
+        }
+    }
+
+    private var primaryCopyAction: WorkbenchActionBarAction? {
+        (trailingActions + leadingActions).first { if case .copy = $0.kind { return true } else { return false } }
     }
 
     // MARK: - 等宽契约（旧 IndexPairWorkbenchLayoutPolicy 几何平移）

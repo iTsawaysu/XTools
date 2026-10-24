@@ -23,6 +23,12 @@ struct IndexBasicAuthPage: View {
     }
 }
 
+/// 统一壳装配（page-rollout A1）：生成/解析分段是页面级模式（双向转移
+/// 凭据），归标题行 titleAccessory（Base64File 编码/解码分段先例）；清空
+/// 归输入 pane 尾部 ActionBar；「在解析中打开 / 用于生成」转移钮归输出
+/// pane 头附件（Base64File pane 附件先例，动作带跨模式副作用不进
+/// ActionBar 五种声明）；复制归输出 pane 尾部 ActionBar（首个 copy 同步
+/// 壳级 actions 注册 ⇧⌘C）。语义本就是 fill 布局，保持不变。
 private struct IndexBasicAuthWorkspaceContent: View {
     @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @Binding var session: BasicAuthWorkspaceSession
@@ -35,28 +41,52 @@ private struct IndexBasicAuthWorkspaceContent: View {
         modeBinding.wrappedValue == .generate
     }
 
+    private var copyAction: WorkbenchActionBarAction {
+        .copy(text: session.output)
+    }
+
     var body: some View {
         IndexPage(
             "Basic Auth",
             subtitle: "生成或解析 Basic Auth 请求头；Base64 不是加密，请仅通过 HTTPS 使用。",
             workspaceSemantic: .securityTransformWorkspace
         ) {
-            IndexInputResultWorkbench(
-                inputTitle: isGenerating ? "凭据" : "请求头",
-                resultTitle: isGenerating ? "Authorization 请求头" : "解析结果"
+            WorkbenchSurface(
+                title: nil,
+                primaryAction: nil,
+                shape: .inputOutput,
+                actions: isGenerating ? [copyAction] : [],
+                titleAccessory: { modeSegmentedControl }
             ) {
-                HStack(spacing: ToolMetrics.Spacing.sm) {
-                    IndexSegmentedControl(
-                        items: IndexGenerateParseMode.segmentedItems,
-                        selection: modeSelection
-                    )
-                    .accessibilityLabel("操作模式")
-                    Spacer(minLength: ToolMetrics.Spacing.sm)
-                    IndexClearButton(isDisabled: !session.hasAnyContent, action: clearAll)
-                }
-            } resultControls: {
-                resultControls
-            } input: {
+                ioPair
+            }
+        }
+        .onChange(of: entryGeneration) {
+            if entryGeneration == 0 {
+                showsPassword = false
+                showsParsedPassword = false
+            }
+        }
+        .onAppear {
+            if !isGenerating { parse() }
+        }
+        .onChange(of: isGenerating) {
+            if !isGenerating { parse() }
+        }
+    }
+
+    /// 双栏装配：凭据/请求头 pane 与 Authorization/解析结果 pane，随模式
+    /// 切换标题与内容（pane 内容投影见下方同名属性）。
+    private var ioPair: some View {
+        WorkbenchIOPair(
+            leadingTitle: isGenerating ? "凭据" : "请求头",
+            trailingTitle: isGenerating ? "Authorization 请求头" : "解析结果",
+            leadingActions: [
+                .clear(enabled: session.hasAnyContent, onPerform: clearAll)
+            ],
+            trailingActions: isGenerating ? [copyAction] : [],
+            leadingAccessory: { EmptyView() },
+            leading: {
                 Group {
                     if isGenerating {
                         credentialsForm
@@ -64,9 +94,9 @@ private struct IndexBasicAuthWorkspaceContent: View {
                         parseField
                     }
                 }
-                .padding(.horizontal, ToolMetrics.Spacing.md)
-                .padding(.vertical, ToolMetrics.Spacing.sm)
-            } result: {
+            },
+            trailingAccessory: { resultTransferControls },
+            trailing: {
                 Group {
                     if isGenerating {
                         generateResult
@@ -75,25 +105,14 @@ private struct IndexBasicAuthWorkspaceContent: View {
                     }
                 }
             }
-        }
-        .onChange(of: entryGeneration) { generation in
-            if generation == 0 {
-                showsPassword = false
-                showsParsedPassword = false
-            }
-        }
-        .onAppear {
-            if !isGenerating { parse() }
-        }
-        .onChange(of: isGenerating) { generating in
-            if !generating { parse() }
-        }
+        )
     }
 
     private var credentialsForm: some View {
         VStack(spacing: ToolMetrics.Spacing.md) {
             credentialRow("用户名") {
                 IndexTextInput(placeholder: "username", text: $session.username, autoFocus: true)
+                    .workbenchFocusTarget()
             }
             credentialRow("密码") {
                 passwordInput
@@ -106,12 +125,23 @@ private struct IndexBasicAuthWorkspaceContent: View {
             placeholder: "Authorization: Basic dXNlcjpwYXNz",
             text: $session.parseInput,
             minHeight: 84,
+            fillsHeight: true,
             autoFocus: true,
             embedsFlat: true,
             workspaceSemantic: .longTextNaturalInput
         )
-        .onChange(of: session.parseInput) { _ in parse() }
+        .workbenchFocusTarget()
+        .onChange(of: session.parseInput) { parse() }
         .indexWorkspaceDiagnostic(session.parseError)
+    }
+
+    /// 生成/解析分段（页面级模式，标题行承载）。
+    private var modeSegmentedControl: some View {
+        IndexSegmentedControl(
+            items: IndexGenerateParseMode.segmentedItems,
+            selection: modeSelection
+        )
+        .accessibilityLabel("操作模式")
     }
 
     private var generateResult: some View {
@@ -131,7 +161,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
             .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                    .strokeBorder(ToolTheme.border, lineWidth: 0.5)
+                    .strokeBorder(ToolTheme.border, lineWidth: ToolMetrics.Spacing.hairline)
             }
             .padding(ToolMetrics.Spacing.md)
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -146,19 +176,16 @@ private struct IndexBasicAuthWorkspaceContent: View {
         }
     }
 
+    /// 跨模式转移钮（原 resultControls 槽投影，pane 头附件承载）。
     @ViewBuilder
-    private var resultControls: some View {
+    private var resultTransferControls: some View {
         if isGenerating {
-            HStack(spacing: ToolMetrics.Spacing.sm) {
-                Button(action: transferGeneratedToParse) {
-                    Label("在解析中打开", systemImage: "arrow.right.circle")
-                        .font(ToolTypography.buttonSmall)
-                }
-                .buttonStyle(IndexButtonStyle(compact: true))
-                .disabled(session.output.isEmpty)
-
-                IndexCopyButton(text: session.output)
+            Button(action: transferGeneratedToParse) {
+                Label("在解析中打开", systemImage: "arrow.right.circle")
+                    .font(ToolTypography.buttonSmall)
             }
+            .buttonStyle(IndexButtonStyle(compact: true))
+            .disabled(session.output.isEmpty)
         } else {
             Button(action: transferParsedToGenerate) {
                 Label("用于生成", systemImage: "arrow.left.circle")

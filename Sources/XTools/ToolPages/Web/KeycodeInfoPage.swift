@@ -56,30 +56,29 @@ private struct IndexKeycodeWorkspaceContent: View {
             subtitle: "根据本机按键事件推导对应的 Web KeyboardEvent 字段。",
             workspaceSemantic: .fixedInputWorkspace
         ) {
-            IndexInputResultWorkbench(
-                inputTitle: "按键捕获",
-                resultTitle: "最近事件"
-            ) {
-                EmptyView()
-            } resultControls: {
-                EmptyView()
-            } input: {
-                captureCard
-                    .padding(.horizontal, ToolMetrics.Spacing.md)
-                    .padding(.vertical, ToolMetrics.Spacing.sm)
-            } result: {
-                IndexResultSurface(
-                    content: .kv(resultItems),
-                    emptyText: "等待按键…"
-                )
+            // 统一壳装配（page-rollout A1）：捕获卡为输入 pane 自由内容，
+            // 事件 KV 为输出 pane；无参数无动作（旧页两槽均 EmptyView），
+            // 语义 fixedInputWorkspace 本就是 fill 布局，保持不变。
+            WorkbenchSurface(title: nil, shape: .inputOutput) {
+                WorkbenchIOPair(
+                    leadingTitle: "按键捕获",
+                    trailingTitle: "最近事件"
+                ) {
+                    captureCard
+                } trailing: {
+                    IndexResultSurface(
+                        content: .kv(resultItems),
+                        emptyText: "等待按键…"
+                    )
+                }
             }
         }
         .onAppear {
             guard entryGeneration > 0 else { return }
             focusRequestToken &+= 1
         }
-        .onChange(of: entryGeneration) { generation in
-            guard generation > 0 else { return }
+        .onChange(of: entryGeneration) {
+            guard entryGeneration > 0 else { return }
             focusRequestToken &+= 1
         }
     }

@@ -120,49 +120,37 @@ struct IndexBaseConverterPage: View {
     }
 }
 
+/// 统一壳装配（page-rollout A1）：单行输入 + 窄 KV 结果 → .result 形态。
+/// 进制分段与数值字段都是影响当下换算的即时参数，归弹性参数区（数值
+/// 字段独占一行，参数区统一轴线 36pt，RegexTester pattern 行先例）；清空
+/// 归内容区底部 ActionBar（.result 标准挂载点）。KV/进度呈现与空态逐字
+/// 保留，语义不变（自然高度结果面板继续走页面滚动）。
 private struct IndexBaseConverterWorkspaceContent: View {
     @ObservedObject var workspace: IntegerBaseToolWorkspaceModel
 
-    private var rows: [(String, String, Color?)] {
+    private var resultItems: [IndexResultKVItem] {
         guard let result = workspace.conversions else { return [] }
         return [
-            ("二进制 (2)", result.binary, nil),
-            ("八进制 (8)", result.octal, nil),
-            ("十进制 (10)", result.decimal, nil),
-            ("十六进制 (16)", result.hex, nil)
+            IndexResultKVItem(key: "二进制 (2)", value: result.binary),
+            IndexResultKVItem(key: "八进制 (8)", value: result.octal),
+            IndexResultKVItem(key: "十进制 (10)", value: result.decimal),
+            IndexResultKVItem(key: "十六进制 (16)", value: result.hex)
         ]
-    }
-
-    private var resultItems: [IndexResultKVItem] {
-        rows.map { IndexResultKVItem(key: $0.0, value: $0.1, color: $0.2) }
     }
 
     var body: some View {
         IndexPage("进制转换", subtitle: "在二进制、八进制、十进制、十六进制之间转换。", workspaceSemantic: .naturalHeightShortResultPanel) {
-            IndexInputResultWorkbench(
-                inputTitle: "输入",
-                resultTitle: "各进制结果"
-            ) {
-                HStack(spacing: ToolMetrics.Spacing.sm) {
-                    IndexOptionLabel("进制")
-                    IndexSegmentedControl(
-                        items: [("2", "二进制"), ("8", "八进制"), ("10", "十进制"), ("16", "十六进制")],
-                        selection: $workspace.base,
-                        density: .compact
+            WorkbenchSurface(
+                title: nil,
+                shape: .result,
+                actions: [
+                    .clear(
+                        enabled: !(workspace.input.isEmpty && workspace.error == nil),
+                        onPerform: { workspace.clear() }
                     )
-                    Spacer(minLength: ToolMetrics.Spacing.sm)
-                    IndexClearButton(isDisabled: workspace.input.isEmpty && workspace.error == nil) {
-                        workspace.clear()
-                    }
-                }
-            } resultControls: {
-                EmptyView()
-            } input: {
-                IndexTextInput(placeholder: "输入数值…", text: $workspace.input, height: 38, autoFocus: true)
-                    .indexWorkspaceDiagnostic(workspace.error)
-                    .padding(.horizontal, ToolMetrics.Spacing.md)
-                    .padding(.vertical, ToolMetrics.Spacing.sm)
-            } result: {
+                ],
+                parameters: { parameterFlow }
+            ) {
                 Group {
                     if workspace.isProcessing {
                         IndexProgressLabel(message: "正在换算…")
@@ -175,6 +163,24 @@ private struct IndexBaseConverterWorkspaceContent: View {
                         )
                     }
                 }
+            }
+        }
+    }
+
+    /// 弹性参数区：进制分段（旧 IndexOptionLabel + 分段）与数值输入行。
+    private var parameterFlow: some View {
+        WorkbenchParameterFlow {
+            WorkbenchParameterItem("进制") {
+                IndexSegmentedControl(
+                    items: [("2", "二进制"), ("8", "八进制"), ("10", "十进制"), ("16", "十六进制")],
+                    selection: $workspace.base,
+                    density: .compact
+                )
+            }
+            WorkbenchParameterItem {
+                IndexTextInput(placeholder: "输入数值…", text: $workspace.input, height: ToolMetrics.Control.row, autoFocus: true)
+                    .indexWorkspaceDiagnostic(workspace.error)
+                    .workbenchFocusTarget()
             }
         }
     }

@@ -110,36 +110,36 @@ private struct IndexUserAgentWorkspaceContent: View {
         IndexPage(
             "User-Agent 解析",
             subtitle: "本地尽力识别浏览器、操作系统与设备类型，仅供调试，不用于能力判断或安全决策。",
-            workspaceSemantic: .longTextNaturalInput
+            workspaceSemantic: .queryListWorkspace
         ) {
-            IndexInputResultWorkbench(
-                inputTitle: "输入",
-                resultTitle: "解析结果"
-            ) {
-                HStack(spacing: ToolMetrics.Spacing.sm) {
-                    Spacer(minLength: ToolMetrics.Spacing.sm)
-                    IndexClearButton(
-                        isDisabled: !workspace.hasAnyContent,
-                        action: workspace.clear
+            // 统一壳装配（page-rollout A1）：清空归输入 pane 尾部 ActionBar；
+            // 解析 KV 归输出 pane（行内复制由 KV 自带）。双栏需固定高度，
+            // 语义从自然长文本切 queryList（DateTime 先例授权）。
+            WorkbenchSurface(title: nil, shape: .inputOutput) {
+                WorkbenchIOPair(
+                    leadingTitle: "输入",
+                    trailingTitle: "解析结果",
+                    leadingActions: [
+                        .clear(enabled: workspace.hasAnyContent, onPerform: { workspace.clear() })
+                    ]
+                ) {
+                    IndexWorkspaceTextArea(
+                        placeholder: "粘贴 User-Agent 字符串…",
+                        text: $workspace.input,
+                        minHeight: 80,
+                        fillsHeight: true,
+                        embedsFlat: true,
+                        workspaceSemantic: .queryListWorkspace
+                    )
+                    .workbenchFocusTarget()
+                    .onChange(of: workspace.input) { parse() }
+                    .indexWorkspaceDiagnostic(workspace.error)
+                } trailing: {
+                    IndexResultSurface(
+                        content: .kv(rows),
+                        emptyText: "输入 User-Agent 后自动解析"
                     )
                 }
-            } resultControls: {
-                EmptyView()
-            } input: {
-                IndexWorkspaceTextArea(
-                    placeholder: "粘贴 User-Agent 字符串…",
-                    text: $workspace.input,
-                    minHeight: 80,
-                    embedsFlat: true,
-                    workspaceSemantic: .longTextNaturalInput
-                )
-                .onChange(of: workspace.input) { _ in parse() }
-                .indexWorkspaceDiagnostic(workspace.error)
-            } result: {
-                IndexResultSurface(
-                    content: .kv(rows),
-                    emptyText: "输入 User-Agent 后自动解析"
-                )
             }
         }
     }

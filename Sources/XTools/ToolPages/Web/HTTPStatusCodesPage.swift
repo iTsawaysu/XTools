@@ -24,6 +24,11 @@ struct IndexHTTPStatusPage: View {
     }
 }
 
+/// 统一壳装配（page-rollout A0）：搜索框 + List 过滤形态的标准配方——
+/// 搜索字段与分类徽章是筛选参数，归弹性参数区；动态结果计数移标题行
+/// （UUID meta 同款 title 槽投影）；列表为 .result 内容（行内复制、
+/// 行 hover（indexRowHoverBackground 范式）原样保留；列表过滤动画旧账
+/// 留阶段⑤）。
 private struct IndexHTTPStatusWorkspaceContent: View {
     @ObservedObject var workspace: HTTPStatusToolWorkspaceModel
 
@@ -35,49 +40,47 @@ private struct IndexHTTPStatusWorkspaceContent: View {
 
     var body: some View {
         IndexPage("HTTP 状态码", subtitle: "查询 HTTP 状态码及其含义。", workspaceSemantic: .queryListWorkspace) {
-            IndexInputResultWorkbench(
-                inputTitle: "分类筛选",
-                resultTitle: "状态码（\(filtered.count)）"
-            ) {
-                EmptyView()
-            } resultControls: {
-                EmptyView()
-            } input: {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
-                    IndexSearchInput(
-                        placeholder: "搜索状态码、名称或描述…",
-                        text: $workspace.query,
-                        autoFocus: true,
-                        clearTitle: "清空状态码搜索",
-                        onClear: workspace.clearSearch
-                    )
-                    .frame(maxWidth: ToolMetrics.Control.readingNarrow)
-
-                    IndexFlowLayout(spacing: ToolMetrics.Spacing.fine, lineSpacing: 6) {
-                        ForEach(categories, id: \.self) { name in
-                            let isActive = workspace.category == name
-                            IndexBadge(name, isSelected: isActive) {
-                                workspace.category = name
-                            }
+            WorkbenchSurface(title: "状态码（\(filtered.count)）", shape: .result, parameters: { parameterFlow }) {
+                Group {
+                    if filtered.isEmpty {
+                        emptyState
+                    } else {
+                        List(filtered) { row in
+                            IndexHTTPStatusRow(row: row)
+                                .listRowInsets(EdgeInsets())
+                                .listRowSeparator(.visible)
+                                .listRowBackground(Color.clear)
                         }
+                        .listStyle(.plain)
+                        .scrollContentBackground(.hidden)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, ToolMetrics.Spacing.md)
-                .padding(.vertical, ToolMetrics.Spacing.sm)
-            } result: {
-                if filtered.isEmpty {
-                    emptyState
-                } else {
-                    List(filtered) { row in
-                        IndexHTTPStatusRow(row: row)
-                            .listRowInsets(EdgeInsets())
-                            .listRowSeparator(.visible)
-                            .listRowBackground(Color.clear)
+            }
+        }
+    }
+
+    /// 弹性参数区：搜索字段独占行（参数区统一轴线 36pt），分类徽章随窗宽
+    /// 换行（行距从旧 6 收敛到参数区统一 sm 档）。
+    private var parameterFlow: some View {
+        WorkbenchParameterFlow {
+            WorkbenchParameterItem {
+                IndexSearchInput(
+                    placeholder: "搜索状态码、名称或描述…",
+                    text: $workspace.query,
+                    height: ToolMetrics.Control.row,
+                    autoFocus: true,
+                    clearTitle: "清空状态码搜索",
+                    onClear: workspace.clearSearch
+                )
+                .frame(maxWidth: ToolMetrics.Control.readingNarrow)
+                .workbenchFocusTarget()
+            }
+            WorkbenchParameterGroup {
+                ForEach(categories, id: \.self) { name in
+                    let isActive = workspace.category == name
+                    IndexBadge(name, isSelected: isActive) {
+                        workspace.category = name
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
                 }
             }
         }

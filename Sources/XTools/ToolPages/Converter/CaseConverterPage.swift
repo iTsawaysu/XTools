@@ -106,12 +106,13 @@ struct IndexCaseConverterPage: View {
     }
 }
 
+/// 统一壳装配（page-rollout A0）：输入/转换结果对等双栏。纯清空钮形态的
+/// 标准配方——旧 inputControls 槽的清空钮归输入 pane 尾部 ActionBar，
+/// resultControls 槽的复制钮归输出 pane 尾部 ActionBar（首个 copy 同步
+/// 声明在壳级 actions 上注册 ⇧⌘C；.inputOutput 形态壳层不渲染 actions，
+/// 只消费其页面级快捷键）。
 private struct IndexCaseConverterWorkspaceContent: View {
     @ObservedObject var workspace: CaseConverterToolWorkspaceModel
-
-    private var rows: [(String, String, Color?)] {
-        workspace.styles.map { ($0.label, $0.value, nil) }
-    }
 
     /// 全部复制只带结果值（标签是字段名，不进剪贴板），与 Hash 页的
     /// 「全部复制」按行拼接语义一致；输入为空时按钮经 IndexCopyButton
@@ -120,37 +121,47 @@ private struct IndexCaseConverterWorkspaceContent: View {
         workspace.styles.map(\.value).joined(separator: "\n")
     }
 
+    private var copyAction: WorkbenchActionBarAction {
+        .copy(text: allResultsText, title: "全部复制")
+    }
+
     var body: some View {
-        IndexPage("大小写转换", subtitle: "在 camelCase、snake_case、kebab-case 等之间转换。", workspaceSemantic: .longTextNaturalInput) {
-            IndexInputResultWorkbench(
-                inputTitle: "输入",
-                resultTitle: "转换结果"
-            ) {
-                HStack(spacing: ToolMetrics.Spacing.sm) {
-                    Spacer(minLength: ToolMetrics.Spacing.sm)
-                    IndexClearButton(isDisabled: workspace.text.isEmpty) {
-                        workspace.text = ""
-                    }
+        IndexPage("大小写转换", subtitle: "在 camelCase、snake_case、kebab-case 等之间转换。", workspaceSemantic: .queryListWorkspace) {
+            WorkbenchSurface(title: nil, shape: .inputOutput, actions: [copyAction]) {
+                WorkbenchIOPair(
+                    leadingTitle: "输入",
+                    trailingTitle: "转换结果",
+                    leadingActions: [
+                        .clear(enabled: !workspace.text.isEmpty, onPerform: { workspace.text = "" })
+                    ],
+                    trailingActions: [copyAction]
+                ) {
+                    inputPane
+                } trailing: {
+                    IndexResultSurface(
+                        content: .kv(
+                            workspace.styles.map { IndexResultKVItem(key: $0.label, value: $0.value) }
+                        ),
+                        emptyText: IndexEmptyStateCopy.autoShow("文本")
+                    )
                 }
-            } resultControls: {
-                IndexCopyButton(text: allResultsText, title: "全部复制")
-            } input: {
-                IndexWorkspaceTextArea(
-                    placeholder: "输入文本，自动转换所有格式…",
-                    text: $workspace.text,
-                    minHeight: 76,
-                    autoFocus: true,
-                    embedsFlat: true,
-                    workspaceSemantic: .longTextNaturalInput
-                )
-            } result: {
-                IndexResultSurface(
-                    content: .kv(
-                        workspace.styles.map { IndexResultKVItem(key: $0.label, value: $0.value) }
-                    ),
-                    emptyText: IndexEmptyStateCopy.autoShow("文本")
-                )
             }
         }
+    }
+
+    /// 输入 pane 内容（原 IndexInputResultWorkbench input 槽投影）：
+    /// 受控 AppKit 编辑器填满 pane（双栏 pane 几何）。
+    private var inputPane: some View {
+        IndexWorkspaceTextArea(
+            placeholder: "输入文本，自动转换所有格式…",
+            text: $workspace.text,
+            minHeight: 76,
+            fillsHeight: true,
+            autoFocus: true,
+            embedsFlat: true,
+            workspaceSemantic: .queryListWorkspace
+        )
+        // 焦点契约（阶段③ C3）：页面首个输入 = 文本输入区。
+        .workbenchFocusTarget()
     }
 }

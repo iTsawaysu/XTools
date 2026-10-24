@@ -55,6 +55,9 @@ struct IndexChmodPage: View {
     }
 }
 
+/// 统一壳装配（page-rollout A1）：八进制输入 + 权限矩阵 | hero 结果对等
+/// 双栏（双栏需固定高度，语义从自然高度短结果切 queryList，DateTime 先例
+/// 授权）。无参数无动作（旧页两槽均 EmptyView），hero 与诊断逐字保留。
 private struct IndexChmodWorkspaceContent: View {
     @ObservedObject var workspace: ChmodToolWorkspaceModel
 
@@ -66,34 +69,33 @@ private struct IndexChmodWorkspaceContent: View {
     }
 
     var body: some View {
-        IndexPage("Chmod 计算器", subtitle: "在八进制与 rwx（含特殊权限位）之间双向换算。", workspaceSemantic: .naturalHeightShortResultPanel) {
-            IndexInputResultWorkbench(
-                inputTitle: "八进制权限",
-                resultTitle: "结果"
-            ) {
-                EmptyView()
-            } resultControls: {
-                EmptyView()
-            } input: {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
-                    IndexTextInput(placeholder: "644 或 4755", text: octalBinding, height: 44, alignment: .center)
-                        .font(ToolTypography.valueMedium)
-                        .accessibilityLabel("Chmod 八进制权限")
-                        .accessibilityHint("输入三位 rwx 权限或四位特殊权限模式")
-                        .indexWorkspaceDiagnostic(workspace.error)
+        IndexPage("Chmod 计算器", subtitle: "在八进制与 rwx（含特殊权限位）之间双向换算。", workspaceSemantic: .queryListWorkspace) {
+            WorkbenchSurface(title: nil, shape: .inputOutput) {
+                WorkbenchIOPair(
+                    leadingTitle: "八进制权限",
+                    trailingTitle: "结果",
+                    leading: {
+                        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+                            IndexTextInput(placeholder: "644 或 4755", text: octalBinding, height: ToolMetrics.Control.thumb, alignment: .center)
+                                .font(ToolTypography.valueMedium)
+                                .accessibilityLabel("Chmod 八进制权限")
+                                .accessibilityHint("输入三位 rwx 权限或四位特殊权限模式")
+                                .indexWorkspaceDiagnostic(workspace.error)
+                                .workbenchFocusTarget()
 
-                    permissionMatrix
-                }
-                .padding(.horizontal, ToolMetrics.Spacing.md)
-                .padding(.vertical, ToolMetrics.Spacing.sm)
-            } result: {
-                IndexResultSurface(
-                    content: .hero(
-                        IndexResultHeroItem(
-                            value: workspace.mode.octalString,
-                            caption: "chmod \(workspace.mode.octalString)  ·  \(workspace.mode.symbolicString)"
+                            permissionMatrix
+                        }
+                    },
+                    trailing: {
+                        IndexResultSurface(
+                            content: .hero(
+                                IndexResultHeroItem(
+                                    value: workspace.mode.octalString,
+                                    caption: "chmod \(workspace.mode.octalString)  ·  \(workspace.mode.symbolicString)"
+                                )
+                            )
                         )
-                    )
+                    }
                 )
             }
         }

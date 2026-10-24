@@ -155,65 +155,81 @@ private struct IndexEmojiWorkspaceContent: View {
             subtitle: "\(EmojiCatalog.totalProducible) 个 Emoji（含肤色变体） · \(EmojiCatalog.specialSymbolCount) 个特殊符号。搜索关键词或选择分类，点击即复制。",
             workspaceSemantic: .queryListWorkspace
         ) {
-            IndexInputResultWorkbench(
-                inputTitle: "搜索",
-                resultTitle: display.panelTitle
+            // 统一壳装配（page-rollout A1，搜索框形态配方）：搜索/分类徽章/
+            // 肤色分段归弹性参数区；动态结果标题（搜索结果/分类名）移壳
+            // title 行，截断提示归 titleAccessory（UUID meta 同款右对齐）；
+            // AppKit 网格原样作为 .result 内容（外壳更换，EmojiCollectionView
+            // 不动），点击复制与空态路径不变。
+            WorkbenchSurface(
+                title: display.panelTitle,
+                primaryAction: nil,
+                shape: .result,
+                titleAccessory: { truncationNotice(for: display) },
+                parameters: { parameterFlow(for: display) }
             ) {
-                EmptyView()
-            } resultControls: {
-                panelAccessory(for: display)
-            } input: {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
-                    IndexSearchInput(
-                        placeholder: "搜索 Emoji 或符号（如 right / 右 / 播放）…",
-                        text: $workspace.query,
-                        clearTitle: "清空 Emoji 搜索",
-                        onClear: workspace.clearSearch
-                    )
-                    .frame(maxWidth: ToolMetrics.Control.readingMedium)
+                resultContent(display)
+            }
+        }
+    }
 
-                    if !display.isSearching {
-                        IndexEmojiCategoryBar(selection: $workspace.category)
-                    }
+    /// .result 内容：空态或 AppKit 网格（EmojiCollectionView 不动，只换外壳）。
+    private func resultContent(_ display: DisplayState) -> some View {
+        Group {
+            if display.entries.isEmpty {
+                IndexEmptyState(
+                    title: "无匹配结果",
+                    systemImage: "magnifyingglass",
+                    message: "没有匹配的 Emoji 或符号"
+                )
+                .frame(maxWidth: .infinity, minHeight: 90)
+            } else {
+                IndexEmojiCollectionView(
+                    snapshot: display.snapshot,
+                    scrollResetIdentity: workspace.category,
+                    reduceMotion: reduceMotion,
+                    onCopy: copyGlyph
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+    }
+
+    /// 弹性参数区：搜索字段独占行（参数区统一轴线 36pt）；分类徽章与肤色
+    /// 分段为流式项（搜索时分类条让位、有肤色变体条目时肤色分段在场，
+    /// 条件与旧页一致）。
+    private func parameterFlow(for display: DisplayState) -> some View {
+        WorkbenchParameterFlow {
+            WorkbenchParameterItem {
+                IndexSearchInput(
+                    placeholder: "搜索 Emoji 或符号（如 right / 右 / 播放）…",
+                    text: $workspace.query,
+                    height: ToolMetrics.Control.row,
+                    clearTitle: "清空 Emoji 搜索",
+                    onClear: workspace.clearSearch
+                )
+                .frame(maxWidth: ToolMetrics.Control.readingMedium)
+                .workbenchFocusTarget()
+            }
+            WorkbenchParameterGroup {
+                if !display.isSearching {
+                    IndexEmojiCategoryBar(selection: $workspace.category)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, ToolMetrics.Spacing.md)
-                .padding(.vertical, ToolMetrics.Spacing.sm)
-            } result: {
-                if display.entries.isEmpty {
-                    IndexEmptyState(
-                        title: "无匹配结果",
-                        systemImage: "magnifyingglass",
-                        message: "没有匹配的 Emoji 或符号"
-                    )
-                    .frame(maxWidth: .infinity, minHeight: 90)
-                } else {
-                    IndexEmojiCollectionView(
-                        snapshot: display.snapshot,
-                        scrollResetIdentity: workspace.category,
-                        reduceMotion: reduceMotion,
-                        onCopy: copyGlyph
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if display.showsSkinToneControl {
+                    skinToneControl
                 }
             }
         }
     }
 
+    /// 截断提示（原 resultControls 槽投影）。
     @ViewBuilder
-    private func panelAccessory(for display: DisplayState) -> some View {
-        HStack(spacing: ToolMetrics.Spacing.compact) {
-            if display.isTruncated {
-                Text("仅展示前 200 个结果")
-                    .font(ToolTypography.caption)
-                    .foregroundStyle(ToolTheme.textSecondary)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-
-            if display.showsSkinToneControl {
-                skinToneControl
-            }
+    private func truncationNotice(for display: DisplayState) -> some View {
+        if display.isTruncated {
+            Text("仅展示前 200 个结果")
+                .font(ToolTypography.caption)
+                .foregroundStyle(ToolTheme.textSecondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
         }
     }
 

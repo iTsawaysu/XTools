@@ -40,6 +40,10 @@ struct IndexCrontabPage: View {
 
 /// 两面板结构：表达式与预设同板，解析摘要、逐字段说明与下次运行同板。
 /// 摘要（Core 的 expressionSummary）先给答案，逐字段行退居参考细节。
+/// 统一壳装配（page-rollout A1）：表达式清空/复制归输入 pane 尾部
+/// ActionBar（旧 inputControls 槽），时区徽标与刷新钮归输出 pane 头附件
+/// （旧 resultControls 槽）；双栏需固定高度，语义切 queryList（DateTime
+/// 先例授权）。
 private struct IndexCrontabWorkspaceContent: View {
     @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @ObservedObject var workspace: CrontabToolWorkspaceModel
@@ -53,113 +57,128 @@ private struct IndexCrontabWorkspaceContent: View {
         ("每季度", "0 0 1 */3 *"), ("每年", "0 0 1 1 *")
     ]
 
+    private var trimmedExpression: String {
+        workspace.expression.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var expressionCopyAction: WorkbenchActionBarAction {
+        .copy(text: trimmedExpression)
+    }
+
     var body: some View {
-        IndexPage("Crontab 生成", subtitle: "用预设拼出 cron 表达式并给出说明。", workspaceSemantic: .naturalHeightShortResultPanel) {
-            IndexInputResultWorkbench(
-                inputTitle: "Cron 表达式",
-                resultTitle: "解析结果"
-            ) {
-                HStack(spacing: ToolMetrics.Spacing.sm) {
-                    Spacer(minLength: ToolMetrics.Spacing.sm)
-                    IndexClearButton(
-                        isDisabled: !workspace.hasAnyContent,
-                        title: "清空 Cron 表达式",
-                        iconOnly: true,
-                        action: workspace.clear
-                    )
-                    IndexCopyButton(text: workspace.expression.trimmingCharacters(in: .whitespacesAndNewlines))
-                }
-            } resultControls: {
-                HStack(spacing: ToolMetrics.Spacing.sm) {
-                    if let identifier = workspace.previewTimeZoneIdentifier {
-                        Text("时区 \(identifier)")
-                            .font(ToolTypography.monoCaption)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                            .lineLimit(1)
-                    }
-                    IndexIconButton(systemImage: "arrow.clockwise", help: "刷新下次运行时间") {
-                        validate()
-                    }
-                }
-            } input: {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
-                    IndexTextInput(placeholder: "*/5 * * * *", text: $workspace.expression, height: 44, alignment: .center)
-                        .font(ToolTypography.valueMedium)
-                        .onChange(of: workspace.expression) { _ in
-                            workspace.debouncer.schedule(IndexDebouncer.keystrokeDebounce) { validate() }
-                        }
-                        .indexWorkspaceDiagnostic(workspace.error)
-
-                    if let fields = CronScheduler.fieldExplanations(workspace.expression) {
-                        fieldSegmentBar(fields)
-                    }
-
-                    Text("预设")
-                        .font(ToolTypography.micro)
-                        .foregroundStyle(ToolTheme.textTertiary)
-
-                    IndexFlowLayout(spacing: ToolMetrics.Spacing.fine, lineSpacing: 6) {
-                        ForEach(presets, id: \.0) { preset in
-                            let isActive = preset.1 == workspace.expression.trimmingCharacters(in: .whitespacesAndNewlines)
-                            IndexBadge(preset.0, isSelected: isActive, help: preset.1) {
-                                workspace.expression = preset.1
-                                validate()
-                            }
-                        }
-                    }
-                }
-                .padding(.horizontal, ToolMetrics.Spacing.md)
-                .padding(.vertical, ToolMetrics.Spacing.sm)
-            } result: {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                    if let summary = CronScheduler.expressionSummary(workspace.expression) {
-                        HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.sm) {
-                            Image(systemName: "clock")
-                                .font(ToolTypography.body)
-                                .foregroundStyle(ToolTheme.accentHover)
-                            Text(summary)
-                                .font(ToolTypography.sectionTitle)
-                                .foregroundStyle(ToolTheme.accentHover)
-                                .textSelection(.enabled)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityAddTraits(.isHeader)
-                    }
-
-                    if let dayNote = CronScheduler.dayMatchingExplanation(workspace.expression) {
-                        HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.fine) {
-                            Image(systemName: "info.circle")
-                                .font(ToolTypography.caption)
-                                .foregroundStyle(ToolTheme.textSecondary)
-                            Text(dayNote)
-                                .font(ToolTypography.caption)
-                                .foregroundStyle(ToolTheme.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .accessibilityElement(children: .combine)
-                    }
-
-                    if !workspace.nextRuns.isEmpty {
-                        nextRunsSection
-                    }
-
-                    if let emptyText = explanationEmptyText {
-                        Text(emptyText)
-                            .font(ToolTypography.compactBody)
-                            .foregroundStyle(ToolTheme.textTertiary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                .padding(.horizontal, ToolMetrics.Spacing.md)
-                .padding(.vertical, ToolMetrics.Spacing.sm)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        IndexPage("Crontab 生成", subtitle: "用预设拼出 cron 表达式并给出说明。", workspaceSemantic: .queryListWorkspace) {
+            WorkbenchSurface(title: nil, shape: .inputOutput, actions: [expressionCopyAction]) {
+                WorkbenchIOPair(
+                    leadingTitle: "Cron 表达式",
+                    trailingTitle: "解析结果",
+                    leadingActions: [
+                        .clear(
+                            title: "清空 Cron 表达式",
+                            enabled: workspace.hasAnyContent,
+                            onPerform: { workspace.clear() }
+                        ),
+                        expressionCopyAction
+                    ],
+                    leadingAccessory: { EmptyView() },
+                    leading: { inputPane },
+                    trailingAccessory: { resultPanelAccessory },
+                    trailing: { resultPane }
+                )
             }
         }
         .onAppear { if entryGeneration > 0 { validate() } }
-        .onChange(of: entryGeneration) { generation in
-            if generation > 0 { validate() }
+        .onChange(of: entryGeneration) {
+            if entryGeneration > 0 { validate() }
+        }
+    }
+
+    /// 输入 pane 内容：表达式字段、五段拆解条与预设徽章流。
+    private var inputPane: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+            IndexTextInput(placeholder: "*/5 * * * *", text: $workspace.expression, height: ToolMetrics.Control.thumb, alignment: .center)
+                .font(ToolTypography.valueMedium)
+                .onChange(of: workspace.expression) {
+                    workspace.debouncer.schedule(IndexDebouncer.keystrokeDebounce) { validate() }
+                }
+                .indexWorkspaceDiagnostic(workspace.error)
+                .workbenchFocusTarget()
+
+            if let fields = CronScheduler.fieldExplanations(workspace.expression) {
+                fieldSegmentBar(fields)
+            }
+
+            Text("预设")
+                .font(ToolTypography.micro)
+                .foregroundStyle(ToolTheme.textTertiary)
+
+            IndexFlowLayout(spacing: ToolMetrics.Spacing.fine, lineSpacing: 6) {
+                ForEach(presets, id: \.0) { preset in
+                    let isActive = preset.1 == trimmedExpression
+                    IndexBadge(preset.0, isSelected: isActive, help: preset.1) {
+                        workspace.expression = preset.1
+                        validate()
+                    }
+                }
+            }
+        }
+    }
+
+    /// 输出 pane 内容：解析摘要、日匹配说明、下次运行与解释空态。
+    private var resultPane: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+            if let summary = CronScheduler.expressionSummary(workspace.expression) {
+                HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.sm) {
+                    Image(systemName: "clock")
+                        .font(ToolTypography.body)
+                        .foregroundStyle(ToolTheme.accentHover)
+                    Text(summary)
+                        .font(ToolTypography.sectionTitle)
+                        .foregroundStyle(ToolTheme.accentHover)
+                        .textSelection(.enabled)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
+            }
+
+            if let dayNote = CronScheduler.dayMatchingExplanation(workspace.expression) {
+                HStack(alignment: .firstTextBaseline, spacing: ToolMetrics.Spacing.fine) {
+                    Image(systemName: "info.circle")
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                    Text(dayNote)
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+            }
+
+            if !workspace.nextRuns.isEmpty {
+                nextRunsSection
+            }
+
+            if let emptyText = explanationEmptyText {
+                Text(emptyText)
+                    .font(ToolTypography.compactBody)
+                    .foregroundStyle(ToolTheme.textTertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    /// 时区徽标与刷新钮（原 resultControls 槽投影，pane 头附件承载）。
+    @ViewBuilder
+    private var resultPanelAccessory: some View {
+        if let identifier = workspace.previewTimeZoneIdentifier {
+            Text("时区 \(identifier)")
+                .font(ToolTypography.monoCaption)
+                .foregroundStyle(ToolTheme.textSecondary)
+                .lineLimit(1)
+        }
+        IndexIconButton(systemImage: "arrow.clockwise", help: "刷新下次运行时间") {
+            validate()
         }
     }
 

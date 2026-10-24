@@ -86,30 +86,23 @@ struct IndexMathPage: View {
     }
 }
 
+/// 统一壳装配（page-rollout A1）：单行表达式 + hero/帮助结果 → .result
+/// 形态。表达式字段独占参数区一行（统一轴线 36pt，RegexTester pattern 行
+/// 先例），清空归内容区底部 ActionBar；hero、帮助区与空态逐字保留，
+/// 语义不变。
 private struct IndexMathWorkspaceContent: View {
     @ObservedObject var workspace: MathToolWorkspaceModel
 
     var body: some View {
         IndexPage("数学计算", subtitle: "输入数学表达式即时求值。", workspaceSemantic: .naturalHeightShortResultPanel) {
-            IndexInputResultWorkbench(
-                inputTitle: "表达式",
-                resultTitle: "结果"
+            WorkbenchSurface(
+                title: nil,
+                shape: .result,
+                actions: [
+                    .clear(enabled: workspace.hasAnyContent, onPerform: { workspace.clear() })
+                ],
+                parameters: { parameterFlow }
             ) {
-                HStack(spacing: ToolMetrics.Spacing.sm) {
-                    Spacer(minLength: ToolMetrics.Spacing.sm)
-                    IndexClearButton(
-                        isDisabled: !workspace.hasAnyContent,
-                        action: workspace.clear
-                    )
-                }
-            } resultControls: {
-                EmptyView()
-            } input: {
-                IndexTextInput(placeholder: "例如 (3 + 4) * 2 / sqrt(16)", text: $workspace.expression, height: 42, autoFocus: true)
-                    .indexWorkspaceDiagnostic(diagnosticText)
-                    .padding(.horizontal, ToolMetrics.Spacing.md)
-                    .padding(.vertical, ToolMetrics.Spacing.sm)
-            } result: {
                 VStack(alignment: .leading, spacing: 0) {
                     IndexResultSurface(
                         content: .hero(
@@ -133,6 +126,17 @@ private struct IndexMathWorkspaceContent: View {
                     .padding(ToolMetrics.Spacing.md)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
+            }
+        }
+    }
+
+    /// 弹性参数区：表达式输入行（参数区统一轴线 36pt）。
+    private var parameterFlow: some View {
+        WorkbenchParameterFlow {
+            WorkbenchParameterItem {
+                IndexTextInput(placeholder: "例如 (3 + 4) * 2 / sqrt(16)", text: $workspace.expression, height: ToolMetrics.Control.row, autoFocus: true)
+                    .indexWorkspaceDiagnostic(diagnosticText)
+                    .workbenchFocusTarget()
             }
         }
     }

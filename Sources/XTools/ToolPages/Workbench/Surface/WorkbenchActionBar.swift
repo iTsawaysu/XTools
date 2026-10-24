@@ -14,7 +14,9 @@ import XToolsDesign
 /// - `.useAsInput` 执行宿主写回闭包后由操作条统一播报成功 toast
 ///   （「已作为输入」）；写回与聚焦输入由宿主闭包完成；
 /// - `.swap` 只翻转方向并触发重算，不播报 toast（方向变化自身可见）。
-struct WorkbenchActionBarAction {
+/// Sendable 说明：动作闭包均为页面侧 MainActor UI 回调，结构体仅在主线程
+/// 构造与消费（preference 传递也在主线程视图树内）；`@unchecked` 限于该边界。
+struct WorkbenchActionBarAction: @unchecked Sendable {
     /// 动作种类（存储用；调用侧用静态工厂构造）。
     enum Kind {
         case copy(text: String, title: String, successToast: String?, help: String?)
@@ -67,7 +69,7 @@ struct WorkbenchActionBarAction {
     }
 }
 
-/// 页面级快捷键代理钮的动作载体（壳 `pageLevelShortcuts` 使用）：标题（代理
+/// 页面级快捷键代理钮的动作载体（壳与 IOPair 的 `pageLevelShortcuts` 使用）：
 /// 钮的真实文字，EmptyView 标签不产生平台视图）+ 键位 + 闭包。⇧⌘C 的执行
 /// 语义与可见复制钮一致（写剪贴板 + toast 回执），由壳侧调用
 /// `performCopyViaToastCenter` 桥接。
