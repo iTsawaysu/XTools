@@ -57,9 +57,9 @@ struct DesignSystemContractTests {
                 // washCornerRadius 2：LocatingWash token 定义本体——命名圆角
                 // 常量的唯一合法形式就是 token 定义点。
                 "Sources/XToolsDesign/ToolMotion.swift": 1,
-                // rowCornerRadius 7：侧栏行圆角——PRD 将侧栏视觉整体留待
-                // 阶段③原生侧栏迁移时消除。
-                "Sources/XTools/AppShell/SidebarMetrics.swift": 1,
+                // SidebarMetrics.rowCornerRadius 7（S14）已随阶段③原生侧栏
+                // 迁移删除：行级圆角交给系统 List(.sidebar)，白名单条目同步
+                // 移除，7pt 侧栏行圆角不得复活。
             ],
             because: "圆角必须走 ToolMetrics.CornerRadius / IndexSurfaceShape 阶梯（design.md §6.3）；命名常量仅允许 token 定义点"
         )

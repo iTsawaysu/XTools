@@ -6,7 +6,10 @@ import XToolsDesign
 struct WindowToolbarContent: ToolbarContent {
     let selectedTool: RegisteredTool?
     let isSidebarVisible: Bool
-    let isFavorite: Bool
+    /// 接收收藏 store **引用**（而非 body 里算好的 isFavorite）：收藏星观察
+    /// 下沉到 `FavoriteToolbarLabel` 自身，收藏切换不重估 Root（B4 契约，
+    /// 与 CommandTriggerLabel 观察面板模型同一范式）。
+    let favorites: FavoritesStore
     /// 接收 presentation 模型**引用**（而非 RootViewModel 的计算属性）：
     /// `CommandPalettePresentationModel` 与 RootViewModel 刻意隔离——面板
     /// 开关不触发 RootView body 重估（rootBody=0 契约），所以工具栏内容
@@ -33,25 +36,20 @@ struct WindowToolbarContent: ToolbarContent {
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
-            if selectedTool != nil {
+            if let selectedTool {
                 // Favorite toggle in native toolbar chrome. The star glyph and
                 // active accent tint mirror `IndexFavoriteButton`; only the
                 // chrome button style and 28pt toolbar size stay local because
                 // this is AppKit toolbar chrome, not an in-page control.
                 Button(action: onToggleFavorite) {
-                    Image(systemName: isFavorite ? IndexActionSymbol.favoriteFill : IndexActionSymbol.favorite)
-                        .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .medium))
-                        .frame(
-                            width: WindowToolbarMetrics.iconButtonSize,
-                            height: WindowToolbarMetrics.iconButtonSize
-                        )
-                        .toolMotionIconSwap(id: isFavorite)
+                    FavoriteToolbarLabel(
+                        favorites: favorites,
+                        toolID: selectedTool.id
+                    )
                 }
                 .buttonStyle(IndexQuietChromeStyle(ink: .pressAccent))
                 .environment(\.colorScheme, colorScheme)
-                .foregroundStyle(isFavorite ? ToolTheme.accent : ToolTheme.textSecondary)
-                .help(isFavorite ? "取消收藏" : "加入收藏")
-                .accessibilityLabel(isFavorite ? "取消收藏" : "加入收藏")
+                // help/无障碍文案由 FavoriteToolbarLabel 按收藏态给出。
             }
 
             // label 自绘 chip 观感（底色/描边/按压态全部在 CommandTriggerLabel），
@@ -66,6 +64,31 @@ struct WindowToolbarContent: ToolbarContent {
             .accessibilityLabel("跳转工具")
             .accessibilityHint("打开命令面板，快捷键 Command-K")
         }
+    }
+}
+
+/// 工具栏收藏星的 label：自行观察 `FavoritesStore`，收藏切换只重估这个
+/// label（星形翻转 + accent 激活色 + help/无障碍文案），App shell 不受牵连
+/// （与 `CommandTriggerLabel` 同一隔离范式）。
+private struct FavoriteToolbarLabel: View {
+    @ObservedObject var favorites: FavoritesStore
+    let toolID: ToolID
+
+    private var isFavorite: Bool {
+        favorites.isFavorite(toolID)
+    }
+
+    var body: some View {
+        Image(systemName: isFavorite ? IndexActionSymbol.favoriteFill : IndexActionSymbol.favorite)
+            .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .medium))
+            .frame(
+                width: WindowToolbarMetrics.iconButtonSize,
+                height: WindowToolbarMetrics.iconButtonSize
+            )
+            .toolMotionIconSwap(id: isFavorite)
+            .foregroundStyle(isFavorite ? ToolTheme.accent : ToolTheme.textSecondary)
+            .help(isFavorite ? "取消收藏" : "加入收藏")
+            .accessibilityLabel(isFavorite ? "取消收藏" : "加入收藏")
     }
 }
 

@@ -7,16 +7,21 @@ struct RootView: View {
     @StateObject private var toastCenter = ToolToastCenter()
     @StateObject private var fileInputPanelCoordinator = FileInputPanelCoordinator()
     @StateObject private var fileOutputPanelCoordinator = FileOutputPanelCoordinator()
-    @StateObject private var favorites = FavoritesStore()
-    @StateObject private var sidebarSections = SidebarSectionExpansionStore()
+    // 收藏 / 折叠 / 使用频率是侧栏与页面局部观察状态（阶段③ B4 契约）：
+    // RootView 刻意不订阅——收藏切换只触发侧栏/页面局部重估，Section 折叠
+    // 只触发列表区重估，rootBody 保持 0。所有权沿用 paletteRecents 先例：
+    // init 构造、无观察引用下发；Batch D 多窗口时升级为环境注入共享单例。
+    private let favorites: FavoritesStore
+    private let sidebarSections: SidebarSectionExpansionStore
     @StateObject private var workspaceRepository: ToolWorkspaceRepository
     @StateObject private var dashboardStore: DashboardStore
     @StateObject private var smartPaste = SmartPasteMonitor()
     @StateObject private var hubSegmentEntryHint = HubSegmentEntryHint()
     @StateObject private var systemAppearanceSource: SystemAppearanceSource
     @State private var showsPreferences = false
-    // 投影记忆化：RootView 会在无关 shell 抖动（toast、面板呈现、建议横幅）
-    // 时整体重估 body；查询、收藏、选择三者未变时重建整个过滤导航树是纯浪费。
+    // 投影记忆化：RootView 会在无关 shell 抖动（toast、建议横幅）时整体重估
+    // body；查询、选择未变时重建整个导航树是纯浪费。投影自阶段③ B 起不含
+    // 收藏（收藏观察已下沉侧栏），缓存键收敛为（查询、选择）二元组。
     @State private var sidebarProjectionCache = SidebarProjectionCache()
     // detail 列的动作路由盒：见 DetailActionRouting 协议注释。
     @State private var detailRouting = DetailActionRoutingBox()
@@ -51,9 +56,8 @@ struct RootView: View {
         let validToolIDs = Set(
             ToolRegistry.default.categoryGroups().flatMap { $0.tools.map(\.id) }
         )
-        _favorites = StateObject(
-            wrappedValue: FavoritesStore(defaults: defaults, validToolIDs: validToolIDs)
-        )
+        self.favorites = FavoritesStore(defaults: defaults, validToolIDs: validToolIDs)
+        self.sidebarSections = SidebarSectionExpansionStore(defaults: defaults)
         _workspaceRepository = StateObject(
             wrappedValue: workspaceRepository ?? ToolWorkspaceRepository(preferences: preferences)
         )
@@ -80,16 +84,18 @@ struct RootView: View {
             HStack(spacing: 0) {
                 SidebarView(
                     projection: sidebarProjection,
+                    registry: registry,
+                    favorites: favorites,
+                    sidebarSections: sidebarSections,
+                    recentToolIDs: sidebarRecentToolIDs,
                     selectedToolID: viewModel.selectedToolID,
-                    favoriteOrder: favorites.favoriteIDs,
                     searchText: $viewModel.searchText,
                     searchFocusToken: viewModel.searchFocusToken,
                     onSelectTool: { _ = navigationActions.selectTool($0) },
                     onOpenDashboard: { navigationActions.openDashboard() },
                     onToggleFavorite: { toggleFavorite($0, showsToast: false) },
-                    isSectionExpanded: { navigationActions.isSectionExpanded($0) },
-                    onToggleSection: { navigationActions.toggleSection($0) },
-                    onToggleSectionExclusive: { navigationActions.toggleSection($0, exclusive: true) },
+                    onMoveFavorites: { navigationActions.moveFavorites($0, toOffset: $1) },
+                    onToggleSection: { navigationActions.toggleSection($0, exclusive: $1) },
                     onToggleTheme: toggleTheme,
                     onPreferences: showPreferences,
                     themeTitle: themePreference.title,
@@ -141,7 +147,9 @@ struct RootView: View {
             WindowToolbarContent(
                 selectedTool: selectedTool,
                 isSidebarVisible: viewModel.sidebarVisibility == .visible,
-                isFavorite: selectedTool.map { favorites.isFavorite($0.id) } ?? false,
+                // 传收藏 store 引用（不读 isFavorite）：收藏星观察下沉到
+                // FavoriteToolbarLabel 自身，收藏切换不重估 Root（B4 契约）。
+                favorites: favorites,
                 // 传模型引用（let 常量，不读计算属性）：读取 showsCommandPalette
                 // 会在 body 里依赖面板状态，而面板开关不触发 body 重估——压暗
                 // 观察在 CommandTriggerLabel 内完成。
@@ -247,9 +255,21 @@ struct RootView: View {
         CommandPaletteTrace.count(.sidebarProjection)
         return sidebarProjectionCache.projection(
             registry: registry,
-            favoriteIDs: favorites.favoriteIDs,
             selectedToolID: viewModel.selectedToolID,
             query: viewModel.searchText
+        )
+    }
+
+    /// 侧栏「最近使用」top5（navigation 通道，最新优先）。读经 dashboardStore
+    /// 门面（launchToken 发布语义）；导航发生时 RootView 本就随选择重估，
+    /// 使用频率记录路径不额外触发壳层失效。
+    private var sidebarRecentToolIDs: [ToolID] {
+        let knownToolIDs = Set(registry.categoryGroups().flatMap { $0.tools.map(\.id) })
+        return Array(
+            dashboardStore
+                .recentTools(knownToolIDs: knownToolIDs)
+                .prefix(5)
+                .map(\.toolID)
         )
     }
 
@@ -427,37 +447,33 @@ struct RootView: View {
     }
 }
 
-/// 单条目投影缓存：输入三元组（查询、收藏、选择）未变时直接复用上一次
-/// 的投影结果；任一真实变化仍会全量重建。只为砍掉无关 shell 抖动引发的
-/// 重复构建，不改变任何投影语义。
+/// 单条目投影缓存：输入二元组（查询、选择）未变时直接复用上一次的投影
+/// 结果；任一真实变化仍会全量重建。只为砍掉无关 shell 抖动引发的重复
+/// 构建，不改变任何投影语义。（收藏自阶段③ B 起不进投影——收藏切换由
+/// 侧栏局部观察承接，缓存键随之收敛。）
 @MainActor
 private final class SidebarProjectionCache {
     private var query: String?
-    private var favoriteIDs: [ToolID]?
     private var selectedToolID: ToolID?
     private var projection: ToolNavigationProjection?
 
     func projection(
         registry: ToolRegistry,
-        favoriteIDs: [ToolID],
         selectedToolID: ToolID?,
         query: String
     ) -> ToolNavigationProjection {
         if let projection,
            self.query == query,
-           self.favoriteIDs == favoriteIDs,
            self.selectedToolID == selectedToolID {
             return projection
         }
 
         let rebuilt = ToolNavigationProjection(
             registry: registry,
-            favoriteIDs: favoriteIDs,
             selectedToolID: selectedToolID,
             query: query
         )
         self.query = query
-        self.favoriteIDs = favoriteIDs
         self.selectedToolID = selectedToolID
         self.projection = rebuilt
         return rebuilt

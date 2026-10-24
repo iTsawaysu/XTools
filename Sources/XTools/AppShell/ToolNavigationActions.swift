@@ -17,10 +17,16 @@ struct ToolNavigationActions {
         self.dashboardStore = dashboardStore
     }
 
-    func selectDefaultToolIfNeeded(_ defaultToolID: ToolID?) {
+    func selectDefaultToolIfNeeded(_ registryDefaultToolID: ToolID?) {
         if viewModel.autoResumeLastTool,
            let selectedToolID = viewModel.selectedToolID,
            registry.tool(for: selectedToolID) != nil { return }
+
+        // 收藏优先的默认落点（注册表序首个收藏 → 注册表序首个工具）。
+        // 原投影的 favorite-first 语义平移到动作层：投影自阶段③ B 起不读
+        // 收藏（rootBody=0 契约，收藏切换不触发壳层重估）。
+        let defaultToolID = registry.tools(for: favorites.favoriteIDs).first?.id
+            ?? registryDefaultToolID
 
         guard viewModel.autoResumeLastTool, let defaultToolID else {
             viewModel.selectedToolID = nil
@@ -80,6 +86,12 @@ struct ToolNavigationActions {
             return false
         }
         return selectTool(firstTool.id)
+    }
+
+    /// 收藏区拖拽排序写回（原生 List `.onMove` → 动作缝 → FavoritesStore；
+    /// 数组序即 tools.favorites.v1 持久化序，格式兼容）。
+    func moveFavorites(_ fromOffsets: IndexSet, toOffset: Int) {
+        favorites.move(fromOffsets: fromOffsets, toOffset: toOffset)
     }
 
     func isSectionExpanded(_ section: ToolNavigationSection) -> Bool {

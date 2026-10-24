@@ -47,28 +47,12 @@ struct ToolNavigationActionsTests {
         #expect(fixture.favorites.isFavorite(.json))
         #expect(fixture.sidebarSections.isExpanded(favorites.groupID))
 
-        let favoriteProjection = ToolNavigationProjection(
-            registry: fixture.registry,
-            favoriteIDs: fixture.favorites.favoriteIDs,
-            selectedToolID: fixture.viewModel.selectedToolID,
-            query: ""
-        )
-        #expect(favoriteProjection.selectedSection == .favorites)
-
         fixture.sidebarSections.toggle(development.groupID)
         let stoppedBeingFavorite = fixture.actions.toggleFavorite(.json)
 
         #expect(stoppedBeingFavorite == false)
         #expect(!fixture.favorites.isFavorite(.json))
         #expect(fixture.sidebarSections.isExpanded(development.groupID))
-
-        let categoryProjection = ToolNavigationProjection(
-            registry: fixture.registry,
-            favoriteIDs: fixture.favorites.favoriteIDs,
-            selectedToolID: fixture.viewModel.selectedToolID,
-            query: ""
-        )
-        #expect(categoryProjection.selectedSection == .category(.development))
     }
 
     @MainActor
@@ -104,26 +88,6 @@ struct ToolNavigationActionsTests {
         #expect(fixture.viewModel.selectedToolID == .json)
         #expect(fixture.viewModel.showsCommandPalette)
         #expect(!fixture.sidebarSections.isExpanded(ToolNavigationSection.category(.web).groupID))
-    }
-
-    @MainActor
-    @Test func defaultSelectionUsesProjectedDefaultWithoutOverwritingExistingSelection() {
-        let fixture = Self.fixture()
-        fixture.viewModel.autoResumeLastTool = true
-        fixture.favorites.toggle(.jwt)
-
-        let projection = ToolNavigationProjection(
-            registry: fixture.registry,
-            favoriteIDs: fixture.favorites.favoriteIDs,
-            selectedToolID: fixture.viewModel.selectedToolID,
-            query: ""
-        )
-
-        fixture.actions.selectDefaultToolIfNeeded(projection.defaultToolID)
-        #expect(fixture.viewModel.selectedToolID == .jwt)
-
-        fixture.actions.selectDefaultToolIfNeeded(.json)
-        #expect(fixture.viewModel.selectedToolID == .jwt)
     }
 
     @MainActor
@@ -168,6 +132,67 @@ struct ToolNavigationActionsTests {
         #expect(favorites.favoriteIDs == [.jwt])
         #expect(!favorites.isFavorite(.json))
         #expect(favorites.isFavorite(.jwt))
+    }
+
+    @MainActor
+    @Test func favoritesMoveReordersInPlaceAndPersistsArrayOrder() {
+        // 收藏区拖拽排序（原生 List .onMove）：数组序即 tools.favorites.v1
+        // 持久化序，成员集合不变。
+        let defaults = Self.defaults()
+        let favorites = FavoritesStore(
+            defaults: defaults,
+            validToolIDs: [.json, .regex, .jwt]
+        )
+        favorites.toggle(.json)
+        favorites.toggle(.regex)
+        favorites.toggle(.jwt)
+        #expect(favorites.favoriteIDs == [.json, .regex, .jwt])
+
+        favorites.move(fromOffsets: IndexSet(integer: 2), toOffset: 0)
+        #expect(favorites.favoriteIDs == [.jwt, .json, .regex])
+        #expect(favorites.isFavorite(.regex))
+
+        let reloaded = FavoritesStore(defaults: defaults)
+        #expect(reloaded.favoriteIDs == [.jwt, .json, .regex])
+    }
+
+    @MainActor
+    @Test func favoritesMoveIgnoresNoOpReordersAndClampsOutOfRangeTargets() {
+        let defaults = Self.defaults()
+        defaults.set(["jwt", "json"], forKey: "tools.favorites.v1")
+        let favorites = FavoritesStore(defaults: defaults, validToolIDs: [.json, .jwt])
+
+        favorites.move(fromOffsets: IndexSet(integer: 0), toOffset: 1)
+        #expect(favorites.favoriteIDs == [.jwt, .json])
+
+        favorites.move(fromOffsets: IndexSet(integer: 0), toOffset: 99)
+        #expect(favorites.favoriteIDs == [.json, .jwt])
+
+        favorites.move(fromOffsets: IndexSet(), toOffset: 0)
+        #expect(favorites.favoriteIDs == [.json, .jwt])
+        #expect(favorites.isFavorite(.json))
+        #expect(favorites.isFavorite(.jwt))
+    }
+
+    @MainActor
+    @Test func defaultSelectionPrefersFirstFavoriteBeforeProjectedRegistryDefault() {
+        // 收藏优先默认落点在动作层（投影自阶段③ B 起不读收藏）。
+        let fixture = Self.fixture()
+        fixture.viewModel.autoResumeLastTool = true
+        fixture.favorites.toggle(.jwt)
+
+        fixture.actions.selectDefaultToolIfNeeded(.json)
+        #expect(fixture.viewModel.selectedToolID == .jwt)
+
+        // 已有合法选择不被默认落点覆盖。
+        fixture.actions.selectDefaultToolIfNeeded(.json)
+        #expect(fixture.viewModel.selectedToolID == .jwt)
+
+        // 无收藏时回落注册表序默认。
+        fixture.actions.toggleFavorite(.jwt)
+        fixture.viewModel.selectedToolID = nil
+        fixture.actions.selectDefaultToolIfNeeded(.json)
+        #expect(fixture.viewModel.selectedToolID == .json)
     }
 
     @MainActor

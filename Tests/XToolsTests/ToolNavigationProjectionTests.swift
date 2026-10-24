@@ -4,39 +4,34 @@ import Testing
 import XToolsDesign
 
 struct ToolNavigationProjectionTests {
-    @Test func favoriteToolsMoveOutOfTheirOriginalCategoryAndDriveSelectedSection() {
+    @Test func categoryGroupsKeepFavoriteToolsAndCarryNoFavoritesSection() {
+        // 阶段③ 决策 8：收藏不再移出分类组；投影不含收藏组（收藏区由
+        // SidebarNativeList 用 FavoritesStore 装配，收藏切换不重估壳层）。
         let registry = Self.registry()
         let projection = ToolNavigationProjection(
             registry: registry,
-            favoriteIDs: [.json],
             selectedToolID: .json,
             query: ""
         )
 
-        #expect(projection.selectedSection == .favorites)
-        #expect(projection.sidebarGroups.map(\.title) == ["收藏", "Development", "Web"])
-        #expect(projection.sidebarGroups.map(\.systemImage) == ["star.fill", "hammer", "globe"])
-        #expect(projection.sidebarGroups[0].items.map(\.id) == [.json])
-        #expect(projection.sidebarGroups[1].items.map(\.id) == [.regex])
+        #expect(projection.matchingToolIDs == nil)
+        #expect(projection.selectedToolID == .json)
+        #expect(projection.sidebarGroups.map(\.title) == ["Development", "Web"])
+        #expect(projection.sidebarGroups.map(\.systemImage) == ["hammer", "globe"])
+        #expect(projection.sidebarGroups[0].items.map(\.id) == [.json, .regex])
+        #expect(projection.sidebarGroups[0].items[0].section == .category(.development))
     }
 
-    @Test func defaultSelectionUsesFavoritesBeforeFirstRegisteredCategoryTool() {
-        let registry = Self.registry()
-        let withFavorite = ToolNavigationProjection(
-            registry: registry,
-            favoriteIDs: [.jwt],
-            selectedToolID: nil,
-            query: ""
-        )
-        let withoutFavorite = ToolNavigationProjection(
-            registry: registry,
-            favoriteIDs: [],
+    @Test func defaultToolIsFirstToolInRegistryCategoryOrder() {
+        // 收藏优先的默认落点已平移到 ToolNavigationActions 动作层；投影只
+        // 回答注册表序首个工具。
+        let projection = ToolNavigationProjection(
+            registry: Self.registry(),
             selectedToolID: nil,
             query: ""
         )
 
-        #expect(withFavorite.defaultToolID == .jwt)
-        #expect(withoutFavorite.defaultToolID == .json)
+        #expect(projection.defaultToolID == .json)
     }
 
     @Test func commandPaletteEntriesUseRankedSearchAndCarryCategoryTitles() {
@@ -74,7 +69,7 @@ struct ToolNavigationProjectionTests {
         #expect(projection.entries.isEmpty)
     }
 
-    @Test func sidebarSearchUsesSameDiacriticInsensitiveMatchingButKeepsGroups() {
+    @Test func sidebarSearchFiltersCategoryGroupsAndPublishesMatchingIDs() {
         let registry = ToolRegistry(
             categories: [
                 ToolCategory(id: .development, title: "Development", systemImage: "hammer")
@@ -86,17 +81,43 @@ struct ToolNavigationProjectionTests {
 
         let projection = ToolNavigationProjection(
             registry: registry,
-            favoriteIDs: [],
             selectedToolID: nil,
             query: "café"
         )
 
         #expect(projection.sidebarGroups.count == 1)
         #expect(projection.sidebarGroups[0].items.map(\.id) == [.cafe])
+        #expect(projection.matchingToolIDs == [.cafe])
+    }
+
+    @Test func sidebarSearchMatchingIDsExcludeNonMatchesForFavoriteHoisting() {
+        // 侧栏装配层用 matchingToolIDs 过滤收藏区并把命中收藏从分类组去重
+        // 上浮（等价旧版搜索结果形态）。
+        let projection = ToolNavigationProjection(
+            registry: Self.registry(),
+            selectedToolID: nil,
+            query: "pretty"
+        )
+
+        #expect(projection.matchingToolIDs == [.json])
+        #expect(projection.sidebarGroups.count == 1)
+        #expect(projection.sidebarGroups[0].items.map(\.id) == [.json])
+    }
+
+    @Test func noMatchQueryYieldsEmptyGroupsButPublishesTheMatchSet() {
+        let projection = ToolNavigationProjection(
+            registry: Self.registry(),
+            selectedToolID: nil,
+            query: "definitely-missing"
+        )
+
+        #expect(projection.sidebarGroups.isEmpty)
+        #expect(projection.matchingToolIDs == [])
     }
 
     @Test func sectionGroupIDsAreStableForSidebarExpansionPersistence() {
         #expect(ToolNavigationSection.favorites.groupID == "favorites")
+        #expect(ToolNavigationSection.recents.groupID == "recents")
         #expect(ToolNavigationSection.category(.development).groupID == "category.development")
         #expect(ToolNavigationGroup(title: "Development", systemImage: "hammer", section: .category(.development), items: []).id == "category.development")
     }

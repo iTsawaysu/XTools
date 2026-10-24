@@ -45,6 +45,21 @@ final class FavoritesStore: ObservableObject {
         return true
     }
 
+    /// 收藏区拖拽排序（原生 List `.onMove` 的唯一写入方）。数组序 =
+    /// tools.favorites.v1 持久化序，格式与语义不变；成员集合不受影响，
+    /// 仅顺序变化。toOffset 防御性截断（List 恒传合法值，此处只兜底）。
+    func move(fromOffsets: IndexSet, toOffset: Int) {
+        guard !favoriteIDs.isEmpty else { return }
+        var reordered = favoriteIDs
+        reordered.move(
+            fromOffsets: fromOffsets,
+            toOffset: min(max(toOffset, 0), reordered.count)
+        )
+        guard reordered != favoriteIDs else { return }
+        favoriteIDs = reordered
+        persist()
+    }
+
     private func persist() {
         defaults.set(favoriteIDs.map(\.rawValue), forKey: Self.storageKey)
     }

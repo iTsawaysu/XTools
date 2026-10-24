@@ -217,27 +217,9 @@ public enum ToolTheme {
         public static let textSecondary = dynamicNSColor(light: 0x6B645C, dark: 0x8A847C)
     }
 
-    /// AppKit twin of the sidebar selection tokens for the flat navigation
-    /// renderer's sliding indicator (see `SidebarSelectionIndicatorView`).
-    /// Same values as `selectionFill` / `accent`; SwiftUI `Color` tokens cannot
-    /// be wrapped back into appearance-tracking `NSColor` without duplicating
-    /// the provider, mirroring the SynNSColor convention above.
-    public enum SelectionNSColor {
-        public static let fill = dynamicNSColor(light: 0xB5532F, dark: 0xD97757, alpha: 0.10, darkAlpha: 0.12)
-        public static let rail = dynamicNSColor(light: 0xB5532F, dark: 0xD97757)
-    }
-
-    /// AppKit token for the sidebar's permanent thin scroll knob (see
-    /// `SidebarScrollIndicatorView`). Translucent ink matching the native
-    /// overlay knob sampled on the sidebar surface (~50% black over beige).
-    public enum ScrollbarNSColor {
-        public static let sidebarKnob = dynamicNSColor(
-            light: 0x000000,
-            dark: 0xFFFFFF,
-            alpha: 0.5,
-            darkAlpha: 0.4
-        )
-    }
+    // 阶段③ 原生侧栏迁移：自绘选中条/滚动条的 AppKit 孪生 token（选中药丸
+    // 填充、rail 竖条、滚动旋钮色）随自绘轨道一并退役，选中态由系统
+    // `List(.sidebar)` 接管。
 
     public static func dynamicNSColor(
         light: UInt32,

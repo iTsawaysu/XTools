@@ -400,54 +400,9 @@ public enum ToolMotion {
         }
     }
 
-    public struct AppKitMotion {
-        public let duration: TimeInterval
-        public let timingFunction: CAMediaTimingFunction
-    }
-
-    public enum AppKitPreset {
-        /// AppKit 侧折叠轨道与 SwiftUI `Preset.accordion` 同为 0.24 单时长
-        /// （design-foundation D1：原 0.35 与行头 0.24 同帧错拍，收敛为
-        /// contentReveal 一个节奏）。
-        public static var accordion: AppKitMotion {
-            let points = Curve.smoothOutControlPoints
-            return AppKitMotion(
-                duration: Duration.arrival,
-                timingFunction: CAMediaTimingFunction(
-                    controlPoints: Float(points.x1),
-                    Float(points.y1),
-                    Float(points.x2),
-                    Float(points.y2)
-                )
-            )
-        }
-
-        /// Sliding spring for the sidebar selection chrome. Replicates the
-        /// prototype's hand-integrated rail spring exactly (transition-lab
-        /// PHYS.spring { s: 170, d: 22 }, mass 1): ωn ≈ 13.0 rad/s, ζ ≈ 0.84 —
-        /// slow, soft, and inertial, which is the "settles like liquid" feel
-        /// the prototype's rail has. Deliberately NOT the 0.3/0.85
-        /// `gentleSpring` family: that one reads snappy here, not silky.
-        /// CoreAnimation integrates the spring off the main thread, which beats
-        /// the prototype's rAF loop on frame budget; the one trade is that an
-        /// interrupted slide restarts from its presentation position with zero
-        /// velocity (CASpringAnimation cannot inject the in-flight velocity the
-        /// prototype carried over on retarget).
-        public static func selectionSlide() -> CASpringAnimation {
-            let spring = CASpringAnimation(keyPath: "position.y")
-            spring.mass = 1
-            spring.stiffness = 170
-            spring.damping = 22
-            // settlingDuration self-reports short: at that timestamp the spring
-            // can still be a few pixels from rest on long jumps, and CASpring
-            // hard-cuts to the model value when the animation ends — the
-            // "slams to a stop" feel. The +0.12s tail lets the arc settle to
-            // sub-pixel residual before the cut, restoring the prototype's
-            // liquid landing (its rAF loop ran until |Δ| < 0.05px).
-            spring.duration = spring.settlingDuration + 0.12
-            return spring
-        }
-    }
+    // 阶段③ 原生侧栏迁移：AppKitPreset（accordion / selectionSlide CASpring）
+    // 与 AppKitMotion 随自绘侧栏轨道退役——折叠节奏由 SwiftUI `Preset.accordion`
+    // 承担，选中态由系统 `List(.sidebar)` 原生绘制，不再有 CASpring 侧通道。
 
     public enum Transition {
         public static var scrim: AnyTransition {

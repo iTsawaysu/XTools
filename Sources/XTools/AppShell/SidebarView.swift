@@ -2,28 +2,37 @@ import AppKit
 import SwiftUI
 import XToolsDesign
 
+/// 侧栏壳（阶段③ 原生侧栏重组）：品牌带 + 搜索框 + 原生列表 + 底部主题/设置。
+///
+/// 本视图刻意**不持有任何观察**：收藏与 Section 折叠由 `SidebarNativeList`
+/// 直接观察（收藏切换/折叠只重估列表区，RootView 不重估——B4 契约）；
+/// 搜索过滤沿用 `SidebarSearchTextField` + `ToolSearchEngine` 投影（拼音/fzf
+/// 不变），强制展开/组头禁用/空态浮层的等价行为都在 `SidebarNativeList`。
 struct SidebarView: View {
     static let idealWidth: CGFloat = 220
 
     let projection: ToolNavigationProjection
+    let registry: ToolRegistry
+    /// 引用透传（观察在 SidebarNativeList）。
+    let favorites: FavoritesStore
+    let sidebarSections: SidebarSectionExpansionStore
+    /// 最近使用 top5（navigation 通道，最新优先；RootView 随导航刷新）。
+    let recentToolIDs: [ToolID]
     let selectedToolID: ToolID?
-    let favoriteOrder: [ToolID]
     @Binding var searchText: String
     let searchFocusToken: Int
     let onSelectTool: (ToolID) -> Void
     let onOpenDashboard: () -> Void
     let onToggleFavorite: (ToolID) -> Void
-    let isSectionExpanded: (ToolNavigationSection) -> Bool
-    let onToggleSection: (ToolNavigationSection) -> Void
-    var onToggleSectionExclusive: ((ToolNavigationSection) -> Void)? = nil
+    let onMoveFavorites: (IndexSet, Int) -> Void
+    /// Bool = option 点击（单区独占折叠，原生保留旧版头部语义）。
+    let onToggleSection: (ToolNavigationSection, Bool) -> Void
     let onToggleTheme: () -> Void
     let onPreferences: () -> Void
     let themeTitle: String
     let themeIcon: String
 
     @State private var isSearchFocused = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.colorScheme) private var colorScheme
 
     private var isSearchActive: Bool {
         !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -32,48 +41,34 @@ struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             sidebarHeader
-            dashboardEntry
-            expandedToolList
-            Spacer(minLength: 0)
+            SidebarNativeList(
+                projection: projection,
+                registry: registry,
+                favorites: favorites,
+                sidebarSections: sidebarSections,
+                recentToolIDs: recentToolIDs,
+                selectedToolID: selectedToolID,
+                isSearchActive: isSearchActive,
+                onSelectTool: onSelectTool,
+                onOpenDashboard: onOpenDashboard,
+                onToggleFavorite: onToggleFavorite,
+                onMoveFavorites: onMoveFavorites,
+                onToggleSection: onToggleSection
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .layoutPriority(1)
             sidebarFooter
         }
         .frame(width: Self.idealWidth, alignment: .top)
         .frame(maxHeight: .infinity, alignment: .top)
-        .toolSurface(.sidebar, fallback: ToolTheme.sidebarBackground, in: Rectangle())
+        // B0 材质决策（见 SidebarNativeList.swift 文件头）：整列系统 sidebar
+        // 材质铺底，替代旧的不透明暖墨填充（toolSurface(.sidebar) 已退役）。
+        .background(SidebarMaterialBackground())
         .overlay(alignment: .trailing) {
             Rectangle()
                 .fill(ToolTheme.border)
-                .frame(width: 0.5)
+                .frame(width: ToolMetrics.Spacing.hairline)
         }
-    }
-
-    private var dashboardEntry: some View {
-        Button(action: onOpenDashboard) {
-            HStack(spacing: ToolMetrics.Spacing.sm) {
-                Image(systemName: "square.grid.3x3")
-                    .font(ToolTypography.icon(ToolMetrics.IconSize.small, .semibold))
-                    .frame(width: SidebarMetrics.iconSize)
-                Text("工作台")
-                    .font(ToolTypography.label)
-                Spacer(minLength: 0)
-                IndexKeycap(label: "⌘0")
-            }
-            .foregroundStyle(selectedToolID == nil ? ToolTheme.accent : ToolTheme.textSecondary)
-            .padding(.horizontal, SidebarMetrics.toolRowHorizontalPadding)
-            .frame(height: SidebarMetrics.expandedRowHeight)
-            .background(
-                selectedToolID == nil ? ToolTheme.accent.opacity(0.12) : Color.clear,
-                in: RoundedRectangle(cornerRadius: SidebarMetrics.rowCornerRadius, style: .continuous)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .toolInteractionFeedback()
-        .accessibilityIdentifier("sidebar.dashboard")
-        .accessibilityLabel("工作台")
-        .padding(.horizontal, SidebarMetrics.toolRowHorizontalPadding)
-        .padding(.top, ToolMetrics.Spacing.sm)
-        .padding(.bottom, ToolMetrics.Spacing.xs)
     }
 
     private var sidebarHeader: some View {
@@ -166,59 +161,12 @@ struct SidebarView: View {
         )
         .overlay {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                .strokeBorder(isSearchFocused ? ToolTheme.accentBorder : ToolTheme.border, lineWidth: isSearchFocused ? 1 : 0.5)
+                .strokeBorder(isSearchFocused ? ToolTheme.accentBorder : ToolTheme.border, lineWidth: isSearchFocused ? 1 : ToolMetrics.Spacing.hairline)
         }
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: isSearchFocused)
         .padding(.horizontal, SidebarMetrics.searchHorizontalPadding)
         .padding(.top, SidebarMetrics.searchTopPadding)
         .padding(.bottom, SidebarMetrics.searchBottomPadding)
-    }
-
-    private var expandedToolList: some View {
-        SidebarNavigationList(configuration: SidebarNavigationListConfiguration(
-            entries: sidebarEntries,
-            selectedToolID: selectedToolID,
-            selectedSection: projection.selectedSection,
-            favoriteOrder: favoriteOrder,
-            isSearchActive: isSearchActive,
-            reduceMotion: reduceMotion,
-            colorScheme: colorScheme,
-            onSelectTool: onSelectTool,
-            onToggleFavorite: onToggleFavorite,
-            onToggleSection: { section in
-                guard !isSearchActive else { return }
-                onToggleSection(section)
-            },
-            onToggleSectionExclusive: { section in
-                guard !isSearchActive else { return }
-                onToggleSectionExclusive?(section)
-            }
-        ))
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .layoutPriority(1)
-        .overlay(alignment: .top) {
-            if isSearchActive && projection.sidebarGroups.isEmpty {
-                VStack(spacing: ToolMetrics.Spacing.fine) {
-                    Image(systemName: "magnifyingglass")
-                        .font(ToolTypography.icon(ToolMetrics.IconSize.medium, .medium))
-                        .foregroundStyle(ToolTheme.textTertiary)
-                    Text("没有匹配的工具")
-                        .font(ToolTypography.label)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 72, alignment: .center)
-                .background(
-                    ToolTheme.panelBackground,
-                    in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                        .strokeBorder(ToolTheme.border, lineWidth: 0.5)
-                }
-                .padding(.horizontal, ToolMetrics.Spacing.md)
-                .padding(.top, ToolMetrics.Spacing.md)
-            }
-        }
     }
 
     private var sidebarFooter: some View {
@@ -235,13 +183,4 @@ struct SidebarView: View {
             .padding(.vertical, ToolMetrics.Spacing.sm)
         }
     }
-
-    private var sidebarEntries: [SidebarNavigationEntry] {
-        SidebarNavigationEntryProjection.entries(
-            groups: projection.sidebarGroups,
-            isSearchActive: isSearchActive,
-            isSectionExpanded: { isSectionExpanded($0) }
-        )
-    }
-
 }
