@@ -146,6 +146,60 @@ struct WorkbenchSurface<
             workspaceDiagnostic = diagnostic
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // 页面级快捷键的统一挂载点（unified-workbench 排查修复）：⇧⌘C 等由
+        // ActionBar 深嵌在 pane 内（GeometryReader 固定高分栏 + IndexWorkbenchPane
+        // 双层容器），实测事件分发在该位置不稳定（真窗口矩阵：同 gen 同动作，
+        // IndexPage 直系层零尺寸代理可触发而 pane 内按钮不触发）。统一上移到
+        // 壳直系层挂零尺寸代理钮，视觉仍由 ActionBar 呈现（代理钮 opacity 0）。
+        // 门控语义不变：entryGeneration=0（停靠/失活）传 nil 注销。
+        .overlay { pageLevelShortcuts }
+    }
+
+    /// 页面级快捷键代理（design.md §5-6 的实现位）：每个持快捷键的动作在此
+    /// 挂一个隐藏 Button；可见按钮照常渲染、其自身不再挂 keyboardShortcut。
+    /// 形制沿用 RootView 隐藏快捷键按钮组的成熟先例：真实文字标题 +
+    /// opacity(0)（EmptyView 标签的按钮不产生平台视图，快捷键不注册）。
+    @ViewBuilder
+    private var pageLevelShortcuts: some View {
+        if entryGeneration > 0 {
+            ForEach(Array(pageShortcutActions.enumerated()), id: \.offset) { index, shortcut in
+                Button(shortcut.title) {
+                    shortcut.perform()
+                }
+                .keyboardShortcut(shortcut.key, modifiers: shortcut.modifiers)
+                .opacity(0)
+                .frame(width: .zero, height: .zero)
+                .accessibilityHidden(true)
+            }
+        }
+    }
+
+    /// 壳持有的页面级快捷键清单：⇧⌘C（首个 copy）与 ⌘↩（primaryAction）。
+    /// 動作执行委托回 ActionBar 动作闭包；copy 的成功 toast 复用
+    /// IndexCopyButton 同路径（拷贝 + 播报）。
+    private var pageShortcutActions: [WorkbenchPageShortcut] {
+        var shortcuts: [WorkbenchPageShortcut] = []
+        if let primaryAction {
+            shortcuts.append(WorkbenchPageShortcut(
+                title: primaryAction.title,
+                key: .return,
+                modifiers: .command,
+                perform: primaryAction.perform
+            ))
+        }
+        if let copy = firstCopyAction {
+            shortcuts.append(WorkbenchPageShortcut(
+                title: copy.copyTitle,
+                key: "c",
+                modifiers: [.command, .shift],
+                perform: { copy.performCopyViaToastCenter(toastCenter) }
+            ))
+        }
+        return shortcuts
+    }
+
+    private var firstCopyAction: WorkbenchActionBarAction? {
+        actions.first { if case .copy = $0.kind { return true } else { return false } }
     }
 
     // MARK: - 标题行（可选）

@@ -67,6 +67,35 @@ struct WorkbenchActionBarAction {
     }
 }
 
+/// 页面级快捷键代理钮的动作载体（壳 `pageLevelShortcuts` 使用）：标题（代理
+/// 钮的真实文字，EmptyView 标签不产生平台视图）+ 键位 + 闭包。⇧⌘C 的执行
+/// 语义与可见复制钮一致（写剪贴板 + toast 回执），由壳侧调用
+/// `performCopyViaToastCenter` 桥接。
+struct WorkbenchPageShortcut {
+    let title: String
+    let key: KeyEquivalent
+    let modifiers: EventModifiers
+    let perform: () -> Void
+}
+
+extension WorkbenchActionBarAction {
+    /// 可见 copy 钮的标题（壳层代理钮复用同文案）。
+    var copyTitle: String {
+        if case let .copy(_, title, _, _) = kind { return title }
+        return "复制"
+    }
+
+    /// 供壳层 ⇧⌘C 代理钮复用：执行 copy 语义（IndexCopyButton 同路径：
+    /// IndexPasteboard 写剪贴板 + toastCenter 播报成功回执）。
+    @MainActor
+    func performCopyViaToastCenter(_ toastCenter: ToolToastCenter?) {
+        guard case let .copy(text, _, successToast, _) = kind, !text.isEmpty else { return }
+        IndexPasteboard.copyString(text)
+        let message = successToast ?? ToolFeedbackCopy.copied
+        toastCenter?.show(message, tone: .success)
+    }
+}
+
 /// 新能力「用作输入」的规范回执文案（ToolFeedbackCopy 的同族规范；随
 /// 本操作条首发，阶段④铺开时如需集中可平移进共享文案表）。
 enum WorkbenchActionBarCopy {
@@ -128,13 +157,9 @@ struct WorkbenchActionBar: View {
                 successToast: successToast,
                 help: help
             )
-            // 页面级 ⇧⌘C（design.md §5-6）：entryGeneration 为 0（停靠/失活）
-            // 时传 nil 注销，避免停靠页抢走全局快捷键。
-            .keyboardShortcut(
-                isPrimaryCopy && entryGeneration > 0
-                    ? KeyboardShortcut("c", modifiers: [.command, .shift])
-                    : nil
-            )
+            // 页面级 ⇧⌘C 已上移至壳层 pageLevelShortcuts 统一挂载（真窗口
+            // 排查结论：pane 深嵌位置的事件分发不稳定；此处不再挂快捷键，
+            // 仅保留可见按钮的点击路径）。
 
         case let .save(payload, fileName):
             IndexSaveTextButton(
