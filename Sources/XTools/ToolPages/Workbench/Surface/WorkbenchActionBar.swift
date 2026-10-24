@@ -19,7 +19,7 @@ import XToolsDesign
 struct WorkbenchActionBarAction: @unchecked Sendable {
     /// 动作种类（存储用；调用侧用静态工厂构造）。
     enum Kind {
-        case copy(text: String, title: String, successToast: String?, help: String?)
+        case copy(text: String, title: String, successToast: String?, help: String?, enabled: Bool)
         case save(payload: String, fileName: String)
         case useAsInput(onPerform: () -> Void)
         case swap(onPerform: () -> Void, directionLabel: String)
@@ -30,14 +30,18 @@ struct WorkbenchActionBarAction: @unchecked Sendable {
 
     /// 复制主输出（第一个 copy 动作挂 ⇧⌘C）。`title` 为按钮文案（默认
     /// 「复制」，批量动作传「全部复制」保持旧页文案等价）；`successToast`
-    /// 覆盖标准「已复制」回执（批量复制传 `copiedAll(noun:)`）。
+    /// 覆盖标准「已复制」回执（批量复制传 `copiedAll(noun:)`）；`enabled`
+    /// 由宿主给出门控（page-rollout Batch B：格式化族沿用旧页
+    /// `.disabled(!isOutputFresh)`——陈旧结果在重新格式化前不可复制），
+    /// 默认 true，既有调用点零影响。
     static func copy(
         text: String,
         title: String = "复制",
         successToast: String? = nil,
-        help: String? = nil
+        help: String? = nil,
+        enabled: Bool = true
     ) -> WorkbenchActionBarAction {
-        WorkbenchActionBarAction(kind: .copy(text: text, title: title, successToast: successToast, help: help))
+        WorkbenchActionBarAction(kind: .copy(text: text, title: title, successToast: successToast, help: help, enabled: enabled))
     }
 
     /// 异步保存输出到文件（AppKit 异步保存器）。
@@ -83,15 +87,22 @@ struct WorkbenchPageShortcut {
 extension WorkbenchActionBarAction {
     /// 可见 copy 钮的标题（壳层代理钮复用同文案）。
     var copyTitle: String {
-        if case let .copy(_, title, _, _) = kind { return title }
+        if case let .copy(_, title, _, _, _) = kind { return title }
         return "复制"
+    }
+
+    /// copy 门控（Batch B 格式化族 isOutputFresh 等价迁移）：壳层/IOPair 的
+    /// ⇧⌘C 代理与可见钮同门控——旧页禁用按钮的快捷键不触发，代理同样注销。
+    var copyEnabled: Bool {
+        if case let .copy(_, _, _, _, enabled) = kind { return enabled }
+        return false
     }
 
     /// 供壳层 ⇧⌘C 代理钮复用：执行 copy 语义（IndexCopyButton 同路径：
     /// IndexPasteboard 写剪贴板 + toastCenter 播报成功回执）。
     @MainActor
     func performCopyViaToastCenter(_ toastCenter: ToolToastCenter?) {
-        guard case let .copy(text, _, successToast, _) = kind, !text.isEmpty else { return }
+        guard case let .copy(text, _, successToast, _, _) = kind, !text.isEmpty else { return }
         IndexPasteboard.copyString(text)
         let message = successToast ?? ToolFeedbackCopy.copied
         toastCenter?.show(message, tone: .success)
@@ -150,7 +161,7 @@ struct WorkbenchActionBar: View {
     @ViewBuilder
     private func button(for action: WorkbenchActionBarAction, isPrimaryCopy: Bool) -> some View {
         switch action.kind {
-        case let .copy(text, title, successToast, help):
+        case let .copy(text, title, successToast, help, enabled):
             IndexCopyButton(
                 text: text,
                 title: title,
@@ -159,6 +170,7 @@ struct WorkbenchActionBar: View {
                 successToast: successToast,
                 help: help
             )
+            .disabled(!enabled)
             // 页面级 ⇧⌘C 已上移至壳层 pageLevelShortcuts 统一挂载（真窗口
             // 排查结论：pane 深嵌位置的事件分发不稳定；此处不再挂快捷键，
             // 仅保留可见按钮的点击路径）。

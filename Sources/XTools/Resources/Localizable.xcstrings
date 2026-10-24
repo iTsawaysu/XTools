@@ -1996,6 +1996,17 @@
     "格式化与压缩 XML，支持 2/4 空格缩进与 Minify。": {
       "extractionState": "manual"
     },
+    "格式化（⌘↩）": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format (⌘↩)"
+          }
+        }
+      }
+    },
     "格式化结果": {
       "extractionState": "manual"
     },
@@ -2789,6 +2800,17 @@
     },
     "转换质量": {
       "extractionState": "manual"
+    },
+    "转换（⌘↩）": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convert (⌘↩)"
+          }
+        }
+      }
     },
     "辅助工具": {
       "extractionState": "manual"

@@ -41,6 +41,39 @@ struct IndexDiagnosticPresentation {
     }
 }
 
+/// 运行中/结果过期的行内状态（page-rollout Batch B 自 IndexFormatWorkbench
+/// stdout 簇平移为共享件，由输出 pane 头附件承载）：spinner 或 tone 图标 +
+/// 单行截尾文案，tone.tint 墨色、最宽 240pt（超长截尾不挤压 pane 头）。
+struct IndexInlineDiagnosticStatus: View {
+    let message: String
+    var tone: ToolFeedbackTone = .info
+    var showsSpinner = false
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: ToolMetrics.Spacing.xs) {
+            if showsSpinner {
+                IndexProgressSpinner()
+                    .accessibilityHidden(true)
+            } else {
+                Image(systemName: tone.systemImage)
+                    .font(ToolTypography.icon(ToolMetrics.IconSize.small, .semibold))
+            }
+            Text(message)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .font(ToolTypography.caption)
+        .foregroundStyle(tone.tint)
+        .frame(maxWidth: 240, alignment: .leading)
+        .help(message)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(tone.accessibilityPrefix)：\(message)")
+        .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
+    }
+}
+
 /// One stable summary row; longer guidance lives in a popover so it cannot
 /// resize the editors or move their primary actions.
 struct IndexDiagnosticBanner: View {
@@ -113,7 +146,9 @@ struct IndexDiagnosticBanner: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(tone.borderTint).frame(height: ToolMetrics.Spacing.hairline)
         }
-        .onChange(of: message) { _ in showsDetails = false }
+        .onChange(of: message) {
+            showsDetails = false
+        }
     }
 }
 

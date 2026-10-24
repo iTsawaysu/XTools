@@ -530,18 +530,24 @@ struct IndexWorkspaceDiagnosticRegion<Content: View>: View {
     let text: String?
     var tone: ToolFeedbackTone = .error
     var maxWidth: CGFloat = 460
+    var detail: FormatDiagnostic? = nil
+    var isLocatable = false
     private let content: Content
 
     init(
         _ text: String?,
         tone: ToolFeedbackTone = .error,
         maxWidth: CGFloat = 460,
+        detail: FormatDiagnostic? = nil,
+        isLocatable: Bool = false,
         spacing: CGFloat = 8,
         @ViewBuilder content: () -> Content
     ) {
         self.text = text
         self.tone = tone
         self.maxWidth = maxWidth
+        self.detail = detail
+        self.isLocatable = isLocatable
         self.content = content()
     }
 
@@ -560,14 +566,45 @@ struct IndexWorkspaceDiagnosticRegion<Content: View>: View {
 
     private var diagnosticPayload: IndexWorkspaceDiagnosticPayload? {
         guard let visibleText else { return nil }
-        return IndexWorkspaceDiagnosticPayload(text: visibleText, tone: tone, maxWidth: maxWidth)
+        return IndexWorkspaceDiagnosticPayload(
+            text: visibleText,
+            tone: tone,
+            maxWidth: maxWidth,
+            detail: detail,
+            isLocatable: isLocatable
+        )
     }
 }
 
+/// 壳层「定位」请求（page-rollout B2）：WorkbenchSurface 的诊断 banner 点
+/// 「定位」时递增本值并经环境下发；声明了源标记的输入编辑器把它当作
+/// `diagnosticNavigationToken` 消费（一次性请求，0 = 仅描边不跳转）。
+private struct WorkbenchDiagnosticLocateRequestKey: EnvironmentKey {
+    static let defaultValue = 0
+}
+
+extension EnvironmentValues {
+    /// 当前定位请求 token（壳层 banner「定位」驱动；无 banner 时恒 0）。
+    var workbenchDiagnosticLocateRequest: Int {
+        get { self[WorkbenchDiagnosticLocateRequestKey.self] }
+        set { self[WorkbenchDiagnosticLocateRequestKey.self] = newValue }
+    }
+}
+
+/// 纸顶诊断槽的单轨载荷。`detail`/`isLocatable` 是 page-rollout Batch B 的
+/// 扩展：格式化族的诊断带 `FormatDiagnostic`（banner「详情」popover 的有界
+/// 细节）与可定位标记——这两项能力原属 IndexFormatWorkbench 参数轨，迁
+/// preference 单轨后随载荷透传，避免 spec「details open in a bounded
+/// popover / explicit navigation」合同降级。定位动作本身不带闭包（payload
+/// 须保持 Sendable）：「定位」钮由壳持有一个一次性 token 经
+/// `workbenchDiagnosticLocateRequest` 环境下发，页面的源标记编辑器以它为
+/// navigationToken 消费（page-rollout B2）。
 struct IndexWorkspaceDiagnosticPayload: Equatable {
     let text: String
     let tone: ToolFeedbackTone
     let maxWidth: CGFloat
+    var detail: FormatDiagnostic? = nil
+    var isLocatable: Bool = false
 }
 
 struct IndexWorkspaceDiagnosticPresentationState: Equatable {
@@ -612,9 +649,11 @@ extension View {
     func indexWorkspaceDiagnostic(
         _ text: String?,
         tone: ToolFeedbackTone = .error,
-        maxWidth: CGFloat = 460
+        maxWidth: CGFloat = 460,
+        detail: FormatDiagnostic? = nil,
+        isLocatable: Bool = false
     ) -> some View {
-        IndexWorkspaceDiagnosticRegion(text, tone: tone, maxWidth: maxWidth) {
+        IndexWorkspaceDiagnosticRegion(text, tone: tone, maxWidth: maxWidth, detail: detail, isLocatable: isLocatable) {
             self
         }
     }

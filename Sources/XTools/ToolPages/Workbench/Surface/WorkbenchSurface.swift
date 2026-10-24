@@ -9,11 +9,21 @@ import XToolsDesign
 struct WorkbenchPrimaryAction {
     let title: String
     let help: String
+    /// 动作可用性（page-rollout Batch B：格式化族主操作沿用旧页门控
+    /// 「运行中或输入为空白时禁用」；默认 true，既有调用点零影响）。
+    /// false 时可见钮置灰、⌘↩ 代理注销（与旧 disabled 按钮快捷键失效一致）。
+    var enabled: Bool = true
     let perform: () -> Void
 
-    init(title: String, help: String, perform: @escaping () -> Void) {
+    init(
+        title: String,
+        help: String,
+        enabled: Bool = true,
+        perform: @escaping () -> Void
+    ) {
         self.title = title
         self.help = help
+        self.enabled = enabled
         self.perform = perform
     }
 }
@@ -79,6 +89,10 @@ struct WorkbenchSurface<
     // 诊断单轨三件套（壳私有持有，调用侧不再各自复制）。
     @State private var workspaceDiagnostic: IndexWorkspaceDiagnosticPayload?
     @State private var diagnosticPresentation = IndexWorkspaceDiagnosticPresentationState()
+    /// 「定位」一次性请求 token（page-rollout B2）：载荷声明 isLocatable 时
+    /// banner 出「定位」钮，点击递增并经 `workbenchDiagnosticLocateRequest`
+    /// 环境下发；声明了源标记的输入编辑器以它为 navigationToken 消费。
+    @State private var diagnosticLocateRequest = 0
     @Environment(\.toolToastCenter) private var toastCenter
     @Environment(\.toolPageEntryGeneration) private var entryGeneration
     // 壳层直达载荷（Batch D）：校验 toolID 归属后并入焦点请求。
@@ -168,6 +182,9 @@ struct WorkbenchSurface<
         // 焦点契约下发（阶段③ C3）：值 = 页面代际 + 页内 token；页面经
         // `.workbenchFocusTarget()` 声明的首个输入在请求变化时消费聚焦。
         .environment(\.workbenchFocusRequest, workbenchFocusRequest)
+        // 「定位」请求下发（page-rollout B2）：banner「定位」→ 环境值递增，
+        // 页面源标记编辑器消费（见 IndexResultDisplays 的键注释）。
+        .environment(\.workbenchDiagnosticLocateRequest, diagnosticLocateRequest)
     }
 
     /// 焦点契约请求值（C3 + Batch D 直达载荷）：页面声明了首位输入
@@ -215,7 +232,7 @@ struct WorkbenchSurface<
     /// paneBody），壳的 `actions` 只覆盖本壳直挂的 copy。
     private var pageShortcutActions: [WorkbenchPageShortcut] {
         var shortcuts: [WorkbenchPageShortcut] = []
-        if let primaryAction {
+        if let primaryAction, primaryAction.enabled {
             shortcuts.append(WorkbenchPageShortcut(
                 title: primaryAction.title,
                 key: .return,
@@ -223,7 +240,7 @@ struct WorkbenchSurface<
                 perform: primaryAction.perform
             ))
         }
-        if let copy = firstCopyAction {
+        if let copy = firstCopyAction, copy.copyEnabled {
             shortcuts.append(WorkbenchPageShortcut(
                 title: copy.copyTitle,
                 key: "c",
@@ -275,10 +292,14 @@ struct WorkbenchSurface<
             help: action.help,
             action: action.perform
         )
+        .disabled(!action.enabled)
         // 页面级 ⌘↩（design.md §6）：entryGeneration 为 0（停靠/失活）时
-        // 传 nil 注销。
+        // 传 nil 注销；动作禁用（Batch B 格式化族门控）同样注销——与旧页
+        // 「disabled 按钮的快捷键不触发」一致。
         .keyboardShortcut(
-            entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil
+            entryGeneration > 0 && action.enabled
+                ? KeyboardShortcut(.return, modifiers: .command)
+                : nil
         )
     }
 
@@ -300,6 +321,10 @@ struct WorkbenchSurface<
                 )
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .overlay(alignment: .bottom) { hairline }
+                // 参数区内的锚定菜单（IndexOptionsMenu）向下展开覆盖内容区；
+                // 参数带是 VStack 中的前序兄弟，不提层会被后序 pane 的原生
+                // 编辑器盖住（旧 IndexFormatWorkbench 工具栏 zIndex(1) 同因）。
+                .zIndex(1)
         }
     }
 
@@ -307,13 +332,19 @@ struct WorkbenchSurface<
 
     /// 纸顶诊断槽：preference 聚合结果渲染为 banner（36pt 有界轨道）；
     /// 变化才播报 toast（`IndexWorkspaceDiagnosticPresentationState` 门控）。
+    /// Batch B：载荷的 `detail` 透传给 banner「详情」popover；`isLocatable`
+    /// 时出「定位」钮——点击递增壳持有的 token，经环境交给页面源标记编辑器
+    /// （旧 IndexFormatWorkbench 的 onLocate/onMarker 能力等价随行）。
     private var diagnosticTrack: some View {
         IndexDiagnosticStatusSlot(isActive: workspaceDiagnostic != nil) {
             if let diagnostic = workspaceDiagnostic {
                 IndexDiagnosticBanner(
-                    diagnostic: nil,
+                    diagnostic: diagnostic.detail,
                     message: diagnostic.text,
-                    tone: diagnostic.tone
+                    tone: diagnostic.tone,
+                    onLocate: diagnostic.isLocatable
+                        ? { diagnosticLocateRequest &+= 1 }
+                        : nil
                 )
             }
         }

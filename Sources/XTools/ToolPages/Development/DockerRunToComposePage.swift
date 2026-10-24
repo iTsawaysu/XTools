@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 @MainActor
 final class DockerConversionToolWorkspaceModel: ObservableObject {
@@ -68,47 +69,170 @@ struct IndexDockerPage: View {
 struct IndexDockerWorkspaceContent: View {
     nonisolated private static let maxInputCharacters = 200_000
 
+    /// 输出 pane 标题（AX 过期态插值与 pane 头同源）。
+    private let outputTitle = "输出"
+
     @ObservedObject var workspace: DockerConversionToolWorkspaceModel
     @ObservedObject var execution: IndexFormatExecutionSession
+    /// 输入 pane 的文本文件拖入会话（旧壳能力随行）。
+    @StateObject private var droppedFile = IndexDroppedTextFile()
+    /// 输出呼吸代际：显式转换落地新鲜、非空、无错结果时 +1。
+    @State private var outputBreathGeneration = 0
+
+    private var diagnosticText: String? {
+        execution.binding.error ?? execution.binding.warning
+    }
+
+    private var diagnosticTone: ToolFeedbackTone {
+        execution.binding.error == nil ? .warning : .error
+    }
+
+    /// 旧壳 hasDiagnostic 门控：运行中/结果过期时不投递诊断。
+    private var showsDiagnostic: Bool {
+        !execution.isRunning && execution.isOutputFresh && diagnosticText != nil
+    }
+
+    private var hasStaleResult: Bool {
+        !execution.isOutputFresh && (!execution.binding.output.isEmpty || diagnosticText != nil)
+    }
+
+    /// 旧壳 formatButton 门控：运行中或输入为空白时禁用主操作。
+    private var formatEnabled: Bool {
+        !execution.isRunning
+            && !workspace.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         IndexPage("Docker Run ↔ Compose", subtitle: "docker run 命令与 Compose YAML 双向转换。", workspaceSemantic: .structuredEditorTransform) {
-            IndexFormatWorkbench(
-                inputTitle: "输入",
-                outputTitle: "输出",
-                input: $workspace.input,
-                output: execution.binding.output,
-                inputPlaceholder: inputPlaceholder,
-                diagnostic: execution.binding.error ?? execution.binding.warning,
-                diagnosticTone: execution.binding.error == nil ? .warning : .error,
-                diagnosticDetail: execution.diagnostic,
-                outputLineNumbers: true,
-                outputSyntax: workspace.direction == .runToCompose ? .yaml : nil,
-                actionTitle: "转换",
-                isRunning: execution.isRunning,
-                isOutputFresh: execution.isOutputFresh,
-                clearDisabled: workspace.input.isEmpty && !execution.hasClearableContent,
-                onFormat: convert,
-                onClear: workspace.clear,
-                leadingControl: {
-                    IndexSegmentedControl(
-                        items: DockerConversionToolWorkspaceModel.Direction.allCases.map { ($0.id, $0.label) },
-                        selection: Binding(
-                            get: { workspace.direction.id },
-                            set: { raw in
-                                guard let direction = DockerConversionToolWorkspaceModel.Direction(rawValue: raw) else { return }
-                                workspace.direction = direction
-                                if !execution.binding.output.isEmpty {
-                                    convert()
-                                }
-                            }
-                        ),
-                        density: .compact
+            // 统一壳装配（page-rollout B2）：方向分段（Run ↔ Compose，页面级
+            // 模式分段）归标题行 accessory（Batch A 配方）；显式转换走壳级
+            // primaryAction（⌘↩，旧「转换」钮等价——actionTitle 字符串反推
+            // 随显式状态消灭）；诊断走 preference 单轨。
+            WorkbenchSurface(
+                title: nil,
+                primaryAction: WorkbenchPrimaryAction(
+                    title: "转换",
+                    help: "转换（⌘↩）",
+                    enabled: formatEnabled,
+                    perform: convert
+                ),
+                shape: .inputOutput,
+                titleAccessory: { directionSegment },
+                content: {
+                    WorkbenchIOPair(
+                        leadingTitle: "输入",
+                        trailingTitle: outputTitle,
+                        leadingActions: [
+                            .clear(
+                                enabled: !(workspace.input.isEmpty && !execution.hasClearableContent),
+                                onPerform: workspace.clear
+                            )
+                        ],
+                        trailingActions: [
+                            .copy(text: execution.binding.output, help: "复制全部 (⇧⌘C)", enabled: execution.isOutputFresh)
+                        ],
+                        leadingAccessory: { stdinBadge },
+                        leading: { inputPane },
+                        trailingAccessory: { stdoutCluster },
+                        trailing: { outputPane }
                     )
-                    .fixedSize(horizontal: true, vertical: false)
+                    // 诊断单轨：拖入拒判优先，其后是错误/警告；诊断详情随
+                    // 载荷透传给纸顶 banner（Docker 无源标记，「定位」缺席，
+                    // 与旧壳 onLocate 为 nil 一致）。
+                    .indexWorkspaceDiagnostic(
+                        droppedFile.rejection?.message ?? (showsDiagnostic ? diagnosticText : nil),
+                        tone: droppedFile.rejection == nil ? diagnosticTone : .error,
+                        detail: droppedFile.rejection == nil && showsDiagnostic ? execution.diagnostic : nil
+                    )
                 }
             )
         }
+        .onChange(of: execution.isOutputFresh) {
+            guard execution.isOutputFresh, !execution.binding.output.isEmpty, execution.binding.error == nil else {
+                return
+            }
+            outputBreathGeneration += 1
+        }
+    }
+
+    // MARK: - 标题行 accessory
+
+    /// 方向分段：切换即写偏好，已有输出时按旧页语义立即重转。
+    private var directionSegment: some View {
+        IndexSegmentedControl(
+            items: DockerConversionToolWorkspaceModel.Direction.allCases.map { ($0.id, $0.label) },
+            selection: Binding(
+                get: { workspace.direction.id },
+                set: { raw in
+                    guard let direction = DockerConversionToolWorkspaceModel.Direction(rawValue: raw) else { return }
+                    workspace.direction = direction
+                    if !execution.binding.output.isEmpty {
+                        convert()
+                    }
+                }
+            ),
+            density: .compact
+        )
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    // MARK: - 内容区 pane
+
+    private var stdinBadge: some View {
+        IndexBadge("STDIN", tone: .neutral, isCapsule: true)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var stdoutCluster: some View {
+        HStack(spacing: ToolMetrics.Spacing.fine) {
+            IndexBadge("STDOUT", tone: .neutral, isCapsule: true)
+                .fixedSize(horizontal: true, vertical: false)
+            outputStatus
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    @ViewBuilder
+    private var outputStatus: some View {
+        if execution.isRunning {
+            IndexInlineDiagnosticStatus(message: "正在转换…", showsSpinner: true)
+        } else if hasStaleResult {
+            IndexInlineDiagnosticStatus(message: "输入已更改，请重新转换。")
+        }
+    }
+
+    private var inputPane: some View {
+        IndexWorkspaceTextArea(
+            placeholder: inputPlaceholder,
+            text: $workspace.input,
+            fillsHeight: true,
+            autoFocus: true,
+            embedsFlat: true,
+            lineNumbers: true,
+            onFileDrop: { content in
+                workspace.input = content
+                convert()
+            },
+            droppedFile: droppedFile,
+            workspaceSemantic: .structuredEditorTransform
+        )
+        .workbenchInputDropSupport(text: $workspace.input, droppedFile: droppedFile)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityLabel("输入")
+        // 焦点契约（阶段③ C3）：页面首个输入 = 输入编辑器。
+        .workbenchFocusTarget()
+    }
+
+    private var outputPane: some View {
+        IndexOutputSurface(
+            text: execution.binding.output,
+            lineNumbers: true,
+            syntax: workspace.direction == .runToCompose ? .yaml : nil,
+            fillsHeight: true,
+            embedsFlat: true
+        )
+        .toolOutputBreath(generation: outputBreathGeneration)
+        .accessibilityLabel(hasStaleResult ? "\(outputTitle)，结果已过期" : outputTitle)
     }
 
     private var inputPlaceholder: String {

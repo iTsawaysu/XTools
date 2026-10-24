@@ -128,10 +128,12 @@ struct WorkbenchIOPair<
     }
 
     /// 双栏动作的页面级快捷键代理：首个 copy 取 trailingActions 优先（输出
-    /// pane 即主输出），退而 leadingActions。执行语义与可见复制钮一致。
+    /// pane 即主输出），退而 leadingActions。执行语义与可见复制钮一致；
+    /// `copyEnabled` 门控同可见钮（Batch B 格式化族 isOutputFresh——旧页
+    /// 禁用按钮的快捷键不触发，代理同样注销）。
     @ViewBuilder
     private var pageLevelShortcuts: some View {
-        if entryGeneration > 0, let copy = primaryCopyAction {
+        if entryGeneration > 0, let copy = primaryCopyAction, copy.copyEnabled {
             Button(copy.copyTitle) {
                 copy.performCopyViaToastCenter(toastCenter)
             }

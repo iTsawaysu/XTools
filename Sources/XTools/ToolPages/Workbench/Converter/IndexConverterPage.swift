@@ -1,5 +1,6 @@
 import XToolsCore
 import SwiftUI
+import XToolsDesign
 
 enum IndexConverterFailure: Error, Sendable {
     case invalidInput
@@ -234,13 +235,10 @@ final class IndexConverterToolWorkspaceModel: ObservableObject {
 }
 
 struct IndexConverterPage: View {
-    let title: String
-    let subtitle: String
     let modes: [IndexConverterMode]
     let placeholder: String
     let outputPresentation: IndexTextConversionOutputPresentation
     let backfillModeTransition: (String, String) -> Bool
-    let embedsPageShell: Bool
 
     private let workspaceKey: ToolWorkspaceKey<IndexConverterToolWorkspaceModel>
 
@@ -256,12 +254,14 @@ struct IndexConverterPage: View {
         return initialMode
     }
 
+    /// page-rollout B1 简化：旧 `embedsPageShell` 双装配路径退役。全部调用
+    /// 方（文本编码 Hub 的四个分段）都以 `false` 使用本页——页面壳由所属
+    /// Hub 的 `HubSegmentPage` 提供，本页只装配 `WorkbenchSurface` 工作台
+    /// 主体；`title`/`subtitle` 只服务过壳内嵌 IndexPage 分支，随之移除
+    /// （Hub 分段副标题由 `EncodingHubWorkspaceModel.Segment.subtitle` 声明）。
     init(
         toolID: ToolID,
         slot: String = "main",
-        embedsPageShell: Bool = true,
-        title: String,
-        subtitle: String,
         modes: [IndexConverterMode],
         initialMode: String? = nil,
         placeholder: String,
@@ -273,13 +273,10 @@ struct IndexConverterPage: View {
         errorMessage: @escaping IndexConverterErrorMessage = { _ in "转换失败。" },
         convert: @escaping IndexConverterOperation
     ) {
-        self.title = title
-        self.subtitle = subtitle
         self.modes = modes
         self.placeholder = placeholder
         self.outputPresentation = outputPresentation
         self.backfillModeTransition = backfillModeTransition ?? { _, _ in backfillsOutputOnModeChange }
-        self.embedsPageShell = embedsPageShell
 
         let resolvedEmptyInput: IndexConverterEmptyInput = isEmptyInputForMode ?? { input, _ in isEmptyInput(input) }
         let resolvedInitialMode = Self.resolvedInitialMode(requested: initialMode, modes: modes)
@@ -296,13 +293,10 @@ struct IndexConverterPage: View {
     var body: some View {
         ToolWorkspaceHost(key: workspaceKey) { workspace, _ in
             IndexConverterWorkspaceContent(
-                title: title,
-                subtitle: subtitle,
                 modes: modes,
                 placeholder: placeholder,
                 outputPresentation: outputPresentation,
                 backfillModeTransition: backfillModeTransition,
-                embedsPageShell: embedsPageShell,
                 workspace: workspace
             )
         }
@@ -310,17 +304,16 @@ struct IndexConverterPage: View {
 }
 
 private struct IndexConverterWorkspaceContent: View {
-    let title: String
-    let subtitle: String
     let modes: [IndexConverterMode]
     let placeholder: String
     let outputPresentation: IndexTextConversionOutputPresentation
     let backfillModeTransition: (String, String) -> Bool
-    /// 是否内嵌 IndexPage 页面壳：true（默认）时本视图独立成页；false 时
-    /// 页面壳由所属 Hub 提供，本视图只贡献工作台主体（四个转换分段复用）。
-    let embedsPageShell: Bool
 
     @ObservedObject var workspace: IndexConverterToolWorkspaceModel
+    /// 输入 pane 的文本文件拖入会话（旧壳能力等价随行：接收写入 + 拒判
+    /// 经诊断单轨 + 悬停 wash，见 `WorkbenchInputDropSupport`）。
+    @StateObject private var droppedFile = IndexDroppedTextFile()
+
     private var modeSelection: Binding<String> {
         Binding(
             get: { workspace.mode },
@@ -328,45 +321,127 @@ private struct IndexConverterWorkspaceContent: View {
         )
     }
 
-    var body: some View {
-        if embedsPageShell {
-            IndexPage(title, subtitle: subtitle, workspaceSemantic: .copyTransformWorkspace) {
-                workbenchBody
-            }
-        } else {
-            workbenchBody
-        }
+    /// 旧 clearDisabled 等价迁移：输入、输出与错误诊断全部为空时清空不可用。
+    private var clearDisabled: Bool {
+        workspace.input.isEmpty && workspace.output.isEmpty && workspace.error == nil
     }
 
-    /// 壳内作为 IndexPage 的内容闭包，嵌入态直接挂到 Hub 的内容闭包——
-    /// 两者同为 VStack 上下文。工作台与「格式化」/「对比」同构：单一面板
-    /// + 统一工具栏，模式切换落在 STDIN 槽位（同 JSON 缩进控制），转换
-    /// 错误走工具栏下的诊断状态行。
-    private var workbenchBody: some View {
-        IndexFormatWorkbench(
-            inputTitle: "输入",
-            outputTitle: "输出",
-            input: $workspace.input,
-            output: workspace.output,
-            inputPlaceholder: placeholder,
-            diagnostic: workspace.error,
-            diagnosticTone: .error,
-            outputLineNumbers: false,
-            inputLineNumbers: false,
-            inputCaretPlacementRequestToken: workspace.inputReplacementToken == 0 ? nil : workspace.inputReplacementToken,
-            inputCountPresentation: .characters,
+    var body: some View {
+        // 统一壳装配（page-rollout B1）：模式分段（编码/解码等方向切换，
+        // 即时参数）归标题行 accessory（Batch A 页面级模式分段配方）；清空
+        // 归输入 pane 尾 ActionBar，复制归输出 pane 尾 ActionBar（⇧⌘C 由
+        // IOPair 根部的页面级代理持有，页面只在 IOPair 声明一次）；转换
+        // 错误走 preference 单轨（旧 IndexFormatWorkbench 参数轨终结）。
+        WorkbenchSurface(
+            title: nil,
+            shape: .inputOutput,
+            titleAccessory: { modeSegment },
+            content: {
+                WorkbenchIOPair(
+                    leadingTitle: "输入",
+                    trailingTitle: "输出",
+                    leadingActions: [
+                        .clear(enabled: !clearDisabled, onPerform: workspace.clear)
+                    ],
+                    trailingActions: [
+                        .copy(text: workspace.output, help: "复制全部 (⇧⌘C)")
+                    ],
+                    leadingAccessory: { stdinCluster },
+                    leading: { inputPane },
+                    trailingAccessory: { stdoutBadge },
+                    trailing: { outputPane }
+                )
+                // 诊断单轨：拖入拒判优先（旧壳状态槽同序），其后是转换错误；
+                // 经 preference 聚合到纸顶单槽（同一文本、同一错误描边；新增
+                // 「变化才播报」toast，与全部其他页对齐）。
+                .indexWorkspaceDiagnostic(
+                    droppedFile.rejection?.message ?? workspace.error,
+                    tone: .error
+                )
+            }
+        )
+    }
+
+    /// 模式分段：Mode chrome motion 由 IndexSegmentedControl（Preset.tabs）
+    /// 自持；模式切换不动画固定双栏布局（quality hot-path ban），pane 内容
+    /// 即时更新——沿用旧页注释语义。
+    private var modeSegment: some View {
+        IndexSegmentedControl(
+            items: modes.map { ($0.id, $0.label) },
+            selection: modeSelection,
+            density: .compact
+        )
+    }
+
+    /// 输入 pane 头附件：STDIN 徽章 + 实时字符计数（旧工具栏 STDIN 簇的
+    /// 计数，pane 头附件承载）。
+    private var stdinCluster: some View {
+        HStack(spacing: ToolMetrics.Spacing.fine) {
+            IndexBadge("STDIN", tone: .neutral, isCapsule: true)
+            IndexInputCountLabel(
+                text: IndexInputCountPresentation.characters.label(for: workspace.input)
+            )
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var stdoutBadge: some View {
+        IndexBadge("STDOUT", tone: .neutral, isCapsule: true)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    /// 输入 pane 内容：受控 AppKit 编辑器填满 pane；模式回填（backfill）
+    /// 的一次性光标落位 token 原样保留；文本文件拖入接收后经 didSet 照常
+    /// 重算，拒判提示并入纸顶诊断单轨。
+    private var inputPane: some View {
+        IndexWorkspaceTextArea(
+            placeholder: placeholder,
+            text: $workspace.input,
+            fillsHeight: true,
             autoFocus: true,
-            clearDisabled: workspace.input.isEmpty && workspace.output.isEmpty && workspace.error == nil,
-            onClear: workspace.clear,
-            outputPresentation: outputPresentation,
-            outputProcessingText: workspace.isProcessing ? "正在转换…" : nil,
-            leadingControl: {
-                // Mode chrome motion is owned by IndexSegmentedControl (Preset.tabs).
-                // Do not animate the fixed text-conversion pair layout on mode change
-                // (quality hot-path ban). Pane content updates stay immediate.
-                IndexSegmentedControl(items: modes.map { ($0.id, $0.label) }, selection: modeSelection, density: .compact)
+            caretPlacementRequestToken: workspace.inputReplacementToken == 0 ? nil : workspace.inputReplacementToken,
+            embedsFlat: true,
+            lineNumbers: false,
+            onFileDrop: { content in
+                workspace.input = content
             },
+            droppedFile: droppedFile,
             workspaceSemantic: .copyTransformWorkspace
         )
+        .workbenchInputDropSupport(text: $workspace.input, droppedFile: droppedFile)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // 焦点契约（阶段③ C3）：页面首个输入 = 输入编辑器。
+        .workbenchFocusTarget()
+    }
+
+    @ViewBuilder
+    private var outputPane: some View {
+        if workspace.isProcessing {
+            IndexTextConversionProcessingSurface(text: "正在转换…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        } else {
+            switch outputPresentation {
+            case .standard:
+                IndexOutputSurface(
+                    text: workspace.output,
+                    lineNumbers: false,
+                    fillsHeight: true,
+                    embedsFlat: true
+                )
+            case .nativeReadOnlyText:
+                IndexOutputSurface(
+                    text: workspace.output,
+                    presentation: .plain,
+                    lineNumbers: false,
+                    fillsHeight: true
+                )
+            case .markdownPreview:
+                IndexMarkdownPreviewSurface(
+                    text: workspace.output,
+                    fillsHeight: true,
+                    accessibilityTitle: "输出"
+                )
+            }
+        }
     }
 }
