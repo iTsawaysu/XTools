@@ -77,7 +77,7 @@ private struct IndexHTTPStatusWorkspaceContent: View {
 
     private var emptyState: some View {
         IndexEmptyState(
-            title: "无匹配结果",
+            title: IndexEmptyStateCopy.noResults,
             systemImage: "magnifyingglass",
             message: "没有匹配的状态码"
         )

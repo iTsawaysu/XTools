@@ -43,6 +43,11 @@ private struct IndexChronometerWorkspaceContent: View {
         chronometer.isRunning ? "pause.fill" : "play.fill"
     }
 
+    private var primaryActionHelp: String {
+        if chronometer.isRunning { return "暂停计时" }
+        return chronometer.hasElapsed ? "继续计时" : "开始计时"
+    }
+
     var body: some View {
         IndexPage("计时器", subtitle: "秒表计时，支持计次与暂停。", layout: .scroll) {
             IndexPanel("秒表") {
@@ -59,16 +64,12 @@ private struct IndexChronometerWorkspaceContent: View {
                             .accessibilityValue(ChronometerFormatter.format(currentTime(tick: context.date)))
                     }
                     HStack(spacing: 8) {
-                        Button { toggle() } label: {
-                            Label {
-                                Text(primaryActionTitle)
-                                    .toolMotionTextSwap(id: primaryActionTitle)
-                            } icon: {
-                                Image(systemName: primaryActionIcon)
-                                    .toolMotionIconSwap(id: primaryActionIcon)
-                            }
-                        }
-                            .buttonStyle(IndexButtonStyle(primary: true))
+                        IndexPrimaryActionButton(
+                            title: primaryActionTitle,
+                            systemImage: primaryActionIcon,
+                            help: primaryActionHelp,
+                            action: toggle
+                        )
                         Button { _ = chronometer.recordLap(at: monotonicNow()) } label: { Text("计次") }
                             .buttonStyle(IndexButtonStyle())
                             .disabled(!chronometer.canRecordLap)

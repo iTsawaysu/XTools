@@ -64,7 +64,11 @@ private struct IndexDateTimeWorkspaceContent: View {
                 IndexShortResultKV(rows: workspace.rows, emptyText: IndexEmptyStateCopy.autoCalculate("时间戳或时间"), valueMotion: .immediate)
             } accessory: {
                 HStack(spacing: 8) {
-                    clearAllButton
+                    IndexClearButton(
+                        isDisabled: !hasClearableContent,
+                        title: "全部清空",
+                        action: clearAll
+                    )
                     IndexCopyButton(text: allRowsText, title: "全部复制")
                 }
                 .fixedSize(horizontal: true, vertical: false)
@@ -122,6 +126,14 @@ private struct IndexDateTimeWorkspaceContent: View {
         workspace.rows.map { "\($0.0): \($0.1)" }.joined(separator: "\n")
     }
 
+    private var hasClearableContent: Bool {
+        !workspace.timestamp.isEmpty
+            || !workspace.humanTimeInput.isEmpty
+            || !workspace.rows.isEmpty
+            || workspace.timestampError != nil
+            || workspace.humanError != nil
+    }
+
     private var currentTimePageAction: some View {
         Button(action: applyCurrentTime) {
             Label("现在", systemImage: "clock")
@@ -135,16 +147,6 @@ private struct IndexDateTimeWorkspaceContent: View {
     private func applyCurrentTime() {
         NSApp.keyWindow?.makeFirstResponder(nil)
         apply(Date())
-    }
-
-    private var clearAllButton: some View {
-        Button(action: clearAll) {
-            Label("全部清空", systemImage: IndexActionSymbol.clear)
-                .font(ToolTypography.buttonSmall)
-        }
-        .buttonStyle(IndexSmallButtonStyle())
-        .disabled(workspace.timestamp.isEmpty && workspace.humanTimeInput.isEmpty && workspace.rows.isEmpty && workspace.timestampError == nil && workspace.humanError == nil)
-        .accessibilityLabel("全部清空")
     }
 
     private func applyFromHumanTimeInput(_ date: Date) {

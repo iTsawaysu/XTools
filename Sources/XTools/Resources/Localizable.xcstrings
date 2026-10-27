@@ -1006,6 +1006,9 @@
     "在此粘贴 JSON…" : {
       "extractionState" : "manual"
     },
+    "在此区域按下按键后显示事件字段。" : {
+      "extractionState" : "manual"
+    },
     "在此粘贴文本或 Base64…" : {
       "extractionState" : "manual"
     },
@@ -1322,6 +1325,9 @@
       "extractionState" : "manual"
     },
     "开始" : {
+      "extractionState" : "manual"
+    },
+    "开始计时" : {
       "extractionState" : "manual"
     },
     "开始使用工具后显示" : {
@@ -1672,9 +1678,6 @@
     "无" : {
       "extractionState" : "manual"
     },
-    "无匹配结果" : {
-      "extractionState" : "manual"
-    },
     "无变化" : {
       "extractionState" : "manual"
     },
@@ -1808,6 +1811,9 @@
       "extractionState" : "manual"
     },
     "暂停" : {
+      "extractionState" : "manual"
+    },
+    "暂停计时" : {
       "extractionState" : "manual"
     },
     "暂无匹配结果" : {
@@ -2419,7 +2425,7 @@
     "等待可解码的 JWT" : {
       "extractionState" : "manual"
     },
-    "等待按键…" : {
+    "等待按键" : {
       "extractionState" : "manual"
     },
     "等待检查" : {
@@ -2516,6 +2522,9 @@
       "extractionState" : "manual"
     },
     "继续" : {
+      "extractionState" : "manual"
+    },
+    "继续计时" : {
       "extractionState" : "manual"
     },
     "继续工作" : {
@@ -2822,6 +2831,12 @@
       "extractionState" : "manual"
     },
     "输入数学表达式即时求值。" : {
+      "extractionState" : "manual"
+    },
+    "输入数学表达式后自动求值。" : {
+      "extractionState" : "manual"
+    },
+    "修正上方表达式后自动求值。" : {
       "extractionState" : "manual"
     },
     "输入文本后实时显示摘要" : {

@@ -59,13 +59,13 @@ private struct IndexKeycodeWorkspaceContent: View {
                     }
                 }
             } empty: {
-                IndexKV(
-                    rows: [],
-                    emptyText: "等待按键…",
-                    copyable: true,
-                    valueLineBreakMode: .byCharWrapping,
-                    valueMotion: .immediate
+                IndexEmptyState(
+                    title: "等待按键",
+                    systemImage: "keyboard",
+                    message: "在此区域按下按键后显示事件字段。",
+                    density: .list
                 )
+                .frame(minHeight: 96)
             }
         }
     }

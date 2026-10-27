@@ -290,7 +290,7 @@ private struct DateCalculatorTodayButton: View {
                 .font(ToolTypography.buttonSmall)
                 .foregroundStyle(isHovering ? ToolTheme.textPrimary : ToolTheme.textSecondary)
                 .padding(.horizontal, 6)
-                .frame(height: 24)
+                .frame(height: ToolMetrics.ControlHeight.compact)
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
         }
         .buttonStyle(IndexBareButtonStyle())

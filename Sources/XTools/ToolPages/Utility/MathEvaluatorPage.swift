@@ -87,11 +87,12 @@ struct IndexMathPage: View {
 
 private struct IndexMathWorkspaceContent: View {
     @ObservedObject var workspace: MathToolWorkspaceModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         IndexPage("数学计算", subtitle: "输入数学表达式即时求值。", workspaceSemantic: .naturalHeightShortResultPanel) {
             IndexPanel("表达式") {
-                IndexTextInput(placeholder: "例如 (3 + 4) * 2 / sqrt(16)", text: $workspace.expression, height: 42, autoFocus: true)
+                IndexTextInput(placeholder: "例如 (3 + 4) * 2 / sqrt(16)", text: $workspace.expression, autoFocus: true)
                     .indexWorkspaceDiagnostic(diagnosticText)
             } accessory: {
                 IndexClearButton(
@@ -99,7 +100,20 @@ private struct IndexMathWorkspaceContent: View {
                     action: workspace.clear
                 )
             }
-            IndexHeroStat(value: resultText, copyable: validResult != nil)
+            if let result = validResult {
+                IndexHeroStat(value: result, copyable: true)
+            } else {
+                IndexEmptyState(
+                    title: "等待输入",
+                    systemImage: "function",
+                    message: workspace.expression.isEmpty
+                        ? "输入数学表达式后自动求值。"
+                        : "修正上方表达式后自动求值。",
+                    density: .list
+                )
+                .frame(minHeight: 96)
+                .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
+            }
             IndexPanel("说明") {
                 VStack(alignment: .leading, spacing: 8) {
                     mathHelpRow("运算符", "+  -  *  /  %  ^")
@@ -116,10 +130,6 @@ private struct IndexMathWorkspaceContent: View {
             return result
         }
         return nil
-    }
-
-    private var resultText: String {
-        validResult ?? IndexEmptyStateCopy.notAvailable
     }
 
     private var diagnosticText: String? {
