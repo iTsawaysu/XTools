@@ -197,7 +197,6 @@ private struct IndexCrontabWorkspaceContent: View {
                     .strokeBorder(ToolTheme.accent.opacity(0.40), lineWidth: 0.5)
             }
         }
-        .help(field.explanation)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(field.label)：\(field.token)，\(field.explanation)")
     }

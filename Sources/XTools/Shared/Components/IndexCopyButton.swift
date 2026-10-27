@@ -15,7 +15,9 @@ private struct IndexCopyButtonHelp: ViewModifier {
 
     func body(content: Content) -> some View {
         if iconOnly || help != nil {
-            content.help(copied ? "已复制" : (help ?? title))
+            // 图标复制没有可见标题，需要气泡；有标题的复制只在图标模式下
+            // 弹气泡，文字分支把提示留给 AX。
+            content.indexTooltip(copied ? "已复制" : (help ?? title), wantsVisibleBubble: iconOnly)
         } else {
             content
         }
@@ -23,6 +25,22 @@ private struct IndexCopyButtonHelp: ViewModifier {
 }
 
 // MARK: - IndexCopyButton
+
+/// AX 提示：只有图标副本或调用方显式给了描述时才发布，避免与可见标题
+/// 重复播报同一句话。
+private struct IndexCopyButtonAccessibilityHint: ViewModifier {
+    let iconOnly: Bool
+    let copied: Bool
+    let help: String?
+
+    func body(content: Content) -> some View {
+        if iconOnly || help != nil {
+            content.accessibilityHint(copied ? "已复制" : (help ?? "复制"))
+        } else {
+            content
+        }
+    }
+}
 
 struct IndexCopyButton: View {
     let text: String
@@ -115,6 +133,7 @@ struct IndexCopyButton: View {
         }
         .modifier(IndexCopyButtonHelp(iconOnly: iconOnly || title.isEmpty, copied: copied, title: actionTitle, help: help))
         .accessibilityLabel(copied ? "已复制" : actionTitle)
+        .modifier(IndexCopyButtonAccessibilityHint(iconOnly: iconOnly || title.isEmpty, copied: copied, help: help))
     }
 }
 

@@ -37,6 +37,7 @@ private struct IndexEmojiWorkspaceContent: View {
     @ObservedObject var workspace: EmojiToolWorkspaceModel
     @Environment(\.toolToastCenter) private var toastCenter
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.toolInteractionIsLive) private var isLive
 
     private var trimmedQuery: String {
         workspace.query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -143,7 +144,6 @@ private struct IndexEmojiWorkspaceContent: View {
             density: .compact
         )
         .accessibilityLabel("Emoji 肤色")
-        .help("选择默认肤色")
     }
 
     var body: some View {
@@ -182,7 +182,8 @@ private struct IndexEmojiWorkspaceContent: View {
                         snapshot: display.snapshot,
                         scrollResetIdentity: workspace.category,
                         reduceMotion: reduceMotion,
-                        onCopy: copyGlyph
+                        onCopy: copyGlyph,
+                        isLive: isLive
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }

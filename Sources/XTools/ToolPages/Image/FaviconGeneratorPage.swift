@@ -158,7 +158,6 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                 .buttonStyle(IndexSmallButtonStyle())
                 .disabled(session.isSaving || session.isProcessing)
                 .accessibilityLabel(session.isSaving ? "正在保存全部 Favicon 部署文件" : "保存全部五个 Favicon 部署文件")
-                .help("保存全部五个 Favicon 部署文件")
             }
         }
         .verticallyFilling()

@@ -74,6 +74,8 @@ struct IndexEmojiCollectionView: NSViewRepresentable {
     let scrollResetIdentity: String
     let reduceMotion: Bool
     let onCopy: @MainActor (String) -> Void
+    /// 停靠页不注册 tooltip：透明页的气泡会串到当前页面。
+    var isLive: Bool = true
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onCopy: onCopy)
@@ -89,6 +91,7 @@ struct IndexEmojiCollectionView: NSViewRepresentable {
             snapshot: snapshot,
             scrollResetIdentity: scrollResetIdentity,
             reduceMotion: reduceMotion,
+            isLive: isLive,
             onCopy: onCopy
         )
     }
@@ -103,6 +106,7 @@ struct IndexEmojiCollectionView: NSViewRepresentable {
         private var lastScrollResetIdentity: String?
         private var hoveredIndexPath: IndexPath?
         private var reduceMotion = false
+        private var isLive = true
         private var onCopy: @MainActor (String) -> Void
         // Collection layout is coordinated by the scroll view's layout pass. Keep
         // the invalidation state here so repeated SwiftUI updates and clip-view
@@ -176,10 +180,13 @@ struct IndexEmojiCollectionView: NSViewRepresentable {
             snapshot: IndexEmojiCollectionSnapshot,
             scrollResetIdentity: String,
             reduceMotion: Bool,
+            isLive: Bool = true,
             onCopy: @escaping @MainActor (String) -> Void
         ) {
             let motionChanged = self.reduceMotion != reduceMotion
             self.reduceMotion = reduceMotion
+            let liveChanged = self.isLive != isLive
+            self.isLive = isLive
             self.onCopy = onCopy
             let changed = currentSnapshot != snapshot
             let shouldResetScroll = lastScrollResetIdentity != nil
@@ -191,7 +198,7 @@ struct IndexEmojiCollectionView: NSViewRepresentable {
             lastScrollResetIdentity = scrollResetIdentity
             configureLayout(for: snapshot)
 
-            if changed || motionChanged {
+            if changed || motionChanged || liveChanged {
                 collectionView.reloadData()
                 collectionView.collectionViewLayout?.invalidateLayout()
                 needsLayoutRefresh = true
@@ -308,6 +315,7 @@ struct IndexEmojiCollectionView: NSViewRepresentable {
                     model: model,
                     isHovering: hoveredIndexPath == indexPath,
                     reduceMotion: reduceMotion,
+                    isLive: isLive,
                     onCopy: onCopy
                 )
             }
@@ -488,6 +496,7 @@ private final class IndexEmojiCollectionItem: NSCollectionViewItem {
         model: IndexEmojiCollectionSnapshot.Item,
         isHovering: Bool,
         reduceMotion: Bool,
+        isLive: Bool,
         onCopy: @escaping @MainActor (String) -> Void
     ) {
         emojiButton.configure(
@@ -495,6 +504,7 @@ private final class IndexEmojiCollectionItem: NSCollectionViewItem {
             helpText: model.helpText,
             isHovering: isHovering,
             reduceMotion: reduceMotion,
+            isLive: isLive,
             onCopy: onCopy
         )
     }
@@ -556,10 +566,11 @@ private final class IndexEmojiCollectionButton: NSButton {
         helpText: String,
         isHovering: Bool,
         reduceMotion: Bool,
+        isLive: Bool,
         onCopy: @escaping @MainActor (String) -> Void
     ) {
         title = glyph
-        toolTip = helpText
+        toolTip = isLive ? helpText : nil
         setAccessibilityRole(.button)
         setAccessibilityLabel(glyph)
         setAccessibilityHelp("按下以复制字符")

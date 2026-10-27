@@ -315,7 +315,7 @@ private struct DateCalculatorInlineOption: View {
 
     var body: some View {
         if let help, !help.isEmpty {
-            optionLabel.help(help)
+            optionLabel.indexTooltip(help, wantsVisibleBubble: false)
         } else {
             optionLabel
         }

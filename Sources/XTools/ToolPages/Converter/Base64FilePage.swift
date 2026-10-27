@@ -396,7 +396,7 @@ private struct IndexBase64FileWorkspaceContent: View {
         }
         .buttonStyle(IndexIconActionButtonStyle())
         .disabled(session.selectedFile == nil || session.outputPreview == nil || session.outputAction != nil || session.isPreparingOutput || session.isReadingFile)
-        .help("复制完整输出")
+        .indexTooltip("复制完整输出")
         .accessibilityLabel(session.outputAction == .copying ? "正在复制完整输出" : "复制完整输出")
     }
 
@@ -411,7 +411,7 @@ private struct IndexBase64FileWorkspaceContent: View {
         }
         .buttonStyle(IndexIconActionButtonStyle())
         .disabled(session.selectedFile == nil || session.outputPreview == nil || session.outputAction != nil || session.isPreparingOutput || session.isReadingFile)
-        .help("在解码结果中预览")
+        .indexTooltip("在解码结果中预览")
         .accessibilityLabel(session.outputAction == .sending ? "正在准备解码预览" : "在解码结果中预览")
     }
 
@@ -428,7 +428,7 @@ private struct IndexBase64FileWorkspaceContent: View {
         }
         .buttonStyle(IndexIconActionButtonStyle())
         .disabled(session.selectedFile == nil || session.outputPreview == nil || session.outputAction != nil || session.isPreparingOutput || session.isReadingFile)
-        .help("保存完整输出")
+        .indexTooltip("保存完整输出")
         .accessibilityLabel(session.outputAction == .saving ? "正在保存完整输出" : "保存完整输出")
     }
 
@@ -557,7 +557,7 @@ private struct IndexBase64FileWorkspaceContent: View {
         }
         .buttonStyle(IndexIconActionButtonStyle())
         .disabled(session.decodedPayload == nil || session.isSavingDecoded)
-        .help("保存解码后的文件")
+        .indexTooltip("保存解码后的文件")
         .accessibilityLabel(session.isSavingDecoded ? "正在保存解码后的文件" : "保存解码后的文件")
     }
 
@@ -568,7 +568,7 @@ private struct IndexBase64FileWorkspaceContent: View {
         }
         .buttonStyle(IndexIconActionButtonStyle())
         .disabled(session.outputFileName == session.defaultOutputFileName)
-        .help("重置文件名")
+        .indexTooltip("重置文件名")
         .accessibilityLabel("重置文件名")
     }
 
@@ -959,7 +959,7 @@ private struct Base64OutputCountBadge: View {
                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
                     .strokeBorder(isTruncated ? ToolTheme.warning.opacity(0.22) : ToolTheme.border, lineWidth: 0.5)
             }
-            .help(isTruncated ? "当前只显示前后片段，复制或保存会使用完整输出" : "输出字符数")
+            .indexTooltip(isTruncated ? "当前只显示前后片段，复制或保存会使用完整输出" : "输出字符数")
             .accessibilityLabel(accessibilityText)
             .toolNumericTransition(value: characterCount)
     }

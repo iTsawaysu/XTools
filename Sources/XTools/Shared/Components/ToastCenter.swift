@@ -55,6 +55,14 @@ final class ToolToastCenter: ObservableObject {
     }
 
     func show(_ text: String, tone: ToolToastMessage.Tone = .success) {
+        // 同一句话仍在显示时再次触发（连点复制、反复粘贴）只重置计时，
+        // 不叠加第二张相同卡片——一列相同文案读起来像出错而不是确认。
+        if let duplicate = messages.first(where: { $0.text == text && $0.tone == tone }) {
+            cleanupMessage(duplicate.id)
+            scheduleDismissal(for: duplicate.id, after: tone.defaultToastDuration)
+            return
+        }
+
         let message = ToolToastMessage(text: text, tone: tone)
         var removedIDs: [UUID] = []
 
@@ -77,6 +85,12 @@ final class ToolToastCenter: ObservableObject {
         applyToolMotion {
             messages.removeAll { $0.id == id }
         }
+    }
+
+    /// 只播报、不显示卡片。内联诊断自己有可见落点，读屏需要同一句话
+    /// 被念出来；屏幕上则不该再出现第二份。
+    func announce(_ text: String, tone: ToolToastMessage.Tone = .error) {
+        announcer.announceStatus("\(tone.accessibilityPrefix)：\(text)")
     }
 
     func pauseDismissal(for id: UUID) {
@@ -207,7 +221,7 @@ private struct ToolToastCard: View {
             .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
             .onHover { isCloseHovered = $0 }
             .toolAnimation(ToolMotion.Preset.controlFeedback, value: isCloseHovered)
-            .help("关闭提示")
+            .indexTooltip("关闭提示")
             .accessibilityLabel("关闭提示")
         }
         .padding(.horizontal, 12)

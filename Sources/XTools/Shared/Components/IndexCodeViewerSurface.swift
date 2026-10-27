@@ -166,7 +166,7 @@ struct IndexCodeViewerSurface: View {
                             IndexCopyButton(text: text.value, title: "复制全文", showsIcon: false, framed: true)
                             Button("载入全文") { fullTextSource = text }
                                 .buttonStyle(IndexSmallButtonStyle(framed: true))
-                                .help("全文排版可能需要较长时间")
+                                .indexTooltip("全文排版可能需要较长时间", wantsVisibleBubble: false)
                         }
                     }
                 }

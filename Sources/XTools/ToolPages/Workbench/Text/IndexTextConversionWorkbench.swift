@@ -290,8 +290,8 @@ struct IndexSaveTextButton: View {
         }
         .buttonStyle(IndexSmallButtonStyle(done: saved, framed: framed))
         .disabled(text.isEmpty)
-        .help(saved ? "已保存" : "保存输出")
         .accessibilityLabel(saved ? "已保存" : "保存输出")
+        .accessibilityHint(saved ? "已保存" : "保存输出")
         .task(id: feedback.generation) {
             let generation = feedback.generation
             guard feedback.isPresented else { return }

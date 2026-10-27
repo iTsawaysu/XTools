@@ -211,7 +211,7 @@ private struct IndexCalendarNavButton: View {
         .onHover { hovering in
             withToolAnimation(ToolMotion.Preset.controlFeedback) { isHovering = hovering }
         }
-        .help(help)
+        .indexTooltip(help)
         .accessibilityLabel(help)
     }
 }

@@ -116,7 +116,7 @@ struct IndexOptionsMenu: View {
         .overlay {
             IndexMenuArrowCursorLayer()
         }
-        .help(enabledSummary)
+        .indexTooltip(enabledSummary)
         .accessibilityLabel(menuTitle)
         .accessibilityValue(enabledSummary)
     }

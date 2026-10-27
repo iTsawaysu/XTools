@@ -237,7 +237,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                     .frame(width: 100)
                     .accessibilityLabel("水印大小")
                     .accessibilityValue("\(sizePercent)%")
-                    .help("按图片宽度比例设置水印大小")
+                    .indexTooltip("按图片宽度比例设置水印大小")
                     .onChange(of: sizeRatio) { _ in recipeDidChange(previewCadence: .debounced) }
                 Text("\(sizePercent)%")
                     .font(ToolTypography.monoCaption)
@@ -350,7 +350,6 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                         .buttonStyle(IndexSmallButtonStyle())
                         .disabled(session.isSaving)
                         .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存水印图片")
-                        .help("保存与当前水印设置一致的原尺寸图片")
                     }
                 }
                 .verticallyFilling()
@@ -397,7 +396,6 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                         .foregroundStyle(ToolTheme.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                        .help(source.url.lastPathComponent)
 
                     Text(sourceMetadataSummary)
                         .font(ToolTypography.caption)
@@ -661,7 +659,6 @@ private struct WatermarkAnchorCell: View {
         .indexFocusRing(active: isFocused, cornerRadius: ToolMetrics.CornerRadius.nestedControl)
         .accessibilityLabel(item.displayName)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .help(item.displayName)
     }
 }
 

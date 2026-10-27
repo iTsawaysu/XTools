@@ -244,7 +244,7 @@ private struct WorkbenchSearchHero: View {
         .accessibilityIdentifier("dashboard.search")
         .accessibilityLabel("搜索工具、命令或操作")
         .accessibilityHint("打开命令面板，快捷键 Command-K")
-        .help("打开命令面板（⌘K）")
+        .indexTooltip("打开命令面板（⌘K）")
     }
 }
 

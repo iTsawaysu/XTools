@@ -89,7 +89,6 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
                 .buttonStyle(IndexSmallButtonStyle())
                 .disabled(session.isSaving)
                 .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存灰度图")
-                .help("保存生成的灰度图")
             }
         }
         .verticallyFilling()

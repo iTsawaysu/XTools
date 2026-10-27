@@ -174,8 +174,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
                 .buttonStyle(IndexSmallButtonStyle())
                 .disabled(session.isSaving)
                 .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存优化图片")
-                .help("保存优化后的图片")
-            }
+                    }
         }
         .verticallyFilling()
     }

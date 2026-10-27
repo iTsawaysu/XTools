@@ -99,13 +99,13 @@ private struct IndexChmodWorkspaceContent: View {
 
                     IndexFlowLayout(spacing: 14, lineSpacing: 8) {
                         IndexOptionSwitch(title: "setuid", style: .standalone, isOn: permissionBinding(\ChmodMode.setuid))
-                            .help("显示所有者 s/S")
+                            .indexTooltip("显示所有者 s/S")
                             .accessibilityHint("控制 setuid 特殊权限位")
                         IndexOptionSwitch(title: "setgid", style: .standalone, isOn: permissionBinding(\ChmodMode.setgid))
-                            .help("显示所属组 s/S")
+                            .indexTooltip("显示所属组 s/S")
                             .accessibilityHint("控制 setgid 特殊权限位")
                         IndexOptionSwitch(title: "sticky", style: .standalone, isOn: permissionBinding(\ChmodMode.sticky))
-                            .help("显示其他用户 t/T")
+                            .indexTooltip("显示其他用户 t/T")
                             .accessibilityHint("控制 sticky 特殊权限位")
                     }
                 }

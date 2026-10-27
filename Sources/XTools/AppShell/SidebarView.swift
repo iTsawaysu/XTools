@@ -145,8 +145,8 @@ struct SidebarView: View {
                         .arrowCursorOnHover()
                         .toolInteractionFeedback()
                         .accessibilityIdentifier("sidebar.search.clear")
-                        .help("清除搜索")
                         .accessibilityLabel("清除搜索")
+                        .indexTooltip("清除搜索")
                     }
                 }
                 .frame(

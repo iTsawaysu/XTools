@@ -479,7 +479,6 @@ struct IndexDiagnosticStatusButton: View {
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
         }
         .buttonStyle(.plain)
-        .help(payload.text)
         .accessibilityLabel("\(payload.tone.accessibilityPrefix)：\(payload.text)")
         .popover(isPresented: $showsPopover, arrowEdge: .bottom) {
             HStack(alignment: .top, spacing: 9) {

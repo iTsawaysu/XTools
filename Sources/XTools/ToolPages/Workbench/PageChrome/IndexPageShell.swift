@@ -504,8 +504,12 @@ struct IndexPanel<Content: View, Accessory: View>: View {
         )
         .toolShadow(ToolTheme.Shadow.panel)
         .onPreferenceChange(IndexWorkspaceDiagnosticPreferenceKey.self) { diagnostic in
+            // 错误只走面板内联横幅：同一句话再弹一条 toast 会在屏幕上出现
+            // 两个同一错误的落点（横幅 + 右下角），且 toast 无法把用户带回
+            // 出错字段。toast 只服务没有落点的瞬时结果（复制/保存成功等）。
+            // 读屏仍需要念出这次变化，因此只播报、不显示卡片。
             if let announcement = diagnosticPresentation.update(to: diagnostic) {
-                toastCenter?.show(announcement.text, tone: announcement.tone)
+                toastCenter?.announce(announcement.text, tone: announcement.tone)
             }
             workspaceDiagnostic = diagnostic
         }

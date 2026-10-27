@@ -212,7 +212,7 @@ private struct IndexControlledSegmentInput<TrailingAccessory: View>: View {
         .overlay(alignment: .trailing) {
             trailingAccessory()
         }
-        .help(helpText)
+        .indexTooltip(helpText)
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: isFocused)
     }
 }

@@ -106,12 +106,18 @@ struct IndexDiagnosticBanner: View {
                     .frame(width: 380, height: 250)
                 }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, minHeight: 36, maxHeight: 36, alignment: .leading)
-        .background(tone.softFill)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(tone.tint.opacity(0.25)).frame(height: 0.5)
+        // 内嵌卡片：左右与面板内容对齐、整体圆角描边。整行铺底会贴到面板
+        // 两侧边缘，读起来像一条横贯面板的色带而不是一条提示。
+        .background(tone.softFill, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                .strokeBorder(tone.tint.opacity(0.30), lineWidth: 0.5)
         }
+        // 状态槽总高固定 36pt：卡片占满该行，靠左右留白离开面板边缘。
+        .padding(.horizontal, ToolMetrics.Spacing.panelInset)
+        .frame(height: 36)
         .onChange(of: message) { _ in showsDetails = false }
     }
 }
@@ -148,8 +154,8 @@ struct IndexDiagnosticStatusSlot<Content: View>: View {
                     .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
             }
         }
-        // One bounded status row (the banner self-bounds to 36); 0pt reserves
-        // no blank space while the track itself stays mounted to animate.
+        // One bounded status row: the banner self-bounds to 36pt and the card
+        // inset lives inside that row, so the reserved height stays exactly 36.
         .frame(height: isActive ? 36 : 0, alignment: .top)
         .frame(maxWidth: .infinity)
         .clipped()

@@ -45,7 +45,7 @@ struct WindowToolbarContent: ToolbarContent {
                 .buttonStyle(QuietTitlebarButtonStyle())
                 .environment(\.colorScheme, colorScheme)
                 .foregroundStyle(isFavorite ? ToolTheme.accent : ToolTheme.textSecondary)
-                .help(isFavorite ? "取消收藏" : "加入收藏")
+                .indexTooltip(isFavorite ? "取消收藏" : "加入收藏")
                 .accessibilityLabel(isFavorite ? "取消收藏" : "加入收藏")
             }
 
@@ -93,7 +93,7 @@ private struct SidebarToggleButton: View {
         }
         .buttonStyle(SidebarChromeButtonStyle(isHovered: isHovered))
         .environment(\.colorScheme, colorScheme)
-        .help(presentation.help)
+        .indexTooltip(presentation.help)
         .accessibilityLabel(presentation.title)
         .accessibilityHint(SidebarTogglePresentation.accessibilityHint)
         .accessibilityIdentifier("window.sidebar-toggle")

@@ -104,7 +104,7 @@ struct IndexBadge: View {
             }
             .buttonStyle(.plain)
             .onHover { isHovering = $0 }
-                        .help(help ?? "")
+            .modifier(IndexBadgeHelp(help: help))
         } else {
             content
         }
@@ -135,3 +135,26 @@ struct IndexBadge: View {
 }
 
 
+
+/// 可选提示：徽章本身显示文字，鼠标气泡只在调用方给了额外说明时出现；
+/// AX 提示始终发布，避免读屏丢上下文。
+private struct IndexBadgeHelp: ViewModifier {
+    let help: String?
+
+    private var resolved: String? {
+        guard let help else { return nil }
+        let trimmed = help.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : help
+    }
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if let resolved {
+            content
+                .indexTooltip(resolved, wantsVisibleBubble: false)
+                .accessibilityHint(resolved)
+        } else {
+            content
+        }
+    }
+}

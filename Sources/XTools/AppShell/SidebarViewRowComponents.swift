@@ -208,7 +208,7 @@ struct SidebarToolRow: View {
             .buttonStyle(.plain)
             .toolInteractionFeedback()
             .accessibilityIdentifier("sidebar.favorite.\(toolID.rawValue)")
-            .help(isFavorite ? "取消收藏" : "加入收藏")
+            .indexTooltip(isFavorite ? "取消收藏" : "加入收藏")
             .accessibilityLabel(isFavorite ? "取消收藏\(title)" : "收藏\(title)")
             .opacity(isFavorite || hoverState.isHovered ? 1 : 0)
             .allowsHitTesting(isFavorite || hoverState.isHovered)

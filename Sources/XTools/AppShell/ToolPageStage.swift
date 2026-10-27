@@ -74,6 +74,9 @@ struct ToolPageStage<Page: View>: View {
             .allowsHitTesting(isCurrent)
             .accessibilityHidden(!isCurrent)
             .environment(\.toolPageEntryGeneration, gen)
+            // 停靠页不进 AppKit 的 tooltip 跟踪：透明页若继续注册 tooltip，
+            // 鼠标扫过当前位置会弹出上一个页面的提示。
+            .environment(\.toolInteractionIsLive, isCurrent)
             .task(id: gen) {
                 guard gen > 0, !Task.isCancelled else { return }
                 model.finishArrival(key, generation: gen)

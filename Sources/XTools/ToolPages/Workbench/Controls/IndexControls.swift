@@ -21,7 +21,7 @@ private struct IndexOptionalHelp: ViewModifier {
 
     func body(content: Content) -> some View {
         if let title {
-            content.help(title)
+            content.indexTooltip(title)
         } else {
             content
         }
@@ -228,6 +228,8 @@ struct IndexPrimaryActionButton: View {
     let title: String
     var systemImage: String? = nil
     var hint: String? = nil
+    /// 无障碍名称与提示。按钮文字已经写在脸上，鼠标悬停不再弹一条重复的
+    /// 气泡；`help` 只服务于读屏。
     var help: String
     let action: () -> Void
 
@@ -249,8 +251,8 @@ struct IndexPrimaryActionButton: View {
             .fixedSize(horizontal: true, vertical: false)
         }
         .buttonStyle(IndexButtonStyle(primary: true))
-        .help(help)
         .accessibilityLabel(help)
+        .accessibilityHint(help)
     }
 }
 
@@ -381,7 +383,7 @@ struct IndexIconButton: View {
             activeTint: activeTint,
             tint: tint
         ))
-        .help(help)
+        .indexTooltip(help)
         .accessibilityLabel(help)
         .modifier(IndexIconButtonActiveAccessibility(isActive: isActive))
     }

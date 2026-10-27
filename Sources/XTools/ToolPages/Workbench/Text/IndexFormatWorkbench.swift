@@ -332,7 +332,6 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
             .foregroundStyle(tone.tint)
             .frame(maxWidth: 240, alignment: .leading)
             .layoutPriority(1)
-            .help(message)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(tone.accessibilityPrefix)：\(message)")
             .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)

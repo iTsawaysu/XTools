@@ -84,7 +84,7 @@ private struct IndexColorWorkspaceContent: View {
                             .font(ToolTypography.buttonSmall)
                     }
                     .buttonStyle(IndexSmallButtonStyle())
-                    .help("打开系统取色器（包含透明度）")
+                    .indexTooltip("打开系统取色器（包含透明度）")
                     .accessibilityLabel("打开系统取色器")
                     .popover(isPresented: $showsSystemColorPicker, arrowEdge: .bottom) {
                         systemColorPicker

@@ -88,7 +88,6 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                             .buttonStyle(IndexSmallButtonStyle(done: false, framed: true))
                             .fixedSize(horizontal: true, vertical: false)
                             .accessibilityLabel("停止解析网页")
-                            .help("停止解析网页")
                         }
                     }
                 },
@@ -138,7 +137,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                     .buttonStyle(IndexBareButtonStyle())
                     .padding(.trailing, 8)
                     .arrowCursorOnHover()
-                    .help("清空 URL (Esc)")
+                    .indexTooltip("清空 URL (Esc)")
                     .accessibilityLabel("清空 URL 地址")
                 }
             }
@@ -165,7 +164,6 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
         .buttonStyle(IndexSmallButtonStyle(done: false, framed: true))
         .disabled(fetchDisabled)
         .accessibilityLabel(session.isURLProcessing ? "正在解析网页" : "获取网页")
-        .help("获取网页 (↩)")
     }
 
     private var inputBinding: Binding<String> {

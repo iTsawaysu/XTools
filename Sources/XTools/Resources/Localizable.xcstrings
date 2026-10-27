@@ -1,6 +1,39 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "输入完整的表达式后自动求值。" : {
+      "extractionState" : "manual"
+    },
+    "输入数学表达式即时求值；三角函数按弧度计算。" : {
+      "extractionState" : "manual"
+    },
+    "实时求值" : {
+      "extractionState" : "manual"
+    },
+    "计算结果" : {
+      "extractionState" : "manual"
+    },
+    "复制结果" : {
+      "extractionState" : "manual"
+    },
+    "无法求值" : {
+      "extractionState" : "manual"
+    },
+    "用法" : {
+      "extractionState" : "manual"
+    },
+    "+  -  *  /  %  ^，括号按常规优先级求值" : {
+      "extractionState" : "manual"
+    },
+    "pi ≈ 3.14159、e ≈ 2.71828、phi ≈ 1.61803" : {
+      "extractionState" : "manual"
+    },
+    "sqrt  abs  round  floor  ceil  min  max  log  ln  exp  cbrt" : {
+      "extractionState" : "manual"
+    },
+    "sin / cos / tan 及反函数、双曲函数均按弧度，例如 sin(pi/2) = 1" : {
+      "extractionState" : "manual"
+    },
     "保存优化后的图片" : {
       "extractionState" : "manual"
     },

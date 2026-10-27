@@ -217,7 +217,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel("透明区域填充颜色")
                     .accessibilityValue(transparencyFillAccessibilityValue)
-                    .help("JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。")
+                    .indexTooltip("JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。")
                     // 自定义色无效时就地诊断（页面外壳按优先级合并 workspace 诊断），
                     // 不再让 convert() 静默清空输出。
                     .indexWorkspaceDiagnostic(transparencyFillError)
@@ -320,7 +320,7 @@ private struct IndexImageConverterWorkspaceContent: View {
             .buttonStyle(IndexSmallButtonStyle())
             .disabled(session.completedCount == 0 || session.isProcessing || session.isSaving)
             .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存转换结果")
-            .help("保存转换结果")
+            .indexTooltip("保存转换结果", wantsVisibleBubble: false)
         }
     }
 
@@ -340,7 +340,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                 .buttonStyle(IndexSmallButtonStyle())
                 .disabled(session.completedCount == 0 || session.isProcessing || session.isSaving)
                 .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存转换结果")
-                .help("保存转换结果")
+                .indexTooltip("保存转换结果", wantsVisibleBubble: false)
             }
 
             ForEach(session.items) { item in

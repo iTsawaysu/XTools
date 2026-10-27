@@ -129,9 +129,7 @@ private struct IndexTextEncryptionWorkspaceContent: View {
     @Environment(\.toolPageEntryGeneration) private var entryGeneration
     @ObservedObject var workspace: TextEncryptionToolWorkspaceModel
     @State private var showsPassword = false
-    @State private var weakAlgorithmPresentation = IndexWorkspaceDiagnosticPresentationState()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.toolToastCenter) private var toastCenter
 
     private let weakAlgorithmMessage = "当前算法安全性较弱。"
 
@@ -204,11 +202,6 @@ private struct IndexTextEncryptionWorkspaceContent: View {
         }
         .onChange(of: entryGeneration) { generation in
             if generation == 0 { showsPassword = false }
-        }
-        .onChange(of: weakAlgorithmDiagnostic) { diagnostic in
-            if let announcement = weakAlgorithmPresentation.update(to: diagnostic) {
-                toastCenter?.show(announcement.text, tone: announcement.tone)
-            }
         }
     }
 

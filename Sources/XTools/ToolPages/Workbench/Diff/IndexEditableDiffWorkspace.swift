@@ -395,7 +395,6 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
             .foregroundStyle(diagnosticTone.tint)
             .frame(maxWidth: 320, alignment: .leading)
             .layoutPriority(1)
-            .help(diagnosticText)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(diagnosticTone.accessibilityPrefix)：\(diagnosticText)")
         }
