@@ -524,7 +524,7 @@ private struct IndexBase64FileWorkspaceContent: View {
             IndexTextInput(
                 placeholder: "文件名",
                 text: $session.outputFileName,
-                height: 30
+                height: ToolMetrics.ControlHeight.field
             )
             .frame(maxWidth: .infinity)
 

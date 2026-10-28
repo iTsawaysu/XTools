@@ -261,7 +261,7 @@ private struct IndexStringObfuscatorWorkspaceContent: View {
                         get: { workspace.replacementChar },
                         set: { workspace.setReplacementCharacter($0) }
                     ),
-                    height: 30
+                    height: ToolMetrics.ControlHeight.small
                 )
                     .frame(width: 44)
             }

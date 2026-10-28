@@ -101,6 +101,10 @@ struct IndexBadge: View {
         if let action {
             Button(action: action) {
                 content
+                    // 命中区对齐 ControlHeight.compact：视觉胶囊保持原高，
+                    // 外层补足 24pt 可点区域（低于该值的可点控件会削弱可达性）。
+                    .frame(minHeight: ToolMetrics.ControlHeight.compact)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .onHover { isHovering = $0 }

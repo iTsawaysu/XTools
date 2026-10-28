@@ -154,6 +154,7 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
                         .font(ToolTypography.bodyPlain)
                         .foregroundStyle(ToolTheme.textSecondary)
                 }
+                .frame(height: ToolMetrics.ControlHeight.compact)
                 .contentShape(Rectangle())
 
             case .switchToggle:

@@ -334,6 +334,7 @@ private struct DateCalculatorInlineOption: View {
                     .font(ToolTypography.caption)
                     .foregroundStyle(ToolTheme.textSecondary)
             }
+            .frame(height: ToolMetrics.ControlHeight.compact)
             .contentShape(Rectangle())
         }
         .buttonStyle(IndexBareButtonStyle())
