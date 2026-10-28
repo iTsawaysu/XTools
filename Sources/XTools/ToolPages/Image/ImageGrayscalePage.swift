@@ -13,7 +13,8 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.fileInputPanelClient) private var fileInputPanelClient
     @Environment(\.fileOutputPanelClient) private var fileOutputPanelClient
-    @Environment(\.toolToastCenter) private var toastCenter
+    @Environment(\.toolToastCenter) private var toolToastCenter
+    @Environment(\.pageAvailableHeight) private var pageAvailableHeight
 
     @ObservedObject var session: ImageProcessedOutputSession
     @State private var isImageDropTargeted = false
@@ -22,13 +23,82 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
         session.assessment(for: .grayscale)
     }
 
+    /// 与压缩页同一舞台高度：预览与检查器在最小窗口与宽窗下都收在首屏内。
+    private var comparisonStageHeight: CGFloat {
+        max(320, pageAvailableHeight - 196)
+    }
+
     var body: some View {
-        IndexModeContent(id: session.source == nil, fillsHeight: true) { isEmpty in
-            if isEmpty {
-                emptyUploadPanel
-            } else {
+        // 空态不参与分栏：设置栏此时不存在，对半分会把上传区压成半宽。
+        if session.source == nil {
+            emptyUploadPanel
+        } else {
+            IndexPairLayout(
+                collapseWidth: ToolMetrics.Breakpoint.pairCollapseImageTools,
+                fillsHeight: false,
+                equalizesHeight: true,
+                trailingWidth: 245
+            ) {
                 comparisonWorkspacePanel
+            } trailing: {
+                IndexPanel("检查器") {
+                    ImageWorkflowSettingsPanel(
+                        primaryTitle: saveButtonTitle,
+                        primaryIcon: IndexActionSymbol.save,
+                        primaryHelp: session.isSaving ? "正在保存图片" : "保存灰度图",
+                        isPrimaryDisabled: session.output == nil || session.isProcessing || session.isSaving,
+                        pinsActionToBottom: true,
+                        onPrimary: saveImage,
+                        source: { sourceSection },
+                        settings: { grayscaleNote },
+                        output: { outputSection }
+                    )
+                }
+                .withoutDiagnosticStatusSlot()
+                .verticallyFilling()
             }
+        }
+    }
+
+    private var grayscaleNote: some View {
+        Text("灰度图保留原尺寸与格式，不做额外压缩。")
+            .font(ToolTypography.caption)
+            .foregroundStyle(ToolTheme.textTertiary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 检查器「源文件」区：文件名、尺寸与格式，以及更换/清除动作。
+    private var sourceSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(sourceFileName)
+                .font(ToolTypography.bodyMedium)
+                .foregroundStyle(ToolTheme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Text(sourceMetaText)
+                .font(ToolTypography.caption)
+                .foregroundStyle(ToolTheme.textTertiary)
+                .lineLimit(1)
+                .padding(.top, 2)
+
+            imageSelectionActions
+                .padding(.top, ToolMetrics.Spacing.sm)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 检查器「输出」区：格式、尺寸与体积变化；绝对体积留在舞台脚注。
+    private var outputSection: some View {
+        VStack(spacing: 0) {
+            ImageInspectorFactRow(label: "格式", value: resultFormatText)
+            ImageInspectorFactRow(label: "尺寸", value: resultDimensionsText)
+            ImageInspectorFactRow(
+                label: "体积变化",
+                value: resultChangeText,
+                valueTone: resultChangeTone
+            )
         }
     }
 
@@ -45,53 +115,44 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
     }
 
     private var comparisonWorkspacePanel: some View {
-        IndexPanel("灰阶工作区") {
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                imageSelectionActions
+        IndexPanel("预览") {
+            HStack(spacing: 0) {
+                IndexImageComparisonPane(
+                    title: "原图",
+                    image: session.sourceImage,
+                    accessibilityLabel: "灰阶转换原图预览",
+                    accessibilityValue: sourcePreviewAccessibilityValue,
+                    placeholder: "等待原图预览",
+                    stageHeight: comparisonStageHeight
+                ) {
+                    sourceCardFacts
+                }
 
-                IndexPairLayout(collapseWidth: 0) {
-                    IndexImageComparisonCard(
-                        title: "原图",
-                        image: session.sourceImage,
-                        accessibilityLabel: "灰阶转换原图预览",
-                        accessibilityValue: sourcePreviewAccessibilityValue,
-                        placeholder: "等待原图预览"
-                    ) {
-                        sourceCardFacts
-                    }
-                } trailing: {
-                    IndexImageComparisonCard(
-                        title: "灰度图",
-                        image: session.outputImage,
-                        accessibilityLabel: "灰阶转换结果预览",
-                        accessibilityValue: resultPreviewAccessibilityValue,
-                        placeholder: "等待灰度图结果",
-                        isProcessing: session.isProcessing
-                    ) {
-                        resultCardFacts
-                    }
+                Rectangle()
+                    .fill(ToolTheme.border)
+                    .frame(width: 0.5)
+
+                IndexImageComparisonPane(
+                    title: "灰度图",
+                    image: session.outputImage,
+                    accessibilityLabel: "灰阶转换结果预览",
+                    accessibilityValue: resultPreviewAccessibilityValue,
+                    placeholder: "等待灰度图结果",
+                    isProcessing: session.isProcessing,
+                    stageHeight: comparisonStageHeight
+                ) {
+                    resultCardFacts
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .indexWorkspaceDiagnostic(session.error)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .indexDropZone(
                 isTargeted: $isImageDropTargeted,
                 onFile: receiveImageURL,
                 onMultipleFiles: rejectMultipleImageDrop
             )
-        } accessory: {
-            if session.output != nil && !session.isProcessing {
-                Button {
-                    saveImage()
-                } label: {
-                    ImageSaveButtonLabel(isSaving: session.isSaving, title: saveButtonTitle)
-                }
-                .buttonStyle(IndexSmallButtonStyle())
-                .disabled(session.isSaving)
-                .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存灰度图")
-            }
         }
-        .verticallyFilling()
+        .contentInsets(EdgeInsets())
     }
 
     private var imageSelectionActions: ImageSelectionActionRow {
@@ -105,41 +166,91 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
                 withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
                     session.reset()
                 }
-            }
+            },
+            framed: true
         )
     }
 
     private var sourceCardFacts: some View {
-        Text(sourceSummary)
-            .font(ToolTypography.caption)
-            .foregroundStyle(ToolTheme.textSecondary)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    @ViewBuilder
-    private var resultCardFacts: some View {
-        if let grayscaleAssessment {
-            Text(ImageOutputPresentation.processingOutputSummary(grayscaleAssessment))
+        HStack(spacing: ToolMetrics.Spacing.sm) {
+            Text("原始大小")
                 .font(ToolTypography.caption)
-                .foregroundStyle(grayscaleAssessment.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+                .foregroundStyle(ToolTheme.textSecondary)
+            Spacer(minLength: 8)
+            Text(sourceByteText)
+                .font(ToolTypography.monoLabel)
+                .foregroundStyle(ToolTheme.textPrimary)
         }
+        .accessibilityElement(children: .combine)
     }
 
-    private var sourceSummary: String {
-        guard let metadata = session.sourceMetadata else { return "等待原图信息" }
-        return ImageOutputPresentation.sourceSummary(metadata)
+    private var resultCardFacts: some View {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
+            Text("输出大小")
+                .font(ToolTypography.caption)
+                .foregroundStyle(ToolTheme.textSecondary)
+            Spacer(minLength: 8)
+            Text(resultByteText)
+                .font(ToolTypography.monoLabel)
+                .foregroundStyle(resultByteTone)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var sourceByteText: String {
+        session.sourceMetadata.map { ByteSizeFormatter.format(bytes: $0.byteCount) } ?? "—"
+    }
+
+    private var sourceFileName: String {
+        session.source?.url.lastPathComponent ?? "—"
+    }
+
+    private var sourceMetaText: String {
+        guard let metadata = session.sourceMetadata else { return "—" }
+        let format = metadata.format?.displayName ?? "未知格式"
+        return "\(metadata.pixelWidth)×\(metadata.pixelHeight) · \(format)"
+    }
+
+    private var resultByteText: String {
+        guard let grayscaleAssessment else { return "—" }
+        return ByteSizeFormatter.format(bytes: grayscaleAssessment.output.byteCount)
+    }
+
+    private var resultByteTone: Color {
+        guard let grayscaleAssessment else { return ToolTheme.textTertiary }
+        return grayscaleAssessment.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textPrimary
+    }
+
+    private var resultFormatText: String {
+        grayscaleAssessment?.output.format.displayName ?? "—"
+    }
+
+    private var resultDimensionsText: String {
+        guard let output = grayscaleAssessment?.output else { return "—" }
+        return "\(output.pixelWidth)×\(output.pixelHeight)"
+    }
+
+    private var resultChangeText: String {
+        guard let grayscaleAssessment else { return "—" }
+        return ImageOutputPresentation.sizeChangeText(grayscaleAssessment)
+    }
+
+    private var resultChangeTone: Color {
+        guard let grayscaleAssessment else { return ToolTheme.textTertiary }
+        return grayscaleAssessment.sizeDeltaPercent <= 0 ? ToolTheme.success : ToolTheme.warning
     }
 
     private var sourcePreviewAccessibilityValue: String {
-        "原图，\(sourceSummary)"
+        "原始大小 \(sourceByteText)"
     }
 
     private var resultPreviewAccessibilityValue: String {
         if session.isProcessing {
             return "正在生成灰度图"
         }
-        guard let grayscaleAssessment else { return "等待灰度图结果" }
+        guard let grayscaleAssessment else {
+            return "等待灰度图结果"
+        }
         return ImageOutputPresentation.processingOutputSummary(grayscaleAssessment)
     }
 
@@ -194,8 +305,7 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
     private func saveImage() {
         Task { @MainActor in
             let outcome = await session.save(workflow: .grayscale, defaultBasename: "grayscale", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
-            ImageSaveOutcomeToasts.presentSingleOutput(outcome, toastCenter: toastCenter)
+            ImageSaveOutcomeToasts.presentSingleOutput(outcome, toastCenter: toolToastCenter)
         }
     }
 }
-

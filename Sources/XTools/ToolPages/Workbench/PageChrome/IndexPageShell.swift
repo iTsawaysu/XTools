@@ -400,6 +400,7 @@ private enum IndexPanelMetrics {
 struct IndexPanel<Content: View, Accessory: View>: View {
     let title: String
     var fillsHeight = false
+    var showsHeader = true
     var reservesDiagnosticStatusSlot = true
     /// Optional terminal-stream tag (e.g. `STDIN` / `STDOUT`) shown as a soft
     /// accent capsule before the title. Only set on true I/O panels — most
@@ -436,6 +437,14 @@ struct IndexPanel<Content: View, Accessory: View>: View {
         return copy
     }
 
+    /// Headerless surface for drop wells whose empty state owns the whole
+    /// panel; diagnostics still route to the panel's status slot.
+    func withoutHeader() -> IndexPanel {
+        var copy = self
+        copy.showsHeader = false
+        return copy
+    }
+
     /// Attach a terminal-stream tag (`STDIN` / `STDOUT`) to the panel head.
     func terminal(_ tag: String) -> IndexPanel {
         var copy = self
@@ -452,20 +461,22 @@ struct IndexPanel<Content: View, Accessory: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 8) {
-                if let terminalTag {
-                    IndexBadge(terminalTag, tone: .accent, isCapsule: true)
-                        .layoutPriority(3)
+            if showsHeader {
+                HStack(spacing: 8) {
+                    if let terminalTag {
+                        IndexBadge(terminalTag, tone: .accent, isCapsule: true)
+                            .layoutPriority(3)
+                    }
+                    panelTitle
+                    Spacer(minLength: 8)
+                    accessory
+                        .layoutPriority(2)
                 }
-                panelTitle
-                Spacer(minLength: 8)
-                accessory
-                    .layoutPriority(2)
-            }
-            .frame(height: IndexPanelMetrics.headerHeight)
-            .padding(.horizontal, IndexPanelMetrics.headerHorizontalPadding)
-            .overlay(alignment: .bottom) {
-                Rectangle().fill(ToolTheme.border).frame(height: 0.5)
+                .frame(height: IndexPanelMetrics.headerHeight)
+                .padding(.horizontal, IndexPanelMetrics.headerHorizontalPadding)
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(ToolTheme.border).frame(height: 0.5)
+                }
             }
 
             if reservesDiagnosticStatusSlot {

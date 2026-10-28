@@ -36,6 +36,10 @@ struct IndexSegmentedControl<Value: Hashable>: View {
     let density: Density
     let selectionStyle: SelectionStyle
     var tone: ToolFeedbackTone? = nil
+    /// Filled style only: stretch the tray and its segments to the proposed
+    /// width with equal cells. Inspector rails pass true so the control lines
+    /// up with the fields below it instead of leaving a ragged right edge.
+    var stretchesToFill = false
 
     /// Segment bounds published to the shared cursor layer (same anchor
     /// family as the command-palette selection highlight).
@@ -47,13 +51,15 @@ struct IndexSegmentedControl<Value: Hashable>: View {
         selection: Binding<Value>,
         density: Density = .regular,
         selectionStyle: SelectionStyle = .cursor,
-        tone: ToolFeedbackTone? = nil
+        tone: ToolFeedbackTone? = nil,
+        stretchesToFill: Bool = false
     ) {
         self.items = items
         self._selection = selection
         self.density = density
         self.selectionStyle = selectionStyle
         self.tone = tone
+        self.stretchesToFill = stretchesToFill
     }
 
     var body: some View {
@@ -72,6 +78,7 @@ struct IndexSegmentedControl<Value: Hashable>: View {
                 FilledItem(
                     label: item.1,
                     isSelected: selection == item.0,
+                    stretches: stretchesToFill,
                     namespace: filledSelectionNamespace
                 ) {
                     selection = item.0
@@ -84,7 +91,8 @@ struct IndexSegmentedControl<Value: Hashable>: View {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
                 .strokeBorder(tone?.tint.opacity(0.7) ?? ToolTheme.border, lineWidth: 1)
         }
-        .fixedSize(horizontal: true, vertical: false)
+        .fixedSize(horizontal: !stretchesToFill, vertical: false)
+        .frame(maxWidth: stretchesToFill ? .infinity : nil)
         .toolAnimation(ToolMotion.Preset.settle, value: selection)
     }
 
@@ -93,6 +101,7 @@ struct IndexSegmentedControl<Value: Hashable>: View {
     private struct FilledItem: View {
         let label: String
         let isSelected: Bool
+        let stretches: Bool
         let namespace: Namespace.ID
         let action: () -> Void
 
@@ -102,8 +111,9 @@ struct IndexSegmentedControl<Value: Hashable>: View {
                     .font(ToolTypography.controlLabel(weight: isSelected ? .semibold : .medium))
                     .foregroundStyle(isSelected ? ToolTheme.accentHover : ToolTheme.textSecondary)
                     .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .padding(.horizontal, 11)
+                    .fixedSize(horizontal: !stretches, vertical: false)
+                    .padding(.horizontal, stretches ? 0 : 11)
+                    .frame(maxWidth: stretches ? .infinity : nil)
                     .frame(height: ToolMetrics.ControlHeight.small)
                     .background {
                         if isSelected {

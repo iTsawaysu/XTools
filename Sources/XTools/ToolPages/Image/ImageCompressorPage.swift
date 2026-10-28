@@ -51,6 +51,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
     @Environment(\.fileInputPanelClient) private var fileInputPanelClient
     @Environment(\.fileOutputPanelClient) private var fileOutputPanelClient
     @Environment(\.toolToastCenter) private var toastCenter
+    @Environment(\.pageAvailableHeight) private var pageAvailableHeight
 
     @ObservedObject var session: ImageProcessedOutputSession
     @Binding var compressionPreference: ImageCompressionPreference
@@ -77,42 +78,118 @@ private struct IndexImageCompressorWorkspaceContent: View {
         session.assessment(for: .compression)
     }
 
+    /// 舞台高度吃掉窗口剩余高度：左预览与右检查器在 960×678 与 1200×800
+    /// 下都收在首屏内，底边留出与页面下边距一致的呼吸位。
+    private var comparisonStageHeight: CGFloat {
+        max(320, pageAvailableHeight - 196)
+    }
+
     var body: some View {
-        IndexActionBar {
-            IndexOptionGroup {
+        // 空态不参与分栏：设置栏此时不存在，对半分会把上传区压成半宽。
+        if session.source == nil {
+            emptyUploadPanel
+        } else {
+            IndexPairLayout(
+                collapseWidth: ToolMetrics.Breakpoint.pairCollapseImageTools,
+                fillsHeight: false,
+                equalizesHeight: true,
+                trailingWidth: 245
+            ) {
+                comparisonWorkspacePanel
+            } trailing: {
+                IndexPanel("检查器") {
+                    ImageWorkflowSettingsPanel(
+                        primaryTitle: "保存优化图片",
+                        primaryIcon: IndexActionSymbol.save,
+                        primaryHelp: session.isSaving ? "正在保存图片" : "保存优化图片",
+                        isPrimaryDisabled: !canSaveCompressed || session.isSaving || session.isProcessing,
+                        statusText: compressionStatusText,
+                        statusTone: compressedAssessment?.canSave == false ? ToolTheme.warning : ToolTheme.textTertiary,
+                        pinsActionToBottom: true,
+                        onPrimary: saveImage,
+                        source: { sourceSection },
+                        settings: { compressionSettings },
+                        output: { outputSection }
+                    )
+                }
+                .withoutDiagnosticStatusSlot()
+                .verticallyFilling()
+            }
+        }
+    }
+
+    /// 检查器「源文件」区：文件名、尺寸与格式，以及更换/清除动作。
+    private var sourceSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(sourceFileName)
+                .font(ToolTypography.bodyMedium)
+                .foregroundStyle(ToolTheme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Text(sourceMetaText)
+                .font(ToolTypography.caption)
+                .foregroundStyle(ToolTheme.textTertiary)
+                .lineLimit(1)
+                .padding(.top, 2)
+
+            imageSelectionActions
+                .padding(.top, ToolMetrics.Spacing.sm)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 检查器「输出」区：只列结果侧的事实，体积与节省比例留在舞台脚注。
+    private var outputSection: some View {
+        VStack(spacing: 0) {
+            ImageInspectorFactRow(label: "格式", value: resultFormatText)
+            ImageInspectorFactRow(label: "尺寸", value: resultDimensionsText)
+            ImageInspectorFactRow(label: "实际质量", value: resultQualityText)
+        }
+    }
+
+    /// 设置栏内容：优化偏好与尺寸限制。
+    private var compressionSettings: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.lg) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                 IndexOptionLabel("优化偏好")
                 IndexSegmentedControl(
                     items: ImageCompressionPreference.allCases.map { ($0, $0.displayName) },
                     selection: $compressionPreference,
-                    selectionStyle: .filled
+                    selectionStyle: .filled,
+                    stretchesToFill: true
                 )
                 .onChange(of: compressionPreference) { _ in compress() }
             }
 
-            IndexOptionGroup {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                 IndexOptionSwitch(title: "限制尺寸", isOn: $limitsDimensions)
                     .onChange(of: limitsDimensions) { _ in compress() }
                 if limitsDimensions {
-                    Text("输出尺寸不超过")
-                        .font(ToolTypography.label)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                    IndexNumberInput(value: $maxPixelLength, range: 128...12000, fieldWidth: 62)
-                        .accessibilityLabel("输出最大像素边长")
-                        .onChange(of: maxPixelLength) { _ in compress() }
-                    Text("px")
-                        .font(ToolTypography.monoCaption)
-                        .foregroundStyle(ToolTheme.textSecondary)
+                    HStack(spacing: 6) {
+                        Text("输出尺寸不超过")
+                            .font(ToolTypography.caption)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                        IndexNumberInput(value: $maxPixelLength, range: 128...12000, fieldWidth: 62)
+                            .accessibilityLabel("输出最大像素边长")
+                            .onChange(of: maxPixelLength) { _ in compress() }
+                        Text("px")
+                            .font(ToolTypography.monoCaption)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                    }
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 
-        IndexModeContent(id: session.source == nil, fillsHeight: true) { isEmpty in
-            if isEmpty {
-                emptyUploadPanel
-            } else {
-                comparisonWorkspacePanel
-            }
-        }
+    /// 只有在结果不可保存时才占用状态行；正常结果的体积、格式与质量已经
+    /// 落在脚注和输出摘要里，不在这里重复第二遍。
+    private var compressionStatusText: String? {
+        guard session.source != nil, !session.isProcessing, let compressedAssessment else { return nil }
+        return compressedAssessment.canSave
+            ? nil
+            : "未生成更小文件，试试「更小体积」或限制尺寸。"
     }
 
     private var emptyUploadPanel: some View {
@@ -128,55 +205,46 @@ private struct IndexImageCompressorWorkspaceContent: View {
     }
 
     private var comparisonWorkspacePanel: some View {
-        IndexPanel("优化工作区") {
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                imageSelectionActions
+        IndexPanel("预览") {
+            HStack(spacing: 0) {
+                IndexImageComparisonPane(
+                    title: "原图",
+                    image: session.sourceImage,
+                    accessibilityLabel: "图片优化原图预览",
+                    accessibilityValue: sourcePreviewAccessibilityValue,
+                    placeholder: "等待原图预览",
+                    stageHeight: comparisonStageHeight
+                ) {
+                    sourceCardFacts
+                }
 
-                IndexPairLayout(collapseWidth: 0) {
-                    IndexImageComparisonCard(
-                        title: "原图",
-                        image: session.sourceImage,
-                        accessibilityLabel: "图片优化原图预览",
-                        accessibilityValue: sourcePreviewAccessibilityValue,
-                        placeholder: "等待原图预览"
-                    ) {
-                        sourceCardFacts
-                    }
-                } trailing: {
-                    IndexImageComparisonCard(
-                        title: "优化结果",
-                        badgeText: compressionChangeText,
-                        badgeTone: .neutral,
-                        image: optimizedPreviewImage,
-                        accessibilityLabel: "图片优化结果预览",
-                        accessibilityValue: resultPreviewAccessibilityValue,
-                        placeholder: previewPlaceholder,
-                        isProcessing: session.isProcessing
-                    ) {
-                        resultCardFacts
-                    }
+                Rectangle()
+                    .fill(ToolTheme.border)
+                    .frame(width: 0.5)
+
+                IndexImageComparisonPane(
+                    title: "优化结果",
+                    badgeText: compressionChangeText,
+                    badgeTone: compressionChangeTone,
+                    image: optimizedPreviewImage,
+                    accessibilityLabel: "图片优化结果预览",
+                    accessibilityValue: resultPreviewAccessibilityValue,
+                    placeholder: previewPlaceholder,
+                    isProcessing: session.isProcessing,
+                    stageHeight: comparisonStageHeight
+                ) {
+                    resultCardFacts
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
             .indexWorkspaceDiagnostic(session.error)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .indexDropZone(
                 isTargeted: $isImageDropTargeted,
                 onFile: receiveImageURL,
                 onMultipleFiles: rejectMultipleImageDrop
             )
-        } accessory: {
-            if canSaveCompressed {
-                Button {
-                    saveImage()
-                } label: {
-                    ImageSaveButtonLabel(isSaving: session.isSaving, title: "保存")
-                }
-                .buttonStyle(IndexSmallButtonStyle())
-                .disabled(session.isSaving)
-                .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存优化图片")
-                    }
         }
-        .verticallyFilling()
+        .contentInsets(EdgeInsets())
     }
 
     private var imageSelectionActions: ImageSelectionActionRow {
@@ -190,12 +258,13 @@ private struct IndexImageCompressorWorkspaceContent: View {
                 withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
                     session.reset()
                 }
-            }
+            },
+            framed: true
         )
     }
 
     private var sourceCardFacts: some View {
-        HStack(spacing: ToolMetrics.Spacing.md) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             Text("原始大小")
                 .font(ToolTypography.caption)
                 .foregroundStyle(ToolTheme.textSecondary)
@@ -207,35 +276,67 @@ private struct IndexImageCompressorWorkspaceContent: View {
         .accessibilityElement(children: .combine)
     }
 
-    @ViewBuilder
     private var resultCardFacts: some View {
-        if let compressedAssessment, compressedAssessment.canSave {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: ToolMetrics.Spacing.md) {
-                    Text("输出大小")
-                        .font(ToolTypography.caption)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                    Spacer(minLength: 8)
-                    Text(ByteSizeFormatter.format(bytes: compressedAssessment.output.byteCount))
-                        .font(ToolTypography.monoLabel)
-                        .foregroundStyle(ImageOutputPresentation.color(for: compressedAssessment))
-                }
-
-                Text(ImageOutputPresentation.compressionStatus(compressedAssessment))
-                    .font(ToolTypography.caption)
-                    .foregroundStyle(ToolTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        HStack(spacing: ToolMetrics.Spacing.sm) {
+            Text("输出大小")
+                .font(ToolTypography.caption)
+                .foregroundStyle(ToolTheme.textSecondary)
+            Spacer(minLength: 8)
+            Text(resultByteText)
+                .font(ToolTypography.monoLabel)
+                .foregroundStyle(resultByteTone)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var sourceByteText: String {
         session.sourceMetadata.map { ByteSizeFormatter.format(bytes: $0.byteCount) } ?? "-"
     }
 
+    private var sourceFileName: String {
+        session.source?.url.lastPathComponent ?? "—"
+    }
+
+    private var sourceMetaText: String {
+        guard let metadata = session.sourceMetadata else { return "—" }
+        let format = metadata.format?.displayName ?? "未知格式"
+        return "\(metadata.pixelWidth)×\(metadata.pixelHeight) · \(format)"
+    }
+
+    private var resultByteText: String {
+        guard let compressedAssessment, compressedAssessment.canSave else { return "—" }
+        return ByteSizeFormatter.format(bytes: compressedAssessment.output.byteCount)
+    }
+
+    private var resultByteTone: Color {
+        guard let compressedAssessment, compressedAssessment.canSave else { return ToolTheme.textTertiary }
+        return ImageOutputPresentation.color(for: compressedAssessment)
+    }
+
+    private var resultFormatText: String {
+        guard let compressedAssessment, compressedAssessment.canSave else { return "—" }
+        return compressedAssessment.output.format.displayName
+    }
+
+    private var resultDimensionsText: String {
+        guard let compressedAssessment, compressedAssessment.canSave else { return "—" }
+        let output = compressedAssessment.output
+        return "\(output.pixelWidth)×\(output.pixelHeight)"
+    }
+
+    private var resultQualityText: String {
+        guard let compressedAssessment, compressedAssessment.canSave,
+              let quality = compressedAssessment.output.quality else { return "—" }
+        return "\(Int(quality * 100))%"
+    }
+
     private var compressionChangeText: String? {
         guard let compressedAssessment, compressedAssessment.canSave else { return nil }
         return ImageOutputPresentation.sizeChangeText(compressedAssessment)
+    }
+
+    private var compressionChangeTone: IndexBadgeTone {
+        compressedAssessment?.severity == .success ? .success : .warning
     }
 
     private var sourcePreviewAccessibilityValue: String {

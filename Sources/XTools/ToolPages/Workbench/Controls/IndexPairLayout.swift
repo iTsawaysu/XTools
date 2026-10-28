@@ -15,17 +15,38 @@ struct IndexPairLayout<Leading: View, Trailing: View>: View {
     /// offers (so input/output panels grow with the window). Default false
     /// keeps every existing caller's natural, content-sized height.
     var fillsHeight = false
+    /// When true (default) side-by-side panes share the taller pane's height,
+    /// keeping the pair bottom-aligned. Pages whose right column is a settings
+    /// rail pass false: stretching the rail to a tall preview would push its
+    /// primary action below the fold.
+    var equalizesHeight = true
+    /// Lower bound for a side-by-side pane. Callers whose panes stay usable
+    /// below the 280pt default (e.g. image comparison cards with capped
+    /// preview heights) pass a smaller value together with a matching
+    /// collapse width.
+    var minimumPaneWidth: CGFloat = 280
+    /// Fixed trailing-pane width for settings rails. When set, the leading
+    /// pane takes the remaining width instead of splitting the pair evenly;
+    /// the rail is capped at 45% of the pair so the leading pane never
+    /// collapses into a sliver.
+    var trailingWidth: CGFloat? = nil
     private let leading: Leading
     private let trailing: Trailing
 
     init(
         collapseWidth: CGFloat = 900,
         fillsHeight: Bool = false,
+        equalizesHeight: Bool = true,
+        minimumPaneWidth: CGFloat = 280,
+        trailingWidth: CGFloat? = nil,
         @ViewBuilder leading: () -> Leading,
         @ViewBuilder trailing: () -> Trailing
     ) {
         self.collapseWidth = collapseWidth
         self.fillsHeight = fillsHeight
+        self.equalizesHeight = equalizesHeight
+        self.minimumPaneWidth = minimumPaneWidth
+        self.trailingWidth = trailingWidth
         self.leading = leading()
         self.trailing = trailing()
     }
@@ -34,7 +55,10 @@ struct IndexPairLayout<Leading: View, Trailing: View>: View {
         IndexResponsivePairLayout(
             collapseWidth: collapseWidth,
             spacing: Self.spacing,
-            fillsHeight: fillsHeight
+            fillsHeight: fillsHeight,
+            equalizesHeight: equalizesHeight,
+            minimumPaneWidth: minimumPaneWidth,
+            trailingWidth: trailingWidth
         ) {
             leading
                 .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
@@ -49,9 +73,12 @@ private struct IndexResponsivePairLayout: Layout {
     let collapseWidth: CGFloat
     let spacing: CGFloat
     let fillsHeight: Bool
+    let equalizesHeight: Bool
+    let minimumPaneWidth: CGFloat
+    let trailingWidth: CGFloat?
 
     private var paneMinWidth: CGFloat {
-        max(280, (resolvedCollapseWidth - spacing) / 2)
+        max(minimumPaneWidth, (resolvedCollapseWidth - spacing) / 2)
     }
 
     /// A zero width was historically used by a few pages to mean “always
@@ -68,11 +95,10 @@ private struct IndexResponsivePairLayout: Layout {
 
         if usesHorizontalLayout(width: proposal.width) {
             let width = resolvedWidth(proposal.width)
-            let paneWidth = horizontalPaneWidth(for: width)
+            let widths = horizontalPaneWidths(for: width)
             let paneHeight = fillsHeight ? proposal.height : nil
-            let paneProposal = ProposedViewSize(width: paneWidth, height: paneHeight)
-            let leadingSize = subviews[0].sizeThatFits(paneProposal)
-            let trailingSize = subviews[1].sizeThatFits(paneProposal)
+            let leadingSize = subviews[0].sizeThatFits(ProposedViewSize(width: widths.leading, height: paneHeight))
+            let trailingSize = subviews[1].sizeThatFits(ProposedViewSize(width: widths.trailing, height: paneHeight))
             let naturalHeight = max(leadingSize.height, trailingSize.height)
 
             return CGSize(
@@ -99,33 +125,47 @@ private struct IndexResponsivePairLayout: Layout {
         guard subviews.count >= 2 else { return }
 
         if usesHorizontalLayout(width: bounds.width) {
-            let paneWidth = horizontalPaneWidth(for: bounds.width)
+            let widths = horizontalPaneWidths(for: bounds.width)
             // Both panes share one height so the pair stays equal-height and
             // bottom-aligned on wide windows. When `fillsHeight` the pair fills
             // the height the parent offers; otherwise both panes grow to the
             // taller one's natural height — without this, content-sized panes
             // render at their own heights and produce a ragged grid. (Panes opt
             // into filling via `.verticallyFilling()`.)
+            let h0 = subviews[0].sizeThatFits(ProposedViewSize(width: widths.leading, height: nil)).height
+            let h1 = subviews[1].sizeThatFits(ProposedViewSize(width: widths.trailing, height: nil)).height
+
             let paneHeight: CGFloat
             if fillsHeight {
                 paneHeight = bounds.height
             } else {
-                let measuringProposal = ProposedViewSize(width: paneWidth, height: nil)
-                let h0 = subviews[0].sizeThatFits(measuringProposal).height
-                let h1 = subviews[1].sizeThatFits(measuringProposal).height
-                paneHeight = max(h0, h1)
+                paneHeight = equalizesHeight ? max(h0, h1) : 0
             }
-            let paneProposal = ProposedViewSize(width: paneWidth, height: paneHeight)
-            subviews[0].place(
-                at: CGPoint(x: bounds.minX, y: bounds.minY),
-                anchor: .topLeading,
-                proposal: paneProposal
-            )
-            subviews[1].place(
-                at: CGPoint(x: bounds.minX + paneWidth + spacing, y: bounds.minY),
-                anchor: .topLeading,
-                proposal: paneProposal
-            )
+
+            if equalizesHeight || fillsHeight {
+                subviews[0].place(
+                    at: CGPoint(x: bounds.minX, y: bounds.minY),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(width: widths.leading, height: paneHeight)
+                )
+                subviews[1].place(
+                    at: CGPoint(x: bounds.minX + widths.leading + spacing, y: bounds.minY),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(width: widths.trailing, height: paneHeight)
+                )
+            } else {
+                // 各自保持自然高度、顶部对齐：设置栏不被预览卡拉长。
+                subviews[0].place(
+                    at: CGPoint(x: bounds.minX, y: bounds.minY),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(width: widths.leading, height: h0)
+                )
+                subviews[1].place(
+                    at: CGPoint(x: bounds.minX + widths.leading + spacing, y: bounds.minY),
+                    anchor: .topLeading,
+                    proposal: ProposedViewSize(width: widths.trailing, height: h1)
+                )
+            }
             return
         }
 
@@ -170,8 +210,13 @@ private struct IndexResponsivePairLayout: Layout {
         return width >= resolvedCollapseWidth
     }
 
-    private func horizontalPaneWidth(for width: CGFloat) -> CGFloat {
-        max(paneMinWidth, (width - spacing) / 2)
+    private func horizontalPaneWidths(for width: CGFloat) -> (leading: CGFloat, trailing: CGFloat) {
+        let evenPane = max(paneMinWidth, (width - spacing) / 2)
+        guard let trailingWidth else {
+            return (evenPane, evenPane)
+        }
+        let trailing = min(max(trailingWidth, 220), width * 0.45)
+        return (max(width - spacing - trailing, paneMinWidth), trailing)
     }
 
     private func resolvedWidth(_ proposedWidth: CGFloat?) -> CGFloat {

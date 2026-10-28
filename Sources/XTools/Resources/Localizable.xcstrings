@@ -1,6 +1,18 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "favicon.ico、16/32 px PNG、apple-touch-icon 与站点清单，直接放入站点根目录。" : {
+      "extractionState" : "manual"
+    },
+    "生成 5 个部署文件" : {
+      "extractionState" : "manual"
+    },
+    "灰度图保留原尺寸与格式，不做额外压缩。" : {
+      "extractionState" : "manual"
+    },
+    "输出设置" : {
+      "extractionState" : "manual"
+    },
     "输入完整的表达式后自动求值。" : {
       "extractionState" : "manual"
     },
@@ -3404,6 +3416,42 @@
       "extractionState" : "manual"
     },
     "点击重新生成获取随机端口。" : {
+      "extractionState" : "manual"
+    },
+    "拖入图片，或点击下方按钮。" : {
+      "extractionState" : "manual"
+    },
+    "未知格式" : {
+      "extractionState" : "manual"
+    },
+    "尺寸" : {
+      "extractionState" : "manual"
+    },
+    "实际质量" : {
+      "extractionState" : "manual"
+    },
+    "未生成更小文件，试试「更小体积」或限制尺寸。" : {
+      "extractionState" : "manual"
+    },
+    "检查器" : {
+      "extractionState" : "manual"
+    },
+    "体积变化" : {
+      "extractionState" : "manual"
+    },
+    "总大小" : {
+      "extractionState" : "manual"
+    },
+    "正在保存…" : {
+      "extractionState" : "manual"
+    },
+    "正在更新预览…" : {
+      "extractionState" : "manual"
+    },
+    "转换队列" : {
+      "extractionState" : "manual"
+    },
+    "队列" : {
       "extractionState" : "manual"
     }
   },

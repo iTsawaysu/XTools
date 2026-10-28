@@ -20,6 +20,8 @@ struct ImageSelectionActionRow: View {
     var selectTitle = "选择图片"
     var changeTitle = "更换图片"
     var clearTitle = "清除图片"
+    /// 面板头内的动作行用描边底：38pt 头部里安静文字按钮会失去可点暗示。
+    var framed = false
 
     var body: some View {
         HStack(spacing: ToolMetrics.Spacing.sm) {
@@ -27,7 +29,7 @@ struct ImageSelectionActionRow: View {
                 Label(hasSource ? changeTitle : selectTitle, systemImage: "photo")
                     .font(ToolTypography.buttonSmall)
             }
-            .buttonStyle(IndexSmallButtonStyle())
+            .buttonStyle(IndexSmallButtonStyle(framed: framed))
             .accessibilityLabel(hasSource ? replaceAccessibilityLabel : selectAccessibilityLabel)
 
             if hasSource {
@@ -35,7 +37,7 @@ struct ImageSelectionActionRow: View {
                     Label(clearTitle, systemImage: IndexActionSymbol.removeResource)
                         .font(ToolTypography.buttonSmall)
                 }
-                .buttonStyle(IndexSmallButtonStyle())
+                .buttonStyle(IndexSmallButtonStyle(framed: framed))
                 .accessibilityLabel(clearAccessibilityLabel)
             }
         }
@@ -44,63 +46,36 @@ struct ImageSelectionActionRow: View {
 
 /// 源准备占位：读取中显示进度标签，否则显示共享图片空态。
 ///
-/// 空态用 `.list` 密度（图标 + 标题 + 共享文案），按 `fillsHeight` 垂直
-/// 居中于输入面板剩余空间，构成完整拖放区观感——图片各页共用同一空态
-/// 范式；水印页把文字输入与占位编组后居中，占位本身保持自然高度。
-/// `onSelect` 是空态主操作（32pt 标准按钮，quiet-until-hover，不用实心
-/// accent 以免在空面板里过于突兀），nil 时只呈现文案。
+/// 空态用 `.list` 密度（图标 + 标题 + 共享文案），图片各页共用同一空态
+/// 范式；主操作由调用方另行装配（空态只用 IndexEmptyState，不内嵌按钮）。
 struct ImageUploadPendingState: View {
     let isProcessing: Bool
     let title: String
-    var fillsHeight = false
-    var onSelect: (() -> Void)? = nil
+    var message: String = IndexEmptyStateCopy.autoGenerate("图片")
 
     var body: some View {
         if isProcessing {
             IndexProgressLabel(message: "正在读取图片…", alignment: .center)
                 .accessibilityLabel("正在读取图片")
-                .uploadPendingFrame(fillsHeight: fillsHeight)
         } else {
-            VStack(spacing: ToolMetrics.Spacing.md) {
-                IndexEmptyState(
-                    title: title,
-                    systemImage: "photo.on.rectangle.angled",
-                    message: IndexEmptyStateCopy.autoGenerate("图片"),
-                    density: .list
-                )
-
-                if let onSelect {
-                    Button(action: onSelect) {
-                        Label("选择图片", systemImage: "photo")
-                    }
-                    .buttonStyle(IndexButtonStyle())
-                }
-            }
-            .uploadPendingFrame(fillsHeight: fillsHeight)
+            IndexEmptyState(
+                title: title,
+                systemImage: "photo.on.rectangle.angled",
+                message: message,
+                density: .list
+            )
         }
     }
 }
 
-/// fillsHeight 时居中填充面板剩余空间；否则保持自然高度并给足最小高度。
-private extension View {
-    func uploadPendingFrame(fillsHeight: Bool) -> some View {
-        self.frame(
-            maxWidth: .infinity,
-            minHeight: fillsHeight ? nil : 128,
-            maxHeight: fillsHeight ? .infinity : nil,
-            alignment: .center
-        )
-    }
-}
-
-/// 单输出页（压缩/灰度）的「上传图片」空态面板：居中的空态/源准备占位，
-/// 面板内容即共享单文件拖放区（多文件整批拒绝）。有源后的「更换/清除」
-/// 动作行由各页的工作区面板自带，空态面板只呈现居中主操作。
+/// 单输出页（压缩/灰度）的「上传图片」空态：无面板头的拖放井，井内居中
+/// 呈现共享空态与唯一的实心主操作。空态本身不参与分栏，纵向吃满视口。
 struct ImageUploadEmptyPanel: View {
     @Binding var isDropTargeted: Bool
     let isProcessing: Bool
     let diagnostic: String?
     let emptyStateTitle: String
+    var emptyStateMessage = "拖入图片，或点击下方按钮。"
     let onSelect: () -> Void
     private let onDropFile: (URL) -> Void
     private let onDropMultipleFiles: () -> Void
@@ -110,6 +85,7 @@ struct ImageUploadEmptyPanel: View {
         isProcessing: Bool,
         diagnostic: String?,
         emptyStateTitle: String,
+        emptyStateMessage: String = "拖入图片，或点击下方按钮。",
         onSelect: @escaping () -> Void,
         onDropFile: @escaping (URL) -> Void,
         onDropMultipleFiles: @escaping () -> Void
@@ -118,6 +94,7 @@ struct ImageUploadEmptyPanel: View {
         self.isProcessing = isProcessing
         self.diagnostic = diagnostic
         self.emptyStateTitle = emptyStateTitle
+        self.emptyStateMessage = emptyStateMessage
         self.onSelect = onSelect
         self.onDropFile = onDropFile
         self.onDropMultipleFiles = onDropMultipleFiles
@@ -125,12 +102,34 @@ struct ImageUploadEmptyPanel: View {
 
     var body: some View {
         IndexPanel("上传图片") {
-            ImageUploadPendingState(
-                isProcessing: isProcessing,
-                title: emptyStateTitle,
-                fillsHeight: true,
-                onSelect: onSelect
+            VStack(spacing: ToolMetrics.Spacing.lg) {
+                ImageUploadPendingState(
+                    isProcessing: isProcessing,
+                    title: emptyStateTitle,
+                    message: emptyStateMessage
+                )
+
+                if !isProcessing {
+                    IndexPrimaryActionButton(
+                        title: "选择图片",
+                        systemImage: "photo",
+                        help: "选择图片",
+                        action: onSelect
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .background(
+                ToolTheme.editorBackground,
+                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
+                    .strokeBorder(
+                        ToolTheme.strongBorder,
+                        style: StrokeStyle(lineWidth: 1, dash: [6, 5])
+                    )
+            }
             .indexWorkspaceDiagnostic(diagnostic)
             .indexDropZone(
                 isTargeted: $isDropTargeted,
@@ -138,6 +137,7 @@ struct ImageUploadEmptyPanel: View {
                 onMultipleFiles: onDropMultipleFiles
             )
         }
+        .withoutHeader()
         .verticallyFilling()
     }
 }
@@ -158,28 +158,6 @@ struct ImageUploadInteractions {
     func rejectMultipleDrop(_ reject: () -> Void) {
         withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
             reject()
-        }
-    }
-}
-
-/// 图片页保存按钮的统一忙碌标签：写入期间显示受控 spinner + 文案，
-/// 不新增裸 ProgressView；按钮本身仍由页面的 accessibilityLabel 命名。
-struct ImageSaveButtonLabel: View {
-    let isSaving: Bool
-    let title: String
-    var font: Font = ToolTypography.buttonSmall
-
-    var body: some View {
-        if isSaving {
-            HStack(spacing: 6) {
-                IndexProgressSpinner()
-                    .accessibilityLabel("正在保存")
-                Text("保存中…")
-                    .font(font)
-            }
-        } else {
-            Label(title, systemImage: IndexActionSymbol.save)
-                .font(font)
         }
     }
 }
@@ -235,5 +213,297 @@ enum ImageSaveOutcomeToasts {
         case .cancelled, .blocked:
             break
         }
+    }
+}
+
+// MARK: - 设置栏 + 固定动作区
+
+/// 检查器里的只读事实行：左侧标签，右侧等宽数值。
+struct ImageInspectorFactRow: View {
+    let label: String
+    let value: String
+    var valueTone: Color = ToolTheme.textPrimary
+
+    var body: some View {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
+            Text(label)
+                .font(ToolTypography.caption)
+                .foregroundStyle(ToolTheme.textSecondary)
+            Spacer(minLength: 8)
+            Text(value)
+                .font(ToolTypography.monoLabel)
+                .foregroundStyle(valueTone)
+        }
+        .frame(height: 22)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// 图片页右侧检查器的共享骨架：可选「源文件」区与「输出」摘要区，设置项居中，
+/// 主 CTA 与状态行收在底部分隔线以下。
+///
+/// 图片页是整页滚动（`imagePreviewStage` → `.scroll`）。独立使用时保持自然
+/// 高度；与预览舞台并排、需要底边对齐时传 `pinsActionToBottom`：源文件与设置
+/// 留在顶部，输出摘要与动作区贴住面板底部，由外层分栏给出的高度决定中间留白。
+struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: View {
+    let primaryTitle: String
+    var primaryIcon: String? = nil
+    let primaryHelp: String
+    let isPrimaryDisabled: Bool
+    let statusText: String?
+    var statusTone: Color = ToolTheme.textTertiary
+    var pinsActionToBottom = false
+    var sourceTitle = "源文件"
+    let onPrimary: () -> Void
+    private let showsSourceSection: Bool
+    private let showsSettingsSection: Bool
+    private let showsOutputSection: Bool
+    private let source: Source
+    private let settings: Settings
+    private let output: Output
+
+    private init(
+        primaryTitle: String,
+        primaryIcon: String?,
+        primaryHelp: String,
+        isPrimaryDisabled: Bool,
+        statusText: String?,
+        statusTone: Color,
+        pinsActionToBottom: Bool,
+        sourceTitle: String,
+        onPrimary: @escaping () -> Void,
+        showsSourceSection: Bool,
+        showsSettingsSection: Bool,
+        showsOutputSection: Bool,
+        source: Source,
+        settings: Settings,
+        output: Output
+    ) {
+        self.primaryTitle = primaryTitle
+        self.primaryIcon = primaryIcon
+        self.primaryHelp = primaryHelp
+        self.isPrimaryDisabled = isPrimaryDisabled
+        self.statusText = statusText
+        self.statusTone = statusTone
+        self.pinsActionToBottom = pinsActionToBottom
+        self.sourceTitle = sourceTitle
+        self.onPrimary = onPrimary
+        self.showsSourceSection = showsSourceSection
+        self.showsSettingsSection = showsSettingsSection
+        self.showsOutputSection = showsOutputSection
+        self.source = source
+        self.settings = settings
+        self.output = output
+    }
+
+    /// 检查器版：源文件标识与操作、设置项、输出摘要三段。
+    init(
+        primaryTitle: String,
+        primaryIcon: String? = nil,
+        primaryHelp: String,
+        isPrimaryDisabled: Bool,
+        statusText: String? = nil,
+        statusTone: Color = ToolTheme.textTertiary,
+        pinsActionToBottom: Bool = false,
+        sourceTitle: String = "源文件",
+        onPrimary: @escaping () -> Void,
+        @ViewBuilder source: () -> Source,
+        @ViewBuilder settings: () -> Settings,
+        @ViewBuilder output: () -> Output
+    ) {
+        self.init(
+            primaryTitle: primaryTitle,
+            primaryIcon: primaryIcon,
+            primaryHelp: primaryHelp,
+            isPrimaryDisabled: isPrimaryDisabled,
+            statusText: statusText,
+            statusTone: statusTone,
+            pinsActionToBottom: pinsActionToBottom,
+            sourceTitle: sourceTitle,
+            onPrimary: onPrimary,
+            showsSourceSection: true,
+            showsSettingsSection: true,
+            showsOutputSection: true,
+            source: source(),
+            settings: settings(),
+            output: output()
+        )
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if showsSourceSection {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+                    IndexOptionLabel(sourceTitle)
+                    source
+                }
+                .padding(.top, ToolMetrics.Spacing.base)
+                .padding(.bottom, ToolMetrics.Spacing.base)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                sectionDivider
+            }
+
+            if showsSettingsSection {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+                    settings
+                }
+                // Horizontal gutter belongs to the hosting IndexPanel: adding a
+                // second inset here misaligns fields with the panel title by 14pt.
+                .padding(.top, ToolMetrics.Spacing.md)
+                .padding(.bottom, ToolMetrics.Spacing.base)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if pinsActionToBottom {
+                Spacer(minLength: ToolMetrics.Spacing.md)
+            }
+
+            if showsOutputSection {
+                sectionDivider
+
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+                    IndexOptionLabel("输出")
+                    output
+                }
+                .padding(.top, ToolMetrics.Spacing.md)
+                .padding(.bottom, ToolMetrics.Spacing.base)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            sectionDivider
+
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+                IndexPrimaryActionButton(
+                    title: primaryTitle,
+                    systemImage: primaryIcon,
+                    help: primaryHelp,
+                    fillsWidth: true,
+                    action: onPrimary
+                )
+                .disabled(isPrimaryDisabled)
+
+                if let statusText {
+                    Text(statusText)
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(statusTone)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel(statusText)
+                }
+            }
+            .padding(.top, ToolMetrics.Spacing.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxHeight: pinsActionToBottom ? .infinity : nil, alignment: .top)
+    }
+
+    private var sectionDivider: some View {
+        Rectangle()
+            .fill(ToolTheme.border)
+            .frame(height: 0.5)
+    }
+}
+
+extension ImageWorkflowSettingsPanel where Output == EmptyView {
+    /// 源文件 + 设置两段（水印这类没有额外输出事实的页面）。
+    init(
+        primaryTitle: String,
+        primaryIcon: String? = nil,
+        primaryHelp: String,
+        isPrimaryDisabled: Bool,
+        statusText: String? = nil,
+        statusTone: Color = ToolTheme.textTertiary,
+        pinsActionToBottom: Bool = false,
+        sourceTitle: String = "源文件",
+        onPrimary: @escaping () -> Void,
+        @ViewBuilder source: () -> Source,
+        @ViewBuilder settings: () -> Settings
+    ) {
+        self.init(
+            primaryTitle: primaryTitle,
+            primaryIcon: primaryIcon,
+            primaryHelp: primaryHelp,
+            isPrimaryDisabled: isPrimaryDisabled,
+            statusText: statusText,
+            statusTone: statusTone,
+            pinsActionToBottom: pinsActionToBottom,
+            sourceTitle: sourceTitle,
+            onPrimary: onPrimary,
+            showsSourceSection: true,
+            showsSettingsSection: true,
+            showsOutputSection: false,
+            source: source(),
+            settings: settings(),
+            output: EmptyView()
+        )
+    }
+}
+
+extension ImageWorkflowSettingsPanel where Settings == EmptyView {
+    /// 源文件 + 输出两段（Favicon 这类没有可调参数的页面）。
+    init(
+        primaryTitle: String,
+        primaryIcon: String? = nil,
+        primaryHelp: String,
+        isPrimaryDisabled: Bool,
+        statusText: String? = nil,
+        statusTone: Color = ToolTheme.textTertiary,
+        pinsActionToBottom: Bool = false,
+        sourceTitle: String = "源文件",
+        onPrimary: @escaping () -> Void,
+        @ViewBuilder source: () -> Source,
+        @ViewBuilder output: () -> Output
+    ) {
+        self.init(
+            primaryTitle: primaryTitle,
+            primaryIcon: primaryIcon,
+            primaryHelp: primaryHelp,
+            isPrimaryDisabled: isPrimaryDisabled,
+            statusText: statusText,
+            statusTone: statusTone,
+            pinsActionToBottom: pinsActionToBottom,
+            sourceTitle: sourceTitle,
+            onPrimary: onPrimary,
+            showsSourceSection: true,
+            showsSettingsSection: false,
+            showsOutputSection: true,
+            source: source(),
+            settings: EmptyView(),
+            output: output()
+        )
+    }
+}
+
+extension ImageWorkflowSettingsPanel where Source == EmptyView, Output == EmptyView {
+    /// 仅设置项的既有形态（水印/转换/灰度迁移前继续使用）。
+    init(
+        primaryTitle: String,
+        primaryIcon: String? = nil,
+        primaryHelp: String,
+        isPrimaryDisabled: Bool,
+        statusText: String? = nil,
+        statusTone: Color = ToolTheme.textTertiary,
+        pinsActionToBottom: Bool = false,
+        onPrimary: @escaping () -> Void,
+        @ViewBuilder settings: () -> Settings
+    ) {
+        self.init(
+            primaryTitle: primaryTitle,
+            primaryIcon: primaryIcon,
+            primaryHelp: primaryHelp,
+            isPrimaryDisabled: isPrimaryDisabled,
+            statusText: statusText,
+            statusTone: statusTone,
+            pinsActionToBottom: pinsActionToBottom,
+            sourceTitle: "源文件",
+            onPrimary: onPrimary,
+            showsSourceSection: false,
+            showsSettingsSection: true,
+            showsOutputSection: false,
+            source: EmptyView(),
+            settings: settings(),
+            output: EmptyView()
+        )
     }
 }

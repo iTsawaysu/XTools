@@ -191,7 +191,7 @@ struct IndexNumberInput: View {
         IndexTextInput(
             placeholder: "\(range.lowerBound)",
             text: $text,
-            height: 30,
+            height: ToolMetrics.ControlHeight.small,
             alignment: .center,
             selectAllOnFocus: true,
             onSubmit: commitText,

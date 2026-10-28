@@ -133,128 +133,34 @@ private struct IndexImageConverterWorkspaceContent: View {
         // isImageDropTargeted 呈现——命中范围大、指示只标输入框，与常规
         // App 的拖放语义一致。
         VStack(alignment: .leading, spacing: ToolMetrics.Spacing.panelSection) {
-            IndexActionBar {
-                IndexOptionGroup {
-                    IndexOptionLabel("目标格式")
-                    if outputFormats.isEmpty {
-                        Text(session.items.isEmpty ? "选择图片后显示" : "无可转换目标")
-                            .font(ToolTypography.caption)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                            .fixedSize(horizontal: true, vertical: false)
-                    } else {
-                        IndexSegmentedControl(
-                            items: outputFormats.map { ($0, $0.displayName) },
-                            selection: $targetFormat,
-                            selectionStyle: .filled
+            // 空态不参与分栏：设置栏此时不存在，对半分会把上传区压成半宽。
+            if session.items.isEmpty {
+                emptyUploadWell
+            } else {
+                IndexPairLayout(
+                    collapseWidth: ToolMetrics.Breakpoint.pairCollapseImageTools,
+                    fillsHeight: false,
+                    equalizesHeight: false,
+                    trailingWidth: 245
+                ) {
+                    queuePanel
+                } trailing: {
+                    IndexPanel("检查器") {
+                        ImageWorkflowSettingsPanel(
+                            primaryTitle: saveButtonTitle,
+                            primaryIcon: IndexActionSymbol.save,
+                            primaryHelp: session.isSaving ? "正在保存图片" : "保存转换结果",
+                            isPrimaryDisabled: session.completedCount == 0 || session.isProcessing || session.isSaving,
+                            statusText: batchStatisticsText,
+                            sourceTitle: "队列",
+                            onPrimary: saveConverted,
+                            source: { queueSection },
+                            settings: { outputSettings }
                         )
-                        .accessibilityLabel("目标格式")
-                        .accessibilityValue(targetFormat.displayName)
-                        .onChange(of: targetFormat) { _ in
-                            applyDefaultQualityForTarget()
-                            convert()
-                        }
                     }
                 }
-
-                if canConvert && targetFormat.supportsLossyQuality {
-                    IndexOptionGroup {
-                        IndexOptionLabel("质量")
-                        IndexSlider(value: $quality, range: 0.1...1.0, step: 0)
-                            .frame(width: 160)
-                            .accessibilityLabel("转换质量")
-                            .accessibilityValue("\(Int(quality * 100))%")
-                            .onChange(of: quality) { _ in
-                                qualityDebouncer.schedule(
-                                    session.items.count > 1
-                                        ? Self.batchQualityDebounceDelay
-                                        : Self.singleQualityDebounceDelay
-                                ) {
-                                    convert()
-                                }
-                            }
-                        Text("\(Int(quality * 100))%")
-                            .font(ToolTypography.monoCaption)
-                            .foregroundStyle(ToolTheme.textSecondary)
-                            .frame(width: 40)
-                    }
-                }
-
-                if requiresTransparencyFill {
-                    IndexOptionGroup {
-                        IndexOptionLabel("透明填充")
-                        IndexSegmentedControl(
-                            items: [
-                                (ImageTransparencyFillMode.white, "白色"),
-                                (.black, "黑色"),
-                                (.custom, "自定义")
-                            ],
-                            selection: $transparencyFillMode,
-                            selectionStyle: .filled
-                        )
-                        .accessibilityLabel("透明区域填充颜色")
-                        .accessibilityValue(transparencyFillAccessibilityValue)
-                        .onChange(of: transparencyFillMode) { _ in convert() }
-
-                        if transparencyFillMode == .custom {
-                            IndexTextInput(
-                                placeholder: "#RGB 或 #RRGGBB",
-                                text: $customTransparencyFillHex,
-                                height: 30,
-                                alignment: .center,
-                                selectAllOnFocus: true,
-                                onSubmit: normalizeCustomTransparencyFillHex
-                            )
-                            .frame(width: 118)
-                            .accessibilityLabel("自定义透明区域填充颜色")
-                            .accessibilityValue(customTransparencyFillAccessibilityValue)
-                            .onChange(of: customTransparencyFillHex) { _ in
-                                fillHexDebouncer.schedule(Self.fillHexDebounceDelay) {
-                                    convert()
-                                }
-                            }
-                        }
-                    }
-                    .accessibilityElement(children: .contain)
-                    .accessibilityLabel("透明区域填充颜色")
-                    .accessibilityValue(transparencyFillAccessibilityValue)
-                    .indexTooltip("JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。")
-                    // 自定义色无效时就地诊断（页面外壳按优先级合并 workspace 诊断），
-                    // 不再让 convert() 静默清空输出。
-                    .indexWorkspaceDiagnostic(transparencyFillError)
-                }
-
+                .onAppear(perform: ensureSupportedTargetFormat)
             }
-
-            IndexPanel("上传图片") {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                    if session.items.isEmpty {
-                        // 空态在铺满的输入区内垂直居中，构成完整的拖放区观感；
-                        // 主操作由空态自带的 32pt 按钮承担，不再重复小动作行。
-                        ImageUploadPendingState(
-                            isProcessing: session.isImporting,
-                            title: "选择图片开始转换",
-                            fillsHeight: true,
-                            onSelect: addImages
-                        )
-                    } else {
-                        imageSelectionActions
-
-                        if let singleItem = session.singleItem {
-                            singleImageStage(singleItem)
-                        } else {
-                            batchList
-                        }
-                    }
-                }
-                .indexWorkspaceDiagnostic(session.error)
-                // 输入区铺满面板剩余高度：拖放高亮（imageDropHighlight）随之
-                // 覆盖整个下方区域，而不是只包住当前内容。
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .padding(.vertical, ToolMetrics.Spacing.sm)
-                .imageDropHighlight(isActive: isImageDropTargeted)
-            }
-            .verticallyFilling()
-            .onAppear(perform: ensureSupportedTargetFormat)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .multiImageInputDropDestination(
@@ -262,6 +168,199 @@ private struct IndexImageConverterWorkspaceContent: View {
             onFiles: receiveImageURLs,
             showsHighlight: false
         )
+    }
+
+    /// 转换队列舞台：N=1 时为单张预览，N>1 时为紧凑列表。
+    private var queuePanel: some View {
+        IndexPanel("转换队列") {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+                if let singleItem = session.singleItem {
+                    singleImageStage(singleItem)
+                } else {
+                    batchList
+                }
+            }
+            .indexWorkspaceDiagnostic(session.error)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .imageDropHighlight(isActive: isImageDropTargeted)
+        }
+        .verticallyFilling()
+    }
+
+    /// 空态：无面板头的拖放井。
+    private var emptyUploadWell: some View {
+        IndexPanel("上传图片") {
+            VStack(spacing: ToolMetrics.Spacing.lg) {
+                ImageUploadPendingState(
+                    isProcessing: session.isImporting,
+                    title: "选择图片开始转换"
+                )
+
+                if !session.isImporting {
+                    IndexPrimaryActionButton(
+                        title: "选择图片",
+                        systemImage: "photo",
+                        help: "选择图片",
+                        action: addImages
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .background(
+                ToolTheme.editorBackground,
+                in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
+                    .strokeBorder(
+                        ToolTheme.strongBorder,
+                        style: StrokeStyle(lineWidth: 1, dash: [6, 5])
+                    )
+            }
+            .indexWorkspaceDiagnostic(session.error)
+            .imageDropHighlight(isActive: isImageDropTargeted)
+        }
+        .withoutHeader()
+        .verticallyFilling()
+    }
+
+    /// 检查器「队列」区：单张时显示文件名与源摘要，多张时显示张数与总大小。
+    private var queueSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(queuePrimaryText)
+                .font(ToolTypography.bodyMedium)
+                .foregroundStyle(ToolTheme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Text(queueMetaText)
+                .font(ToolTypography.caption)
+                .foregroundStyle(ToolTheme.textTertiary)
+                .lineLimit(1)
+                .padding(.top, 2)
+
+            imageSelectionActions
+                .padding(.top, ToolMetrics.Spacing.sm)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var queuePrimaryText: String {
+        if let singleItem = session.singleItem {
+            return singleItem.filename
+        }
+        return "\(session.items.count) 张图片"
+    }
+
+    private var queueMetaText: String {
+        if let singleItem = session.singleItem {
+            return ImageOutputPresentation.sourceSummary(singleItem.metadata)
+        }
+        let totalBytes = session.items.reduce(0) { $0 + $1.metadata.byteCount }
+        return "总计 \(ByteSizeFormatter.format(bytes: totalBytes))"
+    }
+
+    /// 设置栏内容：目标格式、质量、透明填充。
+    private var outputSettings: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+            VStack(alignment: .leading, spacing: 6) {
+                IndexOptionLabel("目标格式")
+                if outputFormats.isEmpty {
+                    Text("无可转换目标")
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                } else {
+                    ViewThatFits(in: .horizontal) {
+                        IndexSegmentedControl(
+                            items: outputFormats.map { ($0, $0.displayName) },
+                            selection: $targetFormat,
+                            selectionStyle: .filled
+                        )
+                        IndexSegmentedControl(
+                            items: outputFormats.map { ($0, $0.displayName) },
+                            selection: $targetFormat,
+                            density: .compact,
+                            selectionStyle: .filled
+                        )
+                    }
+                    .accessibilityLabel("目标格式")
+                    .accessibilityValue(targetFormat.displayName)
+                    .onChange(of: targetFormat) { _ in
+                        applyDefaultQualityForTarget()
+                        convert()
+                    }
+                }
+            }
+
+            if canConvert && targetFormat.supportsLossyQuality {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        IndexOptionLabel("质量")
+                        Spacer(minLength: 8)
+                        Text("\(Int(quality * 100))%")
+                            .font(ToolTypography.monoCaption)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                    }
+                    IndexSlider(value: $quality, range: 0.1...1.0, step: 0)
+                        .accessibilityLabel("转换质量")
+                        .accessibilityValue("\(Int(quality * 100))%")
+                        .onChange(of: quality) { _ in
+                            qualityDebouncer.schedule(
+                                session.items.count > 1
+                                    ? Self.batchQualityDebounceDelay
+                                    : Self.singleQualityDebounceDelay
+                            ) {
+                                convert()
+                            }
+                        }
+                }
+            }
+
+            if requiresTransparencyFill {
+                VStack(alignment: .leading, spacing: 6) {
+                    IndexOptionLabel("透明填充")
+                    IndexSegmentedControl(
+                        items: [
+                            (ImageTransparencyFillMode.white, "白色"),
+                            (.black, "黑色"),
+                            (.custom, "自定义")
+                        ],
+                        selection: $transparencyFillMode,
+                        selectionStyle: .filled
+                    )
+                    .accessibilityLabel("透明区域填充颜色")
+                    .accessibilityValue(transparencyFillAccessibilityValue)
+                    .onChange(of: transparencyFillMode) { _ in convert() }
+
+                    if transparencyFillMode == .custom {
+                        IndexTextInput(
+                            placeholder: "#RGB 或 #RRGGBB",
+                            text: $customTransparencyFillHex,
+                            alignment: .center,
+                            selectAllOnFocus: true,
+                            onSubmit: normalizeCustomTransparencyFillHex
+                        )
+                        .accessibilityLabel("自定义透明区域填充颜色")
+                        .accessibilityValue(customTransparencyFillAccessibilityValue)
+                        .onChange(of: customTransparencyFillHex) { _ in
+                            fillHexDebouncer.schedule(Self.fillHexDebounceDelay) {
+                                convert()
+                            }
+                        }
+                    }
+
+                    Text("JPEG 和 HEIC 不支持透明区域；请选择转换前用于填充透明像素的颜色。")
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("透明区域填充颜色")
+                .accessibilityValue(transparencyFillAccessibilityValue)
+                .indexWorkspaceDiagnostic(transparencyFillError)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var imageSelectionActions: ImageSelectionActionRow {
@@ -278,7 +377,8 @@ private struct IndexImageConverterWorkspaceContent: View {
                 resumePendingConversions()
             },
             changeTitle: "添加图片",
-            clearTitle: "清空图片"
+            clearTitle: "清空图片",
+            framed: true
         )
     }
 
@@ -287,14 +387,10 @@ private struct IndexImageConverterWorkspaceContent: View {
         IndexImagePreviewStage(
             image: session.sourceImage,
             accessibilityLabel: "待转换的原图",
-            maxDisplayWidth: 560,
-            maxDisplayHeight: 260,
+            maxDisplayWidth: 640,
+            maxDisplayHeight: 360,
             spacing: ToolMetrics.Spacing.md
         ) {
-            Text("原图: \(ImageOutputPresentation.sourceSummary(item.metadata))")
-                .font(ToolTypography.caption)
-                .foregroundStyle(ToolTheme.textSecondary)
-
             if case .converting = item.state {
                 IndexProgressSpinner()
                     .accessibilityLabel("正在转换图片")
@@ -312,37 +408,12 @@ private struct IndexImageConverterWorkspaceContent: View {
                     .foregroundStyle(ToolTheme.warning)
             }
 
-            Button {
-                saveConverted()
-            } label: {
-                ImageSaveButtonLabel(isSaving: session.isSaving, title: saveButtonTitle)
-            }
-            .buttonStyle(IndexSmallButtonStyle())
-            .disabled(session.completedCount == 0 || session.isProcessing || session.isSaving)
-            .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存转换结果")
-            .indexTooltip("保存转换结果", wantsVisibleBubble: false)
         }
     }
 
-    /// N>1 紧凑行 + 顶部统计。
+    /// N>1 紧凑行。
     private var batchList: some View {
         VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
-            HStack(spacing: ToolMetrics.Spacing.sm) {
-                Text(batchStatisticsText)
-                    .font(ToolTypography.caption)
-                    .foregroundStyle(ToolTheme.textSecondary)
-                Spacer(minLength: ToolMetrics.Spacing.sm)
-                Button {
-                    saveConverted()
-                } label: {
-                    ImageSaveButtonLabel(isSaving: session.isSaving, title: saveButtonTitle)
-                }
-                .buttonStyle(IndexSmallButtonStyle())
-                .disabled(session.completedCount == 0 || session.isProcessing || session.isSaving)
-                .accessibilityLabel(session.isSaving ? "正在保存图片" : "保存转换结果")
-                .indexTooltip("保存转换结果", wantsVisibleBubble: false)
-            }
-
             ForEach(session.items) { item in
                 BatchConversionRow(item: item) {
                     withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {

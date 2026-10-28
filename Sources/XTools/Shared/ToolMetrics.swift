@@ -92,6 +92,11 @@ enum ToolMetrics {
         /// sidebar ≈ 740) plus one column budget, so dual-pane formatters fold
         /// before their editors get crushed.
         static let pairCollapseFormatter: CGFloat = 860
+        /// Collapse width for image-tool workspaces. Stays below the minimum
+        /// window's content rail (960 − 250 sidebar ≈ 710) so the settings rail
+        /// and its primary action never stack below the fold; narrow rails rely
+        /// on per-control density fallbacks instead.
+        static let pairCollapseImageTools: CGFloat = 660
     }
 
     // MARK: - Legacy Animation Duration

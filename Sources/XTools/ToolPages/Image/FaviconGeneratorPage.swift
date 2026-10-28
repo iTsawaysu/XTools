@@ -19,65 +19,92 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     @State private var isImageDropTargeted = false
 
     var body: some View {
-        IndexPanel("上传图片", fillsHeight: session.sourceImage == nil) {
-            IndexModeContent(id: session.sourceImage != nil) { hasSource in
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                    if hasSource, let image = session.sourceImage {
-                        imageSelectionActions
-
-                    HStack(alignment: .center, spacing: ToolMetrics.Spacing.base) {
-                        IndexImagePreviewStage(
-                            image: image,
-                            accessibilityLabel: "Favicon 源图片预览",
-                            accessibilityValue: faviconSourceAccessibilityValue,
-                            maxDisplayWidth: 120,
-                            maxDisplayHeight: 96,
-                            spacing: 0
-                        )
-                        .frame(width: 140)
-
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(session.sourceURL?.lastPathComponent ?? "源图片")
-                                .font(ToolTypography.bodyPlain)
-                                .foregroundStyle(ToolTheme.textPrimary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-
-                            Text(faviconSourceSummary)
-                                .font(ToolTypography.caption)
-                                .foregroundStyle(ToolTheme.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                } else {
-                    // 空态在铺满的输入区内垂直居中，主操作由占位自带的
-                    // 32pt 按钮承担，不再重复小动作行。
-                    ImageUploadPendingState(
-                        isProcessing: session.isProcessing,
-                        title: "选择图片开始生成 Favicon",
-                        fillsHeight: true,
-                        onSelect: selectImage
+        if session.sourceImage == nil {
+            ImageUploadEmptyPanel(
+                isDropTargeted: $isImageDropTargeted,
+                isProcessing: session.isProcessing,
+                diagnostic: session.error,
+                emptyStateTitle: "选择图片开始生成 Favicon",
+                onSelect: selectImage,
+                onDropFile: receiveImageURL,
+                onDropMultipleFiles: rejectMultipleImageDrop
+            )
+        } else {
+            IndexPairLayout(
+                collapseWidth: ToolMetrics.Breakpoint.pairCollapseImageTools,
+                fillsHeight: false,
+                equalizesHeight: false,
+                trailingWidth: 245
+            ) {
+                faviconOutputPanel
+            } trailing: {
+                IndexPanel("检查器") {
+                    ImageWorkflowSettingsPanel(
+                        primaryTitle: session.isSaving ? "正在保存…" : "全部保存",
+                        primaryIcon: IndexActionSymbol.save,
+                        primaryHelp: session.isSaving ? "正在保存全部 Favicon 部署文件" : "保存全部五个 Favicon 部署文件",
+                        isPrimaryDisabled: session.package == nil || session.isSaving || session.isProcessing,
+                        onPrimary: savePackage,
+                        source: { sourceSection },
+                        output: { outputSection }
                     )
                 }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, ToolMetrics.Spacing.sm)
-            // 源就位后成品面板已持有同一诊断锚；这里只在空态生效，
-            // 避免同一错误被两个面板各提示一次（双 toast/双 banner）。
-            .indexWorkspaceDiagnostic(session.sourceImage == nil ? session.error : nil)
-            .indexDropZone(
-                isTargeted: $isImageDropTargeted,
-                onFile: receiveImageURL,
-                onMultipleFiles: rejectMultipleImageDrop
-            )
+                .withoutDiagnosticStatusSlot()
             }
         }
+    }
 
-        IndexModeContent(id: session.sourceImage != nil, fillsHeight: true) { hasSource in
-            if hasSource {
-                faviconOutputPanel
-            }
+    /// 检查器「源文件」区：文件名、尺寸与格式，以及更换/清除动作。
+    private var sourceSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(session.sourceURL?.lastPathComponent ?? "—")
+                .font(ToolTypography.bodyMedium)
+                .foregroundStyle(ToolTheme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+
+            Text(faviconSourceSummary.isEmpty ? "—" : faviconSourceSummary)
+                .font(ToolTypography.caption)
+                .foregroundStyle(ToolTheme.textTertiary)
+                .lineLimit(1)
+                .padding(.top, 2)
+
+            imageSelectionActions
+                .padding(.top, ToolMetrics.Spacing.sm)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 检查器「输出」区：部署文件数量与总大小。
+    private var outputSection: some View {
+        VStack(spacing: 0) {
+            ImageInspectorFactRow(label: "部署文件", value: packageFileCountText)
+            ImageInspectorFactRow(label: "总大小", value: packageTotalSizeText)
+        }
+    }
+
+    private var packageFileCountText: String {
+        guard let package = session.package else { return "—" }
+        return "\(package.saveableArtifacts.count) 个"
+    }
+
+    private var packageTotalSizeText: String {
+        guard let package = session.package else { return "—" }
+        let total = package.saveableArtifacts.reduce(0) { $0 + $1.data.count }
+        return ByteSizeFormatter.format(bytes: total)
+    }
+
+    private func savePackage() {
+        Task { @MainActor in
+            guard let package = session.package else { return }
+            let outcome = await session.savePackage(filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
+            ImageSaveOutcomeToasts.presentCountedOutput(
+                outcome,
+                savedCount: package.saveableArtifacts.count,
+                successNoun: "部署文件",
+                partialNoun: "个部署文件",
+                toastCenter: toastCenter
+            )
         }
     }
 
@@ -91,11 +118,6 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
         return ImageOutputPresentation.sourceSummary(metadata)
     }
 
-    private var faviconSourceAccessibilityValue: String {
-        guard let metadata = session.source?.metadata else { return "" }
-        return "尺寸 \(metadata.pixelWidth)×\(metadata.pixelHeight)，\(metadata.format?.displayName ?? "未知格式")，\(ByteSizeFormatter.format(bytes: metadata.byteCount))"
-    }
-
     private var imageSelectionActions: ImageSelectionActionRow {
         ImageSelectionActionRow(
             hasSource: session.sourceImage != nil,
@@ -107,7 +129,8 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                 withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
                     session.reset()
                 }
-            }
+            },
+            framed: true
         )
     }
 
@@ -134,31 +157,15 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                 }
             }
             .indexWorkspaceDiagnostic(session.error)
+            .indexDropZone(
+                isTargeted: $isImageDropTargeted,
+                onFile: receiveImageURL,
+                onMultipleFiles: rejectMultipleImageDrop
+            )
             .toolAnimation(ToolMotion.Preset.diagnostic, value: session.isProcessing)
             .padding(ToolMetrics.Spacing.sm)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .toolAnimation(ToolMotion.Preset.panelReveal, value: session.package != nil)
-        } accessory: {
-            if session.package != nil {
-                Button {
-                    Task { @MainActor in
-                        guard let package = session.package else { return }
-                        let outcome = await session.savePackage(filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
-                        ImageSaveOutcomeToasts.presentCountedOutput(
-                            outcome,
-                            savedCount: package.saveableArtifacts.count,
-                            successNoun: "部署文件",
-                            partialNoun: "个部署文件",
-                            toastCenter: toastCenter
-                        )
-                    }
-                } label: {
-                    ImageSaveButtonLabel(isSaving: session.isSaving, title: "全部保存")
-                }
-                .buttonStyle(IndexSmallButtonStyle())
-                .disabled(session.isSaving || session.isProcessing)
-                .accessibilityLabel(session.isSaving ? "正在保存全部 Favicon 部署文件" : "保存全部五个 Favicon 部署文件")
-            }
         }
         .verticallyFilling()
     }

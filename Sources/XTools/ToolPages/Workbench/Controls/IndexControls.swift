@@ -231,6 +231,9 @@ struct IndexPrimaryActionButton: View {
     /// 无障碍名称与提示。按钮文字已经写在脸上，鼠标悬停不再弹一条重复的
     /// 气泡；`help` 只服务于读屏。
     var help: String
+    /// Inspector rails stretch the primary action to the column width so the
+    /// footer reads as one anchored bar instead of a small pill.
+    var fillsWidth = false
     let action: () -> Void
 
     var body: some View {
@@ -248,7 +251,8 @@ struct IndexPrimaryActionButton: View {
             // Toolbar halves can run tight; the prototype action must keep its
             // label and shed width through the compressible diagnostic slot
             // instead of collapsing into an empty accent pill.
-            .fixedSize(horizontal: true, vertical: false)
+            .fixedSize(horizontal: !fillsWidth, vertical: false)
+            .frame(maxWidth: fillsWidth ? .infinity : nil)
         }
         .buttonStyle(IndexButtonStyle(primary: true))
         .accessibilityLabel(help)
