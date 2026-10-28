@@ -79,7 +79,8 @@ struct IndexSlider: View {
                     }
             )
         }
-        .frame(height: knobDiameter)
+        // 视觉保持细轨道，命中区对齐 ControlHeight.compact（24pt）。
+        .frame(height: max(knobDiameter, ToolMetrics.ControlHeight.compact))
         .accessibilityElement()
         .accessibilityValue(Text(accessibilityText))
         .accessibilityAdjustableAction { direction in

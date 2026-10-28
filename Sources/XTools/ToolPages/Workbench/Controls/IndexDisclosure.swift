@@ -84,7 +84,12 @@ struct IndexDisclosure<Content: View, Accessory: View>: View {
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
             }
             .padding(.horizontal, isInline ? 8 : 14)
-            .frame(maxWidth: .infinity, minHeight: isInline ? 42 : 36, alignment: .leading)
+            .frame(
+                maxWidth: .infinity,
+                // 内联展开行用行高 44，卡片式展开头对齐面板头 38。
+                minHeight: isInline ? ToolMetrics.ControlHeight.row : ToolMetrics.ControlHeight.field,
+                alignment: .leading
+            )
             .background(
                 isHovering ? ToolTheme.hoverFill : Color.clear,
                 in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)

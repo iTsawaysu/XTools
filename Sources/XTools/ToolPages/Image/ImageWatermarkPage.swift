@@ -372,7 +372,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                 HStack {
                     IndexOptionLabel("大小")
                     Spacer(minLength: 8)
-                    Text("\(sizePercent)%")
+                    Text("\(sizePercent)% · 按宽度")
                         .font(ToolTypography.monoCaption)
                         .foregroundStyle(ToolTheme.textSecondary)
                 }
@@ -380,10 +380,6 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                     .accessibilityLabel("水印大小")
                     .accessibilityValue("\(sizePercent)%")
                     .onChange(of: sizeRatio) { _ in recipeDidChange(previewCadence: .debounced) }
-                Text("按图片宽度比例设置水印大小")
-                    .font(ToolTypography.caption)
-                    .foregroundStyle(ToolTheme.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
