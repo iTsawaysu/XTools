@@ -51,7 +51,7 @@ private struct IndexDateTimeWorkspaceContent: View {
                 currentTimePageAction
             }
             IndexPanel("人类可读时间（本地时区）") {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                     Text("日期与时间")
                         .font(ToolTypography.buttonSmall)
                         .foregroundStyle(ToolTheme.textSecondary)

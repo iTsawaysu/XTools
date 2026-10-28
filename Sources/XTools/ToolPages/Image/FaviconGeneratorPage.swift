@@ -190,7 +190,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     private func artifactGroup(_ group: FaviconArtifactGroup, package: FaviconPackage) -> some View {
         let artifacts = package.artifacts.filter { $0.group == group }
         if !artifacts.isEmpty {
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                 Text(group.displayName)
                     .font(ToolTypography.sectionTitle)
                     .foregroundStyle(ToolTheme.textPrimary)
@@ -314,7 +314,7 @@ private struct FaviconConfigurationGroup: View {
     let htmlSnippet: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
             FaviconConfigurationCodeSurface(
                 title: "site.webmanifest 内容",
                 text: manifestText,
@@ -339,7 +339,7 @@ private struct FaviconConfigurationCodeSurface: View {
 
     var body: some View {
         IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 8) {
-            VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                 IndexFieldHeader(title) {
                     IndexCopyButton(text: text, title: copyTitle, iconOnly: true)
                 }

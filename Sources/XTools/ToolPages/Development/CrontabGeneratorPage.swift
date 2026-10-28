@@ -202,7 +202,7 @@ private struct IndexCrontabWorkspaceContent: View {
     }
 
     private var nextRunsSection: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
             Text("下次运行")
                 .font(ToolTypography.micro)
                 .foregroundStyle(ToolTheme.textSecondary)

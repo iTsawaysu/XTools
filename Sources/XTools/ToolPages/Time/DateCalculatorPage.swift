@@ -235,7 +235,7 @@ private struct DateCalculatorDateField: View {
     @State private var showsCalendar = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
             Text(title)
                 .font(ToolTypography.buttonSmall)
                 .foregroundStyle(ToolTheme.textSecondary)
