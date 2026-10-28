@@ -131,7 +131,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
                 .font(ToolTypography.caption)
                 .foregroundStyle(ToolTheme.textTertiary)
                 .lineLimit(1)
-                .padding(.top, 2)
+                .padding(.top, ToolMetrics.Spacing.xs)
 
             imageSelectionActions
                 .padding(.top, ToolMetrics.Spacing.sm)

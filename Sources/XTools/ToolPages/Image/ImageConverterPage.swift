@@ -237,7 +237,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                 .font(ToolTypography.caption)
                 .foregroundStyle(ToolTheme.textTertiary)
                 .lineLimit(1)
-                .padding(.top, 2)
+                .padding(.top, ToolMetrics.Spacing.xs)
 
             imageSelectionActions
                 .padding(.top, ToolMetrics.Spacing.sm)
@@ -262,27 +262,20 @@ private struct IndexImageConverterWorkspaceContent: View {
 
     /// 设置栏内容：目标格式、质量、透明填充。
     private var outputSettings: some View {
-        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-            VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.lg) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                 IndexOptionLabel("目标格式")
                 if outputFormats.isEmpty {
                     Text("无可转换目标")
                         .font(ToolTypography.caption)
                         .foregroundStyle(ToolTheme.textSecondary)
                 } else {
-                    ViewThatFits(in: .horizontal) {
-                        IndexSegmentedControl(
-                            items: outputFormats.map { ($0, $0.displayName) },
-                            selection: $targetFormat,
-                            selectionStyle: .filled
-                        )
-                        IndexSegmentedControl(
-                            items: outputFormats.map { ($0, $0.displayName) },
-                            selection: $targetFormat,
-                            density: .compact,
-                            selectionStyle: .filled
-                        )
-                    }
+                    IndexSegmentedControl(
+                        items: outputFormats.map { ($0, $0.displayName) },
+                        selection: $targetFormat,
+                        selectionStyle: .filled,
+                        stretchesToFill: true
+                    )
                     .accessibilityLabel("目标格式")
                     .accessibilityValue(targetFormat.displayName)
                     .onChange(of: targetFormat) { _ in
@@ -293,7 +286,7 @@ private struct IndexImageConverterWorkspaceContent: View {
             }
 
             if canConvert && targetFormat.supportsLossyQuality {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                     HStack {
                         IndexOptionLabel("质量")
                         Spacer(minLength: 8)
@@ -317,7 +310,7 @@ private struct IndexImageConverterWorkspaceContent: View {
             }
 
             if requiresTransparencyFill {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                     IndexOptionLabel("透明填充")
                     IndexSegmentedControl(
                         items: [
@@ -326,7 +319,8 @@ private struct IndexImageConverterWorkspaceContent: View {
                             (.custom, "自定义")
                         ],
                         selection: $transparencyFillMode,
-                        selectionStyle: .filled
+                        selectionStyle: .filled,
+                        stretchesToFill: true
                     )
                     .accessibilityLabel("透明区域填充颜色")
                     .accessibilityValue(transparencyFillAccessibilityValue)
