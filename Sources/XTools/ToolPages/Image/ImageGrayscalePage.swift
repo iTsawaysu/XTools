@@ -174,6 +174,7 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
             Text(sourceByteText)
                 .font(ToolTypography.monoLabel)
                 .foregroundStyle(ToolTheme.textPrimary)
+                .toolNumericTransition(value: sourceByteText)
         }
         .accessibilityElement(children: .combine)
     }
@@ -187,6 +188,7 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
             Text(resultByteText)
                 .font(ToolTypography.monoLabel)
                 .foregroundStyle(resultByteTone)
+                .toolNumericTransition(value: resultByteText)
         }
         .accessibilityElement(children: .combine)
     }

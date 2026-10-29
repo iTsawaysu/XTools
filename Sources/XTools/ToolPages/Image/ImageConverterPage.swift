@@ -519,6 +519,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                 Text(ByteSizeFormatter.format(bytes: output.byteCount))
                     .font(ToolTypography.monoLabel)
                     .foregroundStyle(output.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textPrimary)
+                    .toolNumericTransition(value: output.byteCount)
                 Text(changeText(source: item.metadata.byteCount, output: output.byteCount))
                     .font(ToolTypography.caption)
                     .foregroundStyle(output.byteCount <= item.metadata.byteCount ? ToolTheme.success : ToolTheme.warning)

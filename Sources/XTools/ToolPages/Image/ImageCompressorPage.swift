@@ -268,6 +268,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
             Text(sourceByteText)
                 .font(ToolTypography.monoLabel)
                 .foregroundStyle(ToolTheme.textPrimary)
+                .toolNumericTransition(value: sourceByteText)
         }
         .accessibilityElement(children: .combine)
     }
@@ -281,6 +282,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
             Text(resultByteText)
                 .font(ToolTypography.monoLabel)
                 .foregroundStyle(resultByteTone)
+                .toolNumericTransition(value: resultByteText)
         }
         .accessibilityElement(children: .combine)
     }

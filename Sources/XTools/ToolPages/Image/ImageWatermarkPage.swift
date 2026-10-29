@@ -324,6 +324,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
             Text(previewByteText)
                 .font(ToolTypography.monoLabel)
                 .foregroundStyle(previewByteTone)
+                .toolNumericTransition(value: previewByteText)
         }
         .accessibilityElement(children: .combine)
     }
