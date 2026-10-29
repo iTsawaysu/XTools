@@ -53,13 +53,31 @@ struct IndexImageComparisonPane<Footer: View>: View {
                     accessibilityValue: accessibilityValue,
                     placeholder: isProcessing ? "" : placeholder,
                     maxDisplayWidth: 640,
-                    maxDisplayHeight: max(stageHeight - 24, 120)
+                    maxDisplayHeight: max(stageHeight - 16, 120)
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
 
                 if isProcessing {
-                    IndexProgressLabel(message: "处理中…", layout: .centered)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    // 处理中浮在图片上方：给一个不透明胶囊底，避免浅色画面
+                    // 上只剩一枚看不清的转圈。
+                    HStack(spacing: 7) {
+                        IndexProgressSpinner()
+                        Text("处理中…")
+                            .font(ToolTypography.caption)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(height: ToolMetrics.ControlHeight.small)
+                    .background(
+                        ToolTheme.panelBackground.opacity(0.94),
+                        in: Capsule()
+                    )
+                    .overlay {
+                        Capsule().strokeBorder(ToolTheme.border, lineWidth: 0.5)
+                    }
+                    .toolShadow(ToolTheme.Shadow.keycap)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .accessibilityElement(children: .combine)
                 }
 
                 HStack(spacing: 6) {
@@ -84,7 +102,8 @@ struct IndexImageComparisonPane<Footer: View>: View {
 
                     Spacer(minLength: 0)
                 }
-                .padding(8)
+                .padding(.horizontal, 8)
+                .padding(.top, 4)
             }
             .frame(height: stageHeight)
             .background(ToolTheme.editorBackground)

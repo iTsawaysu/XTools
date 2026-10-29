@@ -45,6 +45,54 @@ struct ImageSelectionActionRow: View {
     }
 }
 
+/// 检查器「源文件」行：文件名与元信息占两行，更换/清除收成行尾图标动作。
+///
+/// 原先的文件名、元信息、两颗描边按钮纵向排开会占掉约 90pt，且按钮像
+/// 一条独立工具条；收成一行后源信息与动作同属一个对象，检查器顶部更紧凑。
+struct ImageInspectorSourceRow: View {
+    let title: String
+    let subtitle: String
+    let replaceAccessibilityLabel: String
+    let clearAccessibilityLabel: String
+    var replaceSystemImage = "arrow.triangle.2.circlepath"
+    let onReplace: () -> Void
+    let onClear: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(ToolTypography.bodyMedium)
+                    .foregroundStyle(ToolTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+
+                Spacer(minLength: 4)
+
+                IndexIconButton(
+                    systemImage: replaceSystemImage,
+                    help: replaceAccessibilityLabel,
+                    action: onReplace
+                )
+
+                IndexIconButton(
+                    systemImage: "xmark",
+                    help: clearAccessibilityLabel,
+                    action: onClear
+                )
+            }
+
+            Text(subtitle)
+                .font(ToolTypography.caption)
+                .foregroundStyle(ToolTheme.textTertiary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .contain)
+    }
+}
+
 /// 源准备占位：读取中显示进度标签，否则显示共享图片空态。
 ///
 /// 空态用 `.list` 密度（图标 + 标题 + 共享文案），图片各页共用同一空态
@@ -342,10 +390,10 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
     var body: some View {
         Group {
             if pinsActionToBottom {
-                // 检查器：内容放得下时按自然高度从顶部顺排、动作区紧跟
-                // 输出收口，不会在设置与输出之间裂出一道断层；内容超出
-                // 页面给出的高度上限时才退回「设置区滚动 + 输出/动作吸底」，
-                // 保证主 CTA 在 960×678 也不会被推出首屏。
+                // 检查器：内容放得下时按自然高度顺排、动作区紧跟输出收口；
+                // 面板按内容定高（上限由页面传入），余量留在卡片之外。内容
+                // 超出上限时才退回「设置区滚动 + 动作吸底」，主 CTA 在
+                // 960×678 也不会被推出首屏。
                 ViewThatFits(in: .vertical) {
                     compactInspector
                     pinnedInspector
@@ -372,9 +420,7 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
         .frame(maxHeight: pinsActionToBottom ? .infinity : nil, alignment: .top)
     }
 
-    /// 自然高度版本：源文件、设置、输出从顶部顺排，动作区紧跟输出收口；
-    /// 面板按内容定高（上限由页面传入），不会在设置与输出之间裂出断层，
-    /// 按钮也不会悬在面板中间。
+    /// 自然高度版本：源文件、设置、输出从顶部顺排，动作区紧跟输出收口。
     private var compactInspector: some View {
         VStack(alignment: .leading, spacing: 0) {
             if showsSourceSection {
@@ -394,7 +440,7 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// 溢出回退版本：设置区独立滚动，输出摘要与动作区固定在底部。
+    /// 溢出回退版本：内容独立滚动，动作区固定在底部。
     private var pinnedInspector: some View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
@@ -406,15 +452,14 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
                     if showsSettingsSection {
                         settingsSectionBody
                     }
+                    if showsOutputSection {
+                        sectionDivider
+                        outputSectionBody
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxHeight: .infinity)
-
-            if showsOutputSection {
-                sectionDivider
-                outputSectionBody
-            }
 
             sectionDivider
             actionSectionBody
@@ -426,8 +471,10 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
             IndexOptionLabel(sourceTitle)
             source
         }
-        .padding(.top, ToolMetrics.Spacing.base)
-        .padding(.bottom, ToolMetrics.Spacing.base)
+        // 面板自身已有 14pt 内容内边距；这里不再叠一层顶部留白，
+        // 头部标题与首行信息之间只保留面板的标准呼吸位。
+        .padding(.top, 0)
+        .padding(.bottom, ToolMetrics.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -437,8 +484,8 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
         }
         // Horizontal gutter belongs to the hosting IndexPanel: adding a
         // second inset here misaligns fields with the panel title by 14pt.
-        .padding(.top, ToolMetrics.Spacing.md)
-        .padding(.bottom, ToolMetrics.Spacing.base)
+        .padding(.top, ToolMetrics.Spacing.sm)
+        .padding(.bottom, ToolMetrics.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -447,8 +494,8 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
             IndexOptionLabel("输出")
             output
         }
-        .padding(.top, ToolMetrics.Spacing.md)
-        .padding(.bottom, ToolMetrics.Spacing.base)
+        .padding(.top, ToolMetrics.Spacing.sm)
+        .padding(.bottom, ToolMetrics.Spacing.sm)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

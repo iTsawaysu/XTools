@@ -59,6 +59,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
         max(320, pageAvailableHeight - 118)
     }
 
+
     @ObservedObject var session: ImageProcessedOutputSession
     @Binding var compressionPreference: ImageCompressionPreference
     @Binding var limitsDimensions: Bool
@@ -90,6 +91,10 @@ private struct IndexImageCompressorWorkspaceContent: View {
         max(320, pageAvailableHeight - 196)
     }
 
+    private var sourceFormatBadge: String? {
+        session.sourceMetadata?.format?.displayName
+    }
+
     var body: some View {
         // 空态不参与分栏：设置栏此时不存在，对半分会把上传区压成半宽。
         if session.source == nil {
@@ -103,7 +108,11 @@ private struct IndexImageCompressorWorkspaceContent: View {
             ) {
                 comparisonWorkspacePanel
             } trailing: {
-                IndexPanel("压缩设置") {
+                IndexPanel("压缩设置", accessory: {
+                    if let badge = sourceFormatBadge {
+                        IndexBadge(badge, tone: .neutral, isCapsule: true)
+                    }
+                }) {
                     ImageWorkflowSettingsPanel(
                         primaryTitle: "保存优化图片",
                         primaryIcon: IndexActionSymbol.save,
@@ -124,25 +133,20 @@ private struct IndexImageCompressorWorkspaceContent: View {
         }
     }
 
-    /// 检查器「源文件」区：文件名、尺寸与格式，以及更换/清除动作。
+    /// 检查器「源文件」区：文件名与元信息一行，更换/清除收在行尾。
     private var sourceSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(sourceFileName)
-                .font(ToolTypography.bodyMedium)
-                .foregroundStyle(ToolTheme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-
-            Text(sourceMetaText)
-                .font(ToolTypography.caption)
-                .foregroundStyle(ToolTheme.textTertiary)
-                .lineLimit(1)
-                .padding(.top, ToolMetrics.Spacing.xs)
-
-            imageSelectionActions
-                .padding(.top, ToolMetrics.Spacing.sm)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        ImageInspectorSourceRow(
+            title: sourceFileName,
+            subtitle: sourceMetaText,
+            replaceAccessibilityLabel: "更换要优化的图片",
+            clearAccessibilityLabel: "清除当前优化图片",
+            onReplace: selectImage,
+            onClear: {
+                withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
+                    session.reset()
+                }
+            }
+        )
     }
 
     /// 检查器「输出」区：只列结果侧的事实，体积与节省比例留在舞台脚注。
@@ -253,22 +257,6 @@ private struct IndexImageCompressorWorkspaceContent: View {
             )
         }
         .contentInsets(EdgeInsets())
-    }
-
-    private var imageSelectionActions: ImageSelectionActionRow {
-        ImageSelectionActionRow(
-            hasSource: session.source != nil,
-            selectAccessibilityLabel: "选择要优化的图片",
-            replaceAccessibilityLabel: "更换要优化的图片",
-            clearAccessibilityLabel: "清除当前优化图片",
-            onSelect: selectImage,
-            onClear: {
-                withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
-                    session.reset()
-                }
-            },
-            framed: true
-        )
     }
 
     private var sourceCardFacts: some View {

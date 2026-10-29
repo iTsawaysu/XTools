@@ -147,6 +147,12 @@ struct IndexImagePreviewImage: View {
             .aspectRatio(contentMode: .fit)
             .frame(maxWidth: maxDisplayWidth, maxHeight: maxDisplayHeight)
             .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+            // 浅色照片在暖纸底上会失去边界；一根发丝描边让画面读起来是
+            // 被放在舞台上的「成品」，而不是融进面板背景。
+            .overlay {
+                RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
+                    .strokeBorder(ToolTheme.border, lineWidth: 0.5)
+            }
             .accessibilityLabel(accessibilityLabel)
             .accessibilityValue(accessibilityValue)
     }

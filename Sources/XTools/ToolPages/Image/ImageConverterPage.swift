@@ -127,6 +127,10 @@ private struct IndexImageConverterWorkspaceContent: View {
         transparencyFillMode.color(customHex: customTransparencyFillHex)
     }
 
+    private var sourceFormatBadge: String? {
+        targetFormat.displayName
+    }
+
     var body: some View {
         // 间距对齐 IndexPage 标准页面壳的 sectionSpacing（panelSection = 10），
         // 与两段平铺时视觉一致。拖放命中区挂整个内容根容器（参数区、列表、
@@ -146,7 +150,11 @@ private struct IndexImageConverterWorkspaceContent: View {
                 ) {
                     queuePanel
                 } trailing: {
-                    IndexPanel("转换设置") {
+                    IndexPanel("转换设置", accessory: {
+                        if let badge = sourceFormatBadge {
+                            IndexBadge(badge, tone: .neutral, isCapsule: true)
+                        }
+                    }) {
                         ImageWorkflowSettingsPanel(
                             primaryTitle: saveButtonTitle,
                             primaryIcon: IndexActionSymbol.save,
@@ -190,13 +198,29 @@ private struct IndexImageConverterWorkspaceContent: View {
             Group {
                 if let singleItem = session.singleItem {
                     singleImageStage(singleItem)
+                        .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
                 } else {
                     ScrollView {
                         batchList
                             .padding(ToolMetrics.Spacing.panelInset)
                     }
+                    .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
                 }
             }
+            // 单张 ↔ 队列切换走同一段淡入上浮，列表出现时不再硬切。
+            .toolAnimation(ToolMotion.Preset.panelReveal, value: session.singleItem?.id)
+            // 批量转换的整体进度：2.5pt 细线压在舞台顶边，不占布局高度，
+            // 单张逐张完成时给出连续的完成感，结束后淡出。
+            .overlay(alignment: .top) {
+                if session.isProcessing {
+                    IndexProgressHairline(
+                        fraction: Double(session.completedCount) / Double(max(session.items.count, 1))
+                    )
+                    .padding(.horizontal, ToolMetrics.Spacing.panelInset)
+                    .transition(.opacity)
+                }
+            }
+            .toolAnimation(ToolMotion.Preset.controlFeedback, value: session.isProcessing)
             .indexWorkspaceDiagnostic(session.error)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .imageDropHighlight(isActive: isImageDropTargeted)
@@ -212,7 +236,8 @@ private struct IndexImageConverterWorkspaceContent: View {
             VStack(spacing: ToolMetrics.Spacing.lg) {
                 ImageUploadPendingState(
                     isProcessing: session.isImporting,
-                    title: "选择图片开始转换"
+                    title: "选择图片开始转换",
+                    message: "拖入图片，或点击下方按钮。"
                 )
 
                 if !session.isImporting {
@@ -246,21 +271,37 @@ private struct IndexImageConverterWorkspaceContent: View {
     /// 检查器「队列」区：单张时显示文件名与源摘要；多张时把进度、源→输出
     /// 总量与体积变化收在这一段，避免检查器只剩「几张 + 源总大小」这种
     /// 对保存决策没有帮助的信息。
+    @ViewBuilder
     private var queueSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(queuePrimaryText)
-                .font(ToolTypography.bodyMedium)
-                .foregroundStyle(ToolTheme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.middle)
+        if let singleItem = session.singleItem {
+            ImageInspectorSourceRow(
+                title: singleItem.filename,
+                subtitle: ImageOutputPresentation.sourceSummary(singleItem.metadata),
+                replaceAccessibilityLabel: "添加要转换的图片",
+                clearAccessibilityLabel: "清除全部转换图片",
+                replaceSystemImage: "plus",
+                onReplace: addImages,
+                onClear: {
+                    withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
+                        session.reset()
+                    }
+                    resumePendingConversions()
+                }
+            )
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(queuePrimaryText)
+                    .font(ToolTypography.bodyMedium)
+                    .foregroundStyle(ToolTheme.textPrimary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
 
-            Text(queueProgressText)
-                .font(ToolTypography.caption)
-                .foregroundStyle(ToolTheme.textTertiary)
-                .lineLimit(1)
-                .padding(.top, ToolMetrics.Spacing.xs)
+                Text(queueProgressText)
+                    .font(ToolTypography.caption)
+                    .foregroundStyle(ToolTheme.textTertiary)
+                    .lineLimit(1)
+                    .padding(.top, ToolMetrics.Spacing.xs)
 
-            if session.singleItem == nil {
                 Text(queueAggregateText)
                     .font(ToolTypography.monoCaption)
                     .foregroundStyle(queueAggregateTone)
@@ -269,12 +310,12 @@ private struct IndexImageConverterWorkspaceContent: View {
                     .padding(.top, 2)
                     .accessibilityLabel("批量输出摘要")
                     .accessibilityValue(queueAggregateText)
-            }
 
-            imageSelectionActions
-                .padding(.top, ToolMetrics.Spacing.sm)
+                imageSelectionActions
+                    .padding(.top, ToolMetrics.Spacing.sm)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var queuePrimaryText: String {
@@ -509,6 +550,14 @@ private struct IndexImageConverterWorkspaceContent: View {
                     }
                     resumePendingConversions()
                 }
+                // 新导入的行淡入并轻抬 6pt；移除时由容器的 panelReveal
+                // 事务收起空位，行本身淡出，避免整列表硬跳。
+                .transition(
+                    .asymmetric(
+                        insertion: .opacity.combined(with: .offset(y: ToolMotion.Distance.small)),
+                        removal: .opacity
+                    )
+                )
             }
         }
     }

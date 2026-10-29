@@ -180,6 +180,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         max(320, pageAvailableHeight - 118)
     }
 
+
     @ObservedObject var session: ImageProcessedOutputSession
     @ObservedObject var previewSession: ImageWatermarkPreviewSession
     let previewDebouncer: IndexDebouncer
@@ -229,6 +230,10 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         max(300, pageAvailableHeight - 260)
     }
 
+    private var sourceFormatBadge: String? {
+        session.sourceMetadata?.format?.displayName
+    }
+
     var body: some View {
         // 空态不参与分栏：设置栏此时不存在，对半分会把上传区压成半宽。
         if session.source == nil {
@@ -242,7 +247,11 @@ private struct IndexImageWatermarkWorkspaceContent: View {
             ) {
                 previewWorkspacePanel
             } trailing: {
-                IndexPanel("水印设置") {
+                IndexPanel("水印设置", accessory: {
+                    if let badge = sourceFormatBadge {
+                        IndexBadge(badge, tone: .neutral, isCapsule: true)
+                    }
+                }) {
                     ImageWorkflowSettingsPanel(
                         primaryTitle: "保存水印图片",
                         primaryIcon: IndexActionSymbol.save,
@@ -264,10 +273,19 @@ private struct IndexImageWatermarkWorkspaceContent: View {
     private var previewWorkspacePanel: some View {
         IndexPanel("预览") {
             VStack(spacing: 0) {
-                watermarkTextField
-                    .padding(.horizontal, ToolMetrics.Spacing.panelInset)
-                    .padding(.top, ToolMetrics.Spacing.panelInset)
-                    .padding(.bottom, ToolMetrics.Spacing.md)
+                // 字段内容非空时占位符不再出现；左侧小标签让这条工具栏
+                // 始终能被读懂，同时不额外占用纵向空间。
+                HStack(spacing: ToolMetrics.Spacing.sm) {
+                    Text("水印文字")
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.textTertiary)
+                        .fixedSize()
+
+                    watermarkTextField
+                }
+                .padding(.horizontal, ToolMetrics.Spacing.panelInset)
+                .padding(.top, 10)
+                .padding(.bottom, 10)
 
                 IndexImageComparisonPane(
                     title: "水印成品",
@@ -338,23 +356,14 @@ private struct IndexImageWatermarkWorkspaceContent: View {
 
     /// 检查器「源文件」区：文件名、尺寸与格式，以及更换/清除动作。
     private var sourceSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(sourceFileName)
-                .font(ToolTypography.bodyMedium)
-                .foregroundStyle(ToolTheme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-
-            Text(sourceMetaText)
-                .font(ToolTypography.caption)
-                .foregroundStyle(ToolTheme.textTertiary)
-                .lineLimit(1)
-                .padding(.top, ToolMetrics.Spacing.xs)
-
-            imageSelectionActions
-                .padding(.top, ToolMetrics.Spacing.sm)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        ImageInspectorSourceRow(
+            title: sourceFileName,
+            subtitle: sourceMetaText,
+            replaceAccessibilityLabel: "更换要添加水印的图片",
+            clearAccessibilityLabel: "清除当前水印图片",
+            onReplace: selectImage,
+            onClear: clearImage
+        )
     }
 
     /// 检查器「水印设置」区：透明度、大小、颜色与锚点。
@@ -416,7 +425,8 @@ private struct IndexImageWatermarkWorkspaceContent: View {
             VStack(spacing: ToolMetrics.Spacing.md) {
                 ImageUploadPendingState(
                     isProcessing: session.isProcessing,
-                    title: "选择图片开始添加水印"
+                    title: "选择图片开始添加水印",
+                    message: "拖入图片，或点击下方按钮。"
                 )
 
                 if !session.isProcessing {
@@ -491,18 +501,6 @@ private struct IndexImageWatermarkWorkspaceContent: View {
     private var sourceMetaText: String {
         guard let metadata = session.sourceMetadata else { return "—" }
         return ImageOutputPresentation.sourceSummary(metadata)
-    }
-
-    private var imageSelectionActions: ImageSelectionActionRow {
-        ImageSelectionActionRow(
-            hasSource: session.source != nil,
-            selectAccessibilityLabel: "选择要添加水印的图片",
-            replaceAccessibilityLabel: "更换要添加水印的图片",
-            clearAccessibilityLabel: "清除当前水印图片",
-            onSelect: selectImage,
-            onClear: clearImage,
-            framed: true
-        )
     }
 
     private func clearImage() {
@@ -651,6 +649,8 @@ private struct WatermarkAnchorOption: View {
                 Text(position.displayName)
                     .lineLimit(1)
 
+                Spacer(minLength: 0)
+
                 Image(systemName: "chevron.down")
                     .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
                     .accessibilityHidden(true)
@@ -658,6 +658,7 @@ private struct WatermarkAnchorOption: View {
             .font(ToolTypography.controlLabel(weight: .semibold))
             .foregroundStyle(ToolTheme.textPrimary)
             .padding(.horizontal, 9)
+            .frame(maxWidth: .infinity)
             .frame(height: ToolMetrics.ControlHeight.small)
             .indexSurface(.control, fill: ToolTheme.editorBackground, border: ToolTheme.border)
         }

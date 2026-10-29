@@ -20,6 +20,10 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     @State private var isImageDropTargeted = false
     @State private var showsManifest = false
 
+    private var sourceFormatBadge: String? {
+        session.source?.metadata.format?.displayName
+    }
+
     var body: some View {
         if session.sourceImage == nil {
             ImageUploadEmptyPanel(
@@ -40,7 +44,11 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
             ) {
                 faviconOutputPanel
             } trailing: {
-                IndexPanel("Favicon 设置") {
+                IndexPanel("Favicon 设置", accessory: {
+                    if let badge = sourceFormatBadge {
+                        IndexBadge(badge, tone: .neutral, isCapsule: true)
+                    }
+                }) {
                     ImageWorkflowSettingsPanel(
                         primaryTitle: session.isSaving ? "正在保存…" : "全部保存",
                         primaryIcon: IndexActionSymbol.save,
@@ -58,25 +66,20 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
         }
     }
 
-    /// 检查器「源文件」区：文件名、尺寸与格式，以及更换/清除动作。
+    /// 检查器「源文件」区：文件名与元信息一行，更换/清除收在行尾。
     private var sourceSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(session.sourceURL?.lastPathComponent ?? "—")
-                .font(ToolTypography.bodyMedium)
-                .foregroundStyle(ToolTheme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-
-            Text(faviconSourceSummary.isEmpty ? "—" : faviconSourceSummary)
-                .font(ToolTypography.caption)
-                .foregroundStyle(ToolTheme.textTertiary)
-                .lineLimit(1)
-                .padding(.top, ToolMetrics.Spacing.xs)
-
-            imageSelectionActions
-                .padding(.top, ToolMetrics.Spacing.sm)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        ImageInspectorSourceRow(
+            title: session.sourceURL?.lastPathComponent ?? "—",
+            subtitle: faviconSourceSummary.isEmpty ? "—" : faviconSourceSummary,
+            replaceAccessibilityLabel: "更换 Favicon 源图片",
+            clearAccessibilityLabel: "清除当前 Favicon 图片",
+            onReplace: selectImage,
+            onClear: {
+                withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
+                    session.reset()
+                }
+            }
+        )
     }
 
     /// 检查器「输出」区：部署文件数量与总大小。
@@ -120,22 +123,6 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     private var faviconSourceSummary: String {
         guard let metadata = session.source?.metadata else { return "" }
         return ImageOutputPresentation.sourceSummary(metadata)
-    }
-
-    private var imageSelectionActions: ImageSelectionActionRow {
-        ImageSelectionActionRow(
-            hasSource: session.sourceImage != nil,
-            selectAccessibilityLabel: "选择 Favicon 源图片",
-            replaceAccessibilityLabel: "更换 Favicon 源图片",
-            clearAccessibilityLabel: "清除当前 Favicon 图片",
-            onSelect: selectImage,
-            onClear: {
-                withToolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion) {
-                    session.reset()
-                }
-            },
-            framed: true
-        )
     }
 
     /// 舞台固定占满首屏，部署包在舞台内滚动；检查器按内容收口、以舞台
