@@ -71,6 +71,9 @@ enum ToolMotion {
         /// 01 景深沉降: outgoing pages sink to 99.2% while fading — depth on
         /// the exit without a readable zoom.
         static let pageDepartureSink: CGFloat = 0.992
+        /// Image-result reveal: incoming frames settle from 98.5% — a barely
+        /// readable depth cue, not a zoom.
+        static let imageReveal: CGFloat = 0.985
     }
 
     enum ResultPresence {
@@ -191,6 +194,10 @@ enum ToolMotion {
         static let shellResize = Curve.smoothOut(duration: Duration.fast)
         static let modal = Animation.spring(response: 0.25, dampingFraction: 0.86, blendDuration: 0)
         static let panelReveal = Curve.smoothOut(duration: Duration.medium)
+        /// Image-result reveal: same 350ms smoothOut beat as the panel reveal,
+        /// so a new grayscale/compressed/watermarked frame settles instead of
+        /// snapping. The transition owns the fade/scale shape.
+        static let imageReveal = Curve.smoothOut(duration: Duration.medium)
         /// v3: tool-switch page arrival (host-owned whitelist; see
         /// `MotionSourceContractTests`). 01 景深沉降: 300ms smoothOut — the
         /// incoming page sinks from y+10/99.5% while the outgoing layer runs
@@ -558,6 +565,23 @@ enum ToolMotion {
 
         static var textSwap: AnyTransition {
             AnyTransition.opacity
+        }
+
+        /// Shared image-result reveal: the incoming frame fades in from a
+        /// barely readable scale while the outgoing frame fades out. Used by
+        /// the image preview stage and comparison panes so grayscale,
+        /// compression, conversion, watermark and favicon results all swap on
+        /// the same beat.
+        static var imageReveal: AnyTransition {
+            AnyTransition.asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: Scale.imageReveal, anchor: .center)),
+                removal: .opacity
+            )
+        }
+
+        /// Floating processing chip: small fade + scale, never a hard pop.
+        static var statusChip: AnyTransition {
+            AnyTransition.opacity.combined(with: .scale(scale: 0.96, anchor: .center))
         }
 
         static func orderedContent(_ direction: OrderedDirection) -> AnyTransition {

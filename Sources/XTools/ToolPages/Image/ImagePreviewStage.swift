@@ -79,13 +79,13 @@ struct IndexImagePreviewStage<Footer: View>: View {
                     maxDisplayHeight: maxDisplayHeight
                 )
                 .frame(maxWidth: .infinity, alignment: .center)
-                .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
+                .toolTransition(ToolMotion.Transition.imageReveal, reduceMotion: reduceMotion)
             } else if !placeholder.isEmpty {
                 Text(placeholder)
                     .font(ToolTypography.bodyPlain)
                     .foregroundStyle(ToolTheme.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .center)
-                    .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
+                    .toolTransition(ToolMotion.Transition.textSwap, reduceMotion: reduceMotion)
             }
 
             footer
@@ -94,7 +94,7 @@ struct IndexImagePreviewStage<Footer: View>: View {
         .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .top)
         .animation(
             replacementMotion == .animated
-                ? ToolMotion.animation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion)
+                ? ToolMotion.animation(ToolMotion.Preset.imageReveal, reduceMotion: reduceMotion)
                 : nil,
             value: imageIdentity
         )

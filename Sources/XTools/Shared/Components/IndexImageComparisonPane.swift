@@ -78,6 +78,7 @@ struct IndexImageComparisonPane<Footer: View>: View {
                     .toolShadow(ToolTheme.Shadow.keycap)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .accessibilityElement(children: .combine)
+                    .transition(ToolMotion.Transition.statusChip)
                 }
 
                 HStack(spacing: 6) {
@@ -106,8 +107,26 @@ struct IndexImageComparisonPane<Footer: View>: View {
                 .padding(.top, 4)
             }
             .frame(height: stageHeight)
-            .background(ToolTheme.editorBackground)
+            // 面板头与工具栏是暖白，图像舞台是 clay；在舞台顶边做一段
+            // 18pt 的同色渐变，把硬切变成柔和的沉降，图像本身盖在其上
+            // 不受影响。压缩/灰度/水印三个对比舞台共用这一处。
+            .background {
+                ZStack(alignment: .top) {
+                    ToolTheme.editorBackground
+
+                    LinearGradient(
+                        colors: [
+                            ToolTheme.panelBackground,
+                            ToolTheme.panelBackground.opacity(0)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 18)
+                }
+            }
             .clipped()
+            .toolAnimation(ToolMotion.Preset.panelReveal, value: isProcessing)
 
             Rectangle()
                 .fill(ToolTheme.border)
