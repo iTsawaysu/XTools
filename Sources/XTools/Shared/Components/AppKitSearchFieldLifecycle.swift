@@ -56,6 +56,31 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
     private let focusRetryDelays: [TimeInterval]
     private let focusRequester: FocusRequester
 
+    /// ⌘F 的同步入口：路由在按键事件里先调用 `armSidebarSearchKeystrokeHandoff`，
+    /// 再递增 focusToken。SwiftUI 的字段更新落下一拍，只靠 focusToken 装缓冲
+    /// 会晚于用户紧随其后敲下的第一个字符。
+    private static weak var sidebarSearchField: NSTextField?
+    private static weak var sidebarSearchCoordinator: AppKitSearchFieldCoordinator?
+
+    static func registerSidebarSearch(
+        field: NSTextField,
+        coordinator: AppKitSearchFieldCoordinator
+    ) {
+        sidebarSearchField = field
+        sidebarSearchCoordinator = coordinator
+    }
+
+    static func unregisterSidebarSearch() {
+        sidebarSearchField = nil
+        sidebarSearchCoordinator = nil
+    }
+
+    static func armSidebarSearchKeystrokeHandoff() {
+        guard let field = sidebarSearchField,
+              let coordinator = sidebarSearchCoordinator else { return }
+        coordinator.beginKeystrokeHandoff(for: field)
+    }
+
     init(
         text: Binding<String>,
         processedFocusToken: Int?,
@@ -132,6 +157,20 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
         }
         handoffTimeout = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+        // 字段编辑器通常在 50–150ms 内就绪。只靠「下一次按键」或 0.8s 超时
+        // 回放，会让单独敲下的第一个字符明显迟到；就绪后立即回放。
+        for delay in [0.06, 0.12, 0.2, 0.35] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak textField] in
+                guard let self, let textField else { return }
+                self.flushKeystrokeHandoffIfEditing(textField)
+            }
+        }
+    }
+
+    /// 只在编辑器就绪时回放；未就绪时保留缓冲，交给下一次按键或超时。
+    private func flushKeystrokeHandoffIfEditing(_ textField: NSTextField) {
+        guard handoffMonitor != nil, isEditing(textField) else { return }
+        finishKeystrokeHandoff(flushTo: textField)
     }
 
     private func isEditing(_ textField: NSTextField) -> Bool {

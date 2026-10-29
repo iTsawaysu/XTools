@@ -53,6 +53,12 @@ private struct IndexImageCompressorWorkspaceContent: View {
     @Environment(\.toolToastCenter) private var toastCenter
     @Environment(\.pageAvailableHeight) private var pageAvailableHeight
 
+    /// 检查器按内容收口，但不越过舞台高度；内容超出时由面板内部滚动
+    /// 并保持主 CTA 吸底。
+    private var inspectorMaxHeight: CGFloat {
+        max(320, pageAvailableHeight - 118)
+    }
+
     @ObservedObject var session: ImageProcessedOutputSession
     @Binding var compressionPreference: ImageCompressionPreference
     @Binding var limitsDimensions: Bool
@@ -92,7 +98,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
             IndexPairLayout(
                 collapseWidth: ToolMetrics.Breakpoint.pairCollapseImageTools,
                 fillsHeight: false,
-                equalizesHeight: true,
+                equalizesHeight: false,
                 trailingWidth: 245
             ) {
                 comparisonWorkspacePanel
@@ -113,7 +119,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
                     )
                 }
                 .withoutDiagnosticStatusSlot()
-                .verticallyFilling()
+                .frame(maxHeight: inspectorMaxHeight)
             }
         }
     }
@@ -144,7 +150,9 @@ private struct IndexImageCompressorWorkspaceContent: View {
         VStack(spacing: 0) {
             ImageInspectorFactRow(label: "格式", value: resultFormatText)
             ImageInspectorFactRow(label: "尺寸", value: resultDimensionsText)
-            ImageInspectorFactRow(label: "实际质量", value: resultQualityText)
+            if let quality = resultQuality {
+                ImageInspectorFactRow(label: "实际质量", value: "\(Int(quality * 100))%")
+            }
         }
     }
 
@@ -299,8 +307,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
 
     private var sourceMetaText: String {
         guard let metadata = session.sourceMetadata else { return "—" }
-        let format = metadata.format?.displayName ?? "未知格式"
-        return "\(metadata.pixelWidth)×\(metadata.pixelHeight) · \(format)"
+        return ImageOutputPresentation.sourceSummary(metadata)
     }
 
     private var resultByteText: String {
@@ -324,10 +331,10 @@ private struct IndexImageCompressorWorkspaceContent: View {
         return "\(output.pixelWidth)×\(output.pixelHeight)"
     }
 
-    private var resultQualityText: String {
-        guard let compressedAssessment, compressedAssessment.canSave,
-              let quality = compressedAssessment.output.quality else { return "—" }
-        return "\(Int(quality * 100))%"
+    /// 无损输出没有质量参数，检查器不再显示一行「实际质量 —」。
+    private var resultQuality: Double? {
+        guard let compressedAssessment, compressedAssessment.canSave else { return nil }
+        return compressedAssessment.output.quality
     }
 
     private var compressionChangeText: String? {

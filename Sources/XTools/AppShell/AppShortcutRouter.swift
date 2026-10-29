@@ -56,6 +56,9 @@ final class AppShortcutRouter {
                 if viewModel.sidebarVisibility == .hidden {
                     viewModel.sidebarVisibility = .visible
                 }
+                // 先装首字缓冲再要焦点：SwiftUI 的 focusToken 更新落下一拍，
+                // 用户紧随 ⌘F 敲下的第一个字符会先于字段就绪到达。
+                AppKitSearchFieldCoordinator.armSidebarSearchKeystrokeHandoff()
                 viewModel.focusSearch()
             }
         default:

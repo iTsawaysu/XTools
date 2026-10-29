@@ -33,6 +33,10 @@ struct SidebarSearchTextField: NSViewRepresentable {
             onFocusChange: onFocusChange
         )
         textField.setAccessibilityIdentifier("sidebar.search")
+        AppKitSearchFieldCoordinator.registerSidebarSearch(
+            field: textField,
+            coordinator: context.coordinator
+        )
         return textField
     }
 
@@ -61,6 +65,7 @@ struct SidebarSearchTextField: NSViewRepresentable {
         _ textField: NSTextField,
         coordinator: AppKitSearchFieldCoordinator
     ) {
+        AppKitSearchFieldCoordinator.unregisterSidebarSearch()
         coordinator.invalidateFocusRequests()
     }
 }

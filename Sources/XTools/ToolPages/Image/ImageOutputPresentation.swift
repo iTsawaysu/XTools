@@ -17,6 +17,19 @@ enum ImageOutputPresentation {
         return "无变化"
     }
 
+    /// 字节数直接比较的同一套措辞（批量行与检查器聚合行共用）。
+    static func sizeChangeText(sourceBytes: Int, outputBytes: Int) -> String {
+        guard sourceBytes > 0 else { return "—" }
+        let percent = Int(((Double(outputBytes) - Double(sourceBytes)) / Double(sourceBytes) * 100).rounded())
+        if percent < 0 {
+            return "减少 \(abs(percent))%"
+        }
+        if percent > 0 {
+            return "增大 \(percent)%"
+        }
+        return "无变化"
+    }
+
     static func outputSummary(_ assessment: ImageOutputAssessment, includeQuality: Bool = true) -> String {
         var parts = [
             assessment.output.format.displayName,

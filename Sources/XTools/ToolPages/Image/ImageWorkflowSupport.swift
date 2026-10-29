@@ -301,6 +301,8 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
     }
 
     /// 检查器版：源文件标识与操作、设置项、输出摘要三段。
+    /// `showsOutput` 供批量页在「队列」区已承载聚合输出时关掉重复的
+    /// 输出摘要段（空段会留下孤立的分隔线与标题）。
     init(
         primaryTitle: String,
         primaryIcon: String? = nil,
@@ -311,6 +313,7 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
         pinsActionToBottom: Bool = false,
         sourceTitle: String = "源文件",
         actionSummary: String? = nil,
+        showsOutput: Bool = true,
         onPrimary: @escaping () -> Void,
         @ViewBuilder source: () -> Source,
         @ViewBuilder settings: () -> Settings,
@@ -329,7 +332,7 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
             onPrimary: onPrimary,
             showsSourceSection: true,
             showsSettingsSection: true,
-            showsOutputSection: true,
+            showsOutputSection: showsOutput,
             source: source(),
             settings: settings(),
             output: output()
@@ -337,48 +340,85 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        Group {
             if pinsActionToBottom {
-                // 检查器：设置区独立滚动，输出摘要与动作区固定在底部，
-                // 设置项再多也不会把主 CTA 推出首屏。
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if showsSourceSection {
-                            sourceSectionBody
-                            sectionDivider
-                        }
-                        if showsSettingsSection {
-                            settingsSectionBody
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                // 检查器：内容放得下时按自然高度从顶部顺排、动作区紧跟
+                // 输出收口，不会在设置与输出之间裂出一道断层；内容超出
+                // 页面给出的高度上限时才退回「设置区滚动 + 输出/动作吸底」，
+                // 保证主 CTA 在 960×678 也不会被推出首屏。
+                ViewThatFits(in: .vertical) {
+                    compactInspector
+                    pinnedInspector
                 }
-                .frame(maxHeight: .infinity)
-
-                if showsOutputSection {
-                    sectionDivider
-                    outputSectionBody
-                }
-
-                sectionDivider
-                actionSectionBody
+                .frame(maxHeight: .infinity, alignment: .top)
             } else {
-                if showsSourceSection {
-                    sourceSectionBody
+                VStack(alignment: .leading, spacing: 0) {
+                    if showsSourceSection {
+                        sourceSectionBody
+                        sectionDivider
+                    }
+                    if showsSettingsSection {
+                        settingsSectionBody
+                    }
+                    if showsOutputSection {
+                        sectionDivider
+                        outputSectionBody
+                    }
                     sectionDivider
+                    actionSectionBody
                 }
-                if showsSettingsSection {
-                    settingsSectionBody
-                }
-                if showsOutputSection {
-                    sectionDivider
-                    outputSectionBody
-                }
-                sectionDivider
-                actionSectionBody
             }
         }
         .frame(maxHeight: pinsActionToBottom ? .infinity : nil, alignment: .top)
+    }
+
+    /// 自然高度版本：源文件、设置、输出从顶部顺排，动作区紧跟输出收口；
+    /// 面板按内容定高（上限由页面传入），不会在设置与输出之间裂出断层，
+    /// 按钮也不会悬在面板中间。
+    private var compactInspector: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if showsSourceSection {
+                sourceSectionBody
+                sectionDivider
+            }
+            if showsSettingsSection {
+                settingsSectionBody
+            }
+            if showsOutputSection {
+                sectionDivider
+                outputSectionBody
+            }
+            sectionDivider
+            actionSectionBody
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 溢出回退版本：设置区独立滚动，输出摘要与动作区固定在底部。
+    private var pinnedInspector: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if showsSourceSection {
+                        sourceSectionBody
+                        sectionDivider
+                    }
+                    if showsSettingsSection {
+                        settingsSectionBody
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: .infinity)
+
+            if showsOutputSection {
+                sectionDivider
+                outputSectionBody
+            }
+
+            sectionDivider
+            actionSectionBody
+        }
     }
 
     private var sourceSectionBody: some View {

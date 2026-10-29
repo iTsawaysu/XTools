@@ -16,6 +16,12 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
     @Environment(\.toolToastCenter) private var toolToastCenter
     @Environment(\.pageAvailableHeight) private var pageAvailableHeight
 
+    /// 检查器按内容收口，但不越过舞台高度；内容超出时由面板内部滚动
+    /// 并保持主 CTA 吸底。
+    private var inspectorMaxHeight: CGFloat {
+        max(320, pageAvailableHeight - 118)
+    }
+
     @ObservedObject var session: ImageProcessedOutputSession
     @State private var isImageDropTargeted = false
 
@@ -36,7 +42,7 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
             IndexPairLayout(
                 collapseWidth: ToolMetrics.Breakpoint.pairCollapseImageTools,
                 fillsHeight: false,
-                equalizesHeight: true,
+                equalizesHeight: false,
                 trailingWidth: 245
             ) {
                 comparisonWorkspacePanel
@@ -55,7 +61,7 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
                     )
                 }
                 .withoutDiagnosticStatusSlot()
-                .verticallyFilling()
+                .frame(maxHeight: inspectorMaxHeight)
             }
         }
     }
@@ -207,8 +213,7 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
 
     private var sourceMetaText: String {
         guard let metadata = session.sourceMetadata else { return "—" }
-        let format = metadata.format?.displayName ?? "未知格式"
-        return "\(metadata.pixelWidth)×\(metadata.pixelHeight) · \(format)"
+        return ImageOutputPresentation.sourceSummary(metadata)
     }
 
     private var resultByteText: String {

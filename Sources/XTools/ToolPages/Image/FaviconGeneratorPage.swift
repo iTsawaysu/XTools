@@ -35,7 +35,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
             IndexPairLayout(
                 collapseWidth: ToolMetrics.Breakpoint.pairCollapseImageTools,
                 fillsHeight: false,
-                equalizesHeight: true,
+                equalizesHeight: false,
                 trailingWidth: 245
             ) {
                 faviconOutputPanel
@@ -53,7 +53,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                     )
                 }
                 .withoutDiagnosticStatusSlot()
-                .verticallyFilling()
+                .frame(maxHeight: stagePanelHeight)
             }
         }
     }
@@ -138,7 +138,8 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
         )
     }
 
-    /// 检查器与舞台等高：舞台固定占满首屏，部署包在舞台内滚动。
+    /// 舞台固定占满首屏，部署包在舞台内滚动；检查器按内容收口、以舞台
+    /// 高度为上限，超出时内部滚动并吸底。
     private var stagePanelHeight: CGFloat {
         max(420, pageAvailableHeight - 118)
     }

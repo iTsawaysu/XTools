@@ -141,7 +141,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                 IndexPairLayout(
                     collapseWidth: ToolMetrics.Breakpoint.pairCollapseImageTools,
                     fillsHeight: false,
-                    equalizesHeight: true,
+                    equalizesHeight: false,
                     trailingWidth: 245
                 ) {
                     queuePanel
@@ -154,13 +154,14 @@ private struct IndexImageConverterWorkspaceContent: View {
                             isPrimaryDisabled: session.completedCount == 0 || session.isProcessing || session.isSaving,
                             pinsActionToBottom: true,
                             sourceTitle: session.singleItem == nil ? "队列" : "源文件",
+                            showsOutput: session.singleItem != nil,
                             onPrimary: saveConverted,
                             source: { queueSection },
                             settings: { outputSettings },
                             output: { converterOutputSection }
                         )
                     }
-                    .verticallyFilling()
+                    .frame(maxHeight: stagePanelHeight)
                 }
                 .onAppear(perform: ensureSupportedTargetFormat)
             }
@@ -173,7 +174,8 @@ private struct IndexImageConverterWorkspaceContent: View {
         )
     }
 
-    /// 检查器与舞台等高：舞台固定占满首屏，列表在舞台内滚动。
+    /// 舞台固定占满首屏，列表在舞台内滚动；检查器按内容收口、以舞台高度
+    /// 为上限，超出时内部滚动并吸底。
     private var stagePanelHeight: CGFloat {
         max(420, pageAvailableHeight - 118)
     }
@@ -241,7 +243,9 @@ private struct IndexImageConverterWorkspaceContent: View {
         .verticallyFilling()
     }
 
-    /// 检查器「队列」区：单张时显示文件名与源摘要，多张时显示张数与总大小。
+    /// 检查器「队列」区：单张时显示文件名与源摘要；多张时把进度、源→输出
+    /// 总量与体积变化收在这一段，避免检查器只剩「几张 + 源总大小」这种
+    /// 对保存决策没有帮助的信息。
     private var queueSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(queuePrimaryText)
@@ -250,11 +254,22 @@ private struct IndexImageConverterWorkspaceContent: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
 
-            Text(queueMetaText)
+            Text(queueProgressText)
                 .font(ToolTypography.caption)
                 .foregroundStyle(ToolTheme.textTertiary)
                 .lineLimit(1)
                 .padding(.top, ToolMetrics.Spacing.xs)
+
+            if session.singleItem == nil {
+                Text(queueAggregateText)
+                    .font(ToolTypography.monoCaption)
+                    .foregroundStyle(queueAggregateTone)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .padding(.top, 2)
+                    .accessibilityLabel("批量输出摘要")
+                    .accessibilityValue(queueAggregateText)
+            }
 
             imageSelectionActions
                 .padding(.top, ToolMetrics.Spacing.sm)
@@ -269,12 +284,30 @@ private struct IndexImageConverterWorkspaceContent: View {
         return "\(session.items.count) 张图片"
     }
 
-    private var queueMetaText: String {
+    private var queueProgressText: String {
         if let singleItem = session.singleItem {
             return ImageOutputPresentation.sourceSummary(singleItem.metadata)
         }
-        let totalBytes = session.items.reduce(0) { $0 + $1.metadata.byteCount }
-        return "总计 \(ByteSizeFormatter.format(bytes: totalBytes))"
+        var parts = ["已完成 \(session.completedCount) / \(session.items.count)"]
+        if session.failedCount > 0 {
+            parts.append("失败 \(session.failedCount)")
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    /// 多张时的聚合行：已完成部分按「源 → 输出 · 变化」展示；尚未产出时
+    /// 退回源总大小，避免出现一串 0 B。
+    private var queueAggregateText: String {
+        guard !completedOutputs.isEmpty else {
+            let sourceTotal = session.items.reduce(0) { $0 + $1.metadata.byteCount }
+            return "源 \(ByteSizeFormatter.format(bytes: sourceTotal))"
+        }
+        return "\(ByteSizeFormatter.format(bytes: completedSourceBytes)) → \(ByteSizeFormatter.format(bytes: completedOutputBytes)) · \(batchChangeText)"
+    }
+
+    private var queueAggregateTone: Color {
+        guard !completedOutputs.isEmpty else { return ToolTheme.textSecondary }
+        return batchChangeTone
     }
 
     /// 设置栏内容：目标格式、质量、透明填充。
@@ -463,11 +496,7 @@ private struct IndexImageConverterWorkspaceContent: View {
     }
 
     private func changeText(source: Int, output: Int) -> String {
-        guard source > 0 else { return "—" }
-        let percent = Int(((Double(output) - Double(source)) / Double(source) * 100).rounded())
-        if percent < 0 { return "减少 \(abs(percent))%" }
-        if percent > 0 { return "增大 \(percent)%" }
-        return "无变化"
+        ImageOutputPresentation.sizeChangeText(sourceBytes: source, outputBytes: output)
     }
 
     /// N>1 紧凑行。
@@ -498,15 +527,6 @@ private struct IndexImageConverterWorkspaceContent: View {
                     value: singleOutputChange(singleItem),
                     valueTone: singleOutputChangeTone(singleItem)
                 )
-            }
-        } else {
-            VStack(spacing: 0) {
-                ImageInspectorFactRow(label: "已完成", value: "\(session.completedCount) / \(session.items.count)")
-                if session.failedCount > 0 {
-                    ImageInspectorFactRow(label: "失败", value: "\(session.failedCount)", valueTone: ToolTheme.warning)
-                }
-                ImageInspectorFactRow(label: "输出总计", value: completedOutputTotalText)
-                ImageInspectorFactRow(label: "体积变化", value: batchChangeText, valueTone: batchChangeTone)
             }
         }
     }
@@ -552,10 +572,6 @@ private struct IndexImageConverterWorkspaceContent: View {
 
     private var completedOutputBytes: Int {
         completedOutputs.reduce(0) { $0 + $1.byteCount }
-    }
-
-    private var completedOutputTotalText: String {
-        completedOutputs.isEmpty ? "—" : ByteSizeFormatter.format(bytes: completedOutputBytes)
     }
 
     private var batchChangeText: String {
@@ -757,13 +773,26 @@ private struct BatchConversionRow: View {
                 .font(ToolTypography.caption)
                 .foregroundStyle(ToolTheme.textSecondary)
         case .converting:
-            IndexProgressSpinner()
-                .accessibilityLabel("正在转换图片")
+            HStack(spacing: 5) {
+                IndexProgressSpinner()
+                    .accessibilityLabel("正在转换图片")
+                Text("转换中…")
+                    .font(ToolTypography.caption)
+                    .foregroundStyle(ToolTheme.textSecondary)
+            }
         case let .done(output):
-            Text(output.summaryText)
-                .font(ToolTypography.caption)
-                .foregroundStyle(output.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textSecondary)
-                .lineLimit(1)
+            // 两行状态：格式/体积与变化分开，窄窗口下不再截成「增大 8…」。
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(output.format.displayName) · \(ByteSizeFormatter.format(bytes: output.byteCount))")
+                    .font(ToolTypography.caption)
+                    .foregroundStyle(output.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textSecondary)
+                    .lineLimit(1)
+                Text(ImageOutputPresentation.sizeChangeText(sourceBytes: item.metadata.byteCount, outputBytes: output.byteCount))
+                    .font(ToolTypography.monoCaption)
+                    .foregroundStyle(output.byteCount <= item.metadata.byteCount ? ToolTheme.success : ToolTheme.warning)
+                    .lineLimit(1)
+            }
+            .fixedSize(horizontal: true, vertical: false)
         case let .failed(message):
             Text(message)
                 .font(ToolTypography.caption)

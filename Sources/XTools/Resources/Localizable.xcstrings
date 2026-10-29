@@ -3483,6 +3483,12 @@
     },
     "输出总计" : {
       "extractionState" : "manual"
+    },
+    "转换中…" : {
+      "extractionState" : "manual"
+    },
+    "批量输出摘要" : {
+      "extractionState" : "manual"
     }
   },
   "version" : "1.0"

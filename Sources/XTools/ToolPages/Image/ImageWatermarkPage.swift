@@ -174,6 +174,12 @@ private struct IndexImageWatermarkWorkspaceContent: View {
     @Environment(\.toolToastCenter) private var toastCenter
     @Environment(\.pageAvailableHeight) private var pageAvailableHeight
 
+    /// 检查器按内容收口，但不越过舞台高度；内容超出时由面板内部滚动
+    /// 并保持主 CTA 吸底。
+    private var inspectorMaxHeight: CGFloat {
+        max(320, pageAvailableHeight - 118)
+    }
+
     @ObservedObject var session: ImageProcessedOutputSession
     @ObservedObject var previewSession: ImageWatermarkPreviewSession
     let previewDebouncer: IndexDebouncer
@@ -231,7 +237,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
             IndexPairLayout(
                 collapseWidth: ToolMetrics.Breakpoint.pairCollapseImageTools,
                 fillsHeight: false,
-                equalizesHeight: true,
+                equalizesHeight: false,
                 trailingWidth: 245
             ) {
                 previewWorkspacePanel
@@ -249,7 +255,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                     )
                 }
                 .withoutDiagnosticStatusSlot()
-                .verticallyFilling()
+                .frame(maxHeight: inspectorMaxHeight)
             }
         }
     }
@@ -407,22 +413,26 @@ private struct IndexImageWatermarkWorkspaceContent: View {
 
     private var emptyUploadWell: some View {
         IndexPanel("上传图片") {
-            VStack(spacing: ToolMetrics.Spacing.lg) {
-                watermarkTextField
-                    .frame(maxWidth: 360)
-
+            VStack(spacing: ToolMetrics.Spacing.md) {
                 ImageUploadPendingState(
                     isProcessing: session.isProcessing,
                     title: "选择图片开始添加水印"
                 )
 
                 if !session.isProcessing {
-                    IndexPrimaryActionButton(
-                        title: "选择图片",
-                        systemImage: "photo",
-                        help: "选择图片",
-                        action: selectImage
-                    )
+                    // 水印文字与主操作同一行：空态只有一个紧凑的动作组，
+                    // 输入框不再单独浮在上方、与空态之间留出断层。
+                    HStack(spacing: ToolMetrics.Spacing.sm) {
+                        watermarkTextField
+                            .frame(width: 248)
+
+                        IndexPrimaryActionButton(
+                            title: "选择图片",
+                            systemImage: "photo",
+                            help: "选择图片",
+                            action: selectImage
+                        )
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
@@ -480,8 +490,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
 
     private var sourceMetaText: String {
         guard let metadata = session.sourceMetadata else { return "—" }
-        let format = metadata.format?.displayName ?? "未知格式"
-        return "\(metadata.pixelWidth)×\(metadata.pixelHeight) · \(format)"
+        return ImageOutputPresentation.sourceSummary(metadata)
     }
 
     private var imageSelectionActions: ImageSelectionActionRow {
