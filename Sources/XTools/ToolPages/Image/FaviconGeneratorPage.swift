@@ -14,9 +14,11 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     @Environment(\.fileInputPanelClient) private var fileInputPanelClient
     @Environment(\.fileOutputPanelClient) private var fileOutputPanelClient
     @Environment(\.toolToastCenter) private var toastCenter
+    @Environment(\.pageAvailableHeight) private var pageAvailableHeight
 
     @ObservedObject var session: FaviconOutputSetSession
     @State private var isImageDropTargeted = false
+    @State private var showsManifest = false
 
     var body: some View {
         if session.sourceImage == nil {
@@ -33,23 +35,25 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
             IndexPairLayout(
                 collapseWidth: ToolMetrics.Breakpoint.pairCollapseImageTools,
                 fillsHeight: false,
-                equalizesHeight: false,
+                equalizesHeight: true,
                 trailingWidth: 245
             ) {
                 faviconOutputPanel
             } trailing: {
-                IndexPanel("检查器") {
+                IndexPanel("Favicon 设置") {
                     ImageWorkflowSettingsPanel(
                         primaryTitle: session.isSaving ? "正在保存…" : "全部保存",
                         primaryIcon: IndexActionSymbol.save,
                         primaryHelp: session.isSaving ? "正在保存全部 Favicon 部署文件" : "保存全部五个 Favicon 部署文件",
                         isPrimaryDisabled: session.package == nil || session.isSaving || session.isProcessing,
+                        pinsActionToBottom: true,
                         onPrimary: savePackage,
                         source: { sourceSection },
                         output: { outputSection }
                     )
                 }
                 .withoutDiagnosticStatusSlot()
+                .verticallyFilling()
             }
         }
     }
@@ -134,27 +138,44 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
         )
     }
 
+    /// 检查器与舞台等高：舞台固定占满首屏，部署包在舞台内滚动。
+    private var stagePanelHeight: CGFloat {
+        max(420, pageAvailableHeight - 118)
+    }
+
     private var faviconOutputPanel: some View {
         IndexPanel("Favicon 部署包") {
-            VStack(spacing: ToolMetrics.Spacing.md) {
-                IndexModeContent(id: faviconOutputState) { state in
-                    if state == 0 {
-                        IndexProgressLabel(message: "正在生成部署包…", layout: .centered)
-                            .accessibilityLabel("正在生成 Favicon 部署包")
-                    } else if state == 1, let package = session.package {
-                        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.base) {
+                    IndexModeContent(id: faviconOutputState) { state in
+                        if state == 0 {
+                            IndexProgressLabel(message: "正在生成部署包…", layout: .centered)
+                                .accessibilityLabel("正在生成 Favicon 部署包")
+                        } else if state == 1, let package = session.package {
                             if let warning = session.sourceWarning {
                                 faviconReviewWarning(warning)
                             }
 
-                            artifactGroup(.browser, package: package)
-                            artifactGroup(.apple, package: package)
-                            artifactGroup(.pwa, package: package)
-                            artifactGroup(.configuration, package: package)
-                            configurationGroup(package)
+                            faviconHero(package)
+
+                            VStack(spacing: 2) {
+                                ForEach(package.artifacts) { artifact in
+                                    faviconArtifactRow(artifact, package: package)
+                                }
+                            }
+
+                            FaviconConfigurationCodeSurface(
+                                title: "HTML 引用片段（假设文件位于站点根目录）",
+                                text: package.htmlSnippet,
+                                copyTitle: "复制 Favicon HTML 引用片段"
+                            )
+
+                            manifestDisclosure(package)
                         }
                     }
                 }
+                .padding(ToolMetrics.Spacing.panelInset)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .indexWorkspaceDiagnostic(session.error)
             .indexDropZone(
@@ -163,11 +184,65 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                 onMultipleFiles: rejectMultipleImageDrop
             )
             .toolAnimation(ToolMotion.Preset.diagnostic, value: session.isProcessing)
-            .padding(ToolMetrics.Spacing.sm)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .toolAnimation(ToolMotion.Preset.panelReveal, value: session.package != nil)
         }
+        .contentInsets(EdgeInsets())
         .verticallyFilling()
+        .frame(height: stagePanelHeight)
+    }
+
+    /// 结果预览：用包内最大的图标作为成品主视觉。
+    private func faviconHero(_ package: FaviconPackage) -> some View {
+        let largestSize = package.iconPreviews.map(\.size).max() ?? 180
+        return Group {
+            if let icon = package.icon(size: largestSize), let image = NSImage(data: icon.data) {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 96, height: 96)
+                    .background(
+                        ToolTheme.editorBackground,
+                        in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.card, style: .continuous)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.card, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.card, style: .continuous)
+                            .strokeBorder(ToolTheme.border, lineWidth: 0.5)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, ToolMetrics.Spacing.xs)
+                    .accessibilityLabel("Favicon 图标预览")
+            }
+        }
+    }
+
+    private func manifestDisclosure(_ package: FaviconPackage) -> some View {
+        let manifestText = package.artifact(.siteWebManifest)
+            .map { String(decoding: $0.data, as: UTF8.self) } ?? ""
+        return IndexDisclosure(title: "site.webmanifest 内容", isExpanded: $showsManifest) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+                HStack {
+                    Text("site.webmanifest")
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                    Spacer(minLength: 8)
+                    IndexCopyButton(text: manifestText, title: "复制 site.webmanifest 内容", iconOnly: true)
+                }
+                Text(manifestText)
+                    .font(ToolTypography.monoCaption)
+                    .foregroundStyle(ToolTheme.textSecondary)
+                    .textSelection(.enabled)
+                    .arrowCursorOnHover()
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("site.webmanifest 内容")
+                    .accessibilityValue(manifestText)
+                Text("该 manifest 只声明图标资源，不包含应用名称、启动地址等完整 PWA 安装配置。")
+                    .font(ToolTypography.caption)
+                    .foregroundStyle(ToolTheme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .inline()
     }
 
     private func faviconReviewWarning(_ warning: String) -> some View {
@@ -186,23 +261,6 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
         }
     }
 
-    @ViewBuilder
-    private func artifactGroup(_ group: FaviconArtifactGroup, package: FaviconPackage) -> some View {
-        let artifacts = package.artifacts.filter { $0.group == group }
-        if !artifacts.isEmpty {
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
-                Text(group.displayName)
-                    .font(ToolTypography.sectionTitle)
-                    .foregroundStyle(ToolTheme.textPrimary)
-                    .accessibilityAddTraits(.isHeader)
-
-                ForEach(artifacts) { artifact in
-                    faviconArtifactRow(artifact, package: package)
-                }
-            }
-        }
-    }
-
     private func faviconArtifactRow(_ artifact: FaviconArtifact, package: FaviconPackage) -> some View {
         FaviconArtifactRow(
             artifact: artifact,
@@ -211,15 +269,6 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
         ) {
             Task { @MainActor in handleSave(await session.saveArtifact(artifact.id, filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient), filename: artifact.filename) }
         }
-    }
-
-    private func configurationGroup(_ package: FaviconPackage) -> some View {
-        let manifestText = package.artifact(.siteWebManifest)
-            .map { String(decoding: $0.data, as: UTF8.self) } ?? ""
-        return FaviconConfigurationGroup(
-            manifestText: manifestText,
-            htmlSnippet: package.htmlSnippet
-        )
     }
 
     private func handleSave(_ outcome: ImageSaveOutcome, filename: String) {
@@ -255,79 +304,44 @@ private struct FaviconArtifactRow: View {
     let onSave: () -> Void
 
     var body: some View {
-        IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 8) {
+        IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 7) {
             HStack(spacing: ToolMetrics.Spacing.md) {
-                if !artifact.previewSizes.isEmpty {
-                    FaviconPreviewStrip(artifact: artifact, package: package)
+                if let largest = artifact.previewSizes.max(),
+                   let icon = package.icon(size: largest),
+                   let image = NSImage(data: icon.data) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 24, height: 24)
+                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                .strokeBorder(ToolTheme.border, lineWidth: 0.5)
+                        }
+                        .accessibilityHidden(true)
                 }
-                VStack(alignment: .leading, spacing: 3) {
+
+                VStack(alignment: .leading, spacing: 2) {
                     Text(artifact.filename)
                         .font(ToolTypography.monoLabel)
-                    Text(artifact.purpose)
-                        .font(ToolTypography.bodyPlain)
-                        .foregroundStyle(ToolTheme.textSecondary)
-                    Text(artifact.details)
+                        .lineLimit(1)
+                    Text("\(artifact.purpose) · \(artifact.details)")
                         .font(ToolTypography.caption)
-                        .foregroundStyle(ToolTheme.textTertiary)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
+
                 Spacer(minLength: 8)
+
                 IndexIconButton(
                     systemImage: IndexActionSymbol.save,
                     help: "保存 \(artifact.filename)",
                     action: onSave
                 )
-                    .disabled(isSaving)
-                    .accessibilityLabel(isSaving ? "正在保存 \(artifact.filename)" : "保存 \(artifact.filename)")
+                .disabled(isSaving)
+                .accessibilityLabel(isSaving ? "正在保存 \(artifact.filename)" : "保存 \(artifact.filename)")
             }
-        }
-    }
-}
-
-private struct FaviconPreviewStrip: View {
-    let artifact: FaviconArtifact
-    let package: FaviconPackage
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 5) {
-            ForEach(artifact.previewSizes, id: \.self) { size in
-                if let icon = package.icon(size: size), let image = NSImage(data: icon.data) {
-                    Image(nsImage: image)
-                        .resizable()
-                        .frame(width: previewLength(size), height: previewLength(size))
-                        .overlay {
-                            Rectangle().strokeBorder(ToolTheme.border, lineWidth: 0.5)
-                        }
-                        .accessibilityLabel("\(artifact.filename) 的 \(size)×\(size) 预览")
-                }
-            }
-        }
-        .frame(minWidth: artifact.id == .faviconICO ? 106 : 58, alignment: .leading)
-    }
-
-    private func previewLength(_ size: Int) -> CGFloat {
-        min(CGFloat(size), artifact.id == .faviconICO ? 48 : 56)
-    }
-}
-
-private struct FaviconConfigurationGroup: View {
-    let manifestText: String
-    let htmlSnippet: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
-            FaviconConfigurationCodeSurface(
-                title: "site.webmanifest 内容",
-                text: manifestText,
-                copyTitle: "复制 site.webmanifest 内容"
-            )
-            FaviconConfigurationCodeSurface(
-                title: "HTML 引用片段（假设文件位于站点根目录）",
-                text: htmlSnippet,
-                copyTitle: "复制 Favicon HTML 引用片段"
-            )
-            Text("该 manifest 只声明图标资源，不包含应用名称、启动地址等完整 PWA 安装配置。")
-                .font(ToolTypography.caption)
-                .foregroundStyle(ToolTheme.textTertiary)
         }
     }
 }

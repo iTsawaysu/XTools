@@ -360,7 +360,11 @@ struct ImageBatchConversionSessionTests {
             filePanel: .unavailable,
             outputPanel: FileOutputPanelClient { _ in nil }
         ) == .saved)
-        #expect(successWriter.writes.map { $0.url.lastPathComponent } == ["save-batch-first.jpg", "save-batch-second.jpg"])
+        let writtenNames = successWriter.writes.map { $0.url.lastPathComponent }
+        #expect(writtenNames.count == 2)
+        #expect(writtenNames[0].hasPrefix("save-batch-first-"))
+        #expect(writtenNames[1].hasPrefix("save-batch-second-"))
+        #expect(writtenNames.allSatisfy { $0.hasSuffix(".jpg") })
         // 批量写入的数据来自落盘临时文件的读取结果。
         #expect(successWriter.writes.map(\.data) == [output.data, output.data])
         // 目录面板确认按钮为「保存」，message 说明即将写入的张数。

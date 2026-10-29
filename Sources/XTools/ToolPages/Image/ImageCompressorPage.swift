@@ -97,7 +97,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
             ) {
                 comparisonWorkspacePanel
             } trailing: {
-                IndexPanel("检查器") {
+                IndexPanel("压缩设置") {
                     ImageWorkflowSettingsPanel(
                         primaryTitle: "保存优化图片",
                         primaryIcon: IndexActionSymbol.save,
@@ -409,7 +409,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
 
     private func saveImage() {
         Task { @MainActor in
-            let outcome = await session.save(workflow: .compression, defaultBasename: "compressed", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
+            let outcome = await session.save(workflow: .compression, defaultBasename: OutputFileNaming.timestampedBase(source: session.source?.url.lastPathComponent, fallback: "compressed"), filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
             ImageSaveOutcomeToasts.presentSingleOutput(outcome, toastCenter: toastCenter)
         }
     }

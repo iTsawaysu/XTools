@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import XToolsCore
 
@@ -254,6 +255,7 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
     var statusTone: Color = ToolTheme.textTertiary
     var pinsActionToBottom = false
     var sourceTitle = "源文件"
+    var actionSummary: String? = nil
     let onPrimary: () -> Void
     private let showsSourceSection: Bool
     private let showsSettingsSection: Bool
@@ -271,6 +273,7 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
         statusTone: Color,
         pinsActionToBottom: Bool,
         sourceTitle: String,
+        actionSummary: String?,
         onPrimary: @escaping () -> Void,
         showsSourceSection: Bool,
         showsSettingsSection: Bool,
@@ -287,6 +290,7 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
         self.statusTone = statusTone
         self.pinsActionToBottom = pinsActionToBottom
         self.sourceTitle = sourceTitle
+        self.actionSummary = actionSummary
         self.onPrimary = onPrimary
         self.showsSourceSection = showsSourceSection
         self.showsSettingsSection = showsSettingsSection
@@ -306,6 +310,7 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
         statusTone: Color = ToolTheme.textTertiary,
         pinsActionToBottom: Bool = false,
         sourceTitle: String = "源文件",
+        actionSummary: String? = nil,
         onPrimary: @escaping () -> Void,
         @ViewBuilder source: () -> Source,
         @ViewBuilder settings: () -> Settings,
@@ -320,6 +325,7 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
             statusTone: statusTone,
             pinsActionToBottom: pinsActionToBottom,
             sourceTitle: sourceTitle,
+            actionSummary: actionSummary,
             onPrimary: onPrimary,
             showsSourceSection: true,
             showsSettingsSection: true,
@@ -332,70 +338,112 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if showsSourceSection {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
-                    IndexOptionLabel(sourceTitle)
-                    source
-                }
-                .padding(.top, ToolMetrics.Spacing.base)
-                .padding(.bottom, ToolMetrics.Spacing.base)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                sectionDivider
-            }
-
-            if showsSettingsSection {
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
-                    settings
-                }
-                // Horizontal gutter belongs to the hosting IndexPanel: adding a
-                // second inset here misaligns fields with the panel title by 14pt.
-                .padding(.top, ToolMetrics.Spacing.md)
-                .padding(.bottom, ToolMetrics.Spacing.base)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
             if pinsActionToBottom {
-                Spacer(minLength: ToolMetrics.Spacing.md)
-            }
+                // 检查器：设置区独立滚动，输出摘要与动作区固定在底部，
+                // 设置项再多也不会把主 CTA 推出首屏。
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if showsSourceSection {
+                            sourceSectionBody
+                            sectionDivider
+                        }
+                        if showsSettingsSection {
+                            settingsSectionBody
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxHeight: .infinity)
 
-            if showsOutputSection {
+                if showsOutputSection {
+                    sectionDivider
+                    outputSectionBody
+                }
+
                 sectionDivider
-
-                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
-                    IndexOptionLabel("输出")
-                    output
+                actionSectionBody
+            } else {
+                if showsSourceSection {
+                    sourceSectionBody
+                    sectionDivider
                 }
-                .padding(.top, ToolMetrics.Spacing.md)
-                .padding(.bottom, ToolMetrics.Spacing.base)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
-            sectionDivider
-
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
-                IndexPrimaryActionButton(
-                    title: primaryTitle,
-                    systemImage: primaryIcon,
-                    help: primaryHelp,
-                    fillsWidth: true,
-                    action: onPrimary
-                )
-                .disabled(isPrimaryDisabled)
-
-                if let statusText {
-                    Text(statusText)
-                        .font(ToolTypography.caption)
-                        .foregroundStyle(statusTone)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityLabel(statusText)
+                if showsSettingsSection {
+                    settingsSectionBody
                 }
+                if showsOutputSection {
+                    sectionDivider
+                    outputSectionBody
+                }
+                sectionDivider
+                actionSectionBody
             }
-            .padding(.top, ToolMetrics.Spacing.md)
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxHeight: pinsActionToBottom ? .infinity : nil, alignment: .top)
+    }
+
+    private var sourceSectionBody: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+            IndexOptionLabel(sourceTitle)
+            source
+        }
+        .padding(.top, ToolMetrics.Spacing.base)
+        .padding(.bottom, ToolMetrics.Spacing.base)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var settingsSectionBody: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+            settings
+        }
+        // Horizontal gutter belongs to the hosting IndexPanel: adding a
+        // second inset here misaligns fields with the panel title by 14pt.
+        .padding(.top, ToolMetrics.Spacing.md)
+        .padding(.bottom, ToolMetrics.Spacing.base)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var outputSectionBody: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+            IndexOptionLabel("输出")
+            output
+        }
+        .padding(.top, ToolMetrics.Spacing.md)
+        .padding(.bottom, ToolMetrics.Spacing.base)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var actionSectionBody: some View {
+        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+            if let actionSummary {
+                Text(actionSummary)
+                    .font(ToolTypography.caption)
+                    .foregroundStyle(ToolTheme.textSecondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+
+            IndexPrimaryActionButton(
+                title: primaryTitle,
+                systemImage: primaryIcon,
+                hint: "⌘S",
+                help: primaryHelp,
+                fillsWidth: true,
+                shortcut: "s",
+                action: onPrimary
+            )
+            .disabled(isPrimaryDisabled)
+
+            if let statusText {
+                Text(statusText)
+                    .font(ToolTypography.caption)
+                    .foregroundStyle(statusTone)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel(statusText)
+            }
+        }
+        .padding(.top, ToolMetrics.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var sectionDivider: some View {
@@ -416,6 +464,7 @@ extension ImageWorkflowSettingsPanel where Output == EmptyView {
         statusTone: Color = ToolTheme.textTertiary,
         pinsActionToBottom: Bool = false,
         sourceTitle: String = "源文件",
+        actionSummary: String? = nil,
         onPrimary: @escaping () -> Void,
         @ViewBuilder source: () -> Source,
         @ViewBuilder settings: () -> Settings
@@ -429,6 +478,7 @@ extension ImageWorkflowSettingsPanel where Output == EmptyView {
             statusTone: statusTone,
             pinsActionToBottom: pinsActionToBottom,
             sourceTitle: sourceTitle,
+            actionSummary: actionSummary,
             onPrimary: onPrimary,
             showsSourceSection: true,
             showsSettingsSection: true,
@@ -451,6 +501,7 @@ extension ImageWorkflowSettingsPanel where Settings == EmptyView {
         statusTone: Color = ToolTheme.textTertiary,
         pinsActionToBottom: Bool = false,
         sourceTitle: String = "源文件",
+        actionSummary: String? = nil,
         onPrimary: @escaping () -> Void,
         @ViewBuilder source: () -> Source,
         @ViewBuilder output: () -> Output
@@ -464,6 +515,7 @@ extension ImageWorkflowSettingsPanel where Settings == EmptyView {
             statusTone: statusTone,
             pinsActionToBottom: pinsActionToBottom,
             sourceTitle: sourceTitle,
+            actionSummary: actionSummary,
             onPrimary: onPrimary,
             showsSourceSection: true,
             showsSettingsSection: false,
@@ -497,6 +549,7 @@ extension ImageWorkflowSettingsPanel where Source == EmptyView, Output == EmptyV
             statusTone: statusTone,
             pinsActionToBottom: pinsActionToBottom,
             sourceTitle: "源文件",
+            actionSummary: nil,
             onPrimary: onPrimary,
             showsSourceSection: false,
             showsSettingsSection: true,

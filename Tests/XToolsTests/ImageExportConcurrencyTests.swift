@@ -43,8 +43,16 @@ struct ImageExportConcurrencyTests {
         // before reset and compare descriptors against it after save returns.
         #expect(try probe.openDescriptorsAfterSave() == 0)
         for index in 0..<count {
-            let name = count == 1 ? "converted.png" : "source-\(index).png"
-            #expect(try Data(contentsOf: directory.appendingPathComponent(name)) == accepted)
+            if count == 1 {
+                #expect(try Data(contentsOf: directory.appendingPathComponent("converted.png")) == accepted)
+            } else {
+                let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+                let match = names.first { $0.hasPrefix("source-\(index)-") && $0.hasSuffix(".png") }
+                #expect(match != nil)
+                if let match {
+                    #expect(try Data(contentsOf: directory.appendingPathComponent(match)) == accepted)
+                }
+            }
         }
         probe.session = nil
     }
@@ -126,8 +134,14 @@ struct ImageExportConcurrencyTests {
         gate.signal()
         #expect(await saving.value == .saved)
         #expect(!session.isSaving)
-        #expect(try Data(contentsOf: directory.appendingPathComponent("source-0.png")) == accepted)
-        #expect(try Data(contentsOf: directory.appendingPathComponent("source-1.png")) == accepted)
+        let savedNames = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        for index in 0...1 {
+            let match = savedNames.first { $0.hasPrefix("source-\(index)-") && $0.hasSuffix(".png") }
+            #expect(match != nil)
+            if let match {
+                #expect(try Data(contentsOf: directory.appendingPathComponent(match)) == accepted)
+            }
+        }
     }
 
     @Test(arguments: [1, 2])

@@ -236,7 +236,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
             ) {
                 previewWorkspacePanel
             } trailing: {
-                IndexPanel("检查器") {
+                IndexPanel("水印设置") {
                     ImageWorkflowSettingsPanel(
                         primaryTitle: "保存水印图片",
                         primaryIcon: IndexActionSymbol.save,
@@ -613,7 +613,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
 
     private func saveImage() {
         Task { @MainActor in
-            let outcome = await session.save(workflow: .watermark, defaultBasename: "watermarked", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
+            let outcome = await session.save(workflow: .watermark, defaultBasename: OutputFileNaming.timestampedBase(source: session.source?.url.lastPathComponent, fallback: "watermarked"), filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
             ImageSaveOutcomeToasts.presentSingleOutput(outcome, toastCenter: toastCenter)
         }
     }

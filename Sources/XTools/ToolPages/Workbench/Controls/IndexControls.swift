@@ -234,9 +234,27 @@ struct IndexPrimaryActionButton: View {
     /// Inspector rails stretch the primary action to the column width so the
     /// footer reads as one anchored bar instead of a small pill.
     var fillsWidth = false
+    /// Optional key equivalent bound to this action (image save = ⌘S).
+    var shortcut: KeyEquivalent? = nil
     let action: () -> Void
 
     var body: some View {
+        shortcutButton
+            .buttonStyle(IndexButtonStyle(primary: true))
+            .accessibilityLabel(help)
+            .accessibilityHint(help)
+    }
+
+    @ViewBuilder
+    private var shortcutButton: some View {
+        if let shortcut {
+            actionButton.keyboardShortcut(shortcut, modifiers: .command)
+        } else {
+            actionButton
+        }
+    }
+
+    private var actionButton: some View {
         Button(action: action) {
             HStack(spacing: 7) {
                 if let systemImage {
@@ -254,9 +272,6 @@ struct IndexPrimaryActionButton: View {
             .fixedSize(horizontal: !fillsWidth, vertical: false)
             .frame(maxWidth: fillsWidth ? .infinity : nil)
         }
-        .buttonStyle(IndexButtonStyle(primary: true))
-        .accessibilityLabel(help)
-        .accessibilityHint(help)
     }
 }
 

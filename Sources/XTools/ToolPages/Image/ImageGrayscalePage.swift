@@ -41,7 +41,7 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
             ) {
                 comparisonWorkspacePanel
             } trailing: {
-                IndexPanel("检查器") {
+                IndexPanel("灰度设置") {
                     ImageWorkflowSettingsPanel(
                         primaryTitle: saveButtonTitle,
                         primaryIcon: IndexActionSymbol.save,
@@ -304,7 +304,7 @@ private struct IndexImageGrayscaleWorkspaceContent: View {
 
     private func saveImage() {
         Task { @MainActor in
-            let outcome = await session.save(workflow: .grayscale, defaultBasename: "grayscale", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
+            let outcome = await session.save(workflow: .grayscale, defaultBasename: OutputFileNaming.timestampedBase(source: session.source?.url.lastPathComponent, fallback: "grayscale"), filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
             ImageSaveOutcomeToasts.presentSingleOutput(outcome, toastCenter: toolToastCenter)
         }
     }

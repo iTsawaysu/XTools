@@ -3453,6 +3453,36 @@
     },
     "队列" : {
       "extractionState" : "manual"
+    },
+    "压缩设置" : {
+      "extractionState" : "manual"
+    },
+    "灰度设置" : {
+      "extractionState" : "manual"
+    },
+    "水印设置" : {
+      "extractionState" : "manual"
+    },
+    "转换设置" : {
+      "extractionState" : "manual"
+    },
+    "Favicon 设置" : {
+      "extractionState" : "manual"
+    },
+    "site.webmanifest 内容" : {
+      "extractionState" : "manual"
+    },
+    "Favicon 图标预览" : {
+      "extractionState" : "manual"
+    },
+    "已完成" : {
+      "extractionState" : "manual"
+    },
+    "清空队列" : {
+      "extractionState" : "manual"
+    },
+    "输出总计" : {
+      "extractionState" : "manual"
     }
   },
   "version" : "1.0"

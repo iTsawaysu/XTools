@@ -625,7 +625,9 @@ struct Base64FileWorkflowTests {
 
         await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/source.png"), processor: processor)?.value
         await session.saveEncodedOutput(client: client, processor: processor)?.value
-        #expect(dialog.encodedSaveNames == ["source.data-url.txt"])
+        #expect(dialog.encodedSaveNames.count == 1)
+        #expect(dialog.encodedSaveNames.first?.hasPrefix("source-") == true)
+        #expect(dialog.encodedSaveNames.first?.hasSuffix(".data-url.txt") == true)
         #expect(processor.textWrites.isEmpty)
         #expect(session.fileError == nil)
 

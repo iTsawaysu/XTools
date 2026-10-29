@@ -40,8 +40,13 @@ struct AppKitIndexTextConversionTextSaver: IndexTextConversionTextSaving {
     ) async -> IndexTextConversionSaveResult {
         guard !text.isEmpty else { return .failed }
 
+        let fileExtension = URL(fileURLWithPath: fileName).pathExtension
+        let timestampedBase = OutputFileNaming.timestampedBase(source: fileName, fallback: "output")
+        let defaultFilename = fileExtension.isEmpty
+            ? timestampedBase
+            : "\(timestampedBase).\(fileExtension)"
         let request = FileOutputPanelRequest(
-            defaultFilename: fileName,
+            defaultFilename: defaultFilename,
             allowedContentTypes: [
                 IndexTextConversionSaveContentType.contentType(for: fileName) ?? .plainText
             ],

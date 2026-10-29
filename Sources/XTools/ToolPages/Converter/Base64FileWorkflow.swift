@@ -232,15 +232,13 @@ enum Base64FileWorkflow {
         sourceFileName: String,
         mode: Base64Conversion.FileOutputMode
     ) -> String {
-        let fallback = "encoded"
-        let baseName = URL(fileURLWithPath: sourceFileName).deletingPathExtension().lastPathComponent
-        let safeBaseName = baseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? fallback : baseName
+        let baseName = OutputFileNaming.timestampedBase(source: sourceFileName, fallback: "encoded")
 
         switch mode {
         case .base64:
-            return "\(safeBaseName).base64.txt"
+            return "\(baseName).base64.txt"
         case .dataURL:
-            return "\(safeBaseName).data-url.txt"
+            return "\(baseName).data-url.txt"
         }
     }
 

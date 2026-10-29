@@ -71,6 +71,7 @@ private struct IndexImageConverterWorkspaceContent: View {
     @Environment(\.fileInputPanelClient) private var fileInputPanelClient
     @Environment(\.fileOutputPanelClient) private var fileOutputPanelClient
     @Environment(\.toolToastCenter) private var toastCenter
+    @Environment(\.pageAvailableHeight) private var pageAvailableHeight
 
     @ObservedObject var session: ImageBatchConversionSession
     @Binding var targetFormat: ImageFileFormat
@@ -140,24 +141,26 @@ private struct IndexImageConverterWorkspaceContent: View {
                 IndexPairLayout(
                     collapseWidth: ToolMetrics.Breakpoint.pairCollapseImageTools,
                     fillsHeight: false,
-                    equalizesHeight: false,
+                    equalizesHeight: true,
                     trailingWidth: 245
                 ) {
                     queuePanel
                 } trailing: {
-                    IndexPanel("检查器") {
+                    IndexPanel("转换设置") {
                         ImageWorkflowSettingsPanel(
                             primaryTitle: saveButtonTitle,
                             primaryIcon: IndexActionSymbol.save,
                             primaryHelp: session.isSaving ? "正在保存图片" : "保存转换结果",
                             isPrimaryDisabled: session.completedCount == 0 || session.isProcessing || session.isSaving,
-                            statusText: batchStatisticsText,
-                            sourceTitle: "队列",
+                            pinsActionToBottom: true,
+                            sourceTitle: session.singleItem == nil ? "队列" : "源文件",
                             onPrimary: saveConverted,
                             source: { queueSection },
-                            settings: { outputSettings }
+                            settings: { outputSettings },
+                            output: { converterOutputSection }
                         )
                     }
+                    .verticallyFilling()
                 }
                 .onAppear(perform: ensureSupportedTargetFormat)
             }
@@ -170,21 +173,35 @@ private struct IndexImageConverterWorkspaceContent: View {
         )
     }
 
-    /// 转换队列舞台：N=1 时为单张预览，N>1 时为紧凑列表。
+    /// 检查器与舞台等高：舞台固定占满首屏，列表在舞台内滚动。
+    private var stagePanelHeight: CGFloat {
+        max(420, pageAvailableHeight - 118)
+    }
+
+    private var stagePanelTitle: String {
+        session.singleItem == nil ? "转换队列" : "预览"
+    }
+
+    /// 转换舞台：单张为预览 + 标准脚注，多张为可滚动列表。
     private var queuePanel: some View {
-        IndexPanel("转换队列") {
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
+        IndexPanel(stagePanelTitle) {
+            Group {
                 if let singleItem = session.singleItem {
                     singleImageStage(singleItem)
                 } else {
-                    batchList
+                    ScrollView {
+                        batchList
+                            .padding(ToolMetrics.Spacing.panelInset)
+                    }
                 }
             }
             .indexWorkspaceDiagnostic(session.error)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .imageDropHighlight(isActive: isImageDropTargeted)
         }
+        .contentInsets(EdgeInsets())
         .verticallyFilling()
+        .frame(height: stagePanelHeight)
     }
 
     /// 空态：无面板头的拖放井。
@@ -371,38 +388,86 @@ private struct IndexImageConverterWorkspaceContent: View {
                 resumePendingConversions()
             },
             changeTitle: "添加图片",
-            clearTitle: "清空图片",
+            clearTitle: session.singleItem == nil ? "清空队列" : "清除图片",
             framed: true
         )
     }
 
-    /// N=1 时行密度放宽：大缩略图 + 底部摘要/保存按钮，贴近既有单张观感。
+    /// 单张舞台：预览居中，底部固定 40pt 脚注（原始/输出体积与变化）。
     private func singleImageStage(_ item: BatchConversionItem) -> some View {
-        IndexImagePreviewStage(
-            image: session.sourceImage,
-            accessibilityLabel: "待转换的原图",
-            maxDisplayWidth: 640,
-            maxDisplayHeight: 360,
-            spacing: ToolMetrics.Spacing.md
-        ) {
-            if case .converting = item.state {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            IndexImagePreviewStage(
+                image: session.sourceImage,
+                accessibilityLabel: "待转换的原图",
+                accessibilityValue: sourcePreviewAccessibilityValue(item),
+                maxDisplayWidth: 640,
+                maxDisplayHeight: 400
+            )
+            .padding(.horizontal, ToolMetrics.Spacing.panelInset)
+            Spacer(minLength: 0)
+            Rectangle().fill(ToolTheme.border).frame(height: 0.5)
+            singleItemFooter(item)
+        }
+    }
+
+    private func singleItemFooter(_ item: BatchConversionItem) -> some View {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
+            Text("原始大小")
+                .font(ToolTypography.caption)
+                .foregroundStyle(ToolTheme.textSecondary)
+            Text(ByteSizeFormatter.format(bytes: item.metadata.byteCount))
+                .font(ToolTypography.monoLabel)
+                .foregroundStyle(ToolTheme.textPrimary)
+
+            Spacer(minLength: 8)
+
+            switch item.state {
+            case .idle:
+                Text("待转换")
+                    .font(ToolTypography.caption)
+                    .foregroundStyle(ToolTheme.textSecondary)
+            case .converting:
                 IndexProgressSpinner()
                     .accessibilityLabel("正在转换图片")
-            }
-
-            if case let .done(output) = item.state {
-                Text("输出: \(output.summaryText)\(transparencyFillOutputSuffix)")
+                Text("正在转换…")
                     .font(ToolTypography.caption)
-                    .foregroundStyle(output.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textSecondary)
-            }
-
-            if case let .failed(message) = item.state {
+                    .foregroundStyle(ToolTheme.textSecondary)
+            case let .failed(message):
                 Text(message)
                     .font(ToolTypography.caption)
                     .foregroundStyle(ToolTheme.warning)
+                    .lineLimit(1)
+            case let .done(output):
+                Text("输出大小")
+                    .font(ToolTypography.caption)
+                    .foregroundStyle(ToolTheme.textSecondary)
+                Text(ByteSizeFormatter.format(bytes: output.byteCount))
+                    .font(ToolTypography.monoLabel)
+                    .foregroundStyle(output.requiresExplicitLargerSave ? ToolTheme.warning : ToolTheme.textPrimary)
+                Text(changeText(source: item.metadata.byteCount, output: output.byteCount))
+                    .font(ToolTypography.caption)
+                    .foregroundStyle(output.byteCount <= item.metadata.byteCount ? ToolTheme.success : ToolTheme.warning)
             }
-
         }
+        .padding(.horizontal, 12)
+        .frame(height: 40)
+        .background(ToolTheme.panelBackground)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func sourcePreviewAccessibilityValue(_ item: BatchConversionItem) -> String {
+        let metadata = item.metadata
+        let format = metadata.format?.displayName ?? "未知格式"
+        return "\(metadata.pixelWidth)×\(metadata.pixelHeight)，\(format)，\(ByteSizeFormatter.format(bytes: metadata.byteCount))"
+    }
+
+    private func changeText(source: Int, output: Int) -> String {
+        guard source > 0 else { return "—" }
+        let percent = Int(((Double(output) - Double(source)) / Double(source) * 100).rounded())
+        if percent < 0 { return "减少 \(abs(percent))%" }
+        if percent > 0 { return "增大 \(percent)%" }
+        return "无变化"
     }
 
     /// N>1 紧凑行。
@@ -419,15 +484,88 @@ private struct IndexImageConverterWorkspaceContent: View {
         }
     }
 
-    private var batchStatisticsText: String {
-        var parts = ["共 \(session.items.count) 张"]
-        if session.completedCount > 0 {
-            parts.append("\(session.completedCount) 张完成")
+    @ViewBuilder
+    private var converterOutputSection: some View {
+        if let singleItem = session.singleItem {
+            VStack(spacing: 0) {
+                ImageInspectorFactRow(label: "格式", value: singleOutputFormat(singleItem))
+                ImageInspectorFactRow(label: "尺寸", value: singleOutputDimensions(singleItem))
+                if let quality = singleOutputQuality(singleItem) {
+                    ImageInspectorFactRow(label: "实际质量", value: "\(Int(quality * 100))%")
+                }
+                ImageInspectorFactRow(
+                    label: "体积变化",
+                    value: singleOutputChange(singleItem),
+                    valueTone: singleOutputChangeTone(singleItem)
+                )
+            }
+        } else {
+            VStack(spacing: 0) {
+                ImageInspectorFactRow(label: "已完成", value: "\(session.completedCount) / \(session.items.count)")
+                if session.failedCount > 0 {
+                    ImageInspectorFactRow(label: "失败", value: "\(session.failedCount)", valueTone: ToolTheme.warning)
+                }
+                ImageInspectorFactRow(label: "输出总计", value: completedOutputTotalText)
+                ImageInspectorFactRow(label: "体积变化", value: batchChangeText, valueTone: batchChangeTone)
+            }
         }
-        if session.failedCount > 0 {
-            parts.append("\(session.failedCount) 张失败")
+    }
+
+    private func singleOutput(_ item: BatchConversionItem) -> BatchConversionOutput? {
+        guard case let .done(output) = item.state else { return nil }
+        return output
+    }
+
+    private func singleOutputFormat(_ item: BatchConversionItem) -> String {
+        singleOutput(item)?.format.displayName ?? "—"
+    }
+
+    private func singleOutputDimensions(_ item: BatchConversionItem) -> String {
+        guard let output = singleOutput(item) else { return "—" }
+        return "\(output.pixelWidth)×\(output.pixelHeight)"
+    }
+
+    private func singleOutputQuality(_ item: BatchConversionItem) -> Double? {
+        singleOutput(item)?.quality
+    }
+
+    private func singleOutputChange(_ item: BatchConversionItem) -> String {
+        guard let output = singleOutput(item) else { return "—" }
+        return changeText(source: item.metadata.byteCount, output: output.byteCount)
+    }
+
+    private func singleOutputChangeTone(_ item: BatchConversionItem) -> Color {
+        guard let output = singleOutput(item) else { return ToolTheme.textTertiary }
+        return output.byteCount <= item.metadata.byteCount ? ToolTheme.success : ToolTheme.warning
+    }
+
+    private var completedOutputs: [BatchConversionOutput] {
+        session.items.compactMap { singleOutput($0) }
+    }
+
+    private var completedSourceBytes: Int {
+        session.items.reduce(0) { total, item in
+            guard case .done = item.state else { return total }
+            return total + item.metadata.byteCount
         }
-        return parts.joined(separator: " · ")
+    }
+
+    private var completedOutputBytes: Int {
+        completedOutputs.reduce(0) { $0 + $1.byteCount }
+    }
+
+    private var completedOutputTotalText: String {
+        completedOutputs.isEmpty ? "—" : ByteSizeFormatter.format(bytes: completedOutputBytes)
+    }
+
+    private var batchChangeText: String {
+        guard !completedOutputs.isEmpty else { return "—" }
+        return changeText(source: completedSourceBytes, output: completedOutputBytes)
+    }
+
+    private var batchChangeTone: Color {
+        guard !completedOutputs.isEmpty else { return ToolTheme.textTertiary }
+        return completedOutputBytes <= completedSourceBytes ? ToolTheme.success : ToolTheme.warning
     }
 
     private var saveButtonTitle: String {
@@ -440,11 +578,6 @@ private struct IndexImageConverterWorkspaceContent: View {
             requiresExplicitLargerSave: requiresExplicitLargerSave,
             fallback: session.completedCount > 1 ? "全部保存" : "转换并保存"
         )
-    }
-
-    private var transparencyFillOutputSuffix: String {
-        guard requiresTransparencyFill, selectedTransparencyFill != nil else { return "" }
-        return " · 透明区域已填充为\(transparencyFillDisplayName)"
     }
 
     private var transparencyFillDisplayName: String {
@@ -564,7 +697,7 @@ private struct IndexImageConverterWorkspaceContent: View {
     private func saveConverted() {
         Task { @MainActor in
             let savedCount = session.completedCount
-            let outcome = await session.saveAll(defaultBasename: "converted", filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
+            let outcome = await session.saveAll(defaultBasename: OutputFileNaming.timestampedBase(source: session.singleItem?.filename, fallback: "converted"), filePanel: fileInputPanelClient, outputPanel: fileOutputPanelClient)
             ImageSaveOutcomeToasts.presentCountedOutput(
                 outcome,
                 savedCount: savedCount,

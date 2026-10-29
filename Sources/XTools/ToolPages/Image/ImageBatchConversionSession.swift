@@ -338,7 +338,7 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
         let completed = items.compactMap { item -> BatchConversionSaveCandidate? in
             guard case let .done(output) = item.state else { return nil }
             return BatchConversionSaveCandidate(
-                basename: item.saveBasename,
+                basename: OutputFileNaming.timestampedBase(source: item.saveBasename, fallback: "converted"),
                 tempURL: output.tempURL,
                 format: output.format
             )
