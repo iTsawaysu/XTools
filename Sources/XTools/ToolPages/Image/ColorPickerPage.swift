@@ -373,6 +373,7 @@ private struct ColorFormatResultRow: View {
             .font(ToolTypography.monoLabel)
             .foregroundStyle(ToolTheme.textPrimary)
             .textSelection(.enabled)
+            .arrowCursorOnHover()
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityLabel("\(value.label) 结果")

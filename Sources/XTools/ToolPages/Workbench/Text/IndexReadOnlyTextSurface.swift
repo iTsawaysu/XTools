@@ -44,6 +44,14 @@ struct IndexReadOnlyTextSurface: View {
     }
 }
 
+/// Read-only output: text stays selectable but the pointer stays an arrow.
+/// Only editable fields/editors present a text-insertion cursor.
+private final class IndexReadOnlyArrowTextView: NSTextView {
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .arrow)
+    }
+}
+
 private final class IndexReadOnlyTextScrollView: IndexTextViewportScrollView {
     override func synchronizeDocumentGeometry() {
         guard let textView = documentView as? NSTextView else { return }
@@ -64,7 +72,7 @@ private struct IndexReadOnlyTextView: NSViewRepresentable {
     }
 
     private static func makeTextView() -> NSTextView {
-        let textView = NSTextView(usingTextLayoutManager: true)
+        let textView = IndexReadOnlyArrowTextView(usingTextLayoutManager: true)
         precondition(textView.textLayoutManager != nil)
         return textView
     }

@@ -50,6 +50,7 @@ final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePres
             if let field = searchField {
                 field.isEnabled = true
                 field.window?.makeFirstResponder(field)
+                searchCoordinator?.beginKeystrokeHandoff(for: field)
             }
             sessionRevealRequest = makeRevealRequest(
                 source: .openReset,

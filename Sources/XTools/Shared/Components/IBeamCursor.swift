@@ -20,6 +20,11 @@ private struct IBeamCursorModifier: ViewModifier {
                     NSCursor.arrow.set()
                 }
             }
+            // A page switch can remove the hovered editor without an exit
+            // event; without this reset the I-beam would stick app-wide.
+            .onDisappear {
+                NSCursor.arrow.set()
+            }
     }
 }
 

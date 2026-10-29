@@ -50,6 +50,9 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
     private var focusedToken: Int?
     private var focusRequestGeneration = 0
     private var acceptsFocusRequests = true
+    private var handoffMonitor: Any?
+    private var handoffEvents: [NSEvent] = []
+    private var handoffTimeout: DispatchWorkItem?
     private let focusRetryDelays: [TimeInterval]
     private let focusRequester: FocusRequester
 
@@ -81,6 +84,7 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
         guard focusedToken != focusToken else { return }
         focusedToken = focusToken
         focusRequestGeneration &+= 1
+        beginKeystrokeHandoff(for: textField)
         let generation = focusRequestGeneration
         focusRequester(textField, focusRetryDelays) { [weak self] in
             guard let self else { return false }
@@ -93,6 +97,69 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
     func invalidateFocusRequests() {
         acceptsFocusRequests = false
         focusRequestGeneration &+= 1
+        cancelKeystrokeHandoff()
+    }
+
+    // MARK: - First-keystroke handoff
+    //
+    // Focus is requested on the next runloop turn; a user who starts typing
+    // immediately after ⌘F/⌘K can beat the field editor. Buffer those key
+    // events (plain text keys only) and replay them through the normal event
+    // path once editing begins, so IME composition and the text-change
+    // pipeline still run exactly as if the field had been ready.
+
+    /// Start buffering keys typed before the field editor is attached. Safe to
+    /// call repeatedly; a no-op while already editing or already buffering.
+    func beginKeystrokeHandoff(for textField: NSTextField) {
+        guard handoffMonitor == nil, !isEditing(textField) else { return }
+        handoffEvents.removeAll()
+        handoffMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak textField] event in
+            guard let self, let textField else { return event }
+            if self.isEditing(textField) {
+                self.finishKeystrokeHandoff(flushTo: textField)
+                return event
+            }
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            guard flags.isEmpty || flags == .shift,
+                  event.specialKey == nil,
+                  let characters = event.characters, !characters.isEmpty else { return event }
+            self.handoffEvents.append(event)
+            return nil
+        }
+        let work = DispatchWorkItem { [weak self, weak textField] in
+            guard let self, let textField else { return }
+            self.finishKeystrokeHandoff(flushTo: textField)
+        }
+        handoffTimeout = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+    }
+
+    private func isEditing(_ textField: NSTextField) -> Bool {
+        guard let editor = textField.currentEditor(), let window = textField.window else { return false }
+        return window.firstResponder === editor
+    }
+
+    private func finishKeystrokeHandoff(flushTo textField: NSTextField) {
+        if let handoffMonitor { NSEvent.removeMonitor(handoffMonitor) }
+        handoffMonitor = nil
+        handoffTimeout?.cancel()
+        handoffTimeout = nil
+        let pending = handoffEvents
+        handoffEvents.removeAll()
+        guard !pending.isEmpty, isEditing(textField) else { return }
+        DispatchQueue.main.async {
+            for event in pending {
+                NSApp.sendEvent(event)
+            }
+        }
+    }
+
+    private func cancelKeystrokeHandoff() {
+        if let handoffMonitor { NSEvent.removeMonitor(handoffMonitor) }
+        handoffMonitor = nil
+        handoffTimeout?.cancel()
+        handoffTimeout = nil
+        handoffEvents.removeAll()
     }
 
     /// Live validity for a focus grab performed outside the token-scheduled
@@ -115,11 +182,13 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
     func controlTextDidBeginEditing(_ notification: Notification) {
         if let textField = notification.object as? NSTextField {
             AppKitTextEditingConfiguration.configureCurrentFieldEditor(for: textField)
+            finishKeystrokeHandoff(flushTo: textField)
         }
         onFocusChange?(true)
     }
 
     func controlTextDidEndEditing(_ notification: Notification) {
+        cancelKeystrokeHandoff()
         onFocusChange?(false)
     }
 

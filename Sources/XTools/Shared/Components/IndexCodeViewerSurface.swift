@@ -310,6 +310,12 @@ private final class IndexCodeViewerTextViewInternal: NSTextView, IndexAsymmetric
         textContainerInset.width
     }
 
+    /// Read-only viewer: keep selection, drop the I-beam so the cursor only
+    /// signals editable surfaces.
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .arrow)
+    }
+
     var onEffectiveAppearanceChange: (() -> Void)?
 
     override func viewDidChangeEffectiveAppearance() {

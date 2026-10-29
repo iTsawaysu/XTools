@@ -101,6 +101,7 @@ struct IndexDiagnosticBanner: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)
+                        .arrowCursorOnHover()
                         .padding(14)
                     }
                     .frame(width: 380, height: 250)

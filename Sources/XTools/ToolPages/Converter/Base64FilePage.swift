@@ -843,6 +843,7 @@ private struct Base64EncodedOutputPreviewSurface: View {
                 Text(indexWrappingAttributedText(text, lineBreakMode: .byCharWrapping))
                     .foregroundStyle(ToolTheme.textSecondary)
                     .textSelection(.enabled)
+                    .arrowCursorOnHover()
 
                 if isTruncated {
                     Text("这里只显示有界预览，复制和保存会读取完整输出。")
@@ -877,6 +878,7 @@ private struct Base64DecodedMetadataList: View {
                         .foregroundStyle(row.2 ?? ToolTheme.textPrimary)
                         .multilineTextAlignment(.trailing)
                         .textSelection(.enabled)
+                        .arrowCursorOnHover()
                 }
                 .font(ToolTypography.caption)
                 .padding(.horizontal, 10)

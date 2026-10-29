@@ -47,6 +47,7 @@ struct IndexKVRow: View {
                 .font(ToolTypography.monoLabel)
                 .foregroundStyle(ToolTheme.textSecondary)
                 .textSelection(.enabled)
+                .arrowCursorOnHover()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .indexValueMotion(valueMotion, id: value)
             if copyable {
@@ -410,6 +411,7 @@ private struct IndexResultCard: View {
             .font(ToolTypography.monoLabel)
             .foregroundStyle(ToolTheme.textPrimary)
             .textSelection(.enabled)
+            .arrowCursorOnHover()
             .lineLimit(nil)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)

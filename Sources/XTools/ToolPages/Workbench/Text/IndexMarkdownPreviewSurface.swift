@@ -83,6 +83,7 @@ struct IndexMarkdownPreviewSurface: View {
                     // changes so revoked images cannot linger.
                     .id(remoteImagesAuthorized ? remoteImageLoader?.id : nil)
                     .textSelection(.enabled)
+                    .arrowCursorOnHover()
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     .padding(14)
                 }

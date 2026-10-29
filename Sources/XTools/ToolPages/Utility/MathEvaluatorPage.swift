@@ -222,6 +222,7 @@ private struct IndexMathWorkspaceContent: View {
                 .font(ToolTypography.heroValue)
                 .foregroundStyle(ToolTheme.accentHover)
                 .textSelection(.enabled)
+                .arrowCursorOnHover()
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .frame(maxWidth: .infinity, alignment: .leading)

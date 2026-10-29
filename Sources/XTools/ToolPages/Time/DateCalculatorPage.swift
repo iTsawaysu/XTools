@@ -357,6 +357,7 @@ private struct DateCalculatorHeroResult: View {
                 .font(ToolTypography.heroValue)
                 .foregroundStyle(ToolTheme.accentHover)
                 .textSelection(.enabled)
+                .arrowCursorOnHover()
                 .toolMotionTextSwap(id: value)
             Text(subtitle)
                 .font(ToolTypography.caption)

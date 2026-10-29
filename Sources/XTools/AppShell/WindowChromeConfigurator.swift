@@ -6,6 +6,8 @@ import SwiftUI
 /// scene and is intentionally not configured here.
 /// Installed once via `.background(WindowChromeConfigurator())` on the root.
 struct WindowChromeConfigurator: NSViewRepresentable {
+    var shortcutTarget: RootViewModel? = nil
+
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
@@ -26,12 +28,16 @@ struct WindowChromeConfigurator: NSViewRepresentable {
 
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
         coordinator.removeMouseMonitor()
+        coordinator.uninstallShortcutRouter()
     }
 
     private func configure(window: NSWindow?, coordinator: Coordinator) {
         guard let window else { return }
 
         coordinator.installMouseMonitor(for: window)
+        if let shortcutTarget {
+            coordinator.installShortcutRouter(viewModel: shortcutTarget)
+        }
 
         // 启动时清掉初始 key focus（P1）。AppKit 默认把窗口里第一个可聚焦控件
         // （恰为侧边栏搜索框）设为 first responder，造成「打开 app 焦点就在搜索框」。
@@ -50,6 +56,15 @@ struct WindowChromeConfigurator: NSViewRepresentable {
         var didClearInitialFocus = false
         private weak var monitoredWindow: NSWindow?
         private var mouseMonitor: Any?
+        private let shortcutRouter = AppShortcutRouter()
+
+        func installShortcutRouter(viewModel: RootViewModel) {
+            shortcutRouter.install(viewModel: viewModel)
+        }
+
+        func uninstallShortcutRouter() {
+            shortcutRouter.uninstall()
+        }
 
         func installMouseMonitor(for window: NSWindow) {
             guard monitoredWindow !== window else { return }

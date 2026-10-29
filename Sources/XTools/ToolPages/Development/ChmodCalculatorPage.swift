@@ -117,6 +117,7 @@ private struct IndexChmodWorkspaceContent: View {
                         .font(ToolTypography.heroValue)
                         .foregroundStyle(ToolTheme.accentHover)
                         .textSelection(.enabled)
+                        .arrowCursorOnHover()
                         .toolMotionTextSwap(id: workspace.mode.octalString)
                     Text("chmod \(workspace.mode.octalString)  ·  \(workspace.mode.symbolicString)")
                         .font(ToolTypography.monoCaption)

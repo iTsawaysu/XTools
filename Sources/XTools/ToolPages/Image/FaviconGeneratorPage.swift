@@ -347,6 +347,7 @@ private struct FaviconConfigurationCodeSurface: View {
                     .font(ToolTypography.monoCaption)
                     .foregroundStyle(ToolTheme.textSecondary)
                     .textSelection(.enabled)
+                    .arrowCursorOnHover()
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityLabel(title)
                     .accessibilityValue(text)

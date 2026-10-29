@@ -125,7 +125,7 @@ struct RootView: View {
         .frame(minWidth: 960, minHeight: 640)
         .background(ToolTheme.windowBackground)
         .background(WindowAppearanceOwner(preference: themePreference))
-        .background(WindowChromeConfigurator())
+        .background(WindowChromeConfigurator(shortcutTarget: viewModel))
         .background(FileInputPanelWindowBinder(coordinator: fileInputPanelCoordinator))
         .background(FileOutputPanelWindowBinder(coordinator: fileOutputPanelCoordinator))
         .tint(ToolTheme.accent)

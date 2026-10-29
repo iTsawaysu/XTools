@@ -153,6 +153,7 @@ private struct RegexMatchRow: View {
                     .font(ToolTypography.monoCaption)
                     .foregroundStyle(ToolTheme.textSecondary)
                     .textSelection(.enabled)
+                    .arrowCursorOnHover()
             }
 
             if !match.captures.isEmpty {
@@ -198,6 +199,7 @@ private struct RegexMatchValue: View {
             .font(ToolTypography.monoLabel)
             .foregroundStyle(color ?? ToolTheme.textPrimary)
             .textSelection(.enabled)
+            .arrowCursorOnHover()
             .lineLimit(nil)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)

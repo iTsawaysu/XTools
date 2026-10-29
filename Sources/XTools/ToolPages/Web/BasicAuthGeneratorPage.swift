@@ -173,6 +173,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
                 .font(ToolTypography.monoLabel)
                 .foregroundStyle(ToolTheme.textSecondary)
                 .textSelection(.enabled)
+                .arrowCursorOnHover()
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -187,6 +188,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
                     .font(ToolTypography.monoLabel)
                     .foregroundStyle(ToolTheme.textSecondary)
                     .textSelection(.enabled)
+                    .arrowCursorOnHover()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)
             } else {

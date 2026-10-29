@@ -104,6 +104,7 @@ private struct IndexCrontabWorkspaceContent: View {
                                 .font(ToolTypography.sectionTitle)
                                 .foregroundStyle(ToolTheme.accentHover)
                                 .textSelection(.enabled)
+                                .arrowCursorOnHover()
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityElement(children: .combine)
@@ -176,6 +177,7 @@ private struct IndexCrontabWorkspaceContent: View {
                 .font(ToolTypography.monoLabel)
                 .foregroundStyle(field.isWildcard ? ToolTheme.textTertiary : ToolTheme.accentHover)
                 .textSelection(.enabled)
+                .arrowCursorOnHover()
 
             Text(field.explanation)
                 .font(ToolTypography.caption)
@@ -225,6 +227,7 @@ private struct IndexCrontabWorkspaceContent: View {
                 .font(isFirst ? ToolTypography.monoValueSmall : ToolTypography.monoLabel)
                 .foregroundStyle(isFirst ? ToolTheme.accentHover : ToolTheme.textSecondary)
                 .textSelection(.enabled)
+                .arrowCursorOnHover()
 
             Spacer(minLength: 12)
 
@@ -237,6 +240,7 @@ private struct IndexCrontabWorkspaceContent: View {
                     .font(ToolTypography.monoCaption)
                     .foregroundStyle(ToolTheme.textTertiary)
                     .textSelection(.enabled)
+                    .arrowCursorOnHover()
             }
         }
         .accessibilityElement(children: .combine)

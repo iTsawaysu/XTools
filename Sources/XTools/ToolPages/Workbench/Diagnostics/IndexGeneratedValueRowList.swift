@@ -126,6 +126,7 @@ private struct IndexGeneratedValueRowView: View {
                     .lineLimit(wrapsValue ? nil : 1)
                     .truncationMode(wrapsValue ? .tail : .middle)
                     .textSelection(.enabled)
+                    .arrowCursorOnHover()
                     .fixedSize(horizontal: false, vertical: wrapsValue)
                     .frame(maxWidth: .infinity, alignment: .leading)
 

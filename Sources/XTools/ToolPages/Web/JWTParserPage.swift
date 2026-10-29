@@ -349,6 +349,7 @@ private struct IndexJWTWorkspaceContent: View {
                     .font(ToolTypography.monoLabel)
                     .foregroundStyle(ToolTheme.textPrimary)
                     .textSelection(.enabled)
+                    .arrowCursorOnHover()
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(insight.explanation)

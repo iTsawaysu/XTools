@@ -96,6 +96,7 @@ private struct IndexHeroValueText: View {
                 .opacity(enterProgress)
                 .offset(y: ToolMotion.Distance.valueSwapRise * (1 - enterProgress))
                 .textSelection(.enabled)
+                .arrowCursorOnHover()
         }
         .animation(
             ToolMotion.animation(ToolMotion.Preset.valueSwapExit, reduceMotion: reduceMotion),
