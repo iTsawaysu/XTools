@@ -112,6 +112,7 @@ private struct IndexRegexWorkspaceContent: View {
     @State private var selectedMatchIndex: Int?
     @State private var scrollRequest: IndexTextAreaScrollRequest?
     @State private var scrollRequestToken = 0
+    @State private var isPatternFocused = false
 
     var body: some View {
         IndexPage(
@@ -133,8 +134,11 @@ private struct IndexRegexWorkspaceContent: View {
 
                                 IndexTextInput(
                                     placeholder: #"\b\w+@\w+\.\w+\b"#,
-                                    text: $workspace.pattern
+                                    text: $workspace.pattern,
+                                    embedsFlat: true,
+                                    onFocusChange: { isPatternFocused = $0 }
                                 )
+                                .toolFieldSurface(focused: isPatternFocused)
 
                                 Text("/")
                                     .font(ToolTypography.body)
@@ -177,35 +181,21 @@ private struct IndexRegexWorkspaceContent: View {
                     },
                     accessory: {
                         HStack(spacing: 8) {
-                            Menu {
-                                ForEach(RegexMatcher.presets) { preset in
-                                    Button(preset.title) {
-                                        applyPreset(preset)
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "text.badge.checkmark")
-                                        .accessibilityHidden(true)
-
-                                    Text(activePresetTitle)
-                                        .toolMotionTextSwap(id: activePresetTitle)
-
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
-                                        .foregroundStyle(ToolTheme.textSecondary)
-                                        .accessibilityHidden(true)
-                                }
-                                .font(ToolTypography.buttonSmall)
-                            }
-                            .menuIndicator(.hidden)
-                            .buttonStyle(IndexSmallButtonStyle())
-                            .fixedSize(horizontal: true, vertical: false)
+                            ToolMenu(
+                                triggerTitle: activePresetTitle,
+                                items: presetMenuItems,
+                                selection: presetSelection,
+                                presentation: .popover
+                            )
                             .accessibilityLabel("正则预设，当前为\(activePresetTitle == "预设" ? "自定义" : activePresetTitle)")
 
-                            IndexClearButton(
-                                isDisabled: !workspace.hasAnyContent,
-                                title: "清空工作区",
+                            ToolButton(
+                                "清空工作区",
+                                systemImage: IndexActionSymbol.clear,
+                                role: .quiet,
+                                size: .compact28,
+                                isEnabled: workspace.hasAnyContent,
+                                help: "清空工作区",
                                 action: clearWorkspace
                             )
                         }
@@ -399,6 +389,24 @@ private struct IndexRegexWorkspaceContent: View {
 
     private var activePresetTitle: String {
         workspace.activePreset?.title ?? "预设"
+    }
+
+    private var presetMenuItems: [ToolMenuItem<String>] {
+        RegexMatcher.presets.map {
+            ToolMenuItem(id: $0.id, title: $0.title, systemImage: "text.badge.checkmark")
+        }
+    }
+
+    private var presetSelection: Binding<String> {
+        Binding(
+            get: { workspace.activePreset?.id ?? "" },
+            set: { id in
+                guard let preset = RegexMatcher.presets.first(where: { $0.id == id }) else { return }
+                withAnimation(ToolMotion.Preset.controlFeedback) {
+                    workspace.applyPreset(preset)
+                }
+            }
+        )
     }
 
     private var flagMenu: some View {

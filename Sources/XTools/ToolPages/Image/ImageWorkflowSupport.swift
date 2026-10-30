@@ -159,9 +159,11 @@ struct ImageUploadEmptyPanel: View {
                 )
 
                 if !isProcessing {
-                    IndexPrimaryActionButton(
-                        title: "选择图片",
+                    ToolButton(
+                        "选择图片",
                         systemImage: "photo",
+                        role: .primary,
+                        size: .cta32,
                         help: "选择图片",
                         action: onSelect
                     )
@@ -509,16 +511,18 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
                     .truncationMode(.tail)
             }
 
-            IndexPrimaryActionButton(
-                title: primaryTitle,
+            ToolButton(
+                primaryTitle,
                 systemImage: primaryIcon,
-                hint: "⌘S",
+                role: .primary,
+                size: .cta32,
+                width: .fill,
+                isEnabled: !isPrimaryDisabled,
                 help: primaryHelp,
-                fillsWidth: true,
-                shortcut: "s",
+                keycap: "⌘S",
                 action: onPrimary
             )
-            .disabled(isPrimaryDisabled)
+            .keyboardShortcut("s", modifiers: .command)
 
             if let statusText {
                 Text(statusText)

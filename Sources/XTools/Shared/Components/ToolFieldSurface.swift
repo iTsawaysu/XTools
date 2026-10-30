@@ -38,11 +38,16 @@ extension View {
     /// shadow. Pages pass the height role instead of writing frame(height:).
     func toolFieldSurface(
         focused: Bool = false,
-        height: ToolFieldHeight = .field38,
+        height: ToolFieldHeight? = .field38,
         surface: ToolFieldSurfaceKind = .editor
     ) -> some View {
-        self
-            .frame(height: height.value)
+        Group {
+            if let height {
+                self.frame(height: height.value)
+            } else {
+                self
+            }
+        }
             .background(
                 surface.fill,
                 in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)

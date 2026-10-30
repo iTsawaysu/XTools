@@ -316,33 +316,46 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         tone: ToolFeedbackTone,
         showsSpinner: Bool
     ) -> some View {
-            HStack(spacing: 4) {
-                if showsSpinner {
+        Group {
+            if showsSpinner {
+                HStack(spacing: 4) {
                     IndexProgressSpinner()
                         .accessibilityHidden(true)
-                } else {
-                    Image(systemName: tone.systemImage)
-                        .font(.system(size: ToolMetrics.IconSize.small, weight: .semibold))
+                    Text(message)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
-                Text(message)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                .font(ToolTypography.caption)
+                .foregroundStyle(tone.tint)
+            } else {
+                ToolFeedbackSurface(
+                    tone: ToolFeedbackSurface.Tone(toolFeedbackTone: tone),
+                    message: message,
+                    presentation: .statusSlot
+                )
             }
-            .font(ToolTypography.caption)
-            .foregroundStyle(tone.tint)
-            .frame(maxWidth: 240, alignment: .leading)
-            .layoutPriority(1)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(tone.accessibilityPrefix)：\(message)")
-            .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
+        }
+        .frame(maxWidth: 240, alignment: .leading)
+        .layoutPriority(1)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(tone.accessibilityPrefix)：\(message)")
+        .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
     }
 
     @ViewBuilder
     private var formatButton: some View {
         if let onFormat {
-            IndexPrimaryActionButton(title: actionTitle, hint: actionHint, help: "\(actionTitle)（⌘↩）", action: onFormat)
-                .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
-                .disabled(isRunning || input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            ToolButton(
+                actionTitle,
+                role: .primary,
+                size: .cta32,
+                isEnabled: !isRunning && !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                help: "\(actionTitle)（⌘↩）",
+                keycap: actionHint,
+                accessibilityLabel: "\(actionTitle)（⌘↩）",
+                action: onFormat
+            )
+            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)
         }
     }
 
@@ -363,14 +376,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
                         .frame(height: 0.5)
                     inputPane
                 }
-                .background(
-                    ToolTheme.editorBackground,
-                    in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
-                        .strokeBorder(ToolTheme.border, lineWidth: 0.5)
-                }
+                .toolFieldSurface(height: nil)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             } else {
                 inputPane

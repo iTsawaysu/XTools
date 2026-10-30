@@ -191,6 +191,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
     @Binding var position: ImageWatermarkPosition
     @Binding var textColor: ImageWatermarkTextColor
     @State private var isImageDropTargeted = false
+    @State private var isWatermarkFocused = false
 
     private var sizePercent: Int {
         Int((sizeRatio * 100).rounded())
@@ -426,9 +427,11 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                         watermarkTextField
                             .frame(width: 248)
 
-                        IndexPrimaryActionButton(
-                            title: "选择图片",
+                        ToolButton(
+                            "选择图片",
                             systemImage: "photo",
+                            role: .primary,
+                            size: .cta32,
                             help: "选择图片",
                             action: selectImage
                         )
@@ -477,8 +480,11 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         IndexTextInput(
             placeholder: "水印文字",
             text: $watermarkText,
-            onSubmit: applyFinalImmediately
+            embedsFlat: true,
+            onSubmit: applyFinalImmediately,
+            onFocusChange: { isWatermarkFocused = $0 }
         )
+        .toolFieldSurface(focused: isWatermarkFocused)
         .frame(maxWidth: .infinity)
         .accessibilityLabel("水印文字")
         .onChange(of: watermarkText) { _ in recipeDidChange(previewCadence: .debounced) }

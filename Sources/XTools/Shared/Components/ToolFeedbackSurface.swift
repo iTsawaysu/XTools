@@ -102,3 +102,15 @@ private struct ToolFeedbackElevation: ViewModifier {
         }
     }
 }
+
+
+extension ToolFeedbackSurface.Tone {
+    init(toolFeedbackTone: ToolFeedbackTone) {
+        switch toolFeedbackTone {
+        case .info: self = .info
+        case .success: self = .success
+        case .warning: self = .warning
+        case .error: self = .error
+        }
+    }
+}

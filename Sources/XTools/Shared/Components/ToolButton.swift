@@ -49,6 +49,7 @@ struct ToolButton: View {
     let state: State
     let isEnabled: Bool
     let help: String?
+    let keycap: String?
     let accessibilityLabel: String?
     let action: () -> Void
 
@@ -63,6 +64,7 @@ struct ToolButton: View {
         state: State = .idle,
         isEnabled: Bool = true,
         help: String? = nil,
+        keycap: String? = nil,
         accessibilityLabel: String? = nil,
         action: @escaping () -> Void
     ) {
@@ -74,6 +76,7 @@ struct ToolButton: View {
         self.state = state
         self.isEnabled = isEnabled
         self.help = help
+        self.keycap = keycap
         self.accessibilityLabel = accessibilityLabel
         self.action = action
     }
@@ -119,6 +122,10 @@ struct ToolButton: View {
                 Text(title)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
+            }
+
+            if let keycap, !keycap.isEmpty {
+                IndexKeycap(label: keycap)
             }
         }
     }

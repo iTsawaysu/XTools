@@ -254,8 +254,10 @@ struct TestMarkdownDiffRegexCoverageTests {
                 #expect(result.matches.count == preset.examples.filter(\.shouldMatch).count)
             }
             let source = try TestMarkdownCaseSupport.readSource("Sources/XTools/ToolPages/Development/RegexTesterPage.swift")
-            #expect(source.contains("ForEach(RegexMatcher.presets)"))
-            #expect(source.contains("applyPreset(preset)"))
+            // P2b: the preset menu now builds ToolMenu items from the same
+            // preset source and applies them through the workspace model.
+            #expect(source.contains("RegexMatcher.presets.map"))
+            #expect(source.contains("workspace.applyPreset(preset)"))
             #expect(source.contains("text = preset.exampleText"))
             #expect(source.contains("RegexMatcher.summaryText(for: report)"))
         default:

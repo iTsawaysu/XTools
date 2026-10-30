@@ -245,9 +245,11 @@ private struct IndexImageConverterWorkspaceContent: View {
                 )
 
                 if !session.isImporting {
-                    IndexPrimaryActionButton(
-                        title: "选择图片",
+                    ToolButton(
+                        "选择图片",
                         systemImage: "photo",
+                        role: .primary,
+                        size: .cta32,
                         help: "选择图片",
                         action: addImages
                     )
