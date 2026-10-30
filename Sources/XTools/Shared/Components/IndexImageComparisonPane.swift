@@ -107,8 +107,8 @@ struct IndexImageComparisonPane<Footer: View>: View {
                 .padding(.top, 4)
             }
             .frame(height: stageHeight)
-            // 面板头与工具栏是暖白，图像舞台是 clay；在舞台顶边做一段
-            // 18pt 的同色渐变，把硬切变成柔和的沉降，图像本身盖在其上
+            // 面板头落在 clay 画布上：用一道 12pt 的顶部落影交代层级，
+            // 取代同色渐变的「色带」感。阴影画在内容下层，标签与图像
             // 不受影响。压缩/灰度/水印三个对比舞台共用这一处。
             .background {
                 ZStack(alignment: .top) {
@@ -116,13 +116,13 @@ struct IndexImageComparisonPane<Footer: View>: View {
 
                     LinearGradient(
                         colors: [
-                            ToolTheme.panelBackground,
-                            ToolTheme.panelBackground.opacity(0)
+                            ToolTheme.cardShadow,
+                            ToolTheme.cardShadow.opacity(0)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
                     )
-                    .frame(height: 18)
+                    .frame(height: 12)
                 }
             }
             .clipped()

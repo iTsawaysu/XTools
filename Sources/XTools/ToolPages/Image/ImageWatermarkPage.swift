@@ -225,9 +225,9 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         previewSession.image ?? session.outputImage
     }
 
-    /// 预览舞台高度：与压缩页同一收口（左侧文字工具栏占 78pt，其余一致）。
+    /// 预览舞台高度：与压缩页同一收口（头部 38 + 脚注 40 + 页面留白）。
     private var previewStageHeight: CGFloat {
-        max(300, pageAvailableHeight - 260)
+        max(300, pageAvailableHeight - 196)
     }
 
     private var sourceFormatBadge: String? {
@@ -269,34 +269,18 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         }
     }
 
-    /// 预览舞台：顶部一条水印文字工具栏，其下是与压缩页同构的成品预览。
+    /// 预览舞台：纯画布，水印文字与其他参数一起收进右侧检查器。
     private var previewWorkspacePanel: some View {
         IndexPanel("预览") {
-            VStack(spacing: 0) {
-                // 字段内容非空时占位符不再出现；左侧小标签让这条工具栏
-                // 始终能被读懂，同时不额外占用纵向空间。
-                HStack(spacing: ToolMetrics.Spacing.sm) {
-                    Text("水印文字")
-                        .font(ToolTypography.caption)
-                        .foregroundStyle(ToolTheme.textTertiary)
-                        .fixedSize()
-
-                    watermarkTextField
-                }
-                .padding(.horizontal, ToolMetrics.Spacing.panelInset)
-                .padding(.top, 10)
-                .padding(.bottom, 10)
-
-                IndexImageComparisonPane(
-                    title: "水印成品",
-                    image: resultPreviewImage,
-                    accessibilityLabel: "水印成品预览",
-                    accessibilityValue: previewAccessibilityValue,
-                    placeholder: previewPlaceholder,
-                    stageHeight: previewStageHeight
-                ) {
-                    previewFacts
-                }
+            IndexImageComparisonPane(
+                title: "水印成品",
+                image: resultPreviewImage,
+                accessibilityLabel: "水印成品预览",
+                accessibilityValue: previewAccessibilityValue,
+                placeholder: previewPlaceholder,
+                stageHeight: previewStageHeight
+            ) {
+                previewFacts
             }
             .indexWorkspaceDiagnostic(session.error ?? previewSession.error)
             .indexDropZone(
@@ -367,9 +351,14 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         )
     }
 
-    /// 检查器「水印设置」区：透明度、大小、颜色与锚点。
+    /// 检查器「水印设置」区：文字、透明度、大小、颜色与锚点。
     private var watermarkSettings: some View {
         VStack(alignment: .leading, spacing: ToolMetrics.Spacing.lg) {
+            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+                IndexOptionLabel("水印文字")
+                watermarkTextField
+            }
+
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                 HStack {
                     IndexOptionLabel("透明度")
