@@ -141,17 +141,16 @@ struct IndexCopyButton: View {
 
 /// Fixed icon slot for the shared copy button (Wave 2 candidate d1): the copy
 /// glyph fades out while a checkmark stroke-draws in (`Shape.trim` mirrors the
-/// prototype's stroke-dashoffset), the icon box settles 0.94→1 once, the state
-/// dwells 1400ms, then both glyphs cross-fade back symmetrically. Repeat clicks
-/// during the dwell only reset the dwell timer — the draw never replays while
-/// active. Reduce Motion stays at the call site (plain symbol cut, no draw,
-/// no scale).
+/// prototype's stroke-dashoffset), the state dwells 1.2s, then both glyphs
+/// cross-fade back. The icon box never deforms. Repeat clicks during the dwell
+/// only reset the dwell timer — the draw never replays while active. Reduce
+/// Motion stays at the call site (plain symbol cut, no draw).
 private struct IndexCopyTickIconSlot: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let generation: Int
 
     @State private var isDwelling = false
     @State private var checkDraw: CGFloat = 0
-    @State private var boxScale: CGFloat = 1
     @State private var dwellTask: Task<Void, Never>?
 
     var body: some View {
@@ -164,7 +163,6 @@ private struct IndexCopyTickIconSlot: View {
                 .stroke(.foreground, style: IndexCopyTickCheckGlyph.strokeStyle)
                 .opacity(isDwelling ? 1 : 0)
         }
-        .scaleEffect(boxScale)
         .onChange(of: generation) { _ in
             guard generation > 0 else { return }
             if isDwelling {
@@ -178,26 +176,23 @@ private struct IndexCopyTickIconSlot: View {
         }
     }
 
-    /// First copy of a cycle: park at the pre-draw frame (check undrawn, box
-    /// at 0.94) for one committed render — the SwiftUI analogue of the
-    /// prototype keyframe `from` values — then run the enter choreography.
+    /// First copy of a cycle: park the check undrawn for one committed render,
+    /// then run the enter choreography.
     private func startDwell() {
         dwellTask?.cancel()
         withTransaction(ToolMotion.disabledTransaction) {
             checkDraw = 0
-            boxScale = ToolMotion.CopyTick.boxFrom
         }
         runDwell {
             await Task.yield()
             guard !Task.isCancelled else { return }
-            withAnimation(ToolMotion.CopyTick.fade) { isDwelling = true }
-            withAnimation(ToolMotion.CopyTick.drawCurve) { checkDraw = 1 }
-            withAnimation(ToolMotion.CopyTick.boxSettle) { boxScale = 1 }
+            withToolAnimation(ToolMotion.CopyTick.fade, reduceMotion: reduceMotion) { isDwelling = true }
+            withToolAnimation(ToolMotion.CopyTick.drawCurve, reduceMotion: reduceMotion) { checkDraw = 1 }
         }
     }
 
     /// Repeat click while the dwell is active: only the hold timer restarts;
-    /// the draw and the box settle never replay.
+    /// the draw never replays.
     private func resetDwell() {
         runDwell {}
     }
@@ -211,7 +206,7 @@ private struct IndexCopyTickIconSlot: View {
             guard !Task.isCancelled else { return }
             try? await Task.sleep(for: .seconds(ToolMotion.CopyTick.hold))
             guard !Task.isCancelled else { return }
-            withAnimation(ToolMotion.CopyTick.fadeBack) { isDwelling = false }
+            withToolAnimation(ToolMotion.CopyTick.fadeBack, reduceMotion: reduceMotion) { isDwelling = false }
         }
     }
 }

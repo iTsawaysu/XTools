@@ -74,7 +74,7 @@ struct IndexEmptyState: View {
         .frame(maxWidth: .infinity, maxHeight: density == .list ? nil : .infinity)
         .opacity(arrived ? 1 : 0)
         .offset(y: arrived ? 0 : ToolMotion.EmptyArrival.riseDistance)
-        .animation(reduceMotion ? nil : ToolMotion.EmptyArrival.arrive, value: arrived)
+        .toolAnimation(ToolMotion.EmptyArrival.arrive, reduceMotion: reduceMotion, value: arrived)
         .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
         .onAppear {
             arrived = true

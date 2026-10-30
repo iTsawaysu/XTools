@@ -40,7 +40,7 @@ struct WindowToolbarContent: ToolbarContent {
                             width: WindowToolbarMetrics.iconButtonSize,
                             height: WindowToolbarMetrics.iconButtonSize
                         )
-                        .toolMotionIconSwap(id: isFavorite)
+                        .toolMotionFavoriteSwap(id: isFavorite)
                 }
                 .buttonStyle(QuietTitlebarButtonStyle())
                 .environment(\.colorScheme, colorScheme)

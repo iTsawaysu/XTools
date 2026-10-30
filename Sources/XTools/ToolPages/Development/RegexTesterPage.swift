@@ -402,7 +402,7 @@ private struct IndexRegexWorkspaceContent: View {
             get: { workspace.activePreset?.id ?? "" },
             set: { id in
                 guard let preset = RegexMatcher.presets.first(where: { $0.id == id }) else { return }
-                withAnimation(ToolMotion.Preset.controlFeedback) {
+                withToolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion) {
                     workspace.applyPreset(preset)
                 }
             }

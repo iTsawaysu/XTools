@@ -190,6 +190,7 @@ struct IndexCalendarView: View {
 
 /// Month-navigation arrow with shared hover feedback.
 private struct IndexCalendarNavButton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let systemImage: String
     let help: String
     let action: () -> Void
@@ -209,7 +210,7 @@ private struct IndexCalendarNavButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withToolAnimation(ToolMotion.Preset.controlFeedback) { isHovering = hovering }
+            withToolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion) { isHovering = hovering }
         }
         .indexTooltip(help)
         .accessibilityLabel(help)
@@ -218,6 +219,7 @@ private struct IndexCalendarNavButton: View {
 
 /// Single day cell: selected/today/hover states share the app-wide grammar.
 private struct IndexCalendarDayCell: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let date: Date
     let isSelected: Bool
     let isToday: Bool
@@ -253,7 +255,7 @@ private struct IndexCalendarDayCell: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withToolAnimation(ToolMotion.Preset.controlFeedback) { isHovering = hovering }
+            withToolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion) { isHovering = hovering }
         }
         .accessibilityLabel("\(calendar.component(.day, from: date)) 日")
         .accessibilityAddTraits(isSelected ? .isSelected : [])

@@ -4,19 +4,54 @@ import Testing
 
 struct ToolMotionTests {
     @Test func motionDurationTokensStayInWorkingUiRange() {
-        #expect(ToolMotion.Duration.micro == 0.12)
-        #expect(ToolMotion.Duration.quick == 0.15)
-        #expect(ToolMotion.Duration.arrival == 0.24)
-        #expect(ToolMotion.Duration.fast == 0.25)
-        #expect(ToolMotion.Duration.medium == 0.35)
-        // 01 景深沉降 (PAGE-TRANSITIONS t-1): 300ms in / 220ms out.
-        #expect(ToolMotion.Duration.pageSinkEnter == 0.30)
-        #expect(ToolMotion.Duration.pageSinkExit == 0.22)
+        #expect(ToolMotion.Duration.instant == 0)
+        #expect(ToolMotion.Duration.base == 0.200)
+        #expect(ToolMotion.Duration.enter == 0.260)
+        #expect(ToolMotion.Duration.exit == 0.160)
+        #expect(ToolMotion.Duration.loop == 1.200)
+        #expect(ToolMotion.Duration.micro == 0.100)
+        #expect(ToolMotion.Duration.quick == 0.140)
+        #expect(ToolMotion.Duration.arrival == ToolMotion.Duration.enter)
+        #expect(ToolMotion.Duration.fast == ToolMotion.Duration.base)
+        #expect(ToolMotion.Duration.medium == ToolMotion.Duration.base)
+        #expect(ToolMotion.Duration.pageSinkEnter == ToolMotion.Duration.enter)
+        #expect(ToolMotion.Duration.pageSinkExit == ToolMotion.Duration.exit)
+    }
+
+    @Test func v9CurveAndPresetValuesStayPinned() {
+        let standard = ToolMotion.Curve.standardControlPoints
+        #expect(standard.x1 == 0.2)
+        #expect(standard.y1 == 0.0)
+        #expect(standard.x2 == 0.0)
+        #expect(standard.y2 == 1.0)
+
+        let enter = ToolMotion.Curve.enterControlPoints
+        #expect(enter.x1 == 0.16)
+        #expect(enter.y1 == 1.0)
+        #expect(enter.x2 == 0.3)
+        #expect(enter.y2 == 1.0)
+
+        let exit = ToolMotion.Curve.exitControlPoints
+        #expect(exit.x1 == 0.4)
+        #expect(exit.y1 == 0.0)
+        #expect(exit.x2 == 1.0)
+        #expect(exit.y2 == 1.0)
+
+        #expect(ToolMotion.Preset.pageEnter == ToolMotion.Curve.enter(duration: ToolMotion.Duration.enter))
+        #expect(ToolMotion.Preset.pageExit == ToolMotion.Curve.exit(duration: ToolMotion.Duration.exit))
+        #expect(ToolMotion.Distance.pageRise == 4)
+        #expect(ToolMotion.Preset.toastEnter == ToolMotion.Curve.enter(duration: ToolMotion.Duration.base))
+        #expect(ToolMotion.Preset.toastExit == ToolMotion.Curve.exit(duration: ToolMotion.Duration.exit))
+        #expect(ToolMotion.CopyTick.out == 0.200)
+        #expect(ToolMotion.CopyTick.draw == 0.200)
+        #expect(ToolMotion.CopyTick.back == 0.140)
+        #expect(ToolMotion.Preset.delight == ToolMotion.Curve.delight())
+        #expect(ToolMotion.Preset.reducedMotionFade == ToolMotion.Curve.standard(duration: ToolMotion.Duration.micro))
     }
 
     @Test func pageArrivalStaysAHostOwnedWhitelistedPreset() {
-        #expect(ToolMotion.Preset.pageArrival == ToolMotion.Curve.smoothOut(duration: ToolMotion.Duration.pageSinkEnter))
-        #expect(ToolMotion.Preset.pageDeparture == ToolMotion.Curve.productiveExit(duration: ToolMotion.Duration.pageSinkExit))
+        #expect(ToolMotion.Preset.pageArrival == ToolMotion.Curve.enter(duration: ToolMotion.Duration.pageSinkEnter))
+        #expect(ToolMotion.Preset.pageDeparture == ToolMotion.Curve.exit(duration: ToolMotion.Duration.pageSinkExit))
         #expect(ToolMotion.Scale.pageArrivalSink == 0.995)
         #expect(ToolMotion.Scale.pageDepartureSink == 0.992)
         #expect(ToolMotion.Distance.pageSinkRise == 10)
@@ -37,14 +72,14 @@ struct ToolMotionTests {
     }
 
     @Test func resultPresenceUsesAsymmetricProductiveTiming() {
-        let exit = ToolMotion.Curve.productiveExitControlPoints
+        let exit = ToolMotion.Curve.exitControlPoints
 
-        #expect(ToolMotion.ResultPresence.appearanceDuration == ToolMotion.Duration.medium)
-        #expect(ToolMotion.ResultPresence.exitDuration == ToolMotion.Duration.fast)
-        #expect(exit.x1 == 0.2)
+        #expect(ToolMotion.ResultPresence.appearanceDuration == ToolMotion.Duration.base)
+        #expect(ToolMotion.ResultPresence.exitDuration == ToolMotion.Duration.exit)
+        #expect(exit.x1 == 0.4)
         #expect(exit.y1 == 0.0)
         #expect(exit.x2 == 1.0)
-        #expect(exit.y2 == 0.9)
+        #expect(exit.y2 == 1.0)
     }
 
     @Test func reduceMotionGateRemovesSwiftUIAnimations() {
@@ -66,7 +101,7 @@ struct ToolMotionTests {
     @Test func emptyStateArrivalIsOneTimeline() {
         #expect(ToolMotion.EmptyArrival.riseDistance == 4)
         #expect(ToolMotion.EmptyArrival.elementArrival == ToolMotion.EmptyArrival.arrive)
-        #expect(ToolMotion.EmptyArrival.arrive == ToolMotion.Curve.smoothOut(duration: ToolMotion.Duration.arrival))
+        #expect(ToolMotion.EmptyArrival.arrive == ToolMotion.Curve.enter(duration: ToolMotion.Duration.enter))
     }
 
     @Test func legacyToolMetricsAnimationDurationsForwardToToolMotion() {
@@ -81,10 +116,10 @@ struct ToolMotionTests {
         motion.timingFunction.getControlPoint(at: 1, values: &first)
         motion.timingFunction.getControlPoint(at: 2, values: &second)
 
-        #expect(motion.duration == ToolMotion.Duration.medium)
-        #expect(first[0] == Float(ToolMotion.Curve.smoothOutControlPoints.x1))
-        #expect(first[1] == Float(ToolMotion.Curve.smoothOutControlPoints.y1))
-        #expect(second[0] == Float(ToolMotion.Curve.smoothOutControlPoints.x2))
-        #expect(second[1] == Float(ToolMotion.Curve.smoothOutControlPoints.y2))
+        #expect(motion.duration == ToolMotion.Duration.base)
+        #expect(first[0] == Float(ToolMotion.Curve.standardControlPoints.x1))
+        #expect(first[1] == Float(ToolMotion.Curve.standardControlPoints.y1))
+        #expect(second[0] == Float(ToolMotion.Curve.standardControlPoints.x2))
+        #expect(second[1] == Float(ToolMotion.Curve.standardControlPoints.y2))
     }
 }

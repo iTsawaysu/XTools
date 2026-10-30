@@ -98,14 +98,8 @@ private struct IndexHeroValueText: View {
                 .textSelection(.enabled)
                 .arrowCursorOnHover()
         }
-        .animation(
-            ToolMotion.animation(ToolMotion.Preset.valueSwapExit, reduceMotion: reduceMotion),
-            value: exitProgress
-        )
-        .animation(
-            ToolMotion.animation(ToolMotion.Preset.valueSwapEnter, reduceMotion: reduceMotion),
-            value: enterProgress
-        )
+        .toolAnimation(ToolMotion.Preset.valueSwapExit, reduceMotion: reduceMotion, value: exitProgress)
+        .toolAnimation(ToolMotion.Preset.valueSwapEnter, reduceMotion: reduceMotion, value: enterProgress)
         .onChange(of: value) { newValue in
             guard newValue != displayedValue else { return }
             cleanupTask?.cancel()
@@ -124,10 +118,10 @@ private struct IndexHeroValueText: View {
                 enterProgress = 0
                 exitProgress = 0
             }
-            withAnimation(ToolMotion.Preset.valueSwapExit) {
+            withToolAnimation(ToolMotion.Preset.valueSwapExit, reduceMotion: reduceMotion) {
                 exitProgress = 1
             }
-            withAnimation(ToolMotion.Preset.valueSwapEnter) {
+            withToolAnimation(ToolMotion.Preset.valueSwapEnter, reduceMotion: reduceMotion) {
                 enterProgress = 1
             }
             cleanupTask = Task { @MainActor in

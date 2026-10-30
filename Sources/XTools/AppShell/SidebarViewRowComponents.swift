@@ -69,11 +69,9 @@ struct SidebarGroupHeader: View {
         .onHover { hoverState.isHovered = $0 }
         // Search / Reduce Motion land immediately; otherwise share accordion timing
         // with the AppKit track owner (ADR-0015) via ToolMotion.animation.
-        .animation(
-            ToolMotion.animation(
-                ToolMotion.Preset.accordion,
-                reduceMotion: reduceMotion || isSearchActive
-            ),
+        .toolAnimation(
+            ToolMotion.Preset.accordion,
+            reduceMotion: reduceMotion || isSearchActive,
             value: isExpanded
         )
         .toolAnimation(ToolMotion.Preset.controlFeedback, value: hoverState.isHovered)
@@ -201,7 +199,7 @@ struct SidebarToolRow: View {
                     .font(.system(size: ToolMetrics.IconSize.micro))
                     .foregroundStyle(isFavorite ? (shouldHighlight ? ToolTheme.accent : ToolTheme.textTertiary) : ToolTheme.textSecondary)
                     .frame(width: 14, height: 14)
-                    .toolMotionIconSwap(id: isFavorite)
+                    .toolMotionFavoriteSwap(id: isFavorite)
             }
             .frame(width: 24, height: 24)
             .contentShape(Rectangle())

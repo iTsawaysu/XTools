@@ -41,7 +41,7 @@ final class AppShortcutRouter {
         switch characters {
         case "k":
             return { [weak self] in
-                withToolAnimation(ToolMotion.Preset.modal) {
+                withToolAnimation(ToolMotion.Preset.modal, reduceMotion: ToolMotion.systemReduceMotionEnabled) {
                     self?.viewModel?.toggleCommandPalette()
                 }
             }

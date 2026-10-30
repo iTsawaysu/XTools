@@ -252,8 +252,8 @@ private struct ToolButtonStyle: ButtonStyle {
                 .opacity(isEnabled ? 1 : (role == .icon ? 0.4 : 0.45))
                 .scaleEffect(!reduceMotion && pressed ? ToolMotion.Scale.pressed : 1)
                 .onHover { isHovering = $0 }
-                .toolAnimation(ToolMotion.Preset.controlFeedback, value: hovering)
-                .toolAnimation(ToolMotion.Preset.controlFeedback, value: pressed)
+                .toolAnimation(hovering ? ToolMotion.Preset.hoverIn : ToolMotion.Preset.hoverOut, reduceMotion: reduceMotion, value: hovering)
+                .toolAnimation(ToolMotion.Preset.press, value: pressed)
         }
     }
 }

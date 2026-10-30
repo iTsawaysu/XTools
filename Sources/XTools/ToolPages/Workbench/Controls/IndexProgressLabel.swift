@@ -105,17 +105,14 @@ struct IndexProgressHairline: View {
                         .fill(ToolTheme.accent)
                         .frame(width: railWidth * Self.segmentRatio)
                         .offset(x: sweeping ? railWidth * (1 - Self.segmentRatio) : 0)
-                        .animation(
-                            ToolMotion.animation(ToolMotion.Preset.hairlineSweep, reduceMotion: reduceMotion),
-                            value: sweeping
-                        )
+                        .toolAnimation(ToolMotion.Preset.hairlineSweep, reduceMotion: reduceMotion, value: sweeping)
                 } else {
                     Capsule()
                         .fill(ToolTheme.accent)
                         .frame(width: railWidth)
                         .scaleEffect(x: clampedFraction, y: 1, anchor: .leading)
                         .toolAnimation(
-                            ToolMotion.Curve.smoothOut(duration: ToolMotion.Duration.medium),
+                            ToolMotion.Curve.standard(duration: ToolMotion.Duration.base),
                             value: clampedFraction
                         )
                 }

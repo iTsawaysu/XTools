@@ -222,10 +222,7 @@ private struct IndexPageHeaderText: View {
         }
         .opacity(arrived ? 1 : 0)
         .offset(y: arrived ? 0 : ToolMotion.Distance.headerRise)
-        .animation(
-            ToolMotion.animation(ToolMotion.Preset.pageHeader, reduceMotion: reduceMotion),
-            value: arrived
-        )
+        .toolAnimation(ToolMotion.Preset.pageHeader, reduceMotion: reduceMotion, value: arrived)
         .onAppear { arrived = true }
     }
 }

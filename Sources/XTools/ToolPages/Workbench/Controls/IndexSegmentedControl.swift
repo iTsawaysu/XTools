@@ -370,10 +370,7 @@ struct IndexModeContent<ID: Hashable, Content: View>: View {
                 maxHeight: fillsHeight ? .infinity : nil,
                 alignment: .topLeading
             )
-            .animation(
-                ToolMotion.animation(ToolMotion.Preset.contentSettle, reduceMotion: reduceMotion),
-                value: settleOpacity
-            )
+            .toolAnimation(ToolMotion.Preset.contentSettle, reduceMotion: reduceMotion, value: settleOpacity)
             .onChange(of: id) { newID in
                 guard newID != displayedID else { return }
                 displayedID = newID
@@ -385,7 +382,7 @@ struct IndexModeContent<ID: Hashable, Content: View>: View {
                 withTransaction(ToolMotion.disabledTransaction) {
                     settleOpacity = 0.94
                 }
-                withAnimation(ToolMotion.Preset.contentSettle) {
+                withToolAnimation(ToolMotion.Preset.contentSettle, reduceMotion: reduceMotion) {
                     settleOpacity = 1
                 }
             }

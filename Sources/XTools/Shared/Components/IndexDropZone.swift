@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct IndexDropZoneModifier: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var isTargeted: Bool
     let onFile: (URL) -> Void
     let onMultipleFiles: (() -> Void)?
@@ -39,7 +40,7 @@ struct IndexDropZoneModifier: ViewModifier {
                     return false
                 }
             } isTargeted: { targeted in
-                withToolAnimation(ToolMotion.Preset.controlFeedback) {
+                withToolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion) {
                     isTargeted = targeted
                 }
             }

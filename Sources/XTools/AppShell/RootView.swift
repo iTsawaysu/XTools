@@ -196,7 +196,7 @@ struct RootView: View {
         // owns the id-driven transition; this root-level animation keyed on
         // the selection guarantees the crossfade plays even when the switch
         // originates outside the host (palette, sidebar, shortcuts).
-        .toolAnimation(ToolMotion.Preset.pageArrival, value: viewModel.selectedToolID)
+        .toolAnimation(ToolMotion.Preset.pageEnter, value: viewModel.selectedToolID)
         // Floating suggestion: overlay keeps page layout, scroll ownership, and
         // control positions untouched while the hint is visible. The entrance/
         // exit transaction comes from the monitor's applyToolMotion writes; the
@@ -225,10 +225,7 @@ struct RootView: View {
                 .toolTransition(ToolMotion.Transition.toastPanel, reduceMotion: reduceMotion)
             }
         }
-        .animation(
-            ToolMotion.animation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion),
-            value: smartPaste.suggestion
-        )
+        .toolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion, value: smartPaste.suggestion)
     }
 
     private var navigationActions: ToolNavigationActions {
@@ -278,19 +275,19 @@ struct RootView: View {
     /// Palette open/close uses one explicit transaction shared by the stable
     /// presentation shell; AppKit field/session replacement stays inside it.
     private func toggleCommandPaletteAnimated() {
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: reduceMotion) {
             navigationActions.toggleCommandPalette()
         }
     }
 
     private func openCommandPaletteAnimated() {
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: reduceMotion) {
             navigationActions.openCommandPalette()
         }
     }
 
     private func closeCommandPaletteAnimated() {
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: reduceMotion) {
             navigationActions.closeCommandPalette()
         }
     }

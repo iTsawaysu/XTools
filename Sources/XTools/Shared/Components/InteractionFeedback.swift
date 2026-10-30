@@ -14,10 +14,7 @@ private struct ToolInteractionFeedbackStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.97 : 1)
             .opacity(configuration.isPressed ? 0.88 : 1)
-            .animation(
-                ToolMotion.animation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion),
-                value: configuration.isPressed
-            )
+            .toolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion, value: configuration.isPressed)
     }
 }
 
@@ -66,7 +63,7 @@ private struct ToolPaneHoverChromeModifier: ViewModifier {
                 if reduceMotion {
                     isHovered = hovering
                 } else {
-                    withAnimation(hovering ? ToolMotion.PaneHover.inCurve : ToolMotion.PaneHover.outCurve) {
+                    withToolAnimation(hovering ? ToolMotion.PaneHover.inCurve : ToolMotion.PaneHover.outCurve, reduceMotion: reduceMotion) {
                         isHovered = hovering
                     }
                 }
@@ -111,10 +108,10 @@ struct ToolOutputBreathModifier: ViewModifier {
                     let halfArc = ns(ToolMotion.Duration.outputBreathHalfArc)
                     try? await Task.sleep(nanoseconds: ns(ToolMotion.OutputBreath.delay))
                     guard !Task.isCancelled else { return }
-                    withAnimation(ToolMotion.OutputBreath.rise) { isBreathing = true }
+                    withToolAnimation(ToolMotion.OutputBreath.rise, reduceMotion: reduceMotion) { isBreathing = true }
                     try? await Task.sleep(nanoseconds: halfArc)
                     guard !Task.isCancelled else { return }
-                    withAnimation(ToolMotion.OutputBreath.fall) { isBreathing = false }
+                    withToolAnimation(ToolMotion.OutputBreath.fall, reduceMotion: reduceMotion) { isBreathing = false }
                 }
             }
     }
@@ -161,10 +158,10 @@ private struct ToolErrorTintModifier: ViewModifier {
                             nanoseconds: UInt64(ToolMotion.ErrorFeedback.tintDelay * 1_000_000_000)
                         )
                         guard !Task.isCancelled else { return }
-                        withAnimation(ToolMotion.ErrorFeedback.tintIn) { tintOn = true }
+                        withToolAnimation(ToolMotion.ErrorFeedback.tintIn, reduceMotion: reduceMotion) { tintOn = true }
                     }
                 } else {
-                    withAnimation(ToolMotion.ErrorFeedback.tintOut) { tintOn = false }
+                    withToolAnimation(ToolMotion.ErrorFeedback.tintOut, reduceMotion: reduceMotion) { tintOn = false }
                 }
             }
     }

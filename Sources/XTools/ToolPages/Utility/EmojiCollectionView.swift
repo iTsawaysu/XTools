@@ -610,8 +610,8 @@ private final class IndexEmojiCollectionButton: NSButton {
         let shouldAnimate = animated && !reduceMotion
         CATransaction.begin()
         CATransaction.setAnimationDuration(shouldAnimate ? ToolMotion.Duration.micro : 0)
-        // 与 ToolMotion.Curve.smoothOut 同一条曲线(经 AppKit 桥)。
-        let smooth = ToolMotion.Curve.smoothOutControlPoints
+        // 与 ToolMotion.Curve.standard 同一条曲线（经 AppKit 桥）。
+        let smooth = ToolMotion.Curve.standardControlPoints
         CATransaction.setAnimationTimingFunction(
             CAMediaTimingFunction(
                 controlPoints: Float(smooth.x1), Float(smooth.y1), Float(smooth.x2), Float(smooth.y2)

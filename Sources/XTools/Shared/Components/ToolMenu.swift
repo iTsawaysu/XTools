@@ -29,6 +29,8 @@ struct ToolMenu<Item: Hashable>: View {
         return selected.title
     }
 
+    private var hovering: Bool { isHovering && isEnabled }
+
     private var height: CGFloat {
         presentation == .picker
             ? ToolMetrics.ControlHeight.field38
@@ -79,6 +81,7 @@ struct ToolMenu<Item: Hashable>: View {
         .menuIndicator(.hidden)
         .fixedSize()
         .onHover { isHovering = $0 }
+        .toolAnimation(hovering ? ToolMotion.Preset.hoverIn : ToolMotion.Preset.hoverOut, value: hovering)
         .opacity(isEnabled ? 1 : 0.45)
         .accessibilityLabel(resolvedTitle)
     }

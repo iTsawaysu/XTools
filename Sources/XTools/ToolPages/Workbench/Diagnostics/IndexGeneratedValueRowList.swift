@@ -149,11 +149,9 @@ private struct IndexGeneratedValueRowView: View {
         .opacity(revealed ? 1 : 0)
         .scaleEffect(revealed ? 1 : 0.96, anchor: .top)
         .offset(y: revealed ? 0 : 2)
-        .animation(
-            ToolMotion.animation(
-                ToolMotion.Curve.smoothOut(duration: ToolMotion.Duration.fast).delay(staggerDelay),
-                reduceMotion: reduceMotion
-            ),
+        .toolAnimation(
+            ToolMotion.Curve.standard(duration: ToolMotion.Duration.base).delay(staggerDelay),
+            reduceMotion: reduceMotion,
             value: isRevealed
         )
         .accessibilityHint(row.copyHelp)

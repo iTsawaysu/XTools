@@ -131,24 +131,15 @@ private struct ToolPageParkingModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .opacity(pose == .visible ? 1 : 0)
-            .offset(y: pose == .arrivalStart ? ToolMotion.Distance.pageSinkRise : 0)
-            .scaleEffect(scale)
+            .offset(y: pose == .arrivalStart ? ToolMotion.Distance.pageRise : 0)
             .animation(reduceMotion ? nil : animation, value: pose)
-    }
-
-    private var scale: CGFloat {
-        switch pose {
-        case .visible: 1
-        case .arrivalStart: ToolMotion.Scale.pageArrivalSink
-        case .parked: ToolMotion.Scale.pageDepartureSink
-        }
     }
 
     private var animation: Animation? {
         switch pose {
-        case .visible: ToolMotion.Preset.pageArrival
+        case .visible: ToolMotion.Preset.pageEnter
         case .arrivalStart: nil
-        case .parked: ToolMotion.Preset.pageDeparture
+        case .parked: ToolMotion.Preset.pageExit
         }
     }
 }

@@ -86,6 +86,7 @@ private struct IndexHTTPStatusWorkspaceContent: View {
 }
 
 private struct IndexHTTPStatusRow: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let row: HTTPStatusEntry
 
     @State private var isHovering = false
@@ -119,7 +120,7 @@ private struct IndexHTTPStatusRow: View {
         .background(isHovering ? ToolTheme.hoverFill : Color.clear)
         .contentShape(Rectangle())
         .onHover { hovering in
-            withToolAnimation(ToolMotion.Preset.controlFeedback) { isHovering = hovering }
+            withToolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion) { isHovering = hovering }
         }
     }
 

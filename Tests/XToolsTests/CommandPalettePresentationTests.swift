@@ -11,12 +11,12 @@ struct CommandPalettePresentationTests {
         let fixture = try Fixture()
         defer { fixture.dispose() }
 
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.openCommandPalette()
         }
         let field = try await Self.waitForReadyField(in: fixture)
 
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.closeCommandPalette()
         }
         try await Self.waitForCondition(label: "real palette field suspension") {
@@ -34,7 +34,7 @@ struct CommandPalettePresentationTests {
         defer { fixture.dispose() }
 
         fixture.activateWindow()
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.openCommandPalette()
         }
         let field = try await Self.waitForReadyField(in: fixture)
@@ -55,7 +55,7 @@ struct CommandPalettePresentationTests {
         #expect(fixture.viewModel.commandPalettePresentationSession == 1)
         #expect(field.stringValue == "jwt")
 
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.closeCommandPalette()
         }
         // The persistent field retains its text across close, but the close
@@ -93,7 +93,7 @@ struct CommandPalettePresentationTests {
         // Reopening reuses the SAME persistent field: it is re-enabled,
         // synchronously cleared for the new session, and refocused.
         fixture.activateWindow()
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.openCommandPalette()
         }
         let reopenedField = try await Self.waitForReadyField(in: fixture)
@@ -122,7 +122,7 @@ struct CommandPalettePresentationTests {
         let fixture = try Fixture()
         defer { fixture.dispose() }
 
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.openCommandPalette()
         }
         let oldField = try await Self.waitForReadyField(in: fixture)
@@ -155,7 +155,7 @@ struct CommandPalettePresentationTests {
             return abs(scrollView.contentView.bounds.origin.y - initialScrollOrigin.y) > 100
         }
 
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.closeCommandPalette()
         }
         try await Self.waitForCondition(label: "closed palette native row retention") {
@@ -166,7 +166,7 @@ struct CommandPalettePresentationTests {
         }
 
         fixture.activateWindow()
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.openCommandPalette()
         }
         _ = try await Self.waitForReadyField(in: fixture)
@@ -235,7 +235,7 @@ struct CommandPalettePresentationTests {
             }
         }
 
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.openCommandPalette()
         }
         let field = try await Self.waitForReadyField(in: fixture)
@@ -266,7 +266,7 @@ struct CommandPalettePresentationTests {
         let fixture = try Fixture()
         defer { fixture.dispose() }
 
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.openCommandPalette()
         }
         let field = try await Self.waitForReadyField(in: fixture)
@@ -292,7 +292,7 @@ struct CommandPalettePresentationTests {
         let fixture = try Fixture()
         defer { fixture.dispose() }
 
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.openCommandPalette()
         }
         let field = try await Self.waitForReadyField(in: fixture)
@@ -342,7 +342,7 @@ struct CommandPalettePresentationTests {
         let fixture = try Fixture()
         defer { fixture.dispose() }
 
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.openCommandPalette()
         }
         let field = try await Self.waitForReadyField(in: fixture)
@@ -386,7 +386,7 @@ struct CommandPalettePresentationTests {
         #expect(after.counters[.sidebarProjection, default: 0] == before.counters[.sidebarProjection, default: 0])
         #expect(after.counters[.rowSnapshot, default: 0] == before.counters[.rowSnapshot, default: 0] + 1)
 
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.closeCommandPalette()
         }
         try await Self.waitForCondition(label: "isolated palette close") {
@@ -450,7 +450,7 @@ struct CommandPalettePresentationTests {
     ) async throws -> PresentationSample {
         fixture.activateWindow()
         let startedAt = ContinuousClock.now
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.openCommandPalette()
         }
         let session = fixture.viewModel.commandPalettePresentationSession
@@ -529,7 +529,7 @@ struct CommandPalettePresentationTests {
             layout, focus, ready
         ).utf8))
 
-        withToolAnimation(ToolMotion.Preset.modal) {
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
             fixture.viewModel.closeCommandPalette()
         }
         try await waitForCondition(label: "palette session \(session) suspension") {

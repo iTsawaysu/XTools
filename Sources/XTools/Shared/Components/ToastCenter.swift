@@ -177,7 +177,7 @@ struct ToolToastHost: View {
             .frame(maxWidth: 360, alignment: .bottomTrailing)
             .padding(.bottom, 18)
             .padding(.trailing, 18)
-            .animation(ToolMotion.animation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion), value: center.messages)
+            .toolAnimation(ToolMotion.Preset.toastEnter, reduceMotion: reduceMotion, value: center.messages)
         }
     }
 }

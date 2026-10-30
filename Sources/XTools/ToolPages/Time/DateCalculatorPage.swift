@@ -279,6 +279,7 @@ private struct DateCalculatorDateField: View {
 }
 
 private struct DateCalculatorTodayButton: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let action: () -> Void
 
     @State private var isHovering = false
@@ -300,7 +301,7 @@ private struct DateCalculatorTodayButton: View {
             in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
         )
         .onHover { hovering in
-            withToolAnimation(ToolMotion.Preset.controlFeedback) { isHovering = hovering }
+            withToolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion) { isHovering = hovering }
         }
         .focused($isFocused)
         .indexFocusRing(active: isFocused, cornerRadius: ToolMetrics.CornerRadius.nestedControl)

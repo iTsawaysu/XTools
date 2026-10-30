@@ -693,6 +693,7 @@ private struct WatermarkAnchorOption: View {
 
 /// One 3×3 anchor cell following the shared row grammar (hover/selected/focus).
 private struct WatermarkAnchorCell: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let item: ImageWatermarkPosition
     let isSelected: Bool
     let action: () -> Void
@@ -723,7 +724,7 @@ private struct WatermarkAnchorCell: View {
         }
         .buttonStyle(IndexBareButtonStyle())
         .onHover { hovering in
-            withToolAnimation(ToolMotion.Preset.controlFeedback) { isHovering = hovering }
+            withToolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion) { isHovering = hovering }
         }
         .focused($isFocused)
         .indexFocusRing(active: isFocused, cornerRadius: ToolMetrics.CornerRadius.nestedControl)

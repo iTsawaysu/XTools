@@ -178,10 +178,7 @@ struct IndexCodeViewerSurface: View {
         }
         .onPreferenceChange(IndexCodeViewerFooterHeightPreferenceKey.self) { footerHeight = $0 }
         .onChange(of: text) { _ in fullTextSource = nil }
-        .animation(
-            reduceMotion ? nil : ToolMotion.EmptyArrival.elementArrival,
-            value: text.isEmpty
-        )
+        .toolAnimation(ToolMotion.EmptyArrival.elementArrival, reduceMotion: reduceMotion, value: text.isEmpty)
         .frame(
             maxWidth: .infinity,
             minHeight: effectiveMinHeight,

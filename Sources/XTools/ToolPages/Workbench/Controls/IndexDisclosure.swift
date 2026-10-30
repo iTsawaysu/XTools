@@ -10,6 +10,7 @@ import SwiftUI
 ///
 /// Pages must not hand-roll `.buttonStyle(.plain)` accordion headers.
 struct IndexDisclosure<Content: View, Accessory: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let title: String
     @Binding var isExpanded: Bool
     /// One-line hint shown only while collapsed (e.g. JWT's local-check summary).
@@ -54,7 +55,7 @@ struct IndexDisclosure<Content: View, Accessory: View>: View {
 
     private var header: some View {
         Button {
-            withToolAnimation(ToolMotion.Preset.accordion) {
+            withToolAnimation(ToolMotion.Preset.accordion, reduceMotion: reduceMotion) {
                 isExpanded.toggle()
             }
         } label: {
@@ -98,7 +99,7 @@ struct IndexDisclosure<Content: View, Accessory: View>: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering in
-            withToolAnimation(ToolMotion.Preset.controlFeedback) { isHovering = hovering }
+            withToolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion) { isHovering = hovering }
         }
         .accessibilityLabel(isExpanded ? "折叠\(title)" : "展开\(title)")
         .accessibilityValue(isExpanded ? "已展开" : "已收起\(collapsedSummary.map { "，\($0)" } ?? "")")
