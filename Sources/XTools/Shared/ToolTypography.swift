@@ -21,6 +21,14 @@ enum ToolTypography {
         static let chevron = Font.system(size: 10, weight: .medium)
     }
 
+    // MARK: - v9 semantic aliases
+    //
+    // Computed aliases keep the v9 vocabulary available without adding new
+    // stored static initialization.
+
+    static var display: Font { heroValue }
+    static var workbenchTitle: Font { Workbench.title }
+
     // MARK: - Page Level
 
     static let pageTitle = Font.system(size: 18, weight: .semibold)

@@ -44,24 +44,24 @@ enum ToolTheme {
     // （editor 最沉 < workspace < panel < utility/popover）。
 
     static let windowBackground = dynamicColor(light: 0xE8E4DC, dark: 0x0E0F11)     // §7.1 surfaceWindow
-    static let workspaceBackground = dynamicColor(light: 0xF4F1EB, dark: 0x151517)  // §7.1 surfaceWorkspace ← 用户指定
+    static let workspaceBackground = dynamicColor(light: 0xF4F1EB, dark: 0x151517)  // previous palette
     static let sidebarBackground = dynamicColor(light: 0xEAE6DE, dark: 0x121214)    // §7.1 surfaceSidebar
-    static let panelBackground = dynamicColor(light: 0xFDFCFA, dark: 0x1E1E22)      // §7.1 surfacePanel
-    static let utilityBackground = dynamicColor(light: 0xF5F2EC, dark: 0x242429)    // §7.1 surfacePanel2
-    static let editorBackground = dynamicColor(light: 0xF5F2EC, dark: 0x0F0F11)     // §7.1 surfaceField
+    static let panelBackground = dynamicColor(light: 0xFDFCFA, dark: 0x1E1E22)      // previous palette
+    static let utilityBackground = dynamicColor(light: 0xF5F2EC, dark: 0x242429)    // previous palette
+    static let editorBackground = dynamicColor(light: 0xF5F2EC, dark: 0x0F0F11)     // previous palette
     /// 顶栏 ⌘K 触发按钮的 chip 底。浅色比 `editorBackground` 深一档：统一键帽
     /// `IndexKeycap` 的白色顶面落在过浅的 chip 上会白对白糊成一团，需要约 8%
     /// 明度差才能读出 figure-ground 层次（见 `Keycap` 注释的实测锚）；深色沿用
     /// editorBackground 的近黑——亮灰键帽在近黑上已有足够分离。
     static let commandTriggerChip = dynamicColor(light: 0xEAE6DE, dark: 0x0F0F11)
     static let elevatedBackground = dynamicColor(light: 0xFDFCFA, dark: 0x242429)
-    static let popoverBackground = dynamicColor(light: 0xFDFCFA, dark: 0x242429, alpha: 0.96, darkAlpha: 0.97)
+    static let popoverBackground = dynamicColor(light: 0xFDFCFA, dark: 0x242429)
 
     // MARK: - Text (暖白 / 次要 / 弱)
 
     static let textPrimary = dynamicColor(light: 0x2A2520, dark: 0xE4E2DC)     // §7.1 textPrimary · 暖白
-    static let textSecondary = dynamicColor(light: 0x6B645C, dark: 0x928C84)   // §7.1 textSecondary
-    static let textTertiary = dynamicColor(light: 0x7A736A, dark: 0x7E7870)    // §7.1 textTertiary（满足元数据可读性）
+    static let textSecondary = dynamicColor(light: 0x6B645C, dark: 0x928C84)   // previous palette
+    static let textTertiary = dynamicColor(light: 0x7A736A, dark: 0x7E7870)    // previous palette
 
     // MARK: - Lines & fills
 

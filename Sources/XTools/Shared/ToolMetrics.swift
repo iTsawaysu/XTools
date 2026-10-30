@@ -27,14 +27,16 @@ enum ToolMetrics {
         static let xs: CGFloat = 4
         static let sm: CGFloat = 8
         static let md: CGFloat = 12
-        static let base: CGFloat = 14      // Default panel padding & spacing
+        static let base: CGFloat = 16      // Default panel padding & spacing (v9 4pt grid)
         static let lg: CGFloat = 16
-        static let page: CGFloat = 30      // Page horizontal/vertical padding
+        static let xl: CGFloat = 24
+        static let xxl: CGFloat = 32
+        static let page: CGFloat = 32      // Page horizontal/vertical padding
 
         // Shared panel geometry. Keeping these named prevents individual
         // workspaces from inventing slightly different header/content insets.
-        static let panelInset: CGFloat = 14
-        static let panelSection: CGFloat = 10
+        static let panelInset: CGFloat = 16
+        static let panelSection: CGFloat = 12
     }
 
     // MARK: - Corner Radius
@@ -50,9 +52,17 @@ enum ToolMetrics {
         static let card: CGFloat = 12      // Resting dashboard/content cards
         static let modal: CGFloat = 12     // Floating surfaces: command palette, toasts, popovers, empty-state tiles
         static let keycap: CGFloat = 4      // Keyboard hint keycaps (near-square, Raycast-style)
+        static let sidebarRow: CGFloat = 8 // Sidebar selection capsule and row chrome
         // pill: use Capsule() directly for fully rounded
         // Nested rule: inner radius = outer radius - padding (e.g. 8 - 2 = 6 for segment items)
         static let nestedControl: CGFloat = 6
+    }
+
+    /// v9 border widths. Status changes alter color, not width.
+    enum BorderWidth {
+        static let hairline: CGFloat = 0.5
+        static let selection: CGFloat = 1
+        static let focus: CGFloat = 1.5
     }
 
     // MARK: - Icon Size (SF Symbols rendered inside controls and chrome)
@@ -72,16 +82,20 @@ enum ToolMetrics {
     /// values for the same role; internal calendar cells and decorative
     /// chrome are not part of this ladder.
     enum ControlHeight {
-        /// Icon buttons, small text buttons, compact option-menu triggers.
-        static let compact: CGFloat = 24
-        /// Segmented items, option pills/switches, steppers.
-        static let small: CGFloat = 28
-        /// Primary/secondary action buttons; regular segmented tray is 32.
-        static let action: CGFloat = 32
-        /// Text/search/date fields, menus, option groups.
-        static let field: CGFloat = 38
-        /// Workbench tool rows and generated-value rows.
-        static let row: CGFloat = 44
+        /// v9 canonical ladder: icon 24 / compact 28 / field 38 / bar 44.
+        static let icon24: CGFloat = 24
+        static let compact28: CGFloat = 28
+        static let field38: CGFloat = 38
+        static let bar44: CGFloat = 44
+        /// Primary CTA exception; not part of the general ladder.
+        static let cta32: CGFloat = 32
+
+        // Deprecated aliases kept for P2a compatibility; P2b migrates call sites.
+        static let compact = icon24
+        static let small = compact28
+        static let action = cta32
+        static let field = field38
+        static let row = bar44
     }
 
     // MARK: - Responsive Breakpoints
