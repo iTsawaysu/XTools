@@ -309,10 +309,9 @@ private struct IndexSegmentedCursorLayer<Value: Hashable>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .animation(
-            !reduceMotion && settledFrame != nil
-                ? ToolMotion.SegmentedCursor.slide
-                : nil,
+        .toolAnimation(
+            !reduceMotion && settledFrame != nil ? ToolMotion.SegmentedCursor.slide : nil,
+            reduceMotion: reduceMotion,
             value: selection
         )
         .onChange(of: activeFrame) { newFrame in

@@ -647,10 +647,11 @@ private struct ToolMotionOptionalAnimationModifier<Value: Equatable>: ViewModifi
     let value: Value
 
     func body(content: Content) -> some View {
-        content.animation(
-            reduceMotion ? ToolMotion.Preset.reducedMotionFade : animation,
-            value: value
-        )
+        let resolved: Animation? = {
+            guard reduceMotion else { return animation }
+            return animation == nil ? nil : ToolMotion.Preset.reducedMotionFade
+        }()
+        return content.animation(resolved, value: value)
     }
 }
 

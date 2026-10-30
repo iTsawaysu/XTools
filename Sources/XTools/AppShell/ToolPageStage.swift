@@ -132,7 +132,7 @@ private struct ToolPageParkingModifier: ViewModifier {
         content
             .opacity(pose == .visible ? 1 : 0)
             .offset(y: pose == .arrivalStart ? ToolMotion.Distance.pageRise : 0)
-            .animation(reduceMotion ? nil : animation, value: pose)
+            .toolAnimation(animation, reduceMotion: reduceMotion, value: pose)
     }
 
     private var animation: Animation? {

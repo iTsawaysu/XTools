@@ -92,10 +92,9 @@ struct IndexImagePreviewStage<Footer: View>: View {
         }
         .padding(ToolMetrics.Spacing.sm)
         .frame(maxWidth: .infinity, maxHeight: fillsHeight ? .infinity : nil, alignment: .top)
-        .animation(
-            replacementMotion == .animated
-                ? ToolMotion.animation(ToolMotion.Preset.imageReveal, reduceMotion: reduceMotion)
-                : nil,
+        .toolAnimation(
+            replacementMotion == .animated ? ToolMotion.Preset.imageReveal : nil,
+            reduceMotion: reduceMotion,
             value: imageIdentity
         )
         .transaction { transaction in
