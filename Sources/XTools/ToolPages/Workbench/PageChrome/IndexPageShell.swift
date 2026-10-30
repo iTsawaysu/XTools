@@ -396,6 +396,27 @@ private enum IndexPanelMetrics {
     static var cornerRadius: CGFloat { ToolMetrics.CornerRadius.panel }
 }
 
+private struct IndexPanelElevation: ViewModifier {
+    let surface: IndexPanelSurface
+
+    func body(content: Content) -> some View {
+        switch surface {
+        case .panel:
+            content.toolShadow(ToolTheme.Shadow.panel)
+        case .card:
+            content.toolShadow(ToolTheme.Shadow.card)
+        case .flat:
+            content
+        }
+    }
+}
+
+enum IndexPanelSurface {
+    case panel
+    case card
+    case flat
+}
+
 /// Panel container with header and optional accessory.
 struct IndexPanel<Content: View, Accessory: View>: View {
     let title: String
@@ -407,6 +428,9 @@ struct IndexPanel<Content: View, Accessory: View>: View {
     /// panels leave it nil (SPEC §7.5: labels only on I/O pairs).
     var terminalTag: String? = nil
     var customContentInsets: EdgeInsets? = nil
+
+    var panelSurface: IndexPanelSurface = .panel
+
     @State private var workspaceDiagnostic: IndexWorkspaceDiagnosticPayload?
     @State private var diagnosticPresentation = IndexWorkspaceDiagnosticPresentationState()
     @Environment(\.toolToastCenter) private var toastCenter
@@ -459,6 +483,25 @@ struct IndexPanel<Content: View, Accessory: View>: View {
         return copy
     }
 
+    /// v9 surface: panel (default), card (dashboard only), flat (no chrome).
+    func surface(_ value: IndexPanelSurface) -> IndexPanel {
+        var copy = self
+        copy.panelSurface = value
+        return copy
+    }
+
+    private var resolvedCornerRadius: CGFloat {
+        switch panelSurface {
+        case .panel: return IndexPanelMetrics.cornerRadius
+        case .card: return ToolMetrics.CornerRadius.card
+        case .flat: return 0
+        }
+    }
+
+    private var resolvedFill: Color {
+        panelSurface == .flat ? Color.clear : ToolTheme.panelBackground
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if showsHeader {
@@ -502,18 +545,19 @@ struct IndexPanel<Content: View, Accessory: View>: View {
         }
         .toolAnimation(ToolMotion.Preset.diagnostic, value: workspaceDiagnostic != nil)
         .frame(maxHeight: fillsHeight ? .infinity : nil, alignment: .top)
-        .clipShape(RoundedRectangle(cornerRadius: IndexPanelMetrics.cornerRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous))
         .background(
-            ToolTheme.panelBackground,
-            in: RoundedRectangle(cornerRadius: IndexPanelMetrics.cornerRadius, style: .continuous)
+            resolvedFill,
+            in: RoundedRectangle(cornerRadius: resolvedCornerRadius, style: .continuous)
         )
         .modifier(
             IndexPanelOutline(
-                cornerRadius: IndexPanelMetrics.cornerRadius,
-                diagnostic: workspaceDiagnostic
+                cornerRadius: resolvedCornerRadius,
+                diagnostic: workspaceDiagnostic,
+                isFlat: panelSurface == .flat
             )
         )
-        .toolShadow(ToolTheme.Shadow.panel)
+        .modifier(IndexPanelElevation(surface: panelSurface))
         .onPreferenceChange(IndexWorkspaceDiagnosticPreferenceKey.self) { diagnostic in
             // 错误只走面板内联横幅：同一句话再弹一条 toast 会在屏幕上出现
             // 两个同一错误的落点（横幅 + 右下角），且 toast 无法把用户带回
@@ -687,11 +731,14 @@ extension IndexWorkbenchControlBar where PrimaryAction == EmptyView {
 private struct IndexPanelOutline: ViewModifier {
     let cornerRadius: CGFloat
     let diagnostic: IndexWorkspaceDiagnosticPayload?
+    var isFlat = false
     @Environment(\.colorScheme) private var colorScheme
 
     func body(content: Content) -> some View {
         content.overlay {
-            if let diagnostic {
+            if isFlat {
+                EmptyView()
+            } else if let diagnostic {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(diagnostic.tone.tint.opacity(0.55), lineWidth: 1)
             } else if colorScheme == .dark {

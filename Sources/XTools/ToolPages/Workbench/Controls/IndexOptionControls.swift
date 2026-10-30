@@ -103,6 +103,7 @@ struct IndexOptionSwitch: View {
         case switchToggle
         case embeddedSwitch
         case button
+        case checkbox
     }
 
     let title: String
@@ -185,8 +186,45 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
 
             case .button:
                 IndexOptionButtonLabel(configuration: configuration)
+
+            case .checkbox:
+                IndexCheckboxLabel(configuration: configuration)
             }
         }
+    }
+}
+
+private struct IndexCheckboxLabel: View {
+    let configuration: ToggleStyle.Configuration
+
+    var body: some View {
+        HStack(spacing: 8) {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(configuration.isOn ? ToolTheme.accent : ToolTheme.panelBackground)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .strokeBorder(
+                            configuration.isOn ? ToolTheme.accent : ToolTheme.strongBorder,
+                            lineWidth: 1
+                        )
+                }
+                .overlay {
+                    if configuration.isOn {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: ToolMetrics.IconSize.micro, weight: .bold))
+                            .foregroundStyle(ToolTheme.onAccent)
+                    }
+                }
+                .frame(width: 14, height: 14)
+
+            configuration.label
+                .font(ToolTypography.bodyPlain)
+                .foregroundStyle(ToolTheme.textSecondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        .frame(height: ToolMetrics.ControlHeight.compact)
+        .contentShape(Rectangle())
     }
 }
 

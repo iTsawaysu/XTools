@@ -106,6 +106,8 @@ struct IndexSearchInput: View {
     var autoFocus = false
     var clearTitle = "清空搜索"
     private let onClear: () -> Void
+    private let onSubmit: (() -> Void)?
+    private let onEscape: (() -> Void)?
 
     @State private var focusRequestToken = 0
 
@@ -115,7 +117,9 @@ struct IndexSearchInput: View {
         height: CGFloat = ToolMetrics.ControlHeight.field,
         autoFocus: Bool = false,
         clearTitle: String = "清空搜索",
-        onClear: (() -> Void)? = nil
+        onClear: (() -> Void)? = nil,
+        onSubmit: (() -> Void)? = nil,
+        onEscape: (() -> Void)? = nil
     ) {
         self.placeholder = placeholder
         self._text = text
@@ -123,6 +127,8 @@ struct IndexSearchInput: View {
         self.autoFocus = autoFocus
         self.clearTitle = clearTitle
         self.onClear = onClear ?? { text.wrappedValue = "" }
+        self.onSubmit = onSubmit
+        self.onEscape = onEscape
     }
 
     var body: some View {
@@ -132,7 +138,9 @@ struct IndexSearchInput: View {
             height: height,
             trailingInset: 40,
             autoFocus: autoFocus,
-            focusRequestToken: focusRequestToken == 0 ? nil : focusRequestToken
+            focusRequestToken: focusRequestToken == 0 ? nil : focusRequestToken,
+            onSubmit: onSubmit,
+            onEscape: onEscape
         )
         .overlay(alignment: .trailing) {
             if !text.isEmpty {

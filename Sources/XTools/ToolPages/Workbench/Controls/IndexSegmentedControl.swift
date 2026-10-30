@@ -40,6 +40,7 @@ struct IndexSegmentedControl<Value: Hashable>: View {
     /// width with equal cells. Inspector rails pass true so the control lines
     /// up with the fields below it instead of leaving a ragged right edge.
     var stretchesToFill = false
+    var isEnabled = true
 
     /// Segment bounds published to the shared cursor layer (same anchor
     /// family as the command-palette selection highlight).
@@ -52,7 +53,8 @@ struct IndexSegmentedControl<Value: Hashable>: View {
         density: Density = .regular,
         selectionStyle: SelectionStyle = .cursor,
         tone: ToolFeedbackTone? = nil,
-        stretchesToFill: Bool = false
+        stretchesToFill: Bool = false,
+        isEnabled: Bool = true
     ) {
         self.items = items
         self._selection = selection
@@ -60,14 +62,19 @@ struct IndexSegmentedControl<Value: Hashable>: View {
         self.selectionStyle = selectionStyle
         self.tone = tone
         self.stretchesToFill = stretchesToFill
+        self.isEnabled = isEnabled
     }
 
     var body: some View {
-        if selectionStyle == .filled {
-            filledBody
-        } else {
-            cursorBody
+        Group {
+            if selectionStyle == .filled {
+                filledBody
+            } else {
+                cursorBody
+            }
         }
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
     }
 
     // MARK: Filled selection (the former IndexOptionPicker)
