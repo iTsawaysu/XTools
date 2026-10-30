@@ -660,24 +660,19 @@ private struct ToolMotionIdentityTransitionModifier<ID: Hashable>: ViewModifier 
 }
 
 /// Numeric readout tween: digit roll on value change (macOS 14+
-/// `numericText`). Older systems and Reduce Motion render the final value
-/// directly — the motion is presentation-only chrome for instrument reads.
+/// `numericText`). Reduce Motion renders the final value directly.
 private struct ToolNumericTransitionModifier<Value: Equatable>: ViewModifier {
     let value: Value
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
-        if #available(macOS 14.0, *) {
-            content
-                .contentTransition(.numericText())
-                .animation(
-                    ToolMotion.animation(ToolMotion.Preset.textSwap, reduceMotion: reduceMotion),
-                    value: value
-                )
-        } else {
-            content
-        }
+        content
+            .contentTransition(.numericText())
+            .animation(
+                ToolMotion.animation(ToolMotion.Preset.textSwap, reduceMotion: reduceMotion),
+                value: value
+            )
     }
 }
 

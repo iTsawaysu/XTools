@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "XTools",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v14)
     ],
     products: [
         .executable(name: "XTools", targets: ["XTools"])

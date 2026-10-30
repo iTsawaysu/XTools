@@ -42,7 +42,7 @@ PRODUCT_NAME="XTools"
 APP_DISPLAY_NAME="XTools"
 APP_NAME="$APP_DISPLAY_NAME.app"
 BUNDLE_ID="${BUNDLE_ID:-com.sun.xtools}"
-MIN_SYSTEM_VERSION="13.0"
+MIN_SYSTEM_VERSION="14.0"
 
 # Share the default SwiftPM cache with `swift build` / `swift test`.
 BUILD_DIR="$PROJECT_DIR/.build"

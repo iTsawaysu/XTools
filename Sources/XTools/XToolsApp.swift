@@ -77,11 +77,7 @@ final class XToolsAppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 openWindowAction?(id: "main")
             }
-            if #available(macOS 14.0, *) {
-                sender.activate()
-            } else {
-                sender.activate(ignoringOtherApps: true)
-            }
+            sender.activate()
         }
         return true
     }
