@@ -107,24 +107,7 @@ struct IndexImageComparisonPane<Footer: View>: View {
                 .padding(.top, 4)
             }
             .frame(height: stageHeight)
-            // 面板头落在 clay 画布上：用一道 12pt 的顶部落影交代层级，
-            // 取代同色渐变的「色带」感。阴影画在内容下层，标签与图像
-            // 不受影响。压缩/灰度/水印三个对比舞台共用这一处。
-            .background {
-                ZStack(alignment: .top) {
-                    ToolTheme.editorBackground
-
-                    LinearGradient(
-                        colors: [
-                            ToolTheme.cardShadow,
-                            ToolTheme.cardShadow.opacity(0)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .frame(height: 12)
-                }
-            }
+            .imageCanvasSurface()
             .clipped()
             .toolAnimation(ToolMotion.Preset.panelReveal, value: isProcessing)
 
@@ -136,6 +119,31 @@ struct IndexImageComparisonPane<Footer: View>: View {
                 .padding(.horizontal, 12)
                 .frame(maxWidth: .infinity, minHeight: Self.footerHeight, maxHeight: Self.footerHeight, alignment: .leading)
                 .background(ToolTheme.panelBackground)
+        }
+    }
+}
+
+// MARK: - Image canvas surface
+
+extension View {
+    /// 图片工作区统一的 clay 画布：暖白面板上落一层 clay，顶边用 12pt
+    /// 落影交代层级。对比舞台、单图预览、队列与部署包共用这一套表面，
+    /// 避免同类功能出现白底 / clay 底两套风格。
+    func imageCanvasSurface() -> some View {
+        background {
+            ZStack(alignment: .top) {
+                ToolTheme.editorBackground
+
+                LinearGradient(
+                    colors: [
+                        ToolTheme.cardShadow,
+                        ToolTheme.cardShadow.opacity(0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 12)
+            }
         }
     }
 }

@@ -239,15 +239,20 @@ struct IndexShortResultKV: View {
 struct IndexSurfaceRow<Content: View>: View {
     var horizontalPadding: CGFloat = 12
     var verticalPadding: CGFloat = 8
+    /// 行表面底色。默认落在面板白底上；图片工作区把行放到 clay 画布
+    /// 上时传 `panelBackground`，让卡片从画布里浮出来。
+    var fill: Color = ToolTheme.editorBackground
     private let content: Content
 
     init(
         horizontalPadding: CGFloat = 12,
         verticalPadding: CGFloat = 8,
+        fill: Color = ToolTheme.editorBackground,
         @ViewBuilder content: () -> Content
     ) {
         self.horizontalPadding = horizontalPadding
         self.verticalPadding = verticalPadding
+        self.fill = fill
         self.content = content()
     }
 
@@ -255,7 +260,7 @@ struct IndexSurfaceRow<Content: View>: View {
         content
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
-            .background(ToolTheme.editorBackground, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+            .background(fill, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
                     .strokeBorder(ToolTheme.border, lineWidth: 0.5)

@@ -128,7 +128,10 @@ private struct IndexImageConverterWorkspaceContent: View {
     }
 
     private var sourceFormatBadge: String? {
-        targetFormat.displayName
+        if let single = session.singleItem {
+            return single.metadata.format?.displayName
+        }
+        return targetFormat.displayName
     }
 
     var body: some View {
@@ -204,6 +207,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                         batchList
                             .padding(ToolMetrics.Spacing.panelInset)
                     }
+                    .imageCanvasSurface()
                     .toolTransition(ToolMotion.Transition.modeContent, reduceMotion: reduceMotion)
                 }
             }
@@ -467,20 +471,22 @@ private struct IndexImageConverterWorkspaceContent: View {
         )
     }
 
-    /// 单张舞台：预览居中，底部固定 40pt 脚注（原始/输出体积与变化）。
+    /// 单张舞台：与压缩/灰度/水印同构的对比舞台——clay 画布、浮动标签、
+    /// 40pt 脚注，四页共用同一套表面与结果揭示动效。
+    private var singleStageHeight: CGFloat {
+        max(300, stagePanelHeight - 79)
+    }
+
     private func singleImageStage(_ item: BatchConversionItem) -> some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            IndexImagePreviewStage(
-                image: session.sourceImage,
-                accessibilityLabel: "待转换的原图",
-                accessibilityValue: sourcePreviewAccessibilityValue(item),
-                maxDisplayWidth: 640,
-                maxDisplayHeight: 400
-            )
-            .padding(.horizontal, ToolMetrics.Spacing.panelInset)
-            Spacer(minLength: 0)
-            Rectangle().fill(ToolTheme.border).frame(height: 0.5)
+        IndexImageComparisonPane(
+            title: "原图",
+            image: session.sourceImage,
+            accessibilityLabel: "待转换的原图",
+            accessibilityValue: sourcePreviewAccessibilityValue(item),
+            placeholder: "等待原图预览",
+            isProcessing: item.state == .converting,
+            stageHeight: singleStageHeight
+        ) {
             singleItemFooter(item)
         }
     }
@@ -525,9 +531,6 @@ private struct IndexImageConverterWorkspaceContent: View {
                     .foregroundStyle(output.byteCount <= item.metadata.byteCount ? ToolTheme.success : ToolTheme.warning)
             }
         }
-        .padding(.horizontal, 12)
-        .frame(height: 40)
-        .background(ToolTheme.panelBackground)
         .accessibilityElement(children: .combine)
     }
 
@@ -780,7 +783,7 @@ private struct BatchConversionRow: View {
     let onRemove: () -> Void
 
     var body: some View {
-        IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 8) {
+        IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 8, fill: ToolTheme.panelBackground) {
             HStack(alignment: .center, spacing: ToolMetrics.Spacing.md) {
                 IndexImagePreviewImage(
                     image: item.thumbnail,

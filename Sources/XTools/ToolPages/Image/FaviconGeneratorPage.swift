@@ -165,6 +165,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                 .padding(ToolMetrics.Spacing.panelInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .imageCanvasSurface()
             .indexWorkspaceDiagnostic(session.error)
             .indexDropZone(
                 isTargeted: $isImageDropTargeted,
@@ -189,7 +190,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                     .interpolation(.high)
                     .frame(width: 96, height: 96)
                     .background(
-                        ToolTheme.editorBackground,
+                        ToolTheme.panelBackground,
                         in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.card, style: .continuous)
                     )
                     .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.card, style: .continuous))
@@ -207,34 +208,40 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
     private func manifestDisclosure(_ package: FaviconPackage) -> some View {
         let manifestText = package.artifact(.siteWebManifest)
             .map { String(decoding: $0.data, as: UTF8.self) } ?? ""
-        return IndexDisclosure(title: "site.webmanifest 内容", isExpanded: $showsManifest) {
-            VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
-                HStack {
-                    Text("site.webmanifest")
-                        .font(ToolTypography.caption)
+        return IndexSurfaceRow(
+            horizontalPadding: 0,
+            verticalPadding: 0,
+            fill: ToolTheme.panelBackground
+        ) {
+            IndexDisclosure(title: "site.webmanifest 内容", isExpanded: $showsManifest) {
+                VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
+                    HStack {
+                        Text("site.webmanifest")
+                            .font(ToolTypography.caption)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                        Spacer(minLength: 8)
+                        IndexCopyButton(text: manifestText, title: "复制 site.webmanifest 内容", iconOnly: true)
+                    }
+                    Text(manifestText)
+                        .font(ToolTypography.monoCaption)
                         .foregroundStyle(ToolTheme.textSecondary)
-                    Spacer(minLength: 8)
-                    IndexCopyButton(text: manifestText, title: "复制 site.webmanifest 内容", iconOnly: true)
+                        .textSelection(.enabled)
+                        .arrowCursorOnHover()
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel("site.webmanifest 内容")
+                        .accessibilityValue(manifestText)
+                    Text("该 manifest 只声明图标资源，不包含应用名称、启动地址等完整 PWA 安装配置。")
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.textTertiary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(manifestText)
-                    .font(ToolTypography.monoCaption)
-                    .foregroundStyle(ToolTheme.textSecondary)
-                    .textSelection(.enabled)
-                    .arrowCursorOnHover()
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel("site.webmanifest 内容")
-                    .accessibilityValue(manifestText)
-                Text("该 manifest 只声明图标资源，不包含应用名称、启动地址等完整 PWA 安装配置。")
-                    .font(ToolTypography.caption)
-                    .foregroundStyle(ToolTheme.textTertiary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
+            .inline()
         }
-        .inline()
     }
 
     private func faviconReviewWarning(_ warning: String) -> some View {
-        IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 8) {
+        IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 8, fill: ToolTheme.panelBackground) {
             HStack(alignment: .top, spacing: ToolMetrics.Spacing.sm) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(ToolTheme.warning)
@@ -292,7 +299,7 @@ private struct FaviconArtifactRow: View {
     let onSave: () -> Void
 
     var body: some View {
-        IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 7) {
+        IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 7, fill: ToolTheme.panelBackground) {
             HStack(spacing: ToolMetrics.Spacing.md) {
                 if let largest = artifact.previewSizes.max(),
                    let icon = package.icon(size: largest),
@@ -340,7 +347,7 @@ private struct FaviconConfigurationCodeSurface: View {
     let copyTitle: String
 
     var body: some View {
-        IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 8) {
+        IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 8, fill: ToolTheme.panelBackground) {
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                 IndexFieldHeader(title) {
                     IndexCopyButton(text: text, title: copyTitle, iconOnly: true)
