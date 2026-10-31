@@ -18,19 +18,28 @@ struct ToolDetailHostView: View {
     let dashboardStore: DashboardStore?
     let favorites: FavoritesStore
     let routing: any DetailActionRouting
+    let clipboardSuggestion: SmartPasteMonitor.Suggestion?
+    let onOpenClipboardSuggestion: ((SmartPasteMonitor.Suggestion) -> Void)?
+    let onDismissClipboardSuggestion: (() -> Void)?
 
     init(
         registry: ToolRegistry,
         selectedToolID: ToolID?,
         dashboardStore: DashboardStore? = nil,
         favorites: FavoritesStore,
-        routing: any DetailActionRouting
+        routing: any DetailActionRouting,
+        clipboardSuggestion: SmartPasteMonitor.Suggestion? = nil,
+        onOpenClipboardSuggestion: ((SmartPasteMonitor.Suggestion) -> Void)? = nil,
+        onDismissClipboardSuggestion: (() -> Void)? = nil
     ) {
         self.registry = registry
         self.selectedToolID = selectedToolID
         self.dashboardStore = dashboardStore
         self.favorites = favorites
         self.routing = routing
+        self.clipboardSuggestion = clipboardSuggestion
+        self.onOpenClipboardSuggestion = onOpenClipboardSuggestion
+        self.onDismissClipboardSuggestion = onDismissClipboardSuggestion
     }
 
     var body: some View {
@@ -43,7 +52,10 @@ struct ToolDetailHostView: View {
                 registry: registry,
                 dashboardStore: dashboardStore,
                 favorites: favorites,
-                routing: routing
+                routing: routing,
+                clipboardSuggestion: clipboardSuggestion,
+                onOpenClipboardSuggestion: onOpenClipboardSuggestion,
+                onDismissClipboardSuggestion: onDismissClipboardSuggestion
             )
             .equatable()
         }
@@ -73,6 +85,9 @@ private struct ToolPageHostedItem: View, Equatable {
     let dashboardStore: DashboardStore?
     let favorites: FavoritesStore
     let routing: any DetailActionRouting
+    let clipboardSuggestion: SmartPasteMonitor.Suggestion?
+    let onOpenClipboardSuggestion: ((SmartPasteMonitor.Suggestion) -> Void)?
+    let onDismissClipboardSuggestion: (() -> Void)?
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         // registry 不参与比较：ToolRegistry 是不可变值（RootView 持有
@@ -80,6 +95,7 @@ private struct ToolPageHostedItem: View, Equatable {
         lhs.key == rhs.key &&
         lhs.dashboardStore === rhs.dashboardStore &&
         lhs.favorites === rhs.favorites &&
+        lhs.clipboardSuggestion == rhs.clipboardSuggestion &&
         MainActor.assumeIsolated { lhs.routing === rhs.routing }
     }
 
@@ -100,7 +116,10 @@ private struct ToolPageHostedItem: View, Equatable {
                     store: dashboardStore,
                     registry: registry,
                     favorites: favorites,
-                    routing: routing
+                    routing: routing,
+                    clipboardSuggestion: clipboardSuggestion,
+                    onOpenClipboardSuggestion: onOpenClipboardSuggestion,
+                    onDismissClipboardSuggestion: onDismissClipboardSuggestion
                 )
             }
         case .emptySelection:

@@ -67,9 +67,15 @@ final class SmartPasteMonitor: ObservableObject {
     }
 
     /// Re-samples the pasteboard when it changed since the last sample.
-    func refresh(registry: ToolRegistry, pasteboard: NSPasteboard = .general) {
+    func refresh(
+        registry: ToolRegistry,
+        pasteboard: NSPasteboard = .general,
+        force: Bool = false
+    ) {
         let changeCount = pasteboard.changeCount
-        guard changeCount != inspectedChangeCount else { return }
+        if !force {
+            guard changeCount != inspectedChangeCount else { return }
+        }
         inspectedChangeCount = changeCount
 
         // Any new content invalidates the previous suggestion, including content

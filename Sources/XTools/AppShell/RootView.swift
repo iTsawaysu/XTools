@@ -159,6 +159,7 @@ struct RootView: View {
         }
         .onAppear {
             smartPaste.noteSelectedTool(viewModel.selectedToolID)
+            smartPaste.refresh(registry: registry)
             navigationActions.selectDefaultToolIfNeeded(sidebarProjection.defaultToolID)
             ToolPageEntryBenchmark.runIfRequested(
                 registry: registry,
@@ -173,6 +174,11 @@ struct RootView: View {
         }
         .onChange(of: viewModel.selectedToolID) { newToolID in
             smartPaste.noteSelectedTool(newToolID)
+            // Returning to the dashboard should resurface a suggestion that was
+            // suppressed because the previous tool already owned the clipboard.
+            if newToolID == nil {
+                smartPaste.refresh(registry: registry, force: true)
+            }
         }
     }
 
@@ -187,7 +193,10 @@ struct RootView: View {
                 selectedToolID: viewModel.selectedToolID,
                 dashboardStore: dashboardStore,
                 favorites: favorites,
-                routing: detailRouting
+                routing: detailRouting,
+                clipboardSuggestion: smartPaste.suggestion,
+                onOpenClipboardSuggestion: openClipboardSuggestion,
+                onDismissClipboardSuggestion: smartPaste.dismiss
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -205,7 +214,7 @@ struct RootView: View {
         // clipboard replaces the visible banner (same-tick nil→new writes would
         // otherwise merge into an unanimated content swap).
         .overlay(alignment: .top) {
-            if let suggestion = smartPaste.suggestion {
+            if viewModel.selectedToolID != nil, let suggestion = smartPaste.suggestion {
                 SmartPasteSuggestionBanner(
                     suggestion: suggestion,
                     onOpen: {
@@ -226,6 +235,13 @@ struct RootView: View {
             }
         }
         .toolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion, value: smartPaste.suggestion)
+    }
+
+    private func openClipboardSuggestion(_ suggestion: SmartPasteMonitor.Suggestion) {
+        hubSegmentEntryHint.request = suggestion.hubSegment.map {
+            HubSegmentEntryHint.Request(toolID: suggestion.toolID, segment: $0)
+        }
+        _ = navigationActions.selectTool(suggestion.toolID)
     }
 
     private var navigationActions: ToolNavigationActions {

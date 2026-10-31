@@ -9,6 +9,9 @@ struct DashboardView: View {
     private let categoryGroups: [ToolRegistryCategoryGroup]
     private let knownToolIDs: Set<ToolID>
     private let totalToolCount: Int
+    private let clipboardSuggestion: SmartPasteMonitor.Suggestion?
+    private let onOpenClipboardSuggestion: ((SmartPasteMonitor.Suggestion) -> Void)?
+    private let onDismissClipboardSuggestion: (() -> Void)?
 
     @State private var showsAllRecent = false
     @State private var showsAllFavorites = false
@@ -17,12 +20,18 @@ struct DashboardView: View {
         store: DashboardStore,
         registry: ToolRegistry,
         favorites: FavoritesStore,
-        routing: any DetailActionRouting
+        routing: any DetailActionRouting,
+        clipboardSuggestion: SmartPasteMonitor.Suggestion? = nil,
+        onOpenClipboardSuggestion: ((SmartPasteMonitor.Suggestion) -> Void)? = nil,
+        onDismissClipboardSuggestion: (() -> Void)? = nil
     ) {
         self.store = store
         self.registry = registry
         self.favorites = favorites
         self.routing = routing
+        self.clipboardSuggestion = clipboardSuggestion
+        self.onOpenClipboardSuggestion = onOpenClipboardSuggestion
+        self.onDismissClipboardSuggestion = onDismissClipboardSuggestion
         let groups = registry.categoryGroups()
         self.categoryGroups = groups
         self.knownToolIDs = Set(groups.flatMap { $0.tools.map(\.id) })
@@ -35,6 +44,11 @@ struct DashboardView: View {
                 WorkbenchHeader()
                 WorkbenchSearchHero(action: routing.openCommandPalette)
                     .padding(.top, ToolMetrics.Workbench.sectionGap)
+
+                if let clipboardSuggestion {
+                    clipboardSuggestionBar(clipboardSuggestion)
+                        .padding(.top, 10)
+                }
 
                 HStack(alignment: .top, spacing: 16) {
                     recentPanel
@@ -52,6 +66,41 @@ struct DashboardView: View {
             .padding(.bottom, ToolMetrics.Spacing.page)
         }
         .background(ToolTheme.Workbench.canvas)
+    }
+
+    // MARK: - Clipboard suggestion
+
+    private func clipboardSuggestionBar(_ suggestion: SmartPasteMonitor.Suggestion) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "lightbulb")
+                .font(.system(size: ToolMetrics.IconSize.medium, weight: .medium))
+                .foregroundStyle(ToolTheme.accent)
+                .accessibilityHidden(true)
+
+            Text(suggestion.message)
+                .font(ToolTypography.bodyPlain)
+                .foregroundStyle(ToolTheme.textPrimary)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            ToolButton(
+                "打开 \(suggestion.toolTitle)",
+                role: .quiet,
+                size: .compact28,
+                action: { onOpenClipboardSuggestion?(suggestion) }
+            )
+
+            IndexIconButton(
+                systemImage: "xmark",
+                help: "忽略这个建议",
+                action: { onDismissClipboardSuggestion?() }
+            )
+        }
+        .padding(.horizontal, 12)
+        .toolFieldSurface(height: .bar44, surface: .panel)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(suggestion.message)，可以打开\(suggestion.toolTitle)")
     }
 
     // MARK: - Recent / favorites
