@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Whole-page identity for the 01 景深沉降 transition: a tool page, the
@@ -95,6 +96,10 @@ struct ToolPageStage<Page: View>: View {
 
     private func navigate(to newKey: ToolPageKey) {
         guard newKey != displayed else { return }
+        // A parked page can swallow its hover-exit event while hidden; clear
+        // the beam before the new page mounts so chrome/dashboard never inherit
+        // the previous editor's cursor.
+        NSCursor.arrow.set()
 
         if reduceMotion {
             swapImmediately(to: newKey)
@@ -110,6 +115,7 @@ struct ToolPageStage<Page: View>: View {
 
     /// Direct swap with animations disabled: first mount and Reduce Motion.
     private func swapImmediately(to newKey: ToolPageKey) {
+        NSCursor.arrow.set()
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {

@@ -6,13 +6,20 @@ import SwiftUI
 /// fires once per enter/exit (no per-move wakeups); the AppKit arrow-rect
 /// layers below remain the authoritative fallback for chrome zones.
 private struct IBeamCursorModifier: ViewModifier {
-    /// Chrome column (the line-number gutter) kept out of the I-beam hover
-    /// target so the arrow owns it while text keeps the beam.
+    /// Chrome columns kept out of the I-beam hover target: the line-number
+    /// gutter on the leading edge and the overlay scrollbar on the trailing
+    /// edge. Both are chrome, so the arrow owns them.
     var excludingLeading: CGFloat = 0
+    var excludingTrailing: CGFloat = 0
 
     func body(content: Content) -> some View {
         content
-            .contentShape(LeadingExcludedHoverShape(excludedLeading: excludingLeading))
+            .contentShape(
+                LeadingExcludedHoverShape(
+                    excludedLeading: excludingLeading,
+                    excludedTrailing: excludingTrailing
+                )
+            )
             .onHover { isHovering in
                 if isHovering {
                     NSCursor.iBeam.set()
@@ -30,11 +37,19 @@ private struct IBeamCursorModifier: ViewModifier {
 
 private struct LeadingExcludedHoverShape: Shape {
     var excludedLeading: CGFloat
+    var excludedTrailing: CGFloat
 
     func path(in rect: CGRect) -> Path {
-        guard excludedLeading > 0, rect.width > excludedLeading else { return Path(rect) }
+        let leading = max(0, excludedLeading)
+        let trailing = max(0, excludedTrailing)
+        guard leading + trailing < rect.width else { return Path() }
         return Path(
-            CGRect(x: excludedLeading, y: 0, width: rect.width - excludedLeading, height: rect.height)
+            CGRect(
+                x: rect.minX + leading,
+                y: rect.minY,
+                width: rect.width - leading - trailing,
+                height: rect.height
+            )
         )
     }
 }
@@ -42,8 +57,16 @@ private struct LeadingExcludedHoverShape: Shape {
 extension View {
     /// Apply to the outermost container so the cursor covers the padded region,
     /// not just the inner AppKit field bounds.
-    func iBeamCursorOnHover(excludingLeading: CGFloat = 0) -> some View {
-        modifier(IBeamCursorModifier(excludingLeading: excludingLeading))
+    func iBeamCursorOnHover(
+        excludingLeading: CGFloat = 0,
+        excludingTrailing: CGFloat = 0
+    ) -> some View {
+        modifier(
+            IBeamCursorModifier(
+                excludingLeading: excludingLeading,
+                excludingTrailing: excludingTrailing
+            )
+        )
     }
 }
 

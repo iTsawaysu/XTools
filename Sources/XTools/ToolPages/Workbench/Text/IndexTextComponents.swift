@@ -739,7 +739,10 @@ struct IndexTextArea: View {
                     .strokeBorder(ToolTheme.border, lineWidth: 0.5)
             }
         }
-        .iBeamCursorOnHover(excludingLeading: lineNumbers ? IndexEditorLineNumberGutter.width : 0)
+        .iBeamCursorOnHover(
+            excludingLeading: lineNumbers ? IndexEditorLineNumberGutter.width : 0,
+            excludingTrailing: 12
+        )
     }
 }
 
