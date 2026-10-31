@@ -10,6 +10,9 @@ struct DashboardView: View {
     private let knownToolIDs: Set<ToolID>
     private let totalToolCount: Int
 
+    @State private var showsAllRecent = false
+    @State private var showsAllFavorites = false
+
     init(
         store: DashboardStore,
         registry: ToolRegistry,
@@ -54,12 +57,21 @@ struct DashboardView: View {
     // MARK: - Recent / favorites
 
     private var recentPanel: some View {
-        WorkbenchPanel(title: "最近使用", detail: "本机使用记录") {
+        WorkbenchPanel(
+            title: "最近使用",
+            detail: "本机使用记录",
+            actionTitle: allRecentTools.isEmpty
+                ? nil
+                : (showsAllRecent ? "收起" : "查看全部 \(allRecentTools.count) 条"),
+            action: allRecentTools.isEmpty ? nil : { showsAllRecent.toggle() }
+        ) {
             if recentTools.isEmpty {
                 IndexEmptyState(
                     title: "暂无记录",
                     systemImage: "clock",
                     message: "打开工具后会显示在这里。",
+                    actionTitle: "打开命令面板",
+                    action: routing.openCommandPalette,
                     density: .list
                 )
             } else {
@@ -81,13 +93,19 @@ struct DashboardView: View {
     private var favoritesPanel: some View {
         WorkbenchPanel(
             title: "收藏",
-            detail: favoriteTools.isEmpty ? "置顶工具" : "\(favoriteTools.count) 个置顶"
+            detail: favoriteTools.isEmpty ? "置顶工具" : "\(allFavoriteTools.count) 个置顶",
+            actionTitle: allFavoriteTools.isEmpty
+                ? nil
+                : (showsAllFavorites ? "收起" : "查看全部 \(allFavoriteTools.count) 个"),
+            action: allFavoriteTools.isEmpty ? nil : { showsAllFavorites.toggle() }
         ) {
             if favoriteTools.isEmpty {
                 IndexEmptyState(
                     title: "暂无收藏",
                     systemImage: "star",
                     message: "在侧栏点星标收藏工具。",
+                    actionTitle: "浏览全部工具",
+                    action: routing.openCommandPalette,
                     density: .list
                 )
             } else {
@@ -120,16 +138,16 @@ struct DashboardView: View {
                     WorkbenchCategoryChip(
                         category: group.category,
                         count: group.tools.count,
-                        action: { routing.selectCategory(group.category.id) }
+                        tools: group.tools,
+                        onSelectTool: { routing.selectTool($0) }
                     )
                 }
             }
         }
     }
 
-    private var recentTools: [DashboardRecentItem] {
+    private var allRecentTools: [DashboardRecentItem] {
         store.recentTools(knownToolIDs: knownToolIDs)
-            .prefix(4)
             .compactMap { recent in
                 registry.tool(for: recent.toolID).map {
                     DashboardRecentItem(recent: recent, tool: $0)
@@ -137,8 +155,16 @@ struct DashboardView: View {
             }
     }
 
+    private var recentTools: [DashboardRecentItem] {
+        showsAllRecent ? allRecentTools : Array(allRecentTools.prefix(4))
+    }
+
+    private var allFavoriteTools: [RegisteredTool] {
+        favorites.favoriteIDs.compactMap(registry.tool(for:))
+    }
+
     private var favoriteTools: [RegisteredTool] {
-        favorites.favoriteIDs.prefix(4).compactMap(registry.tool(for:))
+        showsAllFavorites ? allFavoriteTools : Array(allFavoriteTools.prefix(4))
     }
 
     private var toolCardGrid: [GridItem] {
@@ -207,18 +233,11 @@ private struct WorkbenchSearchHero: View {
                     .font(.system(size: ToolMetrics.IconSize.large, weight: .medium))
                     .foregroundStyle(ToolTheme.accent)
 
-                Text("搜索工具、命令或操作…")
+                Text("搜索工具或命令…")
                     .font(ToolTypography.bodyMedium)
                     .foregroundStyle(ToolTheme.textSecondary)
 
                 Spacer(minLength: 0)
-
-                HStack(spacing: 8) {
-                    Text("工具").foregroundStyle(ToolTheme.textPrimary)
-                    Text("命令").foregroundStyle(ToolTheme.textTertiary)
-                    Text("收藏").foregroundStyle(ToolTheme.textTertiary)
-                }
-                .font(ToolTypography.caption)
 
                 IndexKeycap(label: "⌘K")
             }
@@ -250,6 +269,8 @@ private struct WorkbenchSearchHero: View {
 private struct WorkbenchPanel<Content: View>: View {
     let title: String
     let detail: String
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -263,6 +284,9 @@ private struct WorkbenchPanel<Content: View>: View {
                     .font(ToolTypography.caption)
                     .foregroundStyle(ToolTheme.textTertiary)
                     .lineLimit(1)
+                if let actionTitle, let action {
+                    ToolButton(actionTitle, role: .quiet, size: .compact28, action: action)
+                }
             }
 
             content()
@@ -359,13 +383,17 @@ private struct WorkbenchToolCard: View {
 private struct WorkbenchCategoryChip: View {
     let category: ToolCategory
     let count: Int
-    let action: () -> Void
+    let tools: [RegisteredTool]
+    let onSelectTool: (ToolID) -> Void
 
     @State private var isHovering = false
+    @State private var showsPopover = false
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        Button(action: action) {
+        Button {
+            showsPopover.toggle()
+        } label: {
             HStack(spacing: 8) {
                 Image(systemName: category.systemImage)
                     .font(.system(size: ToolMetrics.IconSize.small, weight: .medium))
@@ -405,9 +433,60 @@ private struct WorkbenchCategoryChip: View {
         .focused($isFocused)
         .indexFocusRing(active: isFocused, cornerRadius: ToolMetrics.CornerRadius.field)
         .onHover { isHovering = $0 }
-        .accessibilityLabel("打开\(category.title)")
-        .accessibilityHint("打开该分类的第一个工具")
+        .popover(isPresented: $showsPopover, arrowEdge: .bottom) {
+            WorkbenchCategoryPopover(
+                category: category,
+                tools: tools,
+                onSelect: { toolID in
+                    showsPopover = false
+                    onSelectTool(toolID)
+                }
+            )
+        }
+        .accessibilityLabel("打开\(category.title)分类")
+        .accessibilityHint("打开该分类的工具列表")
         .accessibilityIdentifier("dashboard.category.\(category.id.rawValue)")
+    }
+}
+
+private struct WorkbenchCategoryPopover: View {
+    let category: ToolCategory
+    let tools: [RegisteredTool]
+    let onSelect: (ToolID) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(category.title)
+                    .font(ToolTypography.sectionTitle)
+                    .foregroundStyle(ToolTheme.textPrimary)
+                Spacer(minLength: 8)
+                Text("\(tools.count) 个工具")
+                    .font(ToolTypography.caption)
+                    .foregroundStyle(ToolTheme.textTertiary)
+            }
+
+            ScrollView {
+                VStack(spacing: 4) {
+                    ForEach(tools) { tool in
+                        ToolButton(
+                            tool.title,
+                            systemImage: tool.systemImage,
+                            role: .quiet,
+                            size: .compact28,
+                            width: .fill,
+                            alignment: .leading,
+                            help: "打开\(tool.title)",
+                            action: { onSelect(tool.id) }
+                        )
+                    }
+                }
+            }
+            .frame(maxHeight: 320)
+        }
+        .padding(14)
+        .frame(width: 260)
+        .background(ToolTheme.panelBackground)
     }
 }
 

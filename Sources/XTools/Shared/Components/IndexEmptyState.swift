@@ -22,6 +22,8 @@ struct IndexEmptyState: View {
  let title: String
  let systemImage: String?
  let message: String?
+ let actionTitle: String?
+ let action: (() -> Void)?
  let density: IndexEmptyStateDensity
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -33,11 +35,15 @@ struct IndexEmptyState: View {
         title: String,
         systemImage: String? = nil,
         message: String? = nil,
+        actionTitle: String? = nil,
+        action: (() -> Void)? = nil,
         density: IndexEmptyStateDensity = .panel
     ) {
         self.title = title
         self.systemImage = systemImage
         self.message = message
+        self.actionTitle = actionTitle
+        self.action = action
         self.density = density
     }
 
@@ -65,6 +71,11 @@ struct IndexEmptyState: View {
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
                         .toolMotionTextSwap(id: message)
+                }
+
+                if let actionTitle, let action {
+                    ToolButton(actionTitle, role: .quiet, size: .compact28, action: action)
+                        .padding(.top, 2)
                 }
             }
         }

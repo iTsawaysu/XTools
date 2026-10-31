@@ -34,6 +34,11 @@ struct ToolButton: View {
         case fill
     }
 
+    enum Alignment: Equatable {
+        case center
+        case leading
+    }
+
     enum State: Equatable {
         case idle
         case active
@@ -46,6 +51,7 @@ struct ToolButton: View {
     let role: Role
     let size: Size
     let width: Width
+    let alignment: Alignment
     let state: State
     let isEnabled: Bool
     let help: String?
@@ -61,6 +67,7 @@ struct ToolButton: View {
         role: Role,
         size: Size? = nil,
         width: Width = .hug,
+        alignment: Alignment = .center,
         state: State = .idle,
         isEnabled: Bool = true,
         help: String? = nil,
@@ -73,6 +80,7 @@ struct ToolButton: View {
         self.role = role
         self.size = size ?? role.defaultSize
         self.width = width
+        self.alignment = alignment
         self.state = state
         self.isEnabled = isEnabled
         self.help = help
@@ -127,7 +135,12 @@ struct ToolButton: View {
             if let keycap, !keycap.isEmpty {
                 IndexKeycap(label: keycap)
             }
+
+            if alignment == .leading, width == .fill {
+                Spacer(minLength: 0)
+            }
         }
+        .frame(maxWidth: width == .fill ? .infinity : nil, alignment: alignment == .leading ? .leading : .center)
     }
 }
 
