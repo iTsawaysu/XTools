@@ -163,7 +163,7 @@ private struct IndexCopyTickIconSlot: View {
                 .stroke(.foreground, style: IndexCopyTickCheckGlyph.strokeStyle)
                 .opacity(isDwelling ? 1 : 0)
         }
-        .onChange(of: generation) { _ in
+        .onChange(of: generation) { _, _ in
             guard generation > 0 else { return }
             if isDwelling {
                 resetDwell()

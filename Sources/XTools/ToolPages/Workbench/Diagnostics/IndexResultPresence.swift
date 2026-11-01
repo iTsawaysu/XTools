@@ -102,7 +102,7 @@ struct IndexResultPresence<
             .task(id: updateID) {
                 applyTarget(value, reduceMotion: reduceMotion || motion == .immediate, maximumHeight: maximumHeight)
             }
-            .onChange(of: reduceMotion) { enabled in
+            .onChange(of: reduceMotion) { _, enabled in
                 if enabled {
                     applyTarget(value, reduceMotion: true, maximumHeight: maximumHeight)
                 }

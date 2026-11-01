@@ -100,7 +100,7 @@ private struct IndexHeroValueText: View {
         }
         .toolAnimation(ToolMotion.Preset.valueSwapExit, reduceMotion: reduceMotion, value: exitProgress)
         .toolAnimation(ToolMotion.Preset.valueSwapEnter, reduceMotion: reduceMotion, value: enterProgress)
-        .onChange(of: value) { newValue in
+        .onChange(of: value) { _, newValue in
             guard newValue != displayedValue else { return }
             cleanupTask?.cancel()
 

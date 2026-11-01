@@ -177,7 +177,7 @@ struct IndexCodeViewerSurface: View {
             }
         }
         .onPreferenceChange(IndexCodeViewerFooterHeightPreferenceKey.self) { footerHeight = $0 }
-        .onChange(of: text) { _ in fullTextSource = nil }
+        .onChange(of: text) { _, _ in fullTextSource = nil }
         .toolAnimation(ToolMotion.EmptyArrival.elementArrival, reduceMotion: reduceMotion, value: text.isEmpty)
         .frame(
             maxWidth: .infinity,

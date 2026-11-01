@@ -314,7 +314,7 @@ private struct IndexSegmentedCursorLayer<Value: Hashable>: View {
             reduceMotion: reduceMotion,
             value: selection
         )
-        .onChange(of: activeFrame) { newFrame in
+        .onChange(of: activeFrame) { _, newFrame in
             if !reduceMotion,
                selectionChanged,
                let previousFrame = settledFrame,
@@ -370,7 +370,7 @@ struct IndexModeContent<ID: Hashable, Content: View>: View {
                 alignment: .topLeading
             )
             .toolAnimation(ToolMotion.Preset.contentSettle, reduceMotion: reduceMotion, value: settleOpacity)
-            .onChange(of: id) { newID in
+            .onChange(of: id) { _, newID in
                 guard newID != displayedID else { return }
                 displayedID = newID
 

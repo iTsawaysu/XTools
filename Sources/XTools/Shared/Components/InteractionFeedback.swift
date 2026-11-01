@@ -98,7 +98,7 @@ struct ToolOutputBreathModifier: ViewModifier {
                 }
                 .allowsHitTesting(false)
             }
-            .onChange(of: generation) { _ in
+            .onChange(of: generation) { _, _ in
                 guard generation > 0, !reduceMotion else { return }
                 breathTask?.cancel()
                 breathTask = Task { @MainActor in
@@ -146,7 +146,7 @@ private struct ToolErrorTintModifier: ViewModifier {
                     .opacity(tintOn ? ToolMotion.ErrorFeedback.tintPeak : 0)
                     .allowsHitTesting(false)
             }
-            .onChange(of: active) { nowActive in
+            .onChange(of: active) { _, nowActive in
                 tintTask?.cancel()
                 guard !reduceMotion else {
                     tintOn = nowActive

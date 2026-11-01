@@ -103,11 +103,11 @@ struct IndexMarkdownPreviewSurface: View {
             }
 
         }
-        .onChange(of: authorizationScope) { _ in
+        .onChange(of: authorizationScope) { _, _ in
             revokeRemoteImages()
         }
         .onDisappear { revokeRemoteImages() }
-        .onChange(of: entryGeneration) { generation in
+        .onChange(of: entryGeneration) { _, generation in
             if generation == 0 { revokeRemoteImages() }
         }
         .task(id: entryGeneration == 0 ? nil : authorizationScope) {

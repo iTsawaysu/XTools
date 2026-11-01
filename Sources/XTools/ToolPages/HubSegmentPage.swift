@@ -52,7 +52,7 @@ struct HubSegmentPage<Segment: HubSegmentIdentifier, Content: View>: View {
             }
         }
         .onAppear { consumeEntryHintIfNeeded() }
-        .onChange(of: entryHint.request) { _ in consumeEntryHintIfNeeded() }
+        .onChange(of: entryHint.request) { _, _ in consumeEntryHintIfNeeded() }
     }
 
     private var segmentSelection: Binding<String> {

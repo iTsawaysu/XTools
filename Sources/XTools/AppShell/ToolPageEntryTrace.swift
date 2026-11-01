@@ -46,7 +46,7 @@ struct ToolPageEntryTraceProbe: View {
         Color.clear
             .frame(width: 0, height: 0)
             .onAppear { recordActivation(generation: generation) }
-            .onChange(of: generation) { recordActivation(generation: $0) }
+            .onChange(of: generation) { _, generation in recordActivation(generation: generation) }
     }
 
     private func recordActivation(generation: Int) {

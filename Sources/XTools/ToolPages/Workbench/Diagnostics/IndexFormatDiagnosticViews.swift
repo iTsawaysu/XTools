@@ -119,7 +119,7 @@ struct IndexDiagnosticBanner: View {
         // 状态槽总高固定 36pt：卡片占满该行，靠左右留白离开面板边缘。
         .padding(.horizontal, ToolMetrics.Spacing.panelInset)
         .frame(height: 36)
-        .onChange(of: message) { _ in showsDetails = false }
+        .onChange(of: message) { _, _ in showsDetails = false }
     }
 }
 

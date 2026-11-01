@@ -65,7 +65,7 @@ struct IndexOptionsMenu: View {
                 }
             }
             .toolAnimation(ToolMotion.Preset.settle, value: isOpen)
-            .onChange(of: entryGeneration) { generation in
+            .onChange(of: entryGeneration) { _, generation in
                 guard generation == 0 else { return }
                 dismissalBox.remove()
                 triggerFocus = nil
@@ -168,7 +168,7 @@ struct IndexOptionsMenu: View {
             GeometryReader { geometry in
                 Color.clear
                     .onAppear { dismissalBox.panelFrame = geometry.frame(in: .global) }
-                    .onChange(of: geometry.frame(in: .global)) { dismissalBox.panelFrame = $0 }
+                    .onChange(of: geometry.frame(in: .global)) { _, frame in dismissalBox.panelFrame = frame }
             }
         }
         .onAppear {

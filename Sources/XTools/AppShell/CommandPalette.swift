@@ -600,7 +600,7 @@ struct CommandPaletteView: View {
             presentation.removeLifecycle(contentLifecycle)
             contentLifecycle.tearDown()
         }
-        .onChange(of: presentationSession) { _ in
+        .onChange(of: presentationSession) { _, _ in
             preparePresentationIfNeeded()
             // A rapid reopen must not paint the floating highlight at the
             // previous session's row frames before the list republishes
@@ -615,10 +615,10 @@ struct CommandPaletteView: View {
                 rowAnchors = [:]
             }
         }
-        .onChange(of: isPresented) { _ in
+        .onChange(of: isPresented) { _, _ in
             preparePresentationIfNeeded()
         }
-        .onChange(of: actions) { newActions in
+        .onChange(of: actions) { _, newActions in
             guard isPresentationReadyLive else { return }
             sessionModel.replaceActions(newActions)
         }

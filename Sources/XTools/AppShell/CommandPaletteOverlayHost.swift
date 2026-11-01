@@ -62,7 +62,7 @@ struct CommandPaletteOverlayHost: View {
         // ride the same transaction as the flip, so late or loaded runloop
         // turns can never render the target value unanimated (the white
         // flash), and rapid reversals retarget the in-flight progress.
-        .onChange(of: presentation.shows) { shows in
+        .onChange(of: presentation.shows) { _, shows in
             withToolAnimation(
                 shows
                     ? ToolMotion.PaletteMotion.open

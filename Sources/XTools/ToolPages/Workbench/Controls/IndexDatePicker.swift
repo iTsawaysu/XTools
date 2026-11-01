@@ -182,7 +182,7 @@ struct IndexCalendarView: View {
         .onAppear {
             navigation.reset(to: selection, calendar: calendar)
         }
-        .onChange(of: selection) { navigation.reset(to: $0, calendar: calendar) }
+        .onChange(of: selection) { _, newSelection in navigation.reset(to: newSelection, calendar: calendar) }
     }
 }
 

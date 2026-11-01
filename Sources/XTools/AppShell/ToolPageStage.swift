@@ -54,10 +54,10 @@ struct ToolPageStage<Page: View>: View {
             guard displayed == nil else { return }
             swapImmediately(to: target)
         }
-        .onChange(of: target) { newKey in
+        .onChange(of: target) { _, newKey in
             navigate(to: newKey)
         }
-        .onChange(of: reduceMotion) { enabled in
+        .onChange(of: reduceMotion) { _, enabled in
             if enabled { swapImmediately(to: target) }
         }
     }

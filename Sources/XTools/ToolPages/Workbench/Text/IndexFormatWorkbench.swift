@@ -189,7 +189,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
             .padding(.horizontal, ToolMetrics.Spacing.md)
             .padding(.bottom, ToolMetrics.Spacing.md)
             .padding(.top, ToolMetrics.Spacing.sm)
-            .onChange(of: isOutputFresh) { isFresh in
+            .onChange(of: isOutputFresh) { _, isFresh in
                 guard isFresh, onFormat != nil, !output.isEmpty, diagnosticTone != .error else {
                     return
                 }
@@ -427,7 +427,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
             droppedFile: droppedFile,
             workspaceSemantic: workspaceSemantic
         )
-        .onChange(of: JSONExactTextIdentity(input)) { _ in
+        .onChange(of: JSONExactTextIdentity(input)) { _, _ in
             droppedFile.invalidate()
             droppedFile.dismissRejection()
         }

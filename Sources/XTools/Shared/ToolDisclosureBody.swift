@@ -83,7 +83,7 @@ struct ToolDisclosureBody<Content: View>: View {
             guard isExpanded else { return }
             setVisibleHeight(height, animated: wasMeasured)
         }
-        .onChange(of: isExpanded) { expanded in
+        .onChange(of: isExpanded) { _, expanded in
             if expanded {
                 keepsContentMounted = true
                 if hasMeasuredContentHeight {

@@ -209,10 +209,10 @@ struct IndexNumberInput: View {
         .onAppear {
             setValue(value)
         }
-        .onChange(of: text) { _ in
+        .onChange(of: text) { _, _ in
             sanitizeEditingText()
         }
-        .onChange(of: value) { newValue in
+        .onChange(of: value) { _, newValue in
             let normalized = normalizedValue(newValue)
             if normalized != newValue {
                 value = normalized

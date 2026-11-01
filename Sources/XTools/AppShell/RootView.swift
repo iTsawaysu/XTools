@@ -166,13 +166,13 @@ struct RootView: View {
                 navigationActions: navigationActions
             )
         }
-        .onChange(of: scenePhase) { phase in
+        .onChange(of: scenePhase) { _, phase in
             // Sample the clipboard only when the app comes forward — never in
             // the background.
             guard phase == .active else { return }
             smartPaste.refresh(registry: registry)
         }
-        .onChange(of: viewModel.selectedToolID) { newToolID in
+        .onChange(of: viewModel.selectedToolID) { _, newToolID in
             smartPaste.noteSelectedTool(newToolID)
             // Returning to the dashboard should resurface a suggestion that was
             // suppressed because the previous tool already owned the clipboard.
