@@ -57,11 +57,13 @@ private struct IndexPortWorkspaceContent: View {
                     .frame(minHeight: 96)
                 }
             } accessory: {
-                Button { workspace.generate() } label: {
-                    Label("重新生成", systemImage: IndexActionSymbol.refresh)
-                        .font(ToolTypography.buttonSmall)
-                }
-                .buttonStyle(IndexSmallButtonStyle())
+                ToolButton(
+                    "重新生成",
+                    systemImage: IndexActionSymbol.refresh,
+                    role: .secondary,
+                    size: .compact28,
+                    action: workspace.generate
+                )
             }
         }
     }

@@ -78,7 +78,7 @@ private struct IndexYAMLPrettifyWorkspaceContent: View {
                 IndexOptionSwitch(title: "Key 排序", style: .button, isOn: $workspace.sortKeys)
             }
         )
-        .onChange(of: workspace.sortKeys) { _ in
+        .onChange(of: workspace.sortKeys) { _, _ in
             if !workspace.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 format()
             }

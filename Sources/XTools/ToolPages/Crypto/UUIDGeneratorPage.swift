@@ -91,14 +91,14 @@ private struct IndexUUIDWorkspaceContent: View {
         HStack(spacing: 10) {
             IndexOptionLabel("数量")
             IndexStepperInput(value: $workspace.quantity, range: Self.quantityRange)
-                .onChange(of: workspace.quantity) { _ in generate() }
+                .onChange(of: workspace.quantity) { _, _ in generate() }
 
             IndexOptionLabel("版本")
             IndexSegmentedControl(
                 items: [("v4", "v4"), ("v7", "v7")],
                 selection: versionSelection
             )
-            .onChange(of: workspace.version) { _ in generate() }
+            .onChange(of: workspace.version) { _, _ in generate() }
 
             Spacer(minLength: ToolMetrics.Spacing.md)
 
@@ -119,10 +119,13 @@ private struct IndexUUIDWorkspaceContent: View {
                 successToast: ToolFeedbackCopy.copiedAll(noun: "UUID")
             )
 
-            IndexPrimaryActionButton(
-                title: "生成",
-                hint: "⌘↩",
+            ToolButton(
+                "生成",
+                role: .primary,
+                size: .cta32,
                 help: "生成 UUID（⌘↩）",
+                keycap: "⌘↩",
+                accessibilityLabel: "生成 UUID（⌘↩）",
                 action: generate
             )
             .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)

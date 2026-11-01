@@ -34,19 +34,16 @@ private struct IndexFileTypeDetectorWorkspaceContent: View {
         IndexPage("文件类型探测器", subtitle: "上传文件，对比扩展名与文件内容证据。", layout: .scroll) {
             IndexPanel("上传文件") {
                 VStack(spacing: 12) {
-                    Button {
-                        session.selectFile(filePanel: fileInputPanelClient)
-                    } label: {
-                        IndexProgressMotionLabel(
-                            title: session.isInspecting ? "正在检测…" : "选择文件",
-                            systemImage: "doc",
-                            isProcessing: session.isInspecting,
-                            id: session.isInspecting
-                        )
-                        .font(ToolTypography.buttonSmall)
-                    }
-                    .buttonStyle(IndexSmallButtonStyle())
-                    .disabled(session.isInspecting)
+                    ToolButton(
+                        session.isInspecting ? "正在检测…" : "选择文件",
+                        systemImage: "doc",
+                        role: .secondary,
+                        size: .compact28,
+                        state: session.isInspecting ? .busy : .idle,
+                        isEnabled: !session.isInspecting,
+                        accessibilityLabel: "选择文件",
+                        action: { session.selectFile(filePanel: fileInputPanelClient) }
+                    )
 
                     if !session.fileName.isEmpty {
                         Text(indexWrappingAttributedText(session.fileName, lineBreakMode: .byCharWrapping))
@@ -84,8 +81,13 @@ private struct IndexFileTypeDetectorWorkspaceContent: View {
                 )
                 .indexWorkspaceDiagnostic(session.error)
             } accessory: {
-                IndexClearButton(
-                    isDisabled: !session.canReset,
+                ToolButton(
+                    "清空",
+                    systemImage: IndexActionSymbol.clear,
+                    role: .secondary,
+                    size: .compact28,
+                    isEnabled: session.canReset,
+                    help: "清空",
                     action: session.reset
                 )
             }

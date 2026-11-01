@@ -133,9 +133,15 @@ private struct IndexCaseConverterWorkspaceContent: View {
                     workspaceSemantic: .longTextNaturalInput
                 )
             } accessory: {
-                IndexClearButton(isDisabled: workspace.text.isEmpty) {
-                    workspace.text = ""
-                }
+                ToolButton(
+                    "清空",
+                    systemImage: IndexActionSymbol.clear,
+                    role: .quiet,
+                    size: .compact28,
+                    isEnabled: !workspace.text.isEmpty,
+                    help: "清空",
+                    action: { workspace.text = "" }
+                )
             }
             // 短派生结果自然展开，由页面外层滚动承载长值换行后的高度。
             IndexPanel("转换结果") {

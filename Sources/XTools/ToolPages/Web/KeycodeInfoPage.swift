@@ -101,7 +101,7 @@ private struct IndexKeycodeWorkspaceContent: View {
             guard entryGeneration > 0 else { return }
             focusRequestToken &+= 1
         }
-        .onChange(of: entryGeneration) { generation in
+        .onChange(of: entryGeneration) { _, generation in
             guard generation > 0 else { return }
             focusRequestToken &+= 1
         }

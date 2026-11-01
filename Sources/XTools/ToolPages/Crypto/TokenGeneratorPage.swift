@@ -138,25 +138,25 @@ private struct IndexTokenWorkspaceContent: View {
                     ],
                     selection: modeBinding
                 )
-                .onChange(of: workspace.mode) { _ in generate() }
+                .onChange(of: workspace.mode) { _, _ in generate() }
 
                 IndexOptionLabel(workspace.mode == .characterSet ? "长度" : "字节数")
                 IndexNumberInput(value: $workspace.length, range: 1...512)
-                    .onChange(of: workspace.length) { _ in generate() }
+                    .onChange(of: workspace.length) { _, _ in generate() }
 
                 IndexOptionLabel("数量")
                 IndexStepperInput(value: $workspace.quantity, range: 1...20)
-                    .onChange(of: workspace.quantity) { _ in generate() }
+                    .onChange(of: workspace.quantity) { _, _ in generate() }
 
                 if workspace.mode == .characterSet {
                     IndexOptionSwitch(title: "a-z", isOn: $workspace.lower)
-                        .onChange(of: workspace.lower) { _ in generate() }
+                        .onChange(of: workspace.lower) { _, _ in generate() }
                     IndexOptionSwitch(title: "A-Z", isOn: $workspace.upper)
-                        .onChange(of: workspace.upper) { _ in generate() }
+                        .onChange(of: workspace.upper) { _, _ in generate() }
                     IndexOptionSwitch(title: "0-9", isOn: $workspace.numbers)
-                        .onChange(of: workspace.numbers) { _ in generate() }
+                        .onChange(of: workspace.numbers) { _, _ in generate() }
                     IndexOptionSwitch(title: "符号", isOn: $workspace.symbols)
-                        .onChange(of: workspace.symbols) { _ in generate() }
+                        .onChange(of: workspace.symbols) { _, _ in generate() }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -179,10 +179,13 @@ private struct IndexTokenWorkspaceContent: View {
                 successToast: ToolFeedbackCopy.copiedAll(noun: "Token")
             )
 
-            IndexPrimaryActionButton(
-                title: "生成",
-                hint: "⌘↩",
+            ToolButton(
+                "生成",
+                role: .primary,
+                size: .cta32,
                 help: "生成 Token（⌘↩）",
+                keycap: "⌘↩",
+                accessibilityLabel: "生成 Token（⌘↩）",
                 action: generate
             )
             .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)

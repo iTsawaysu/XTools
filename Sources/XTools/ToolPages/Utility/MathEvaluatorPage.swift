@@ -164,8 +164,13 @@ private struct IndexMathWorkspaceContent: View {
                     snippetBar
                 }
             } accessory: {
-                IndexClearButton(
-                    isDisabled: !workspace.hasAnyContent,
+                ToolButton(
+                    "清空",
+                    systemImage: IndexActionSymbol.clear,
+                    role: .secondary,
+                    size: .compact28,
+                    isEnabled: workspace.hasAnyContent,
+                    help: "清空",
                     action: workspace.clear
                 )
             }

@@ -75,9 +75,15 @@ private struct IndexHashTextWorkspaceContent: View {
                         explicitComputationButton
                     }
 
-                    IndexClearButton(isDisabled: workspace.input.isEmpty) {
-                        workspace.input = ""
-                    }
+                    ToolButton(
+                        "清空",
+                        systemImage: IndexActionSymbol.clear,
+                        role: .quiet,
+                        size: .compact28,
+                        isEnabled: !workspace.input.isEmpty,
+                        help: "清空",
+                        action: { workspace.input = "" }
+                    )
                 }
             }
             .withoutDiagnosticStatusSlot()
@@ -92,17 +98,15 @@ private struct IndexHashTextWorkspaceContent: View {
     }
 
     private var explicitComputationButton: some View {
-        Button(action: workspace.computeExplicitly) {
-            IndexProgressMotionLabel(
-                title: workspace.isComputing ? "计算中" : (resultItems.isEmpty ? "计算摘要" : "重新计算"),
-                systemImage: "function",
-                isProcessing: workspace.isComputing,
-                id: workspace.isComputing
-            )
-            .font(ToolTypography.buttonSmall)
-        }
-        .buttonStyle(IndexSmallButtonStyle())
-        .disabled(workspace.isComputing)
+        ToolButton(
+            workspace.isComputing ? "计算中" : (resultItems.isEmpty ? "计算摘要" : "重新计算"),
+            systemImage: "function",
+            role: .secondary,
+            size: .compact28,
+            state: workspace.isComputing ? .busy : .idle,
+            isEnabled: !workspace.isComputing,
+            action: workspace.computeExplicitly
+        )
     }
 
     @ViewBuilder

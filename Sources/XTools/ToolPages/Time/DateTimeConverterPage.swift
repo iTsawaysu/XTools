@@ -64,9 +64,13 @@ private struct IndexDateTimeWorkspaceContent: View {
                 IndexShortResultKV(rows: workspace.rows, emptyText: IndexEmptyStateCopy.autoCalculate("时间戳或时间"), valueMotion: .immediate)
             } accessory: {
                 HStack(spacing: 8) {
-                    IndexClearButton(
-                        isDisabled: !hasClearableContent,
-                        title: "全部清空",
+                    ToolButton(
+                        "全部清空",
+                        systemImage: IndexActionSymbol.clear,
+                        role: .secondary,
+                        size: .compact28,
+                        isEnabled: hasClearableContent,
+                        help: "全部清空",
                         action: clearAll
                     )
                     IndexCopyButton(text: allRowsText, title: "全部复制")
@@ -83,7 +87,7 @@ private struct IndexDateTimeWorkspaceContent: View {
             text: $workspace.timestamp,
             onSubmit: parseTimestamp
         )
-            .onChange(of: workspace.timestamp) { _ in
+            .onChange(of: workspace.timestamp) { _, _ in
                 handleTimestampChange()
             }
             .indexWorkspaceDiagnostic(workspace.timestampError)
@@ -135,13 +139,14 @@ private struct IndexDateTimeWorkspaceContent: View {
     }
 
     private var currentTimePageAction: some View {
-        Button(action: applyCurrentTime) {
-            Label("现在", systemImage: "clock")
-                .font(ToolTypography.buttonSmall)
-        }
-        .buttonStyle(IndexSmallButtonStyle())
-        .accessibilityLabel("使用当前时间")
-        .fixedSize(horizontal: true, vertical: false)
+        ToolButton(
+            "现在",
+            systemImage: "clock",
+            role: .secondary,
+            size: .compact28,
+            accessibilityLabel: "使用当前时间",
+            action: applyCurrentTime
+        )
     }
 
     private func applyCurrentTime() {

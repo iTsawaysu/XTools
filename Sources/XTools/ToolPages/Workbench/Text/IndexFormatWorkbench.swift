@@ -266,7 +266,15 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
                 Spacer(minLength: 0)
 
                 HStack(spacing: 6) {
-                    IndexClearButton(isDisabled: clearDisabled, showsIcon: false, framed: true, action: onClear)
+                    ToolButton(
+                        "清空",
+                        systemImage: IndexActionSymbol.clear,
+                        role: .secondary,
+                        size: .compact28,
+                        isEnabled: !clearDisabled,
+                        help: "清空",
+                        action: onClear
+                    )
                     IndexCopyButton(text: output, title: "复制", showsIcon: false, framed: true, help: "复制全部 (⇧⌘C)")
                         .disabled(!isOutputFresh)
                         .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut("c", modifiers: [.command, .shift]) : nil)

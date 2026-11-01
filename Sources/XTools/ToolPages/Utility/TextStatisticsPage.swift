@@ -37,7 +37,15 @@ private struct IndexTextStatsWorkspaceContent: View {
                     workspaceSemantic: .fixedInputWorkspace
                 )
             } accessory: {
-                IndexClearButton(isDisabled: workspace.text.isEmpty) { workspace.text = "" }
+                ToolButton(
+                    "清空",
+                    systemImage: IndexActionSymbol.clear,
+                    role: .secondary,
+                    size: .compact28,
+                    isEnabled: !workspace.text.isEmpty,
+                    help: "清空",
+                    action: { workspace.text = "" }
+                )
             }
             .verticallyFilling()
             .withoutDiagnosticStatusSlot()

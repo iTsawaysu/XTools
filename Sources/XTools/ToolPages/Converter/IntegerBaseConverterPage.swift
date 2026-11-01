@@ -148,9 +148,15 @@ private struct IndexBaseConverterWorkspaceContent: View {
                 IndexTextInput(placeholder: "输入数值…", text: $workspace.input, height: 38, autoFocus: true)
                     .indexWorkspaceDiagnostic(workspace.error)
             } accessory: {
-                IndexClearButton(isDisabled: workspace.input.isEmpty && workspace.error == nil) {
-                    workspace.clear()
-                }
+                ToolButton(
+                    "清空",
+                    systemImage: IndexActionSymbol.clear,
+                    role: .quiet,
+                    size: .compact28,
+                    isEnabled: !(workspace.input.isEmpty && workspace.error == nil),
+                    help: "清空",
+                    action: workspace.clear
+                )
             }
             IndexPanel("各进制结果") {
                 resultContent

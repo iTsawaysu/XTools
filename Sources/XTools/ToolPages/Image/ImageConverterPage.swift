@@ -375,7 +375,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                     )
                     .accessibilityLabel("目标格式")
                     .accessibilityValue(targetFormat.displayName)
-                    .onChange(of: targetFormat) { _ in
+                    .onChange(of: targetFormat) { _, _ in
                         applyDefaultQualityForTarget()
                         convert()
                     }
@@ -394,7 +394,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                     IndexSlider(value: $quality, range: 0.1...1.0, step: 0)
                         .accessibilityLabel("转换质量")
                         .accessibilityValue("\(Int(quality * 100))%")
-                        .onChange(of: quality) { _ in
+                        .onChange(of: quality) { _, _ in
                             qualityDebouncer.schedule(
                                 session.items.count > 1
                                     ? Self.batchQualityDebounceDelay
@@ -421,7 +421,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                     )
                     .accessibilityLabel("透明区域填充颜色")
                     .accessibilityValue(transparencyFillAccessibilityValue)
-                    .onChange(of: transparencyFillMode) { _ in convert() }
+                    .onChange(of: transparencyFillMode) { _, _ in convert() }
 
                     if transparencyFillMode == .custom {
                         IndexTextInput(
@@ -433,7 +433,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                         )
                         .accessibilityLabel("自定义透明区域填充颜色")
                         .accessibilityValue(customTransparencyFillAccessibilityValue)
-                        .onChange(of: customTransparencyFillHex) { _ in
+                        .onChange(of: customTransparencyFillHex) { _, _ in
                             fillHexDebouncer.schedule(Self.fillHexDebounceDelay) {
                                 convert()
                             }

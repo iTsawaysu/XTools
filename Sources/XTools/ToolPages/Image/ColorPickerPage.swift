@@ -77,15 +77,15 @@ private struct IndexColorWorkspaceContent: View {
 
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.md) {
                 HStack(spacing: 8) {
-                    Button {
-                        showsSystemColorPicker.toggle()
-                    } label: {
-                        Label("取色", systemImage: "eyedropper")
-                            .font(ToolTypography.buttonSmall)
-                    }
-                    .buttonStyle(IndexSmallButtonStyle())
-                    .indexTooltip("打开系统取色器（包含透明度）")
-                    .accessibilityLabel("打开系统取色器")
+                    ToolButton(
+                        "取色",
+                        systemImage: "eyedropper",
+                        role: .secondary,
+                        size: .compact28,
+                        help: "打开系统取色器（包含透明度）",
+                        accessibilityLabel: "打开系统取色器",
+                        action: { showsSystemColorPicker.toggle() }
+                    )
                     .popover(isPresented: $showsSystemColorPicker, arrowEdge: .bottom) {
                         systemColorPicker
                     }

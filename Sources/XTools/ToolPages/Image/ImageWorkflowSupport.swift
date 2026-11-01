@@ -26,20 +26,24 @@ struct ImageSelectionActionRow: View {
 
     var body: some View {
         HStack(spacing: ToolMetrics.Spacing.sm) {
-            Button(action: onSelect) {
-                Label(hasSource ? changeTitle : selectTitle, systemImage: "photo")
-                    .font(ToolTypography.buttonSmall)
-            }
-            .buttonStyle(IndexSmallButtonStyle(framed: framed))
-            .accessibilityLabel(hasSource ? replaceAccessibilityLabel : selectAccessibilityLabel)
+            ToolButton(
+                hasSource ? changeTitle : selectTitle,
+                systemImage: "photo",
+                role: framed ? .secondary : .quiet,
+                size: .compact28,
+                accessibilityLabel: hasSource ? replaceAccessibilityLabel : selectAccessibilityLabel,
+                action: onSelect
+            )
 
             if hasSource {
-                Button(action: onClear) {
-                    Label(clearTitle, systemImage: IndexActionSymbol.removeResource)
-                        .font(ToolTypography.buttonSmall)
-                }
-                .buttonStyle(IndexSmallButtonStyle(framed: framed))
-                .accessibilityLabel(clearAccessibilityLabel)
+                ToolButton(
+                    clearTitle,
+                    systemImage: IndexActionSymbol.removeResource,
+                    role: framed ? .secondary : .quiet,
+                    size: .compact28,
+                    accessibilityLabel: clearAccessibilityLabel,
+                    action: onClear
+                )
             }
         }
     }

@@ -212,7 +212,27 @@ struct IndexInputHeaderAccessory: View {
             }
 
             if let onClear {
-                IndexClearButton(isDisabled: clearDisabled, iconOnly: clearIconOnly, action: onClear)
+                if clearIconOnly {
+                    ToolButton(
+                        "清空",
+                        systemImage: IndexActionSymbol.clear,
+                        role: .icon,
+                        size: .icon24,
+                        isEnabled: !clearDisabled,
+                        help: "清空",
+                        action: onClear
+                    )
+                } else {
+                    ToolButton(
+                        "清空",
+                        systemImage: IndexActionSymbol.clear,
+                        role: .secondary,
+                        size: .compact28,
+                        isEnabled: !clearDisabled,
+                        help: "清空",
+                        action: onClear
+                    )
+                }
             }
         }
         .fixedSize(horizontal: true, vertical: false)

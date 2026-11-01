@@ -347,11 +347,12 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
                     .fixedSize(horizontal: true, vertical: false)
                     .disabled(!canNavigateDifferences)
                     if let onClear {
-                        IndexClearButton(
-                            isDisabled: clearDisabled,
-                            title: "清空对比",
-                            showsIcon: false,
-                            framed: true,
+                        ToolButton(
+                            "清空对比",
+                            role: .secondary,
+                            size: .compact28,
+                            isEnabled: !clearDisabled,
+                            help: "清空对比",
                             action: {
                                 droppedFileDiagnostic = nil
                                 onClear()

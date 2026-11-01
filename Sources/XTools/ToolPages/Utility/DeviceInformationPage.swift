@@ -23,14 +23,14 @@ struct IndexDeviceInfoPage: View {
                 }
             } accessory: {
                 HStack(spacing: 8) {
-                    Button {
-                        session.refresh()
-                    } label: {
-                        Label("刷新", systemImage: IndexActionSymbol.refresh)
-                            .font(ToolTypography.buttonSmall)
-                    }
-                    .buttonStyle(IndexSmallButtonStyle())
-                    .accessibilityLabel("刷新设备信息")
+                    ToolButton(
+                        "刷新",
+                        systemImage: IndexActionSymbol.refresh,
+                        role: .secondary,
+                        size: .compact28,
+                        accessibilityLabel: "刷新设备信息",
+                        action: session.refresh
+                    )
 
                     IndexCopyButton(text: copySummary, title: "复制全部")
                 }
@@ -42,7 +42,7 @@ struct IndexDeviceInfoPage: View {
             if entryGeneration > 0 { session.refresh() }
         }
         .onAppear { session.enterPage(generation: entryGeneration) }
-        .onChange(of: entryGeneration) { generation in
+        .onChange(of: entryGeneration) { _, generation in
             session.enterPage(generation: generation)
         }
     }

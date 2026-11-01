@@ -80,14 +80,16 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                         fetchButton
                             .fixedSize(horizontal: true, vertical: false)
                         if session.isURLProcessing {
-                            Button {
-                                session.cancelURLFetch()
-                            } label: {
-                                Label("停止", systemImage: IndexActionSymbol.stop)
-                            }
-                            .buttonStyle(IndexSmallButtonStyle(done: false, framed: true))
+                            ToolButton(
+                                "停止",
+                                systemImage: IndexActionSymbol.stop,
+                                role: .secondary,
+                                size: .compact28,
+                                help: "停止解析网页",
+                                accessibilityLabel: "停止解析网页",
+                                action: { session.cancelURLFetch() }
+                            )
                             .fixedSize(horizontal: true, vertical: false)
-                            .accessibilityLabel("停止解析网页")
                         }
                     }
                 },
@@ -151,19 +153,17 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
     }
 
     private var fetchButton: some View {
-        Button {
-            session.fetchURL()
-        } label: {
-            IndexProgressMotionLabel(
-                title: session.isURLProcessing ? "正在解析…" : "获取",
-                systemImage: "arrow.down.doc",
-                isProcessing: session.isURLProcessing,
-                id: session.isURLProcessing
-            )
-        }
-        .buttonStyle(IndexSmallButtonStyle(done: false, framed: true))
-        .disabled(fetchDisabled)
-        .accessibilityLabel(session.isURLProcessing ? "正在解析网页" : "获取网页")
+        ToolButton(
+            session.isURLProcessing ? "正在解析…" : "获取",
+            systemImage: "arrow.down.doc",
+            role: .secondary,
+            size: .compact28,
+            state: session.isURLProcessing ? .busy : .idle,
+            isEnabled: !fetchDisabled,
+            help: session.isURLProcessing ? "正在解析网页" : "获取网页",
+            accessibilityLabel: session.isURLProcessing ? "正在解析网页" : "获取网页",
+            action: { session.fetchURL() }
+        )
     }
 
     private var inputBinding: Binding<String> {

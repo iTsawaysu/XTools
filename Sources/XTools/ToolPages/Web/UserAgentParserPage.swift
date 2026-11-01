@@ -103,11 +103,16 @@ private struct IndexUserAgentWorkspaceContent: View {
                     minHeight: 80,
                     workspaceSemantic: .longTextNaturalInput
                 )
-                    .onChange(of: workspace.input) { _ in parse() }
+                    .onChange(of: workspace.input) { _, _ in parse() }
                     .indexWorkspaceDiagnostic(workspace.error)
             } accessory: {
-                IndexClearButton(
-                    isDisabled: !workspace.hasAnyContent,
+                ToolButton(
+                    "清空",
+                    systemImage: IndexActionSymbol.clear,
+                    role: .secondary,
+                    size: .compact28,
+                    isEnabled: workspace.hasAnyContent,
+                    help: "清空",
                     action: workspace.clear
                 )
             }

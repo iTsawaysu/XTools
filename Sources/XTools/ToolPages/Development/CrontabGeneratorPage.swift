@@ -58,7 +58,7 @@ private struct IndexCrontabWorkspaceContent: View {
                 VStack(alignment: .leading, spacing: 14) {
                     IndexTextInput(placeholder: "*/5 * * * *", text: $workspace.expression, height: ToolMetrics.ControlHeight.field, alignment: .center)
                         .font(ToolTypography.valueMedium)
-                        .onChange(of: workspace.expression) { _ in
+                        .onChange(of: workspace.expression) { _, _ in
                             workspace.debouncer.schedule(IndexDebouncer.keystrokeDebounce) { validate() }
                         }
                         .indexWorkspaceDiagnostic(workspace.error)
@@ -83,10 +83,13 @@ private struct IndexCrontabWorkspaceContent: View {
                 }
             } accessory: {
                 HStack(spacing: 8) {
-                    IndexClearButton(
-                        isDisabled: !workspace.hasAnyContent,
-                        title: "清空 Cron 表达式",
-                        iconOnly: true,
+                    ToolButton(
+                        "清空",
+                        systemImage: IndexActionSymbol.clear,
+                        role: .icon,
+                        size: .icon24,
+                        isEnabled: workspace.hasAnyContent,
+                        help: "清空 Cron 表达式",
                         action: workspace.clear
                     )
                     IndexCopyButton(text: workspace.expression.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -151,7 +154,7 @@ private struct IndexCrontabWorkspaceContent: View {
             }
         }
         .onAppear { if entryGeneration > 0 { validate() } }
-        .onChange(of: entryGeneration) { generation in
+        .onChange(of: entryGeneration) { _, generation in
             if generation > 0 { validate() }
         }
     }

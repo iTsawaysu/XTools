@@ -176,9 +176,15 @@ private struct IndexBase64FileWorkspaceContent: View {
             }
         } accessory: {
             if !projection.fileClearDisabled {
-                IndexClearButton(isDisabled: projection.fileClearDisabled, iconOnly: true) {
-                    session.clearSelection()
-                }
+                ToolButton(
+                    "清空",
+                    systemImage: IndexActionSymbol.clear,
+                    role: .icon,
+                    size: .icon24,
+                    isEnabled: !projection.fileClearDisabled,
+                    help: "清空源文件",
+                    action: session.clearSelection
+                )
             }
         }
         .verticallyFilling()
@@ -476,42 +482,43 @@ private struct IndexBase64FileWorkspaceContent: View {
     }
 
     private var decodeActionButton: some View {
-        Button {
-            session.decodeReverseInput()
-        } label: {
-            Base64FileActivityLabel(
-                title: "解码",
-                systemImage: "arrow.down.doc",
-                isProcessing: session.decodeActivity == .manualInput
-            )
-        }
-        .buttonStyle(IndexSmallButtonStyle())
-        .disabled(session.reverseInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || session.isDecoding)
-        .accessibilityLabel(session.decodeActivity == .manualInput ? "正在解码输入" : "解码输入")
+        ToolButton(
+            "解码",
+            systemImage: "arrow.down.doc",
+            role: .secondary,
+            size: .compact28,
+            state: session.decodeActivity == .manualInput ? .busy : .idle,
+            isEnabled: !session.reverseInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !session.isDecoding,
+            help: "解码输入",
+            accessibilityLabel: session.decodeActivity == .manualInput ? "正在解码输入" : "解码输入",
+            action: { _ = session.decodeReverseInput() }
+        )
     }
 
     private var importEncodedTextFileButton: some View {
-        Button {
-            session.importEncodedTextFile(filePanel: fileInputPanelClient)
-        } label: {
-            Base64FileActivityLabel(
-                title: "导入",
-                systemImage: "doc.badge.plus",
-                isProcessing: session.decodeActivity == .encodedTextImport
-            )
-        }
-        .buttonStyle(IndexSmallButtonStyle())
-        .disabled(session.isDecoding)
-        .accessibilityLabel(session.decodeActivity == .encodedTextImport ? "正在导入编码文本文件" : "导入编码文本文件")
+        ToolButton(
+            "导入",
+            systemImage: "doc.badge.plus",
+            role: .secondary,
+            size: .compact28,
+            state: session.decodeActivity == .encodedTextImport ? .busy : .idle,
+            isEnabled: !session.isDecoding,
+            help: "导入编码文本文件",
+            accessibilityLabel: session.decodeActivity == .encodedTextImport ? "正在导入编码文本文件" : "导入编码文本文件",
+            action: { session.importEncodedTextFile(filePanel: fileInputPanelClient) }
+        )
     }
 
     private var clearReverseInputButton: some View {
-        IndexClearButton(
-            isDisabled: projection.reverseClearDisabled,
-            title: "清空 Base64 输入和解码结果"
-        ) {
-            session.clearReverse()
-        }
+        ToolButton(
+            "清空",
+            systemImage: IndexActionSymbol.clear,
+            role: .quiet,
+            size: .compact28,
+            isEnabled: !projection.reverseClearDisabled,
+            help: "清空 Base64 输入和解码结果",
+            action: session.clearReverse
+        )
     }
 
     private var decodedFileNameEditor: some View {

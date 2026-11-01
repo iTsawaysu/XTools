@@ -128,22 +128,22 @@ private struct IndexPasswordGeneratorWorkspaceContent: View {
             IndexFlowLayout(spacing: ToolMetrics.Spacing.sm, lineSpacing: ToolMetrics.Spacing.sm) {
                 IndexOptionLabel("长度")
                 IndexNumberInput(value: $workspace.length, range: 8...128)
-                    .onChange(of: workspace.length) { _ in generate() }
+                    .onChange(of: workspace.length) { _, _ in generate() }
 
                 IndexOptionLabel("数量")
                 IndexStepperInput(value: $workspace.quantity, range: 1...20)
-                    .onChange(of: workspace.quantity) { _ in generate() }
+                    .onChange(of: workspace.quantity) { _, _ in generate() }
 
                 IndexOptionSwitch(title: "a-z", isOn: $workspace.lower)
-                    .onChange(of: workspace.lower) { _ in generate() }
+                    .onChange(of: workspace.lower) { _, _ in generate() }
                 IndexOptionSwitch(title: "A-Z", isOn: $workspace.upper)
-                    .onChange(of: workspace.upper) { _ in generate() }
+                    .onChange(of: workspace.upper) { _, _ in generate() }
                 IndexOptionSwitch(title: "0-9", isOn: $workspace.numbers)
-                    .onChange(of: workspace.numbers) { _ in generate() }
+                    .onChange(of: workspace.numbers) { _, _ in generate() }
                 IndexOptionSwitch(title: "符号", isOn: $workspace.symbols)
-                    .onChange(of: workspace.symbols) { _ in generate() }
+                    .onChange(of: workspace.symbols) { _, _ in generate() }
                 IndexOptionSwitch(title: "排除易混淆", isOn: $workspace.excludeAmbiguous)
-                    .onChange(of: workspace.excludeAmbiguous) { _ in generate() }
+                    .onChange(of: workspace.excludeAmbiguous) { _, _ in generate() }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -165,10 +165,13 @@ private struct IndexPasswordGeneratorWorkspaceContent: View {
                 successToast: ToolFeedbackCopy.copiedAll(noun: "密码")
             )
 
-            IndexPrimaryActionButton(
-                title: "生成",
-                hint: "⌘↩",
+            ToolButton(
+                "生成",
+                role: .primary,
+                size: .cta32,
                 help: "生成密码（⌘↩）",
+                keycap: "⌘↩",
+                accessibilityLabel: "生成密码（⌘↩）",
                 action: generate
             )
             .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut(.return, modifiers: .command) : nil)

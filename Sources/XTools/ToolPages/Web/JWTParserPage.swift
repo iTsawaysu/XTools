@@ -77,16 +77,16 @@ private struct IndexJWTWorkspaceContent: View {
         .onAppear(perform: refreshGeneration)
         // Observe the owner before mode-content diffing can equate canonically
         // equivalent Strings whose signing bytes are different.
-        .onChange(of: session.generateAlgorithm) { _ in refreshVisibleGeneration() }
-        .onChange(of: ExactUTF8Identity(session.generatePayload)) { _ in refreshVisibleGeneration() }
-        .onChange(of: ExactUTF8Identity(session.generateSecret)) { _ in refreshVisibleGeneration() }
-        .onChange(of: session.generateSecretEncoding) { _ in refreshVisibleGeneration() }
-        .onChange(of: ExactUTF8Identity(session.parseSecret)) { _ in
+        .onChange(of: session.generateAlgorithm) { _, _ in refreshVisibleGeneration() }
+        .onChange(of: ExactUTF8Identity(session.generatePayload)) { _, _ in refreshVisibleGeneration() }
+        .onChange(of: ExactUTF8Identity(session.generateSecret)) { _, _ in refreshVisibleGeneration() }
+        .onChange(of: session.generateSecretEncoding) { _, _ in refreshVisibleGeneration() }
+        .onChange(of: ExactUTF8Identity(session.parseSecret)) { _, _ in
             guard session.mode == .parse else { return }
             verify()
             localCheckDisclosureState.secretChanged(isEmpty: session.parseSecret.isEmpty)
         }
-        .onChange(of: entryGeneration) { generation in
+        .onChange(of: entryGeneration) { _, generation in
             if generation == 0 {
                 showsGenerateSecret = false
                 showsParseSecret = false
@@ -174,12 +174,14 @@ private struct IndexJWTWorkspaceContent: View {
             )
         } accessory: {
             HStack(spacing: 6) {
-                Button(action: transferGeneratedToParse) {
-                    Label("在解析中检查", systemImage: "arrow.right.circle")
-                        .font(ToolTypography.buttonSmall)
-                }
-                .buttonStyle(IndexSmallButtonStyle())
-                .disabled(session.generatedToken.isEmpty)
+                ToolButton(
+                    "在解析中检查",
+                    systemImage: "arrow.right.circle",
+                    role: .secondary,
+                    size: .compact28,
+                    isEnabled: !session.generatedToken.isEmpty,
+                    action: transferGeneratedToParse
+                )
 
                 IndexCopyButton(text: session.generatedToken)
             }
@@ -221,7 +223,7 @@ private struct IndexJWTWorkspaceContent: View {
                 autoFocus: true,
                 workspaceSemantic: .longTextNaturalInput
             )
-            .onChange(of: session.parseInput) { _ in parse() }
+            .onChange(of: session.parseInput) { _, _ in parse() }
             .indexWorkspaceDiagnostic(session.parseError)
         }
 
@@ -372,12 +374,14 @@ private struct IndexJWTWorkspaceContent: View {
             isExpanded: localCheckExpansionBinding,
             collapsedSummary: localCheckCollapsedSummary
         ) {
-            Button(action: transferParsedToGenerate) {
-                Label("用于生成", systemImage: "arrow.left.circle")
-                    .font(ToolTypography.buttonSmall)
-            }
-            .buttonStyle(IndexSmallButtonStyle())
-            .disabled(session.parsedHeader.isEmpty || session.parsedPayload.isEmpty)
+            ToolButton(
+                "用于生成",
+                systemImage: "arrow.left.circle",
+                role: .secondary,
+                size: .compact28,
+                isEnabled: !(session.parsedHeader.isEmpty || session.parsedPayload.isEmpty),
+                action: transferParsedToGenerate
+            )
         } content: {
             VStack(alignment: .leading, spacing: 14) {
                 VStack(alignment: .leading, spacing: 12) {
@@ -411,7 +415,7 @@ private struct IndexJWTWorkspaceContent: View {
             .indexWorkspaceDiagnostic(session.transferError)
         }
         .onAppear(perform: prepareLocalCheckDisclosure)
-        .onChange(of: localCheckAttentionUpdateID) { _ in
+        .onChange(of: localCheckAttentionUpdateID) { _, _ in
             localCheckDisclosureState.presentationChanged(
                 isPresent: session.localCheckPresentation != nil,
                 issueID: localCheckAttentionID

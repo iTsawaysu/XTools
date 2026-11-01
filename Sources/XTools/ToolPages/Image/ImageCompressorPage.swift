@@ -171,12 +171,12 @@ private struct IndexImageCompressorWorkspaceContent: View {
                     selectionStyle: .filled,
                     stretchesToFill: true
                 )
-                .onChange(of: compressionPreference) { _ in compress() }
+                .onChange(of: compressionPreference) { _, _ in compress() }
             }
 
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                 IndexOptionSwitch(title: "限制尺寸", isOn: $limitsDimensions)
-                    .onChange(of: limitsDimensions) { _ in compress() }
+                    .onChange(of: limitsDimensions) { _, _ in compress() }
                 if limitsDimensions {
                     HStack(spacing: 6) {
                         Text("输出尺寸不超过")
@@ -184,7 +184,7 @@ private struct IndexImageCompressorWorkspaceContent: View {
                             .foregroundStyle(ToolTheme.textSecondary)
                         IndexNumberInput(value: $maxPixelLength, range: 128...12000, fieldWidth: 62)
                             .accessibilityLabel("输出最大像素边长")
-                            .onChange(of: maxPixelLength) { _ in compress() }
+                            .onChange(of: maxPixelLength) { _, _ in compress() }
                         Text("px")
                             .font(ToolTypography.monoCaption)
                             .foregroundStyle(ToolTheme.textSecondary)

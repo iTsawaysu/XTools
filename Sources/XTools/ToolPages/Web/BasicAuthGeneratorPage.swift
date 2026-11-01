@@ -48,7 +48,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
                 parseContent
             }
         }
-        .onChange(of: entryGeneration) { generation in
+        .onChange(of: entryGeneration) { _, generation in
             if generation == 0 {
                 showsPassword = false
                 showsParsedPassword = false
@@ -95,12 +95,14 @@ private struct IndexBasicAuthWorkspaceContent: View {
             .indexWorkspaceDiagnostic(session.outputDiagnostic)
         } accessory: {
             HStack(spacing: 6) {
-                Button(action: transferGeneratedToParse) {
-                    Label("在解析中打开", systemImage: "arrow.right.circle")
-                        .font(ToolTypography.buttonSmall)
-                }
-                .buttonStyle(IndexSmallButtonStyle())
-                .disabled(session.output.isEmpty)
+                ToolButton(
+                    "在解析中打开",
+                    systemImage: "arrow.right.circle",
+                    role: .secondary,
+                    size: .compact28,
+                    isEnabled: !session.output.isEmpty,
+                    action: transferGeneratedToParse
+                )
 
                 IndexCopyButton(text: session.output)
             }
@@ -127,7 +129,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
                 autoFocus: true,
                 workspaceSemantic: .longTextNaturalInput
             )
-            .onChange(of: session.parseInput) { _ in parse() }
+            .onChange(of: session.parseInput) { _, _ in parse() }
             .indexWorkspaceDiagnostic(session.parseError)
         }
 
@@ -158,12 +160,14 @@ private struct IndexBasicAuthWorkspaceContent: View {
                 }
             }
         } accessory: {
-            Button(action: transferParsedToGenerate) {
-                Label("用于生成", systemImage: "arrow.left.circle")
-                    .font(ToolTypography.buttonSmall)
-            }
-            .buttonStyle(IndexSmallButtonStyle())
-            .disabled(session.parsedCredentials == nil)
+            ToolButton(
+                "用于生成",
+                systemImage: "arrow.left.circle",
+                role: .secondary,
+                size: .compact28,
+                isEnabled: session.parsedCredentials != nil,
+                action: transferParsedToGenerate
+            )
         }
     }
 

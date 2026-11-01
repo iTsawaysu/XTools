@@ -39,12 +39,18 @@ private struct IndexRomanWorkspaceContent: View {
             }
             IndexPanel("输入") {
                 IndexTextInput(placeholder: "例如 2024 或 MMXXIV", text: $workspace.input, autoFocus: true)
-                    .onChange(of: workspace.input) { _ in normalizeRomanCase(); validate() }
+                    .onChange(of: workspace.input) { _, _ in normalizeRomanCase(); validate() }
                     .indexWorkspaceDiagnostic(workspace.error)
             } accessory: {
-                IndexClearButton(isDisabled: workspace.input.isEmpty) {
-                    clear()
-                }
+                ToolButton(
+                    "清空",
+                    systemImage: IndexActionSymbol.clear,
+                    role: .quiet,
+                    size: .compact28,
+                    isEnabled: !workspace.input.isEmpty,
+                    help: "清空",
+                    action: clear
+                )
             }
             IndexPanel("结果") {
                 IndexModeContent(id: output == IndexEmptyStateCopy.notAvailable) { isEmpty in

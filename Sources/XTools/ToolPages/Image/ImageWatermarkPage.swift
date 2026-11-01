@@ -371,7 +371,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                 IndexSlider(value: $opacity, range: 0.1...1.0, step: 0)
                     .accessibilityLabel("水印透明度")
                     .accessibilityValue("\(Int(opacity * 100))%")
-                    .onChange(of: opacity) { _ in recipeDidChange(previewCadence: .debounced) }
+                    .onChange(of: opacity) { _, _ in recipeDidChange(previewCadence: .debounced) }
             }
 
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
@@ -385,7 +385,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                 IndexSlider(value: $sizeRatio, range: ImageWatermarkSizing.ratioRange, step: 0.01)
                     .accessibilityLabel("水印大小")
                     .accessibilityValue("\(sizePercent)%")
-                    .onChange(of: sizeRatio) { _ in recipeDidChange(previewCadence: .debounced) }
+                    .onChange(of: sizeRatio) { _, _ in recipeDidChange(previewCadence: .debounced) }
             }
 
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
@@ -399,7 +399,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
                     selectionStyle: .filled,
                     stretchesToFill: true
                 )
-                .onChange(of: textColor) { _ in recipeDidChange(previewCadence: .immediate) }
+                .onChange(of: textColor) { _, _ in recipeDidChange(previewCadence: .immediate) }
             }
 
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
@@ -487,7 +487,7 @@ private struct IndexImageWatermarkWorkspaceContent: View {
         .toolFieldSurface(focused: isWatermarkFocused)
         .frame(maxWidth: .infinity)
         .accessibilityLabel("水印文字")
-        .onChange(of: watermarkText) { _ in recipeDidChange(previewCadence: .debounced) }
+        .onChange(of: watermarkText) { _, _ in recipeDidChange(previewCadence: .debounced) }
     }
 
     private var sourceFileName: String {

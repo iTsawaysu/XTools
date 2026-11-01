@@ -154,17 +154,17 @@ private struct IndexJSONFormatterWorkspaceContent: View {
                 }
             }
         )
-        .onChange(of: workspace.sortKeys) { _ in
+        .onChange(of: workspace.sortKeys) { _, _ in
             if !execution.binding.output.isEmpty {
                 format()
             }
         }
-        .onChange(of: workspace.unescape) { _ in
+        .onChange(of: workspace.unescape) { _, _ in
             if !execution.binding.output.isEmpty {
                 format()
             }
         }
-        .onChange(of: workspace.escape) { _ in
+        .onChange(of: workspace.escape) { _, _ in
             if !execution.binding.output.isEmpty {
                 format()
             }

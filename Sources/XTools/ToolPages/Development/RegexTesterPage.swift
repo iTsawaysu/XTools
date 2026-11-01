@@ -227,10 +227,10 @@ private struct IndexRegexWorkspaceContent: View {
         .onAppear {
             displayedReport = report
         }
-        .onChange(of: workspaceInput) { input in
+        .onChange(of: workspaceInput) { _, input in
             handleWorkspaceInputChange(input)
         }
-        .onChange(of: execution.report) { report in
+        .onChange(of: execution.report) { _, report in
             present(report)
         }
     }

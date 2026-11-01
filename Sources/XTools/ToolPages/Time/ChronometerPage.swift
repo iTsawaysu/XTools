@@ -64,18 +64,29 @@ private struct IndexChronometerWorkspaceContent: View {
                             .accessibilityValue(ChronometerFormatter.format(currentTime(tick: context.date)))
                     }
                     HStack(spacing: 8) {
-                        IndexPrimaryActionButton(
-                            title: primaryActionTitle,
+                        ToolButton(
+                            primaryActionTitle,
                             systemImage: primaryActionIcon,
+                            role: .primary,
+                            size: .cta32,
                             help: primaryActionHelp,
                             action: toggle
                         )
-                        Button { _ = chronometer.recordLap(at: monotonicNow()) } label: { Text("计次") }
-                            .buttonStyle(IndexButtonStyle())
-                            .disabled(!chronometer.canRecordLap)
-                        Button { reset() } label: { Label("重置", systemImage: IndexActionSymbol.reset) }
-                            .buttonStyle(IndexButtonStyle())
-                            .disabled(!chronometer.canReset)
+                        ToolButton(
+                            "计次",
+                            role: .secondary,
+                            size: .compact28,
+                            isEnabled: chronometer.canRecordLap,
+                            action: { _ = chronometer.recordLap(at: monotonicNow()) }
+                        )
+                        ToolButton(
+                            "重置",
+                            systemImage: IndexActionSymbol.reset,
+                            role: .secondary,
+                            size: .compact28,
+                            isEnabled: chronometer.canReset,
+                            action: reset
+                        )
                     }
                 }
             }

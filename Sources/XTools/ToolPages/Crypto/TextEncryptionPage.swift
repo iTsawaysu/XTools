@@ -200,7 +200,7 @@ private struct IndexTextEncryptionWorkspaceContent: View {
                 workspaceSemantic: .securityTransformWorkspace
             )
         }
-        .onChange(of: entryGeneration) { generation in
+        .onChange(of: entryGeneration) { _, generation in
             if generation == 0 { showsPassword = false }
         }
     }
@@ -256,11 +256,14 @@ private struct IndexTextEncryptionWorkspaceContent: View {
     }
 
     private var primaryActionButton: some View {
-        IndexPrimaryActionButton(
-            title: primaryActionTitle,
+        ToolButton(
+            primaryActionTitle,
             systemImage: "play.fill",
-            hint: entryGeneration > 0 ? "⌘↩" : nil,
+            role: .primary,
+            size: .cta32,
             help: "\(primaryActionTitle)文本" + (entryGeneration > 0 ? "（⌘↩）" : ""),
+            keycap: entryGeneration > 0 ? "⌘↩" : nil,
+            accessibilityLabel: primaryActionTitle,
             action: run
         )
         .frame(minWidth: 76)
