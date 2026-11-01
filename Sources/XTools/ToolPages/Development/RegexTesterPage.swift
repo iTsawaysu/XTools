@@ -410,49 +410,32 @@ private struct IndexRegexWorkspaceContent: View {
     }
 
     private var flagMenu: some View {
-        Menu {
-            Toggle("全局匹配 (g)", isOn: flagBinding("g"))
-            Toggle("忽略大小写 (i)", isOn: flagBinding("i"))
-            Toggle("多行模式 (m)", isOn: flagBinding("m"))
-            Toggle("点号匹配换行 (s)", isOn: flagBinding("s"))
-            Toggle("允许注释与空白 (x)", isOn: flagBinding("x"))
-        } label: {
-            HStack(spacing: 5) {
-                Text(activeFlagsLabel)
-                    .font(ToolTypography.monoLabel)
-                    .foregroundStyle(ToolTheme.textPrimary)
-
-                Image(systemName: "chevron.down")
-                    .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
-                    .foregroundStyle(ToolTheme.textSecondary)
-                    .accessibilityHidden(true)
-            }
-        }
-        .menuIndicator(.hidden)
-        .buttonStyle(ToolSmallButtonStyle())
-        .fixedSize(horizontal: true, vertical: false)
+        ToolMultiSelectMenu(
+            triggerTitle: activeFlagsLabel,
+            items: [
+                ToolMenuItem(id: Character("g"), title: "全局匹配 (g)"),
+                ToolMenuItem(id: Character("i"), title: "忽略大小写 (i)"),
+                ToolMenuItem(id: Character("m"), title: "多行模式 (m)"),
+                ToolMenuItem(id: Character("s"), title: "点号匹配换行 (s)"),
+                ToolMenuItem(id: Character("x"), title: "允许注释与空白 (x)")
+            ],
+            selection: flagSelection
+        )
         .accessibilityLabel("正则标志，当前为 \(activeFlagsLabel)")
     }
 
-    private var activeFlagsLabel: String {
-        workspace.flags.isEmpty ? "无" : workspace.flags
-    }
-
-    private func flagBinding(_ flag: Character) -> Binding<Bool> {
+    private var flagSelection: Binding<Set<Character>> {
         Binding(
-            get: { workspace.flags.contains(flag) },
-            set: { isOn in
-                setFlag(flag, enabled: isOn)
+            get: { Set(workspace.flags) },
+            set: { selected in
+                let ordered = "gimsx".filter { selected.contains($0) }
+                workspace.flags = normalizeFlagOrder(String(ordered))
             }
         )
     }
 
-    private func setFlag(_ flag: Character, enabled: Bool) {
-        var orderedFlags = workspace.flags.filter { !$0.isWhitespace && $0 != flag }
-        if enabled {
-            orderedFlags.append(flag)
-        }
-        workspace.flags = normalizeFlagOrder(String(orderedFlags))
+    private var activeFlagsLabel: String {
+        workspace.flags.isEmpty ? "无" : workspace.flags
     }
 
     private func normalizeFlagOrder(_ value: String) -> String {

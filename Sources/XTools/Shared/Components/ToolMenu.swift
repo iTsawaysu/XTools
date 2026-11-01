@@ -86,3 +86,55 @@ struct ToolMenu<Item: Hashable>: View {
         .accessibilityLabel(resolvedTitle)
     }
 }
+
+/// Multi-select companion to `ToolMenu` for compact filter menus. The caller
+/// owns ordering in its binding; this view only toggles membership.
+struct ToolMultiSelectMenu<Item: Hashable>: View {
+    let triggerTitle: String
+    let items: [ToolMenuItem<Item>]
+    @Binding var selection: Set<Item>
+    var onChange: ((Set<Item>) -> Void)? = nil
+
+    @Environment(\.isEnabled) private var isEnabled
+
+    private func binding(for item: ToolMenuItem<Item>) -> Binding<Bool> {
+        Binding(
+            get: { selection.contains(item.id) },
+            set: { isOn in
+                var next = selection
+                if isOn {
+                    next.insert(item.id)
+                } else {
+                    next.remove(item.id)
+                }
+                selection = next
+                onChange?(next)
+            }
+        )
+    }
+
+    var body: some View {
+        Menu {
+            ForEach(items) { item in
+                Toggle(item.title, isOn: binding(for: item))
+                    .disabled(!item.isEnabled)
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text(triggerTitle)
+                    .font(ToolTypography.monoLabel)
+                    .foregroundStyle(ToolTheme.textPrimary)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: ToolMetrics.IconSize.micro, weight: .semibold))
+                    .foregroundStyle(ToolTheme.textSecondary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(ToolSmallButtonStyle())
+        .fixedSize(horizontal: true, vertical: false)
+        .opacity(isEnabled ? 1 : 0.5)
+        .accessibilityLabel(triggerTitle)
+    }
+}
