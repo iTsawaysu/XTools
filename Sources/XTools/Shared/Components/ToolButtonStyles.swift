@@ -62,8 +62,8 @@ struct ToolSmallButtonStyle: ButtonStyle {
                 .opacity(isEnabled ? 1 : 0.5)
                 .scaleEffect(!reduceMotion && configuration.isPressed ? ToolMotion.Scale.pressed : 1)
                 .onHover { isHovering = $0 }
-                .toolAnimation(ToolMotion.Preset.controlFeedback, value: hovering)
-                .toolAnimation(ToolMotion.Preset.controlFeedback, value: configuration.isPressed)
+                .toolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion, value: hovering)
+                .toolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion, value: configuration.isPressed)
         }
     }
 }
@@ -117,15 +117,49 @@ struct ToolIconActionButtonStyle: ButtonStyle {
                 .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
                 .opacity(isEnabled ? 1 : 0.4)
-                .scaleEffect(configuration.isPressed ? ToolMotion.Scale.pressed : 1)
+                .scaleEffect(!reduceMotion && configuration.isPressed ? ToolMotion.Scale.pressed : 1)
                 .onHover { isHovering = $0 }
                 .toolAnimation(
                     ToolMotion.Preset.controlFeedback,
+                    reduceMotion: reduceMotion,
                     value: [hovering, configuration.isPressed, isActive]
                 )
                 .transaction { transaction in
                     if reduceMotion { transaction.disablesAnimations = true }
                 }
+        }
+    }
+}
+
+
+/// Compact snippet capsule used by input-assist rows. Hairline at rest,
+/// hover fill, no accent emphasis.
+struct ToolSnippetButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        SnippetStyleBody(configuration: configuration)
+    }
+
+    private struct SnippetStyleBody: View {
+        let configuration: ButtonStyle.Configuration
+        @State private var isHovering = false
+        @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+        var body: some View {
+            configuration.label
+                .background(
+                    configuration.isPressed
+                        ? ToolTheme.activeFill
+                        : (isHovering ? ToolTheme.hoverFill : Color.clear),
+                    in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
+                        .strokeBorder(ToolTheme.border, lineWidth: 0.5)
+                }
+                .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
+                .onHover { isHovering = $0 }
+                .toolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion, value: isHovering)
+                .toolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion, value: configuration.isPressed)
         }
     }
 }

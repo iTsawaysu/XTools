@@ -285,7 +285,7 @@ private struct IndexMathWorkspaceContent: View {
                 .padding(.horizontal, 7)
                 .frame(height: ToolMetrics.ControlHeight.compact)
         }
-        .buttonStyle(IndexSnippetButtonStyle())
+        .buttonStyle(ToolSnippetButtonStyle())
         .accessibilityLabel("插入 \(item)")
     }
 
@@ -302,36 +302,5 @@ private struct IndexMathWorkspaceContent: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// 片段胶囊：静置只有发丝描边，悬停填充。高度走 compact 档；不点亮 accent，
-/// 它们是输入辅助而非页面动作。
-private struct IndexSnippetButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        StyleBody(configuration: configuration)
-    }
-
-    private struct StyleBody: View {
-        let configuration: ButtonStyle.Configuration
-        @State private var isHovering = false
-
-        var body: some View {
-            configuration.label
-                .background(
-                    configuration.isPressed
-                        ? ToolTheme.activeFill
-                        : (isHovering ? ToolTheme.hoverFill : Color.clear),
-                    in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-                        .strokeBorder(ToolTheme.border, lineWidth: 0.5)
-                }
-                .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
-                .onHover { isHovering = $0 }
-                .toolAnimation(ToolMotion.Preset.controlFeedback, value: isHovering)
-                .toolAnimation(ToolMotion.Preset.controlFeedback, value: configuration.isPressed)
-        }
     }
 }

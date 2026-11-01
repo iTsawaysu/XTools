@@ -141,6 +141,8 @@ clean() {
 # Keep `--arch` for explicit cross-compilation only.
 swift_build() {
   local configuration="${1:-debug}"
+  step "ui-lint: checking shared-control boundaries"
+  python3 "$PROJECT_DIR/tools/ui-lint.py" --root "$PROJECT_DIR"
   local host_arch
   host_arch="$(uname -m)"
   local build_args=(build --configuration "$configuration" --product "$PRODUCT_NAME")

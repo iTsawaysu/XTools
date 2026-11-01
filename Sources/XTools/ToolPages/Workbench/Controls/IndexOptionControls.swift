@@ -236,7 +236,7 @@ private struct IndexOptionPressableButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? ToolMotion.Scale.pressed : 1)
+            .scaleEffect(!reduceMotion && configuration.isPressed ? ToolMotion.Scale.pressed : 1)
             .toolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion, value: configuration.isPressed)
     }
 }

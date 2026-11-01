@@ -279,7 +279,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
                         .disabled(!isOutputFresh)
                         .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut("c", modifiers: [.command, .shift]) : nil)
                     if showsOutputSave {
-                        IndexSaveTextButton(text: output, fileName: outputFileName, showsIcon: false, framed: true)
+                        ToolSaveButton(text: output, fileName: outputFileName, showsIcon: false, framed: true)
                             .disabled(!isOutputFresh)
                     }
                     formatButton

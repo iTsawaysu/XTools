@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "page_private_button_styles": 0,
+  "page_plain_button_styles": 0,
+  "page_bare_progress_views": 0,
+  "raw_motion_violations": 0,
+  "note": "Counts are expected to stay at zero. Increase only with a reviewed, time-boxed exception in exception-registry.md."
+}

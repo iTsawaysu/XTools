@@ -111,11 +111,8 @@ private struct IndexDateCalcWorkspaceContent: View {
                     }
                 }
 
-                DateCalculatorInlineOption(
-                    title: "包含结束日",
-                    help: "把结束日期当天也计入结果（+1 天）",
-                    isOn: $session.includeEndDate
-                )
+                IndexOptionSwitch(title: "包含结束日", style: .checkbox, isOn: $session.includeEndDate)
+                    .indexTooltip("把结束日期当天也计入结果（+1 天）", wantsVisibleBubble: false)
 
                 DateCalculatorHeroResult(
                     value: session.totalDaysText,
@@ -180,7 +177,7 @@ private struct IndexDateCalcWorkspaceContent: View {
 
     @ViewBuilder
     private func startField() -> some View {
-        DateCalculatorDateField(
+        ToolDateField(
             title: "开始日期",
             input: $session.startInput,
             date: session.start,
@@ -194,7 +191,7 @@ private struct IndexDateCalcWorkspaceContent: View {
 
     @ViewBuilder
     private func endField() -> some View {
-        DateCalculatorDateField(
+        ToolDateField(
             title: "结束日期",
             input: $session.endInput,
             date: session.end,
@@ -208,7 +205,7 @@ private struct IndexDateCalcWorkspaceContent: View {
 
     @ViewBuilder
     private func baseField() -> some View {
-        DateCalculatorDateField(
+        ToolDateField(
             title: "基准日期",
             input: $session.baseInput,
             date: session.base,
@@ -218,132 +215,6 @@ private struct IndexDateCalcWorkspaceContent: View {
             onSelectDate: { session.applyBaseDate($0) },
             onToday: { session.setBaseToday() }
         )
-    }
-}
-
-private struct DateCalculatorDateField: View {
-    let title: String
-    @Binding var input: ControlledDateInput
-    let date: Date
-    let weekdayText: String
-    var autoFocus = false
-    let onCommit: (Date) -> Void
-    let onInvalidPaste: () -> Void
-    let onSelectDate: (Date) -> Void
-    let onToday: () -> Void
-
-    @State private var showsCalendar = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
-            Text(title)
-                .font(ToolTypography.buttonSmall)
-                .foregroundStyle(ToolTheme.textSecondary)
-
-            HStack(spacing: 8) {
-                IndexControlledDateInput(
-                    input: $input,
-                    placeholder: "2026-07-06",
-                    timeZone: TimeZone.current,
-                    autoFocus: autoFocus,
-                    trailingInset: 82,
-                    onCommit: onCommit,
-                    onInvalidPaste: onInvalidPaste
-                ) {
-                    HStack(spacing: 2) {
-                        DateCalculatorTodayButton(action: onToday)
-                        IndexIconButton(systemImage: "calendar", help: "选择日期") {
-                            showsCalendar = true
-                        }
-                    }
-                    .padding(.trailing, 6)
-                }
-            }
-
-            Text(weekdayText)
-                .font(ToolTypography.caption)
-                .foregroundStyle(ToolTheme.textTertiary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .popover(isPresented: $showsCalendar, arrowEdge: .bottom) {
-            IndexCalendarView(
-                selection: Binding(
-                    get: { date },
-                    set: { onSelectDate($0) }
-                ),
-                dismiss: { showsCalendar = false }
-            )
-            .frame(width: 280)
-        }
-    }
-}
-
-private struct DateCalculatorTodayButton: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    let action: () -> Void
-
-    @State private var isHovering = false
-    @FocusState private var isFocused: Bool
-
-    var body: some View {
-        Button(action: action) {
-            Text("今天")
-                .font(ToolTypography.buttonSmall)
-                .foregroundStyle(isHovering ? ToolTheme.textPrimary : ToolTheme.textSecondary)
-                .padding(.horizontal, 6)
-                .frame(height: ToolMetrics.ControlHeight.compact)
-                .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous))
-        }
-        .buttonStyle(IndexBareButtonStyle())
-        .accessibilityLabel("设为今天")
-        .background(
-            isHovering ? ToolTheme.hoverFill : Color.clear,
-            in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.nestedControl, style: .continuous)
-        )
-        .onHover { hovering in
-            withToolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion) { isHovering = hovering }
-        }
-        .focused($isFocused)
-        .indexFocusRing(active: isFocused, cornerRadius: ToolMetrics.CornerRadius.nestedControl)
-    }
-}
-
-private struct DateCalculatorInlineOption: View {
-    let title: String
-    var help: String? = nil
-    @Binding var isOn: Bool
-    @FocusState private var isFocused: Bool
-
-    var body: some View {
-        if let help, !help.isEmpty {
-            optionLabel.indexTooltip(help, wantsVisibleBubble: false)
-        } else {
-            optionLabel
-        }
-    }
-
-    private var optionLabel: some View {
-        Button { isOn.toggle() } label: {
-            HStack(spacing: 7) {
-                Image(systemName: isOn ? "checkmark.square.fill" : "square")
-                    .font(.system(size: ToolMetrics.IconSize.medium, weight: .semibold))
-                    .foregroundStyle(isOn ? ToolTheme.accentHover : ToolTheme.textSecondary)
-                    .frame(width: 16, height: 16)
-                    .toolMotionIconSwap(id: isOn)
-
-                Text(title)
-                    .font(ToolTypography.caption)
-                    .foregroundStyle(ToolTheme.textSecondary)
-            }
-            .frame(height: ToolMetrics.ControlHeight.compact)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(IndexBareButtonStyle())
-        .accessibilityLabel(title)
-        .accessibilityValue(isOn ? "开启" : "关闭")
-        .toolAnimation(ToolMotion.Preset.controlFeedback, value: isOn)
-        .focused($isFocused)
-        .indexFocusRing(active: isFocused, cornerRadius: ToolMetrics.CornerRadius.nestedControl)
     }
 }
 
