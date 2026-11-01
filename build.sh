@@ -136,15 +136,23 @@ clean() {
 }
 
 # Match XFetch: one plain SwiftPM invocation into the shared .build tree.
+# Native builds must not repeat `--arch` for the host: SwiftPM can stall after
+# dependency compilation when the destination is duplicated (macOS 27/Xcode 27).
+# Keep `--arch` for explicit cross-compilation only.
 swift_build() {
   local configuration="${1:-debug}"
+  local host_arch
+  host_arch="$(uname -m)"
+  local build_args=(build --configuration "$configuration" --product "$PRODUCT_NAME")
+  local arch_note="native $host_arch"
+  if [[ "$ARCH" != "$host_arch" ]]; then
+    build_args+=(--arch "$ARCH")
+    arch_note="cross $ARCH"
+  fi
   local t0
   t0="$(now_ms)"
-  step "swift build -c $configuration --product $PRODUCT_NAME"
-  "$SWIFT_BIN" build \
-    --configuration "$configuration" \
-    --product "$PRODUCT_NAME" \
-    --arch "$ARCH"
+  step "swift build -c $configuration --product $PRODUCT_NAME ($arch_note)"
+  "$SWIFT_BIN" "${build_args[@]}"
   printf '%s\n' "$configuration" >"$BUILD_STATE_FILE"
   info "Compile done ($(elapsed "$t0")ms)"
 }
