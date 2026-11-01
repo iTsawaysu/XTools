@@ -22,7 +22,7 @@ struct WorkbenchAccessibilityTests {
                     model.formatCount += 1
                 }
                 IndexStepperInput(value: .constant(1), range: 0...2)
-                IndexCopyButton(text: payload, title: "")
+                ToolCopyButton(text: payload, title: "")
             }
             .environment(\.accessibilityEnabled, true)
             .environment(\.colorScheme, dark ? .dark : .light))

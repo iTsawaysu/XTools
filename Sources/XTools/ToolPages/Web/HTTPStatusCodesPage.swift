@@ -110,7 +110,7 @@ private struct IndexHTTPStatusRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            IndexCopyButton(
+            ToolCopyButton(
                 text: "\(row.code) \(row.name) \(row.meaning)\n\(row.detail)",
                 title: "复制 \(row.code) 状态码",
                 iconOnly: true

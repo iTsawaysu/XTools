@@ -74,11 +74,11 @@ struct IndexDiagnosticBanner: View {
             Spacer(minLength: 0)
             if let onLocate {
                 Button("定位", action: onLocate)
-                    .buttonStyle(IndexSmallButtonStyle())
+                    .buttonStyle(ToolSmallButtonStyle())
                     .accessibilityLabel("定位问题，\(presentation.location ?? "当前输入")")
             }
             Button("详情") { showsDetails.toggle() }
-                .buttonStyle(IndexSmallButtonStyle())
+                .buttonStyle(ToolSmallButtonStyle())
                 .accessibilityLabel("查看诊断详情")
                 .popover(isPresented: $showsDetails, arrowEdge: .bottom) {
                     ScrollView {
@@ -97,7 +97,7 @@ struct IndexDiagnosticBanner: View {
                                 Text("另有 \(presentation.omittedCount) 项未展示。")
                                     .font(ToolTypography.caption).foregroundStyle(ToolTheme.textSecondary)
                             }
-                            IndexCopyButton(text: presentation.copyPayload, title: "复制诊断", showsIcon: false, framed: true)
+                            ToolCopyButton(text: presentation.copyPayload, title: "复制诊断", showsIcon: false, framed: true)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .textSelection(.enabled)

@@ -43,7 +43,7 @@ struct IndexHeroStat: View {
                 )
                 
                 if copyable && !value.isEmpty {
-                    IndexCopyButton(text: value, iconOnly: true)
+                    ToolCopyButton(text: value, iconOnly: true)
                 }
             }
             if let caption {

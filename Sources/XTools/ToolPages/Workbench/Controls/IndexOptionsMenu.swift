@@ -370,7 +370,7 @@ private final class IndexOptionsMenuDismissalBox {
 // MARK: - Styles
 
 /// Toolbar-family trigger treatment: it rests on the framed small-button look
-/// the workbench actions use (`IndexSmallButtonStyle(framed:)` — utility fill
+/// the workbench actions use (`ToolSmallButtonStyle(framed:)` — utility fill
 /// inside a hairline) so the disclosure sits in the toolbar's control family.
 /// Hover and press use the shared quiet fills; while the menu is open the
 /// trigger switches to the app's engaged-option tint (`selectionFill` inside

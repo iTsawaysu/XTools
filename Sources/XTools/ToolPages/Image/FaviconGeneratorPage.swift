@@ -220,7 +220,7 @@ private struct IndexFaviconGeneratorWorkspaceContent: View {
                             .font(ToolTypography.caption)
                             .foregroundStyle(ToolTheme.textSecondary)
                         Spacer(minLength: 8)
-                        IndexCopyButton(text: manifestText, title: "复制 site.webmanifest 内容", iconOnly: true)
+                        ToolCopyButton(text: manifestText, title: "复制 site.webmanifest 内容", iconOnly: true)
                     }
                     Text(manifestText)
                         .font(ToolTypography.monoCaption)
@@ -350,7 +350,7 @@ private struct FaviconConfigurationCodeSurface: View {
         IndexSurfaceRow(horizontalPadding: 10, verticalPadding: 8, fill: ToolTheme.panelBackground) {
             VStack(alignment: .leading, spacing: ToolMetrics.Spacing.sm) {
                 IndexFieldHeader(title) {
-                    IndexCopyButton(text: text, title: copyTitle, iconOnly: true)
+                    ToolCopyButton(text: text, title: copyTitle, iconOnly: true)
                 }
                 Text(text)
                     .font(ToolTypography.monoCaption)

@@ -217,7 +217,7 @@ private struct IndexRegexWorkspaceContent: View {
                         )
                     },
                     accessory: {
-                        IndexCopyButton(text: resultText, title: "复制匹配结果")
+                        ToolCopyButton(text: resultText, title: "复制匹配结果")
                     }
                 )
                 .verticallyFilling()
@@ -429,7 +429,7 @@ private struct IndexRegexWorkspaceContent: View {
             }
         }
         .menuIndicator(.hidden)
-        .buttonStyle(IndexSmallButtonStyle())
+        .buttonStyle(ToolSmallButtonStyle())
         .fixedSize(horizontal: true, vertical: false)
         .accessibilityLabel("正则标志，当前为 \(activeFlagsLabel)")
     }

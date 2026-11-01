@@ -34,7 +34,7 @@ struct SmartPasteSuggestionBanner: View {
             Button(action: onOpen) {
                 Text("打开 \(suggestion.toolTitle)")
             }
-            .buttonStyle(IndexSmallButtonStyle())
+            .buttonStyle(ToolSmallButtonStyle())
             .accessibilityHint("切换到该工具")
 
             IndexIconButton(

@@ -157,7 +157,7 @@ private struct IndexPasswordGeneratorWorkspaceContent: View {
 
     private var generationActions: some View {
         HStack(spacing: 6) {
-            IndexCopyButton(
+            ToolCopyButton(
                 text: allPasswordsText,
                 title: "全部复制",
                 showsIcon: false,

@@ -118,7 +118,7 @@ private struct IndexHashTextWorkspaceContent: View {
                 .accessibilityLabel("正在计算摘要")
             }
 
-            IndexCopyButton(text: allDigestsText, title: "全部复制")
+            ToolCopyButton(text: allDigestsText, title: "全部复制")
         }
     }
 }

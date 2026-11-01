@@ -51,7 +51,7 @@ struct IndexKVRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .indexValueMotion(valueMotion, id: value)
             if copyable {
-                IndexCopyButton(text: value, title: "")
+                ToolCopyButton(text: value, title: "")
             }
         }
         .padding(.horizontal, 13)
@@ -403,7 +403,7 @@ private struct IndexResultCard: View {
 
                     Spacer(minLength: 8)
 
-                    IndexCopyButton(text: item.value, title: item.copyHelp, iconOnly: true)
+                    ToolCopyButton(text: item.value, title: item.copyHelp, iconOnly: true)
                 }
 
                 valueText

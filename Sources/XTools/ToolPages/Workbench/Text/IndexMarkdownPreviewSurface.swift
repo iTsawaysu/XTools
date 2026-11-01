@@ -158,7 +158,7 @@ struct IndexMarkdownPreviewSurface: View {
                 remoteImageLoader = MarkdownRemoteImageSession()
                 remoteImageAuthorization.authorize(authorizationScope)
             }
-            .buttonStyle(IndexSmallButtonStyle())
+            .buttonStyle(ToolSmallButtonStyle())
             .accessibilityLabel("加载当前 Markdown 结果中的远程图片")
         }
         .padding(.horizontal, 12)

@@ -400,7 +400,7 @@ private struct IndexBase64FileWorkspaceContent: View {
                 isProcessing: session.outputAction == .copying
             )
         }
-        .buttonStyle(IndexIconActionButtonStyle())
+        .buttonStyle(ToolIconActionButtonStyle())
         .disabled(session.selectedFile == nil || session.outputPreview == nil || session.outputAction != nil || session.isPreparingOutput || session.isReadingFile)
         .indexTooltip("复制完整输出")
         .accessibilityLabel(session.outputAction == .copying ? "正在复制完整输出" : "复制完整输出")
@@ -415,7 +415,7 @@ private struct IndexBase64FileWorkspaceContent: View {
                 isProcessing: session.outputAction == .sending
             )
         }
-        .buttonStyle(IndexIconActionButtonStyle())
+        .buttonStyle(ToolIconActionButtonStyle())
         .disabled(session.selectedFile == nil || session.outputPreview == nil || session.outputAction != nil || session.isPreparingOutput || session.isReadingFile)
         .indexTooltip("在解码结果中预览")
         .accessibilityLabel(session.outputAction == .sending ? "正在准备解码预览" : "在解码结果中预览")
@@ -432,7 +432,7 @@ private struct IndexBase64FileWorkspaceContent: View {
                 isProcessing: session.outputAction == .saving
             )
         }
-        .buttonStyle(IndexIconActionButtonStyle())
+        .buttonStyle(ToolIconActionButtonStyle())
         .disabled(session.selectedFile == nil || session.outputPreview == nil || session.outputAction != nil || session.isPreparingOutput || session.isReadingFile)
         .indexTooltip("保存完整输出")
         .accessibilityLabel(session.outputAction == .saving ? "正在保存完整输出" : "保存完整输出")
@@ -562,7 +562,7 @@ private struct IndexBase64FileWorkspaceContent: View {
                 isProcessing: session.isSavingDecoded
             )
         }
-        .buttonStyle(IndexIconActionButtonStyle())
+        .buttonStyle(ToolIconActionButtonStyle())
         .disabled(session.decodedPayload == nil || session.isSavingDecoded)
         .indexTooltip("保存解码后的文件")
         .accessibilityLabel(session.isSavingDecoded ? "正在保存解码后的文件" : "保存解码后的文件")
@@ -573,7 +573,7 @@ private struct IndexBase64FileWorkspaceContent: View {
             Image(systemName: IndexActionSymbol.reset)
                 .font(.system(size: ToolMetrics.IconSize.small, weight: .medium))
         }
-        .buttonStyle(IndexIconActionButtonStyle())
+        .buttonStyle(ToolIconActionButtonStyle())
         .disabled(session.outputFileName == session.defaultOutputFileName)
         .indexTooltip("重置文件名")
         .accessibilityLabel("重置文件名")

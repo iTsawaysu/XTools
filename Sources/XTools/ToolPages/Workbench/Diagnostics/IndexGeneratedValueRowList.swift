@@ -130,7 +130,7 @@ private struct IndexGeneratedValueRowView: View {
                     .fixedSize(horizontal: false, vertical: wrapsValue)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                IndexCopyButton(text: row.value, title: row.copyHelp, iconOnly: true)
+                ToolCopyButton(text: row.value, title: row.copyHelp, iconOnly: true)
                     .opacity(showsActions ? 1 : 0)
             }
             .padding(.horizontal, 14)

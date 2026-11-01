@@ -350,7 +350,7 @@ private struct ColorFormatResultRow: View {
                     .fixedSize(horizontal: true, vertical: false)
             }
 
-            IndexCopyButton(text: value.text, title: "复制 \(value.label)", iconOnly: true)
+            ToolCopyButton(text: value.text, title: "复制 \(value.label)", iconOnly: true)
         }
         .padding(.horizontal, ToolMetrics.Spacing.sm)
         .padding(.vertical, ToolMetrics.Spacing.sm)

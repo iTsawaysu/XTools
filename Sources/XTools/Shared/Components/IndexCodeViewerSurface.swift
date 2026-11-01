@@ -163,9 +163,9 @@ struct IndexCodeViewerSurface: View {
                             "预览前 \(previewCharacterCount) 个字符；选择与查找仅限预览"
                         )
                         HStack(spacing: ToolMetrics.Spacing.sm) {
-                            IndexCopyButton(text: text.value, title: "复制全文", showsIcon: false, framed: true)
+                            ToolCopyButton(text: text.value, title: "复制全文", showsIcon: false, framed: true)
                             Button("载入全文") { fullTextSource = text }
-                                .buttonStyle(IndexSmallButtonStyle(framed: true))
+                                .buttonStyle(ToolSmallButtonStyle(framed: true))
                                 .indexTooltip("全文排版可能需要较长时间", wantsVisibleBubble: false)
                         }
                     }

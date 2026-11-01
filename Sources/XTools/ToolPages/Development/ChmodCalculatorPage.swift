@@ -128,7 +128,7 @@ private struct IndexChmodWorkspaceContent: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, ToolMetrics.Spacing.lg)
             } accessory: {
-                IndexCopyButton(text: workspace.mode.octalString, title: "复制八进制", iconOnly: true)
+                ToolCopyButton(text: workspace.mode.octalString, title: "复制八进制", iconOnly: true)
             }
         }
     }

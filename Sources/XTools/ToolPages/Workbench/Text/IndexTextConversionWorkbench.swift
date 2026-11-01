@@ -249,7 +249,7 @@ struct IndexTextConversionWorkbench: View {
 
     private var outputHeaderActions: some View {
         HStack(spacing: 8) {
-            IndexCopyButton(text: output, iconOnly: true)
+            ToolCopyButton(text: output, iconOnly: true)
             if showsOutputSave {
                 IndexSaveTextButton(text: output, fileName: outputFileName, iconOnly: true, saveClient: saveClient)
             }
@@ -293,7 +293,7 @@ struct IndexSaveTextButton: View {
                 }
             }
         }
-        .buttonStyle(IndexSmallButtonStyle(done: saved, framed: framed))
+        .buttonStyle(ToolSmallButtonStyle(done: saved, framed: framed))
         .disabled(text.isEmpty)
         .accessibilityLabel(saved ? "已保存" : "保存输出")
         .accessibilityHint(saved ? "已保存" : "保存输出")

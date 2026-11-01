@@ -104,7 +104,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
                     action: transferGeneratedToParse
                 )
 
-                IndexCopyButton(text: session.output)
+                ToolCopyButton(text: session.output)
             }
         }
     }
@@ -181,7 +181,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
 
-            IndexCopyButton(text: value, title: "复制", iconOnly: true)
+            ToolCopyButton(text: value, title: "复制", iconOnly: true)
         }
     }
 
@@ -203,7 +203,7 @@ private struct IndexBasicAuthWorkspaceContent: View {
             }
 
             if showsParsedPassword {
-                IndexCopyButton(text: value, title: "复制", iconOnly: true)
+                ToolCopyButton(text: value, title: "复制", iconOnly: true)
             }
 
             IndexIconButton(

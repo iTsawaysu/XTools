@@ -73,7 +73,7 @@ private struct IndexDateTimeWorkspaceContent: View {
                         help: "全部清空",
                         action: clearAll
                     )
-                    IndexCopyButton(text: allRowsText, title: "全部复制")
+                    ToolCopyButton(text: allRowsText, title: "全部复制")
                 }
                 .fixedSize(horizontal: true, vertical: false)
             }

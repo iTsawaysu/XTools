@@ -171,7 +171,7 @@ private struct IndexTokenWorkspaceContent: View {
 
     private var generationActions: some View {
         HStack(spacing: 6) {
-            IndexCopyButton(
+            ToolCopyButton(
                 text: allTokensText,
                 title: "全部复制",
                 showsIcon: false,

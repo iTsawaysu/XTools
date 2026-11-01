@@ -32,7 +32,7 @@ struct IndexDeviceInfoPage: View {
                         action: session.refresh
                     )
 
-                    IndexCopyButton(text: copySummary, title: "复制全部")
+                    ToolCopyButton(text: copySummary, title: "复制全部")
                 }
             }
             .verticallyFilling()

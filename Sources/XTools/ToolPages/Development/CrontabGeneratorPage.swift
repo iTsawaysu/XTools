@@ -92,7 +92,7 @@ private struct IndexCrontabWorkspaceContent: View {
                         help: "清空 Cron 表达式",
                         action: workspace.clear
                     )
-                    IndexCopyButton(text: workspace.expression.trimmingCharacters(in: .whitespacesAndNewlines))
+                    ToolCopyButton(text: workspace.expression.trimmingCharacters(in: .whitespacesAndNewlines))
                 }
             }
 

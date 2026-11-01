@@ -275,7 +275,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
                         help: "清空",
                         action: onClear
                     )
-                    IndexCopyButton(text: output, title: "复制", showsIcon: false, framed: true, help: "复制全部 (⇧⌘C)")
+                    ToolCopyButton(text: output, title: "复制", showsIcon: false, framed: true, help: "复制全部 (⇧⌘C)")
                         .disabled(!isOutputFresh)
                         .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut("c", modifiers: [.command, .shift]) : nil)
                     if showsOutputSave {

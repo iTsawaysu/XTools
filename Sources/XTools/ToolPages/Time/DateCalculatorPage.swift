@@ -127,7 +127,7 @@ private struct IndexDateCalcWorkspaceContent: View {
             }
             .indexWorkspaceDiagnostic(session.diffError)
         } accessory: {
-            IndexCopyButton(text: session.totalDaysText, title: "复制总天数")
+            ToolCopyButton(text: session.totalDaysText, title: "复制总天数")
         }
     }
 
@@ -156,7 +156,7 @@ private struct IndexDateCalcWorkspaceContent: View {
             }
             .indexWorkspaceDiagnostic(session.baseInputError)
         } accessory: {
-            IndexCopyButton(text: session.resultCopyText)
+            ToolCopyButton(text: session.resultCopyText)
         }
     }
 

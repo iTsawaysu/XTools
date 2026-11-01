@@ -60,7 +60,7 @@ struct IndexGenerateParseModeBar: View {
             Label("清空", systemImage: IndexActionSymbol.clear)
                 .font(ToolTypography.buttonSmall)
         }
-        .buttonStyle(IndexSmallButtonStyle())
+        .buttonStyle(ToolSmallButtonStyle())
         .disabled(clearAllDisabled)
         .accessibilityLabel("清空所有内容")
     }

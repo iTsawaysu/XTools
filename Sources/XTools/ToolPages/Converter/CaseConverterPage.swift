@@ -113,7 +113,7 @@ private struct IndexCaseConverterWorkspaceContent: View {
     }
 
     /// 全部复制只带结果值（标签是字段名，不进剪贴板），与 Hash 页的
-    /// 「全部复制」按行拼接语义一致；输入为空时按钮经 IndexCopyButton
+    /// 「全部复制」按行拼接语义一致；输入为空时按钮经 ToolCopyButton
     /// 自身的空文本禁用语义自动置灰。
     private var allResultsText: String {
         workspace.styles.map(\.value).joined(separator: "\n")
@@ -147,7 +147,7 @@ private struct IndexCaseConverterWorkspaceContent: View {
             IndexPanel("转换结果") {
                 IndexShortResultKV(rows: rows, emptyText: IndexEmptyStateCopy.autoShow("文本"), valueMotion: .immediate)
             } accessory: {
-                IndexCopyButton(text: allResultsText, title: "全部复制")
+                ToolCopyButton(text: allResultsText, title: "全部复制")
             }
         }
     }

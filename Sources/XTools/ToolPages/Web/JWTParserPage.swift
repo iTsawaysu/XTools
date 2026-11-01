@@ -147,7 +147,7 @@ private struct IndexJWTWorkspaceContent: View {
                 )
                 .indexWorkspaceDiagnostic(session.generationHeaderError)
             } accessory: {
-                IndexCopyButton(text: session.generatedHeader)
+                ToolCopyButton(text: session.generatedHeader)
             }
             .verticallyFilling()
         } trailing: {
@@ -183,7 +183,7 @@ private struct IndexJWTWorkspaceContent: View {
                     action: transferGeneratedToParse
                 )
 
-                IndexCopyButton(text: session.generatedToken)
+                ToolCopyButton(text: session.generatedToken)
             }
         }
     }
@@ -246,7 +246,7 @@ private struct IndexJWTWorkspaceContent: View {
     private var decodedHeaderPane: some View {
         VStack(alignment: .leading, spacing: 8) {
             IndexFieldHeader("Header") {
-                IndexCopyButton(text: session.parsedHeader, iconOnly: true)
+                ToolCopyButton(text: session.parsedHeader, iconOnly: true)
             }
 
             IndexWorkspaceOutputSurface(
@@ -270,7 +270,7 @@ private struct IndexJWTWorkspaceContent: View {
                         selection: $payloadPresentation,
                         density: .compact
                     )
-                    IndexCopyButton(text: session.parsedPayload, iconOnly: true)
+                    ToolCopyButton(text: session.parsedPayload, iconOnly: true)
                 }
             }
 

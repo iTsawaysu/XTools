@@ -211,7 +211,7 @@ private struct IndexMathWorkspaceContent: View {
             }
         } accessory: {
             if let result = validResult {
-                IndexCopyButton(text: result, title: "复制结果")
+                ToolCopyButton(text: result, title: "复制结果")
             }
         }
         .withoutDiagnosticStatusSlot()

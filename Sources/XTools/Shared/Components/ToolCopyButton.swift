@@ -1,13 +1,12 @@
 import SwiftUI
 
-/// Shared copy action (F3 归位): the shared layer's hero stat and code viewer
-/// surfaces consume this button, so it lives in Shared/Components rather than
-/// the Workbench control family. Styling collaborators (IndexIconActionButtonStyle,
-/// IndexSmallButtonStyle) stay in the Workbench controls file.
+/// Shared copy action used by tool pages, the workbench hero stat, and code
+/// viewer surfaces. Styling lives in Shared/Components (`ToolSmallButtonStyle`
+/// and `ToolIconActionButtonStyle`); the copy tick remains owned here.
 ///
 /// Copy variant on the same icon-only discipline: the tooltip keeps
 /// announcing the copied state while it exists.
-private struct IndexCopyButtonHelp: ViewModifier {
+private struct ToolCopyButtonHelp: ViewModifier {
     let iconOnly: Bool
     let copied: Bool
     let title: String
@@ -24,11 +23,11 @@ private struct IndexCopyButtonHelp: ViewModifier {
     }
 }
 
-// MARK: - IndexCopyButton
+// MARK: - ToolCopyButton
 
 /// AX 提示：只有图标副本或调用方显式给了描述时才发布，避免与可见标题
 /// 重复播报同一句话。
-private struct IndexCopyButtonAccessibilityHint: ViewModifier {
+private struct ToolCopyButtonAccessibilityHint: ViewModifier {
     let iconOnly: Bool
     let copied: Bool
     let help: String?
@@ -42,7 +41,7 @@ private struct IndexCopyButtonAccessibilityHint: ViewModifier {
     }
 }
 
-struct IndexCopyButton: View {
+struct ToolCopyButton: View {
     let text: String
     var title = "复制"
     var iconOnly = false
@@ -65,13 +64,13 @@ struct IndexCopyButton: View {
     var body: some View {
         Group {
             if iconOnly {
-                copyButton.buttonStyle(IndexIconActionButtonStyle(
+                copyButton.buttonStyle(ToolIconActionButtonStyle(
                     isActive: copied,
                     activeTint: ToolTheme.success,
                     activeBackground: ToolTheme.successSoft
                 ))
             } else {
-                copyButton.buttonStyle(IndexSmallButtonStyle(done: copied, framed: framed))
+                copyButton.buttonStyle(ToolSmallButtonStyle(done: copied, framed: framed))
             }
         }
         .disabled(text.isEmpty)
@@ -131,9 +130,9 @@ struct IndexCopyButton: View {
                 .font(ToolTypography.buttonSmall)
             }
         }
-        .modifier(IndexCopyButtonHelp(iconOnly: iconOnly || title.isEmpty, copied: copied, title: actionTitle, help: help))
+        .modifier(ToolCopyButtonHelp(iconOnly: iconOnly || title.isEmpty, copied: copied, title: actionTitle, help: help))
         .accessibilityLabel(copied ? "已复制" : actionTitle)
-        .modifier(IndexCopyButtonAccessibilityHint(iconOnly: iconOnly || title.isEmpty, copied: copied, help: help))
+        .modifier(ToolCopyButtonAccessibilityHint(iconOnly: iconOnly || title.isEmpty, copied: copied, help: help))
     }
 }
 
@@ -228,3 +227,6 @@ private struct IndexCopyTickCheckGlyph: Shape {
         return path
     }
 }
+
+@available(*, deprecated, renamed: "ToolCopyButton")
+typealias IndexCopyButton = ToolCopyButton

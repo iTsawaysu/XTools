@@ -111,7 +111,7 @@ private struct IndexUUIDWorkspaceContent: View {
                     .fixedSize(horizontal: true, vertical: false)
             }
 
-            IndexCopyButton(
+            ToolCopyButton(
                 text: allValuesText,
                 title: "全部复制",
                 showsIcon: false,
