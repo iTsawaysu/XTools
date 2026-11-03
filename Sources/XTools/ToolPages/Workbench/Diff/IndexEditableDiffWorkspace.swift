@@ -286,7 +286,7 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
     }
 
     private var toolbar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             HStack(spacing: 6) {
                 IndexBadge("STDIN", tone: .accent, isCapsule: true)
                     .fixedSize(horizontal: true, vertical: false)
@@ -330,22 +330,26 @@ struct IndexEditableDiffWorkspace<LeadingControl: View>: View {
                         .fixedSize(horizontal: true, vertical: false)
                         .accessibilityLabel("当前差异块 \(current)，共 \(navigationProgress.total) 个")
                     }
-                    IndexIconButton(
+                    ToolButton(
                         systemImage: "chevron.up",
+                        role: .secondary,
+                        size: .compact28,
+                        isEnabled: canNavigateDifferences,
                         help: "上一处差异（⌥⌘↑）"
                     ) {
                         navigateDifference(false)
                     }
                     .fixedSize(horizontal: true, vertical: false)
-                    .disabled(!canNavigateDifferences)
-                    IndexIconButton(
+                    ToolButton(
                         systemImage: "chevron.down",
+                        role: .secondary,
+                        size: .compact28,
+                        isEnabled: canNavigateDifferences,
                         help: "下一处差异（⌥⌘↓）"
                     ) {
                         navigateDifference(true)
                     }
                     .fixedSize(horizontal: true, vertical: false)
-                    .disabled(!canNavigateDifferences)
                     if let onClear {
                         ToolButton(
                             "清空对比",

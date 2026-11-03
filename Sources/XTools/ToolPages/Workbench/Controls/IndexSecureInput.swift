@@ -19,19 +19,22 @@ struct IndexSecureInput: View {
             text: $text,
             secure: !showsSecret,
             allowsCopy: showsSecret,
-            trailingInset: 42
+            trailingInset: 36
         )
         .overlay(alignment: .trailing) {
-            IndexIconButton(
-                systemImage: showsSecret ? "eye.slash" : "eye",
-                help: showsSecret ? "隐藏\(secretNoun)" : "显示\(secretNoun)"
-            ) {
+            Button {
                 showsSecret.toggle()
+            } label: {
+                Image(systemName: showsSecret ? "eye.slash" : "eye")
+                    .font(.system(size: ToolMetrics.IconSize.medium, weight: .regular))
+                    .foregroundStyle(showsSecret ? ToolTheme.accent : ToolTheme.textSecondary)
+                    .toolMotionIconSwap(id: showsSecret)
             }
-            .frame(width: 32, height: 32)
+            .buttonStyle(ToolIconActionButtonStyle(isActive: showsSecret))
+            .indexTooltip(showsSecret ? "隐藏\(secretNoun)" : "显示\(secretNoun)")
+            .accessibilityLabel(showsSecret ? "隐藏\(secretNoun)" : "显示\(secretNoun)")
             .arrowCursorOnHover()
-            .toolMotionIconSwap(id: showsSecret)
-            .padding(.trailing, 5)
+            .padding(.trailing, 6)
         }
         .accessibilityElement(children: .contain)
     }

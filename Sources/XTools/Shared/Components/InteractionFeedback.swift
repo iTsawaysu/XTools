@@ -48,8 +48,8 @@ private struct ToolPaneHoverChromeModifier: ViewModifier {
             .overlay {
                 ZStack {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(Color.white)
-                        .opacity(isHovered ? ToolMotion.PaneHover.washPeak : 0)
+                        .fill(ToolTheme.hoverFill)
+                        .opacity(isHovered ? 1 : 0)
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .strokeBorder(
                             isHovered ? ToolTheme.strongBorder : .clear,

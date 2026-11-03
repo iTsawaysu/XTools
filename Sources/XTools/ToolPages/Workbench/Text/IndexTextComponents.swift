@@ -11,6 +11,7 @@ struct IndexTextInput: View {
     var alignment: TextAlignment = .leading
     var secure = false
     var allowsCopy = true
+    var leadingInset: CGFloat = 11
     var trailingInset: CGFloat = 11
     var autoFocus = false
     var focusRequestToken: Int? = nil
@@ -18,6 +19,9 @@ struct IndexTextInput: View {
     /// Drops the field box so an owning container (e.g. the format workbench's
     /// input header) supplies the shared surface edge.
     var embedsFlat = false
+    /// When the field is embedded in a shared container, keep a focus ring
+    /// around the editable value without drawing the field box at rest.
+    var focusRingWhenFlat = false
     var onSubmit: (() -> Void)? = nil
     var onEscape: (() -> Void)? = nil
     var onFocusChange: ((Bool) -> Void)? = nil
@@ -34,11 +38,13 @@ struct IndexTextInput: View {
         alignment: TextAlignment = .leading,
         secure: Bool = false,
         allowsCopy: Bool = true,
+        leadingInset: CGFloat = 11,
         trailingInset: CGFloat = 11,
         autoFocus: Bool = false,
         focusRequestToken: Int? = nil,
         selectAllOnFocus: Bool = false,
         embedsFlat: Bool = false,
+        focusRingWhenFlat: Bool = false,
         onSubmit: (() -> Void)? = nil,
         onEscape: (() -> Void)? = nil,
         onFocusChange: ((Bool) -> Void)? = nil
@@ -49,11 +55,13 @@ struct IndexTextInput: View {
         self.alignment = alignment
         self.secure = secure
         self.allowsCopy = allowsCopy
+        self.leadingInset = leadingInset
         self.trailingInset = trailingInset
         self.autoFocus = autoFocus
         self.focusRequestToken = focusRequestToken
         self.selectAllOnFocus = selectAllOnFocus
         self.embedsFlat = embedsFlat
+        self.focusRingWhenFlat = focusRingWhenFlat
         self.onSubmit = onSubmit
         self.onEscape = onEscape
         self.onFocusChange = onFocusChange
@@ -67,7 +75,7 @@ struct IndexTextInput: View {
             exactTextIdentity: exactTextIdentity,
             alignment: alignment,
             secure: secure,
-            contentInsets: IndexTextFieldContentInsets(leading: 11, trailing: trailingInset),
+            contentInsets: IndexTextFieldContentInsets(leading: leadingInset, trailing: trailingInset),
             allowsCopy: allowsCopy,
             autoFocus: autoFocus,
             focusRequestToken: focusRequestToken,
@@ -88,7 +96,7 @@ struct IndexTextInput: View {
             in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
         )
         .overlay {
-            if !embedsFlat {
+            if !embedsFlat || (focusRingWhenFlat && isFocused) {
                 RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
                     .strokeBorder(isFocused ? ToolTheme.focusRing : ToolTheme.border, lineWidth: isFocused ? 1.5 : 0.5)
             }
@@ -136,12 +144,23 @@ struct IndexSearchInput: View {
             placeholder: placeholder,
             text: $text,
             height: height,
+            leadingInset: 32,
             trailingInset: 40,
             autoFocus: autoFocus,
             focusRequestToken: focusRequestToken == 0 ? nil : focusRequestToken,
             onSubmit: onSubmit,
             onEscape: onEscape
         )
+        .overlay(alignment: .leading) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(ToolTheme.textSecondary)
+                .font(.system(size: ToolMetrics.IconSize.small, weight: .medium))
+                .frame(width: 14, height: 14)
+                .padding(.leading, 11)
+                .allowsHitTesting(false)
+                .arrowCursorOnHover()
+                .accessibilityHidden(true)
+        }
         .overlay(alignment: .trailing) {
             if !text.isEmpty {
                 IndexIconButton(

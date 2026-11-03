@@ -140,7 +140,7 @@ struct IndexSlider: View {
 }
 
 /// Tiny two-tone checkerboard used behind alpha sliders.
-private struct IndexCheckerboard: View {
+struct IndexCheckerboard: View {
     var body: some View {
         Canvas { context, size in
             let side: CGFloat = 3
@@ -183,6 +183,9 @@ struct IndexNumberInput: View {
     @Binding var value: Int
     let range: ClosedRange<Int>
     var fieldWidth: CGFloat = 54
+    /// Draw only the number, letting an owning control strip supply the
+    /// single shared surface edge.
+    var embedsFlat = false
     var onCommit: (() -> Void)? = nil
 
     @State private var text = ""
@@ -195,6 +198,8 @@ struct IndexNumberInput: View {
             height: ToolMetrics.ControlHeight.small,
             alignment: .center,
             selectAllOnFocus: true,
+            embedsFlat: embedsFlat,
+            focusRingWhenFlat: embedsFlat,
             onSubmit: commitText,
             onFocusChange: { focused in
                 isFocused = focused

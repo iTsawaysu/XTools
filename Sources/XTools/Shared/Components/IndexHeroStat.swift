@@ -141,5 +141,7 @@ private struct IndexHeroValueText: View {
         Text(value)
             .font(ToolTypography.heroValue(design: design))
             .foregroundStyle(color)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
     }
 }

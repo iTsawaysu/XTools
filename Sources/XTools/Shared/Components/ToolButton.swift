@@ -133,7 +133,7 @@ struct ToolButton: View {
             }
 
             if let keycap, !keycap.isEmpty {
-                IndexKeycap(label: keycap)
+                IndexKeycap(label: keycap, variant: role == .primary ? .onAccent : .standard)
             }
 
             if alignment == .leading, width == .fill {
@@ -141,6 +141,7 @@ struct ToolButton: View {
             }
         }
         .frame(maxWidth: width == .fill ? .infinity : nil, alignment: alignment == .leading ? .leading : .center)
+        .fixedSize(horizontal: width == .hug, vertical: false)
     }
 }
 
@@ -192,9 +193,17 @@ private struct ToolButtonStyle: ButtonStyle {
         private var hovering: Bool { isHovering && isEnabled && state != .busy }
         private var pressed: Bool { configuration.isPressed && isEnabled && state != .busy }
 
+        private var isDisabled: Bool { !isEnabled && state != .busy }
+
         private var background: Color {
             if state == .done { return ToolTheme.successSoft }
             if state == .active { return ToolTheme.selectionFill }
+            if isDisabled {
+                switch role {
+                case .primary, .secondary, .chip: return ToolTheme.utilityBackground
+                case .quiet, .icon: return Color.clear
+                }
+            }
             switch role {
             case .primary:
                 return (pressed || hovering) ? ToolTheme.accentHover : ToolTheme.accent
@@ -216,6 +225,12 @@ private struct ToolButtonStyle: ButtonStyle {
         private var border: Color {
             if state == .active { return ToolTheme.selectionStroke }
             if state == .done { return ToolTheme.successSoft }
+            if isDisabled {
+                switch role {
+                case .primary, .secondary, .chip: return ToolTheme.border
+                case .quiet, .icon: return Color.clear
+                }
+            }
             if role == .secondary || role == .chip { return hovering ? ToolTheme.strongBorder : ToolTheme.border }
             if role == .primary { return ToolTheme.accent }
             return Color.clear
@@ -224,6 +239,7 @@ private struct ToolButtonStyle: ButtonStyle {
         private var foreground: Color {
             if state == .done { return ToolTheme.success }
             if state == .active { return ToolTheme.accent }
+            if isDisabled { return ToolTheme.textTertiary }
             switch role {
             case .primary: return ToolTheme.onAccent
             case .secondary, .quiet: return ToolTheme.textSecondary
@@ -262,7 +278,7 @@ private struct ToolButtonStyle: ButtonStyle {
                         .strokeBorder(border, lineWidth: border == .clear ? 0 : ToolMetrics.BorderWidth.hairline)
                 }
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
-                .opacity(isEnabled ? 1 : (role == .icon ? 0.4 : 0.45))
+                .opacity(isEnabled || state == .busy ? 1 : (role == .icon ? 0.4 : 1))
                 .scaleEffect(!reduceMotion && pressed ? ToolMotion.Scale.pressed : 1)
                 .onHover { isHovering = $0 }
                 .toolAnimation(hovering ? ToolMotion.Preset.hoverIn : ToolMotion.Preset.hoverOut, reduceMotion: reduceMotion, value: hovering)

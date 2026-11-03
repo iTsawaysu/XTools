@@ -41,10 +41,17 @@ struct IndexKeycap: View {
         colorScheme == .light ? 0.5 : 0.08
     }
 
+    /// 双字符快捷键插入细空格，让 `⌘↩`/`⌘K` 不再挤在一起；
+    /// 单字符键帽保持原样。字面仍走系统字体，避免 SF Symbol 比例失衡。
+    private var spacedLabel: String {
+        guard label.count > 1 else { return label }
+        return label.map(String.init).joined(separator: "\u{2009}")
+    }
+
     var body: some View {
-        Text(label)
+        Text(spacedLabel)
             .font(ToolTypography.keycap)
-            .tracking(0.6)
+            .tracking(0.3)
             .foregroundStyle(
                 variant == .standard
                     ? ToolTheme.textPrimary

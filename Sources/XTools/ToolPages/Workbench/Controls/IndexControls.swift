@@ -211,7 +211,7 @@ struct IndexFieldHeader<Accessory: View>: View {
             accessory
                 .layoutPriority(2)
         }
-        .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: ToolMetrics.ControlHeight.small, alignment: .leading)
         .accessibilityElement(children: .contain)
     }
 }

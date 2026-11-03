@@ -101,6 +101,7 @@ struct IndexOptionSwitch: View {
         /// button, editor-background track, secondary label.
         case standalone
         case switchToggle
+        case inlineSwitch
         case embeddedSwitch
         case button
         case checkbox
@@ -108,21 +109,28 @@ struct IndexOptionSwitch: View {
 
     let title: String
     var style: Style = .switchToggle
+    var showsLabel: Bool = true
     @Binding var isOn: Bool
 
-    init(title: String, style: Style = .switchToggle, isOn: Binding<Bool>) {
+    init(title: String, style: Style = .switchToggle, showsLabel: Bool = true, isOn: Binding<Bool>) {
         self.title = title
         self.style = style
+        self.showsLabel = showsLabel
         self._isOn = isOn
     }
 
     var body: some View {
-        IndexToggleSurface(title: title, isOn: $isOn, style: IndexOptionSwitchToggleStyle(style: style))
+        IndexToggleSurface(
+            title: title,
+            isOn: $isOn,
+            style: IndexOptionSwitchToggleStyle(style: style, showsLabel: showsLabel)
+        )
     }
 }
 
 private struct IndexOptionSwitchToggleStyle: ToggleStyle {
     var style: IndexOptionSwitch.Style = .switchToggle
+    var showsLabel: Bool = true
 
     func makeBody(configuration: Configuration) -> some View {
         Group {
@@ -143,17 +151,19 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
         } label: {
             switch style {
             case .standalone:
-                HStack(spacing: 9) {
+                HStack(spacing: showsLabel ? 9 : 0) {
                     IndexSwitchTrack(
                         isOn: configuration.isOn,
                         offBackground: ToolTheme.editorBackground,
-                        offBorder: ToolTheme.border,
+                        offBorder: showsLabel ? ToolTheme.border : ToolTheme.strongBorder,
                         offThumb: ToolTheme.textSecondary
                     )
 
-                    configuration.label
-                        .font(ToolTypography.bodyPlain)
-                        .foregroundStyle(ToolTheme.textSecondary)
+                    if showsLabel {
+                        configuration.label
+                            .font(ToolTypography.bodyPlain)
+                            .foregroundStyle(ToolTheme.textSecondary)
+                    }
                 }
                 .frame(height: ToolMetrics.ControlHeight.compact)
                 .contentShape(Rectangle())
@@ -175,11 +185,25 @@ private struct IndexOptionSwitchToggleStyle: ToggleStyle {
                 }
                 .padding(.horizontal, 4)
                 .frame(height: ToolMetrics.ControlHeight.small)
-                .background(
-                    configuration.isOn ? ToolTheme.selectionFill : Color.clear,
-                    in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
-                )
                 .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
+
+            case .inlineSwitch:
+                HStack(spacing: 6) {
+                    IndexSwitchTrack(
+                        isOn: configuration.isOn,
+                        offBackground: ToolTheme.panelBackground,
+                        offBorder: ToolTheme.strongBorder,
+                        offThumb: ToolTheme.textSecondary
+                    )
+
+                    configuration.label
+                        .font(ToolTypography.bodyPlain)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                }
+                .frame(height: ToolMetrics.ControlHeight.small)
+                .contentShape(Rectangle())
 
             case .embeddedSwitch:
                 IndexEmbeddedSwitchLabel(configuration: configuration)

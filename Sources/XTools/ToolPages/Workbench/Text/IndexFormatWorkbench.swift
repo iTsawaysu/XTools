@@ -217,7 +217,7 @@ struct IndexFormatWorkbench<LeadingControl: View, InputHeader: View, OutputContr
         // Mirrors the 50/50 pane split below: each I/O identity left-aligns to
         // its own pane's leading edge (prototype: STDOUT pinned at left:50%),
         // and the actions right-align inside the output half.
-        HStack(spacing: 0) {
+        HStack(spacing: ToolMetrics.Spacing.sm) {
             HStack(spacing: 6) {
                 IndexBadge("STDIN", tone: .accent, isCapsule: true)
                     .fixedSize(horizontal: true, vertical: false)

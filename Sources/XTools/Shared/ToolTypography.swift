@@ -69,7 +69,7 @@ enum ToolTypography {
     /// Tiny monospaced tag (terminal tags, micro badges).
     static let tagMicro = Font.system(size: 9.5, weight: .semibold, design: .monospaced)
     /// Keycap label for keyboard shortcuts (⌘↩, ⌘K) ensuring crisp glyph rendering.
-    static let keycap = Font.system(size: 11, weight: .medium)
+    static let keycap = Font.system(size: 10.5, weight: .medium, design: .monospaced)
 
     // MARK: - Markdown Preview (indexClay)
 

@@ -136,6 +136,7 @@ struct IndexScrollableKV: View {
     var copyable = true
     var valueLineBreakMode: NSLineBreakMode? = .byCharWrapping
     var valueMotion: IndexValueMotionPolicy = .textSwap
+    var emptyCentered = false
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -151,13 +152,20 @@ struct IndexScrollableKV: View {
         ) { snapshot, animatesRowInsertion in
             resultSurface(snapshot, animatesRowInsertion: animatesRowInsertion)
         } empty: {
-            IndexKV(
-                rows: [],
-                emptyText: emptyText,
-                copyable: copyable,
-                valueLineBreakMode: valueLineBreakMode,
-                valueMotion: valueMotion
-            )
+            if emptyCentered {
+                Text(emptyText)
+                    .font(ToolTypography.bodyPlain)
+                    .foregroundStyle(ToolTheme.textTertiary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            } else {
+                IndexKV(
+                    rows: [],
+                    emptyText: emptyText,
+                    copyable: copyable,
+                    valueLineBreakMode: valueLineBreakMode,
+                    valueMotion: valueMotion
+                )
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }

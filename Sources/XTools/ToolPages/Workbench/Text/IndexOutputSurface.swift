@@ -13,7 +13,7 @@ struct IndexOutputSurface: View {
     var colorize: ((String) -> AttributedString)? = nil
     var embedsFlat = false
 
-    private var showsGutter: Bool { lineNumbers }
+    private var showsGutter: Bool { lineNumbers && !text.isEmpty }
     private var effectiveMinHeight: CGFloat { fillsHeight ? 60 : minHeight }
 
     var body: some View {

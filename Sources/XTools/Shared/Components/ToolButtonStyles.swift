@@ -52,7 +52,7 @@ struct ToolSmallButtonStyle: ButtonStyle {
                 .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(done ? ToolTheme.success : ToolTheme.textSecondary)
                 .padding(.horizontal, 9)
-                .frame(height: ToolMetrics.ControlHeight.compact)
+                .frame(height: ToolMetrics.ControlHeight.compact28)
                 .background(background, in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
