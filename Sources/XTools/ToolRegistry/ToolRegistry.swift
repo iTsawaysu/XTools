@@ -219,7 +219,7 @@ extension ToolRegistry {
                 id: "case-converter",
                 title: "大小写转换",
                 categoryID: .converter,
-                systemImage: "textformat.size",
+                systemImage: "arrow.2.squarepath",
                 keywords: ["case", "大小写"],
                 aliases: [
                     ToolAlias("camelCase", matching: ["camel"]),

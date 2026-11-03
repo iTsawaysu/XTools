@@ -33,21 +33,33 @@ struct RootPreferencesSheet: View {
                 .frame(height: 0.5)
                 .padding(.vertical, 20)
 
-            VStack(alignment: .leading, spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("外观")
                         .font(ToolTypography.label)
                         .foregroundStyle(ToolTheme.textSecondary)
-                    Picker("主题", selection: $themeName) {
-                        Text("跟随系统").tag(AppThemePreference.system.rawValue)
-                        Text("浅色").tag(AppThemePreference.light.rawValue)
-                        Text("深色").tag(AppThemePreference.dark.rawValue)
+                    HStack(alignment: .center, spacing: 12) {
+                        Text("主题")
+                            .font(ToolTypography.bodyMedium)
+                            .foregroundStyle(ToolTheme.textPrimary)
+                        Spacer(minLength: 12)
+                        IndexSegmentedControl(
+                            items: [
+                                (AppThemePreference.system.rawValue, "跟随系统"),
+                                (AppThemePreference.light.rawValue, "浅色"),
+                                (AppThemePreference.dark.rawValue, "深色")
+                            ],
+                            selection: $themeName
+                        )
+                        .accessibilityLabel("主题")
                     }
-                    .pickerStyle(.segmented)
-                    .accessibilityLabel("主题")
                 }
 
-                Toggle(isOn: $autoResumeLastTool) {
+                Rectangle()
+                    .fill(ToolTheme.border)
+                    .frame(height: 0.5)
+
+                HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("启动时继续上次工具")
                             .font(ToolTypography.bodyMedium)
@@ -56,8 +68,15 @@ struct RootPreferencesSheet: View {
                             .font(ToolTypography.caption)
                             .foregroundStyle(ToolTheme.textSecondary)
                     }
+                    Spacer(minLength: 12)
+                    IndexOptionSwitch(
+                        title: "启动时继续上次工具",
+                        style: .standalone,
+                        showsLabel: false,
+                        isOn: $autoResumeLastTool
+                    )
                 }
-                .toggleStyle(.switch)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             Spacer(minLength: 0)
@@ -69,7 +88,7 @@ struct RootPreferencesSheet: View {
             .foregroundStyle(ToolTheme.textTertiary)
         }
         .padding(24)
-        .frame(width: 440, height: 300)
+        .frame(width: 440, height: 280)
         .background(ToolTheme.panelBackground)
         .background(WindowAppearanceOwner(preference: themePreference))
         .appThemeEnvironment(preference: themePreference, source: systemAppearanceSource)

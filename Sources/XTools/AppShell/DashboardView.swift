@@ -221,7 +221,7 @@ struct DashboardView: View {
     }
 
     private var fourColumnGrid: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+        [GridItem(.adaptive(minimum: 150), spacing: 8)]
     }
 }
 

@@ -172,8 +172,10 @@ struct SidebarToolRow: View {
                         .fontWeight(shouldHighlight ? .medium : .regular)
                         .foregroundStyle(shouldHighlight ? ToolTheme.textPrimary : ToolTheme.textSecondary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .allowsTightening(true)
                         .truncationMode(.tail)
-                        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                        .help(title)
 
                     Spacer(minLength: 0)
                 }
