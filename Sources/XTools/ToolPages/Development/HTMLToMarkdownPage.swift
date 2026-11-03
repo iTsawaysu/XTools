@@ -51,7 +51,9 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
             subtitle: "粘贴 HTML 或获取 URL，转换为 Markdown。",
             workspaceSemantic: .structuredEditorTransform
         ) {
-            IndexFormatWorkbench(
+            VStack(spacing: ToolMetrics.Spacing.sm) {
+                urlBar
+                IndexFormatWorkbench<AnyView, EmptyView, AnyView>(
                 inputTitle: "输入",
                 outputTitle: "输出",
                 input: inputBinding,
@@ -60,7 +62,7 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 diagnostic: session.error ?? session.warning,
                 diagnosticTone: session.error == nil ? .warning : .error,
                 diagnosticDetail: session.diagnostic,
-                outputLineNumbers: false,
+                outputLineNumbers: true,
                 clearDisabled: !session.canClear,
                 onClear: session.clear,
                 outputPresentation: workspace.showsRenderedPreview ? .markdownPreview : .nativeReadOnlyText,
@@ -68,53 +70,63 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                 showsOutputSave: true,
                 outputFileName: "markdown-output.md",
                 leadingControl: {
-                    IndexOptionSwitch(
-                        title: "仅提取正文",
-                        style: .button,
-                        isOn: $session.extractArticleOnly
+                    AnyView(
+                        IndexOptionSwitch(
+                            title: "仅提取正文",
+                            style: .button,
+                            isOn: $session.extractArticleOnly
+                        )
                     )
-                },
-                inputHeader: {
-                    HStack(spacing: 6) {
-                        urlInput
-                        fetchButton
-                            .fixedSize(horizontal: true, vertical: false)
-                        if session.isURLProcessing {
-                            ToolButton(
-                                "停止",
-                                systemImage: IndexActionSymbol.stop,
-                                role: .secondary,
-                                size: .compact28,
-                                help: "停止解析网页",
-                                accessibilityLabel: "停止解析网页",
-                                action: { session.cancelURLFetch() }
-                            )
-                            .fixedSize(horizontal: true, vertical: false)
-                        }
-                    }
                 },
                 outputControl: {
-                    IndexSegmentedControl(
-                        items: [("source", "源码"), ("preview", "预览")],
-                        selection: Binding(
-                            get: { workspace.showsRenderedPreview ? "preview" : "source" },
-                            set: { workspace.showsRenderedPreview = $0 == "preview" }
-                        ),
-                        density: .compact
+                    AnyView(
+                        IndexSegmentedControl(
+                            items: [("source", "源码"), ("preview", "预览")],
+                            selection: Binding(
+                                get: { workspace.showsRenderedPreview ? "preview" : "source" },
+                                set: { workspace.showsRenderedPreview = $0 == "preview" }
+                            ),
+                            density: .compact
+                        )
+                        .fixedSize(horizontal: true, vertical: false)
                     )
-                    .fixedSize(horizontal: true, vertical: false)
                 }
             )
             .environment(
                 \.markdownPreviewAuthorizationGeneration,
                 session.previewAuthorizationGeneration
             )
+            .frame(maxHeight: .infinity)
+            }
         }
+    }
+
+    private var urlBar: some View {
+        HStack(spacing: 6) {
+            urlInput
+            fetchButton
+                .fixedSize(horizontal: true, vertical: false)
+            if session.isURLProcessing {
+                ToolButton(
+                    "停止",
+                    systemImage: IndexActionSymbol.stop,
+                    role: .secondary,
+                    size: .compact28,
+                    help: "停止解析网页",
+                    accessibilityLabel: "停止解析网页",
+                    action: { session.cancelURLFetch() }
+                )
+                .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 6)
+        .toolFieldSurface(height: nil)
     }
 
     private var urlInput: some View {
         HStack(spacing: 7) {
-            Image(systemName: "magnifyingglass")
+            Image(systemName: "link")
                 .font(.system(size: ToolMetrics.IconSize.small))
                 .foregroundStyle(ToolTheme.textTertiary)
                 .accessibilityHidden(true)

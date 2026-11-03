@@ -11,7 +11,7 @@ enum MacDeviceInformationCollector {
         let screens = NSScreen.screens
 
         return DeviceInformationSnapshot(
-            operatingSystemVersion: process.operatingSystemVersionString,
+            operatingSystemVersion: normalizedOperatingSystemVersion(process.operatingSystemVersionString),
             architecture: architectureName,
             machineModel: sysctlString("hw.model"),
             cpuName: sysctlString("machdep.cpu.brand_string"),
@@ -24,6 +24,14 @@ enum MacDeviceInformationCollector {
             localNetworkAddress: DeviceInspector.localNetworkAddress(family: .ipv4),
             displays: screens.map(Self.displaySnapshot)
         )
+    }
+
+    private static func normalizedOperatingSystemVersion(_ raw: String) -> String {
+        var value = raw
+        for prefix in ["版本", "Version "] where value.hasPrefix(prefix) {
+            value.removeFirst(prefix.count)
+        }
+        return value
     }
 
     private static var architectureName: String {

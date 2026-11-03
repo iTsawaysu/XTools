@@ -134,16 +134,19 @@ private struct IndexPasswordGeneratorWorkspaceContent: View {
                 IndexStepperInput(value: $workspace.quantity, range: 1...20)
                     .onChange(of: workspace.quantity) { _, _ in generate() }
 
-                IndexOptionSwitch(title: "a-z", isOn: $workspace.lower)
-                    .onChange(of: workspace.lower) { _, _ in generate() }
-                IndexOptionSwitch(title: "A-Z", isOn: $workspace.upper)
-                    .onChange(of: workspace.upper) { _, _ in generate() }
-                IndexOptionSwitch(title: "0-9", isOn: $workspace.numbers)
-                    .onChange(of: workspace.numbers) { _, _ in generate() }
-                IndexOptionSwitch(title: "符号", isOn: $workspace.symbols)
-                    .onChange(of: workspace.symbols) { _, _ in generate() }
-                IndexOptionSwitch(title: "排除易混淆", isOn: $workspace.excludeAmbiguous)
-                    .onChange(of: workspace.excludeAmbiguous) { _, _ in generate() }
+                HStack(spacing: ToolMetrics.Spacing.md) {
+                    IndexOptionSwitch(title: "a-z", isOn: $workspace.lower)
+                        .onChange(of: workspace.lower) { _, _ in generate() }
+                    IndexOptionSwitch(title: "A-Z", isOn: $workspace.upper)
+                        .onChange(of: workspace.upper) { _, _ in generate() }
+                    IndexOptionSwitch(title: "0-9", isOn: $workspace.numbers)
+                        .onChange(of: workspace.numbers) { _, _ in generate() }
+                    IndexOptionSwitch(title: "符号", isOn: $workspace.symbols)
+                        .onChange(of: workspace.symbols) { _, _ in generate() }
+                    IndexOptionSwitch(title: "排除易混淆", isOn: $workspace.excludeAmbiguous)
+                        .onChange(of: workspace.excludeAmbiguous) { _, _ in generate() }
+                }
+                .fixedSize()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 

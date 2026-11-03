@@ -202,9 +202,9 @@ private struct IndexBasicAuthWorkspaceContent: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if showsParsedPassword {
-                ToolCopyButton(text: value, title: "复制", iconOnly: true)
-            }
+            ToolCopyButton(text: value, title: "复制", iconOnly: true)
+                .opacity(showsParsedPassword ? 1 : 0)
+                .disabled(!showsParsedPassword)
 
             IndexIconButton(
                 systemImage: showsParsedPassword ? "eye.slash" : "eye",
@@ -245,7 +245,8 @@ private struct IndexBasicAuthWorkspaceContent: View {
         HStack(spacing: 12) {
             Text(title).fieldLabel(width: credentialLabelWidth)
             content()
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: 420)
+            Spacer()
         }
     }
 

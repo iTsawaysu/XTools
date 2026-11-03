@@ -407,7 +407,7 @@ private struct IndexJWTWorkspaceContent: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Divider()
+                ToolDivider()
 
                 localCheckResultView
 
@@ -459,7 +459,7 @@ private struct IndexJWTWorkspaceContent: View {
                     localCheckAxisRow(presentation.timeClaims)
 
                     if !presentation.details.isEmpty {
-                        Divider()
+                        ToolDivider()
                         Text("检查明细")
                             .font(ToolTypography.panelTitle)
                             .foregroundStyle(ToolTheme.textSecondary)

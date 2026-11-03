@@ -135,7 +135,7 @@ private struct IndexBaseConverterWorkspaceContent: View {
     var body: some View {
         IndexPage("进制转换", subtitle: "在二进制、八进制、十进制、十六进制之间转换。", workspaceSemantic: .naturalHeightShortResultPanel) {
             IndexActionBar {
-                IndexOptionGroup {
+                HStack(spacing: ToolMetrics.Spacing.sm) {
                     IndexOptionLabel("输入进制")
                     IndexSegmentedControl(
                         items: [("2", "二进制"), ("8", "八进制"), ("10", "十进制"), ("16", "十六进制")],
@@ -173,6 +173,14 @@ private struct IndexBaseConverterWorkspaceContent: View {
                         .frame(minHeight: 70)
                 }
             }
+        } else if let error = workspace.error {
+            IndexEmptyState(
+                title: "无法换算",
+                systemImage: "exclamationmark.triangle",
+                message: error,
+                density: .list
+            )
+            .frame(minHeight: 70)
         } else {
             IndexShortResultKV(rows: rows, emptyText: IndexEmptyStateCopy.autoCalculate("数值"), valueMotion: .immediate)
         }

@@ -186,6 +186,8 @@ private struct IndexTextEncryptionWorkspaceContent: View {
                 wideControls
             } compactControls: {
                 compactControls
+            } primaryAction: {
+                primaryActionButton
             }
 
             IndexTextConversionWorkbench(
@@ -210,10 +212,7 @@ private struct IndexTextEncryptionWorkspaceContent: View {
             modeControl
             algorithmControlGroup
             widePasswordInput
-                .layoutPriority(1)
-            primaryActionButton
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var compactControls: some View {
@@ -223,17 +222,14 @@ private struct IndexTextEncryptionWorkspaceContent: View {
                 algorithmControlGroup
             }
 
-            HStack(spacing: 9) {
-                compactPasswordInput
-                primaryActionButton
-            }
+            compactPasswordInput
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var modeControl: some View {
         IndexSegmentedControl(items: [("enc", "加密"), ("dec", "解密")], selection: modeSelection)
-            .frame(width: 110, height: 38)
+            .frame(width: 110)
     }
 
     private var algorithmSelector: some View {
@@ -247,12 +243,17 @@ private struct IndexTextEncryptionWorkspaceContent: View {
 
     private var algorithmControlGroup: some View {
         HStack(spacing: 6) {
+            Text("算法")
+                .font(ToolTypography.caption)
+                .foregroundStyle(ToolTheme.textSecondary)
+                .fixedSize()
             algorithmSelector
             if let weakAlgorithmDiagnostic {
                 IndexDiagnosticStatusButton(payload: weakAlgorithmDiagnostic)
                     .toolTransition(ToolMotion.Transition.diagnostic, reduceMotion: reduceMotion)
             }
         }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var primaryActionButton: some View {
@@ -261,9 +262,9 @@ private struct IndexTextEncryptionWorkspaceContent: View {
             systemImage: "play.fill",
             role: .primary,
             size: .cta32,
-            help: "\(primaryActionTitle)文本" + (entryGeneration > 0 ? "（⌘↩）" : ""),
-            keycap: entryGeneration > 0 ? "⌘↩" : nil,
-            accessibilityLabel: primaryActionTitle,
+            help: "\(primaryActionTitle)文本（⌘↩）",
+            keycap: "⌘↩",
+            accessibilityLabel: "\(primaryActionTitle)（⌘↩）",
             action: run
         )
         .frame(minWidth: 76)
@@ -272,7 +273,7 @@ private struct IndexTextEncryptionWorkspaceContent: View {
 
     private var widePasswordInput: some View {
         passwordInput
-            .frame(minWidth: 160, idealWidth: 220, maxWidth: .infinity)
+            .frame(minWidth: 160, idealWidth: 220, maxWidth: 260)
     }
 
     private var compactPasswordInput: some View {

@@ -134,9 +134,9 @@ private struct IndexUserAgentWorkspaceContent: View {
                             .padding(ToolMetrics.Spacing.sm)
                         } empty: {
                             IndexEmptyState(
-                                title: IndexEmptyStateCopy.noParsedResult,
-                                systemImage: "globe",
-                                message: IndexEmptyStateCopy.autoShow("User-Agent"),
+                                title: workspace.error == nil ? IndexEmptyStateCopy.noParsedResult : "无法解析此 User-Agent",
+                                systemImage: workspace.error == nil ? "globe" : "exclamationmark.triangle",
+                                message: workspace.error ?? IndexEmptyStateCopy.autoShow("User-Agent"),
                                 density: .list
                             )
                             .frame(minHeight: 70)

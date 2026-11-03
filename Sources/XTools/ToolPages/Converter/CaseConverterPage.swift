@@ -145,9 +145,18 @@ private struct IndexCaseConverterWorkspaceContent: View {
             }
             // 短派生结果自然展开，由页面外层滚动承载长值换行后的高度。
             IndexPanel("转换结果") {
-                IndexShortResultKV(rows: rows, emptyText: IndexEmptyStateCopy.autoShow("文本"), valueMotion: .immediate)
+                IndexShortResultKV(
+                    rows: rows,
+                    emptyText: workspace.isProcessing ? "正在转换…" : IndexEmptyStateCopy.autoShow("文本"),
+                    valueMotion: .immediate
+                )
             } accessory: {
-                ToolCopyButton(text: allResultsText, title: "全部复制")
+                HStack(spacing: 8) {
+                    if workspace.isProcessing {
+                        IndexProgressLabel(message: "正在转换…")
+                    }
+                    ToolCopyButton(text: allResultsText, title: "全部复制")
+                }
             }
         }
     }

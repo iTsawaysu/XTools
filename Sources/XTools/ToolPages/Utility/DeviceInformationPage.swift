@@ -20,6 +20,7 @@ struct IndexDeviceInfoPage: View {
             IndexPanel("macOS 设备信息") {
                 ScrollView {
                     IndexKV(rows: rows, emptyText: "加载设备信息中…", copyable: true)
+                        .padding(.bottom, ToolMetrics.Spacing.lg)
                 }
             } accessory: {
                 HStack(spacing: 8) {

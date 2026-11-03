@@ -239,7 +239,7 @@ private struct IndexCrontabWorkspaceContent: View {
                     .font(ToolTypography.monoLabel)
                     .foregroundStyle(ToolTheme.accentHover)
             } else {
-                Text(Self.utcRunFormatter.string(from: date))
+                Text("UTC \(Self.utcRunFormatter.string(from: date))")
                     .font(ToolTypography.monoCaption)
                     .foregroundStyle(ToolTheme.textTertiary)
                     .textSelection(.enabled)

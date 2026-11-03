@@ -56,7 +56,7 @@ private struct IndexColorWorkspaceContent: View {
                 VStack(alignment: .leading, spacing: 0) {
                     resultRows(commonValues, emptyText: IndexEmptyStateCopy.autoShow("有效 CSS 颜色"))
 
-                    Divider()
+                    ToolDivider()
 
                     advancedFormatsDisclosure
                 }
@@ -68,7 +68,13 @@ private struct IndexColorWorkspaceContent: View {
         Group {
             RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)
                 .fill(ToolTheme.editorBackground)
-                .overlay { Rectangle().fill(Color(nsColor: previewColor)).clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous)) }
+                .overlay {
+                    ZStack {
+                        IndexCheckerboard()
+                        Rectangle().fill(Color(nsColor: previewColor))
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field, style: .continuous))
+                }
                 .frame(width: 132, height: 132)
                 .overlay { RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.field).strokeBorder(ToolTheme.border, lineWidth: 0.5) }
                 .accessibilityElement()
@@ -81,7 +87,7 @@ private struct IndexColorWorkspaceContent: View {
                         "取色",
                         systemImage: "eyedropper",
                         role: .secondary,
-                        size: .compact28,
+                        size: .field38,
                         help: "打开系统取色器（包含透明度）",
                         accessibilityLabel: "打开系统取色器",
                         action: { showsSystemColorPicker.toggle() }
@@ -111,7 +117,7 @@ private struct IndexColorWorkspaceContent: View {
 
                 hslControls
             }
-            .frame(maxWidth: 620)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -149,7 +155,7 @@ private struct IndexColorWorkspaceContent: View {
                 accessibilityName: "亮度"
             )
 
-            Divider()
+            ToolDivider()
 
             slider(
                 title: "Alpha",
@@ -306,7 +312,7 @@ private struct IndexColorWorkspaceContent: View {
                 ForEach(values) { value in
                     ColorFormatResultRow(value: value)
                     if value.id != values.last?.id {
-                        Divider()
+                        ToolDivider()
                     }
                 }
             }

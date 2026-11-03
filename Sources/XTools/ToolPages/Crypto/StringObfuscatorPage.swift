@@ -207,10 +207,8 @@ private struct IndexStringObfuscatorWorkspaceContent: View {
     var body: some View {
         IndexPage("字符串遮蔽", subtitle: "保留首尾指定位数并遮蔽中部；遮蔽不是加密，仍可能泄露长度和结构。", workspaceSemantic: .securityTransformWorkspace) {
             IndexWorkbenchControlBar {
-                HStack(spacing: 8) {
-                    obfuscationControls
-                }
-                .fixedSize(horizontal: true, vertical: false)
+                obfuscationControls
+                    .fixedSize(horizontal: true, vertical: false)
             } compactControls: {
                 IndexFlowLayout(spacing: 8, lineSpacing: 8) {
                     obfuscationControls
@@ -236,35 +234,28 @@ private struct IndexStringObfuscatorWorkspaceContent: View {
         }
     }
 
-    @ViewBuilder
     private var obfuscationControls: some View {
         IndexOptionGroup {
             IndexOptionLabel("保留首")
-            IndexNumberInput(value: $workspace.keepFirst, range: 0...20, fieldWidth: 36)
-        }
-
-        IndexOptionGroup {
+            IndexNumberInput(value: $workspace.keepFirst, range: 0...20, fieldWidth: 36, embedsFlat: true)
+            IndexOptionDivider()
             IndexOptionLabel("保留尾")
-            IndexNumberInput(value: $workspace.keepLast, range: 0...20, fieldWidth: 36)
-        }
-
-        IndexOptionGroup {
-            IndexOptionSwitch(title: "保留空格", style: .standalone, isOn: $workspace.keepSpaces)
-        }
-
-        IndexOptionGroup {
-            HStack(spacing: 6) {
-                IndexOptionLabel("替换字符")
-                IndexTextInput(
-                    placeholder: "*",
-                    text: Binding(
-                        get: { workspace.replacementChar },
-                        set: { workspace.setReplacementCharacter($0) }
-                    ),
-                    height: ToolMetrics.ControlHeight.small
-                )
-                    .frame(width: 44)
-            }
+            IndexNumberInput(value: $workspace.keepLast, range: 0...20, fieldWidth: 36, embedsFlat: true)
+            IndexOptionDivider()
+            IndexOptionSwitch(title: "保留空格", style: .inlineSwitch, isOn: $workspace.keepSpaces)
+            IndexOptionDivider()
+            IndexOptionLabel("替换字符")
+            IndexTextInput(
+                placeholder: "*",
+                text: Binding(
+                    get: { workspace.replacementChar },
+                    set: { workspace.setReplacementCharacter($0) }
+                ),
+                height: ToolMetrics.ControlHeight.small,
+                embedsFlat: true,
+                focusRingWhenFlat: true
+            )
+            .frame(width: 44)
         }
     }
 

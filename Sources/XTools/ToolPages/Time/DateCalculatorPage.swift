@@ -103,7 +103,9 @@ private struct IndexDateCalcWorkspaceContent: View {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 12) {
                         startField()
+                            .frame(maxWidth: 320)
                         endField()
+                            .frame(maxWidth: 320)
                     }
                     VStack(alignment: .leading, spacing: 12) {
                         startField()
@@ -134,6 +136,7 @@ private struct IndexDateCalcWorkspaceContent: View {
         IndexPanel(mode.panelTitle) {
             VStack(alignment: .leading, spacing: 14) {
                 baseField()
+                    .frame(maxWidth: 420)
 
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 8) {

@@ -35,7 +35,7 @@ private struct IndexRomanWorkspaceContent: View {
         IndexPage("罗马数字", subtitle: "阿拉伯数字与罗马数字互转。", workspaceSemantic: .naturalHeightShortResultPanel) {
             // 模式切换保留（正当选项），「清空」收进输入面板标题栏（SPEC §P5b）。
             IndexActionBar {
-                IndexSegmentedControl(items: [("toRoman", "数字→罗马"), ("toNum", "罗马→数字")], selection: modeSelection)
+                IndexSegmentedControl(items: [("toRoman", "数字 → 罗马"), ("toNum", "罗马 → 数字")], selection: modeSelection)
             }
             IndexPanel("输入") {
                 IndexTextInput(placeholder: "例如 2024 或 MMXXIV", text: $workspace.input, autoFocus: true)
@@ -53,21 +53,51 @@ private struct IndexRomanWorkspaceContent: View {
                 )
             }
             IndexPanel("结果") {
-                IndexModeContent(id: output == IndexEmptyStateCopy.notAvailable) { isEmpty in
-                    if isEmpty {
-                        IndexEmptyState(
-                            title: "等待输入",
-                            systemImage: "arrow.left.arrow.right",
-                            message: "输入数字或罗马数字后自动转换。",
-                            density: .list
-                        )
-                        .frame(minHeight: 96)
-                    } else {
-                        IndexHeroStat(value: output, copyable: true)
-                    }
-                }
+                resultContent
             }
         }
+    }
+
+    @ViewBuilder
+    private var resultContent: some View {
+        IndexModeContent(id: resultStateID) { state in
+            switch state {
+            case .empty:
+                IndexEmptyState(
+                    title: "等待输入",
+                    systemImage: "arrow.left.arrow.right",
+                    message: "输入数字或罗马数字后自动转换。",
+                    density: .list
+                )
+                .frame(minHeight: 96)
+            case .error:
+                IndexEmptyState(
+                    title: "无法转换",
+                    systemImage: "exclamationmark.triangle",
+                    message: workspace.error ?? "请检查输入内容。",
+                    density: .list
+                )
+                .frame(minHeight: 96)
+            case .value:
+                IndexHeroStat(value: output, copyable: true)
+            }
+        }
+    }
+
+    private enum ResultState: Hashable {
+        case empty
+        case error
+        case value
+    }
+
+    private var resultStateID: ResultState {
+        if workspace.input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .empty
+        }
+        if workspace.error != nil || output == IndexEmptyStateCopy.notAvailable {
+            return .error
+        }
+        return .value
     }
 
     private func changeMode(to newMode: String) {

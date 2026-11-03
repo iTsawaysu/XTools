@@ -116,9 +116,13 @@ private struct IndexHTTPStatusRow: View {
                 iconOnly: true
             )
         }
+        .padding(.horizontal, ToolMetrics.Spacing.xs)
         .padding(.vertical, 10)
-        .background(isHovering ? ToolTheme.hoverFill : Color.clear)
-        .contentShape(Rectangle())
+        .background(
+            isHovering ? ToolTheme.hoverFill : Color.clear,
+            in: RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: ToolMetrics.CornerRadius.control, style: .continuous))
         .onHover { hovering in
             withToolAnimation(ToolMotion.Preset.controlFeedback, reduceMotion: reduceMotion) { isHovering = hovering }
         }
@@ -126,10 +130,12 @@ private struct IndexHTTPStatusRow: View {
 
     private func statusTone(_ family: Int) -> IndexBadgeTone {
         switch family {
+        case 1: return .neutral
         case 2: return .success
-        case 4: return .warning
+        case 3: return .warning
+        case 4: return .accent
         case 5: return .error
-        default: return .accent
+        default: return .neutral
         }
     }
 }

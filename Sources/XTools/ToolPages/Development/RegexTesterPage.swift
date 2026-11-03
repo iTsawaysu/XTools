@@ -133,7 +133,7 @@ private struct IndexRegexWorkspaceContent: View {
                                     .foregroundStyle(ToolTheme.textSecondary)
 
                                 IndexTextInput(
-                                    placeholder: #"\b\w+@\w+\.\w+\b"#,
+                                    placeholder: #"示例：\b\w+@\w+\.\w+\b"#,
                                     text: $workspace.pattern,
                                     embedsFlat: true,
                                     onFocusChange: { isPatternFocused = $0 }

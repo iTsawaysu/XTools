@@ -163,6 +163,9 @@ struct ImageUploadEmptyPanel: View {
                 )
 
                 if !isProcessing {
+                    Text("支持 PNG/JPG/WebP/HEIC，单张图片")
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.textTertiary)
                     ToolButton(
                         "选择图片",
                         systemImage: "photo",

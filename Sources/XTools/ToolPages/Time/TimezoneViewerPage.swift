@@ -77,6 +77,7 @@ struct IndexTimezoneViewerPage: View {
                         }
                     }
                     .padding(ToolMetrics.Spacing.sm)
+                    .padding(.bottom, ToolMetrics.Spacing.lg)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

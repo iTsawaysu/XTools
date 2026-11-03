@@ -149,12 +149,15 @@ private struct IndexJSONDiffWorkspaceContent: View {
             onClear: workspace.clear,
             clearDisabled: !workspace.hasAnyContent,
             leadingControl: {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     IndexOptionSwitch(title: "忽略数组顺序", style: .button, isOn: $workspace.ignoreArrayOrder)
-                    IndexIconButton(
+                    ToolButton(
                         systemImage: "chevron.up.chevron.down",
+                        role: .secondary,
+                        size: .compact28,
+                        state: workspace.foldUnchanged ? .active : .idle,
                         help: "折叠未变更行",
-                        isActive: workspace.foldUnchanged
+                        accessibilityLabel: "折叠未变更行"
                     ) {
                         workspace.foldUnchanged.toggle()
                     }

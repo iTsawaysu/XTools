@@ -51,15 +51,20 @@ private struct IndexHashTextWorkspaceContent: View {
             workspaceSemantic: .boundedLongTextInput
         ) {
             IndexActionBar {
-                IndexSegmentedControl(
-                    items: [
-                        ("hex", "Hex"),
-                        ("binary", "Binary"),
-                        ("base64", "Base64"),
-                        ("base64url", "Base64url")
-                    ],
-                    selection: $workspace.encoding
-                )
+                HStack(spacing: 8) {
+                    Text("输出编码")
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.textSecondary)
+                    IndexSegmentedControl(
+                        items: [
+                            ("hex", "Hex"),
+                            ("binary", "Binary"),
+                            ("base64", "Base64"),
+                            ("base64url", "Base64url")
+                        ],
+                        selection: $workspace.encoding
+                    )
+                }
             }
             IndexPanel("输入") {
                 IndexWorkspaceTextArea(

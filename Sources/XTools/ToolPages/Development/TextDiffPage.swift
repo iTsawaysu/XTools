@@ -41,10 +41,13 @@ private struct IndexTextDiffWorkspaceContent: View {
                 HStack(spacing: 6) {
                     IndexOptionSwitch(title: "忽略空白", style: .button, isOn: $workspace.ignoreWhitespace)
                     IndexOptionSwitch(title: "忽略大小写", style: .button, isOn: $workspace.ignoreCase)
-                    IndexIconButton(
+                    ToolButton(
                         systemImage: "chevron.up.chevron.down",
+                        role: .secondary,
+                        size: .compact28,
+                        state: workspace.foldUnchanged ? .active : .idle,
                         help: "折叠未变更行",
-                        isActive: workspace.foldUnchanged
+                        accessibilityLabel: "折叠未变更行"
                     ) {
                         workspace.foldUnchanged.toggle()
                     }

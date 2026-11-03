@@ -74,6 +74,7 @@ private struct IndexChronometerWorkspaceContent: View {
                         )
                         ToolButton(
                             "计次",
+                            systemImage: "flag",
                             role: .secondary,
                             size: .compact28,
                             isEnabled: chronometer.canRecordLap,
@@ -93,7 +94,7 @@ private struct IndexChronometerWorkspaceContent: View {
             .withoutDiagnosticStatusSlot()
             // SPEC §P6：计次记录可无限增长，结果面板吃满剩余高度，超长在面板内部滚动。
             IndexPanel("计次记录") {
-                IndexScrollableKV(rows: lapRows, emptyText: IndexEmptyStateCopy.noRecords, copyable: false, valueMotion: .immediate)
+                IndexScrollableKV(rows: lapRows, emptyText: IndexEmptyStateCopy.noRecords, copyable: false, valueMotion: .immediate, emptyCentered: true)
             }
             .verticallyFilling()
             .withoutDiagnosticStatusSlot()

@@ -251,7 +251,7 @@ private func dateTimeResultRows(
         ("Unix 毫秒", millisecondsText, nil),
         ("ISO 8601", DateTimeFormatters.iso8601.string(from: date), nil),
         ("人类时间（本地）", localHuman, nil),
-        ("本地时间", dateTimeLocalDisplayText(for: date), nil),
+        ("本地时间（中文格式）", dateTimeLocalDisplayText(for: date), nil),
         ("UTC", dateTimeUTCDisplayText(for: date), nil)
     ]
 }

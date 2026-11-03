@@ -69,6 +69,7 @@ private struct IndexChmodWorkspaceContent: View {
             IndexPanel("八进制权限") {
                 IndexTextInput(placeholder: "644 或 4755", text: octalBinding, height: ToolMetrics.ControlHeight.field, alignment: .center)
                     .font(ToolTypography.valueMedium)
+                    .frame(maxWidth: 280)
                     .accessibilityLabel("Chmod 八进制权限")
                     .accessibilityHint("输入三位 rwx 权限或四位特殊权限模式")
                     .indexWorkspaceDiagnostic(workspace.error)
@@ -95,7 +96,7 @@ private struct IndexChmodWorkspaceContent: View {
                         x: permissionBinding(\ChmodMode.other.execute)
                     )
 
-                    Divider().overlay(ToolTheme.border)
+                    ToolDivider()
 
                     IndexFlowLayout(spacing: 14, lineSpacing: 8) {
                         IndexOptionSwitch(title: "setuid", style: .standalone, isOn: permissionBinding(\ChmodMode.setuid))
@@ -147,8 +148,12 @@ private struct IndexChmodWorkspaceContent: View {
                 .foregroundStyle(ToolTheme.textSecondary)
                 .frame(width: 70, alignment: .leading)
             IndexOptionSwitch(title: "读 r", style: .standalone, isOn: r)
+                .frame(maxWidth: .infinity, alignment: .leading)
             IndexOptionSwitch(title: "写 w", style: .standalone, isOn: w)
+                .frame(maxWidth: .infinity, alignment: .leading)
             IndexOptionSwitch(title: "执行 x", style: .standalone, isOn: x)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: 520, alignment: .leading)
     }
 }

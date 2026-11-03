@@ -113,7 +113,7 @@ private struct IndexFileTypeDetectorWorkspaceContent: View {
                         } empty: {
                             IndexEmptyState(
                                 title: "尚未检测文件",
-                                systemImage: "photo.on.rectangle.angled",
+                                systemImage: "doc.text.magnifyingglass",
                                 message: "选择文件后显示检测结果"
                             )
                         }
