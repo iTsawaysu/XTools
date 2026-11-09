@@ -116,6 +116,17 @@ struct ToolSearchEngineTests {
         #expect(matches.first?.id == "crontab-generator")
     }
 
+    @Test func timerQueryStartsWithChronometer() {
+        let matches = ToolRegistry.default.matchingTools(query: "timer")
+        #expect(matches.first?.id == "chronometer")
+        #expect(!matches.prefix(5).map(\.id).contains("crontab-generator"))
+    }
+
+    @Test func scheduleQueryStillFindsCrontabGenerator() {
+        let matches = ToolRegistry.default.matchingTools(query: "schedule")
+        #expect(matches.first?.id == "crontab-generator")
+    }
+
     @Test func pinyinInitialsAndSyllablesMatchChineseTitles() {
         let defaultRegistry = ToolRegistry.default
 

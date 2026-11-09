@@ -79,7 +79,9 @@ final class DashboardStore: ObservableObject {
     }
 
     func recordLaunchIfChanged(toolID: ToolID, previousToolID: ToolID?, at date: Date? = nil) {
-        guard previousToolID != toolID else { return }
+        guard previousToolID != toolID,
+              preferences.activity.last?.toolID != toolID
+        else { return }
         recordLaunch(toolID: toolID, at: date)
     }
 

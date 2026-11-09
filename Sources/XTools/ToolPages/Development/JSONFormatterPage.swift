@@ -118,6 +118,9 @@ private struct IndexJSONFormatterWorkspaceContent: View {
             onClear: workspace.clear,
             leadingControl: {
                 HStack(spacing: 6) {
+                    Text("缩进")
+                        .font(ToolTypography.caption)
+                        .foregroundStyle(ToolTheme.textSecondary)
                     IndexSegmentedControl(
                         items: JSONFormatterToolWorkspaceModel.FormatMode.allCases.map { ($0.id, $0.label) },
                         selection: formatModeSelection,

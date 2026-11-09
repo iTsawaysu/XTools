@@ -89,10 +89,9 @@ struct RootView: View {
                     isSectionExpanded: { navigationActions.isSectionExpanded($0) },
                     onToggleSection: { navigationActions.toggleSection($0) },
                     onToggleSectionExclusive: { navigationActions.toggleSection($0, exclusive: true) },
-                    onToggleTheme: toggleTheme,
                     onPreferences: showPreferences,
-                    themeTitle: themePreference.title,
-                    themeIcon: themePreference.icon
+                    themePreference: themePreference,
+                    onSelectTheme: setTheme
                 )
                 .frame(width: viewModel.sidebarVisibility == .visible ? SidebarView.idealWidth : 0)
                 .clipped()
@@ -161,10 +160,17 @@ struct RootView: View {
             smartPaste.noteSelectedTool(viewModel.selectedToolID)
             smartPaste.refresh(registry: registry)
             navigationActions.selectDefaultToolIfNeeded(sidebarProjection.defaultToolID)
+            if PendingPreferencesPresentation.isPending {
+                PendingPreferencesPresentation.isPending = false
+                showPreferences()
+            }
             ToolPageEntryBenchmark.runIfRequested(
                 registry: registry,
                 navigationActions: navigationActions
             )
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .presentXToolsPreferences)) { _ in
+            showPreferences()
         }
         .onChange(of: scenePhase) { _, phase in
             // Sample the clipboard only when the app comes forward — never in
@@ -250,7 +256,8 @@ struct RootView: View {
             viewModel: viewModel,
             favorites: favorites,
             sidebarSections: sidebarSections,
-            dashboardStore: dashboardStore
+            dashboardStore: dashboardStore,
+            onToolSelected: { paletteRecents.recordLaunchIfChanged($0) }
         )
     }
 
@@ -281,7 +288,6 @@ struct RootView: View {
                 segment: segment
             )
         }
-        paletteRecents.recordLaunch(toolID)
         _ = navigationActions.selectTool(toolID)
         closeCommandPaletteAnimated()
     }
@@ -383,9 +389,6 @@ struct RootView: View {
             Button("Workbench", action: { navigationActions.openDashboard() })
                 .keyboardShortcut("0", modifiers: .command)
 
-            Button("Preferences", action: showPreferences)
-                .keyboardShortcut(",", modifiers: .command)
-
             ForEach(Array(registry.categoryGroups().enumerated()), id: \.offset) { index, group in
                 // 只给前 9 个分类赋 ⌘1-⌘9：第 10 个分类的 Character("10")
                 // 会在 body 求值期触发 precondition 崩溃。
@@ -411,7 +414,11 @@ struct RootView: View {
     }
 
     private func toggleTheme() {
-        let next = themePreference.next
+        setTheme(themePreference.next)
+    }
+
+    private func setTheme(_ next: AppThemePreference) {
+        guard next != themePreference else { return }
         // Wave 2 theme crossfade: the colorScheme flip dissolves through one
         // shared envelope instead of hard-cutting (AppKit sidebar chrome still
         // flips natively via WindowAppearanceOwner).

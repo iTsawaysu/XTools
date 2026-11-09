@@ -24,6 +24,10 @@ final class RootViewModel: ObservableObject {
         }
     }
     @Published private(set) var searchFocusToken = 0
+    /// `RootView.onAppear` can fire again when a window is re-shown. Once the
+    /// initial resume choice has been applied for this view model, repeated
+    /// appearances must not emit duplicate recent-launch events.
+    var hasHandledInitialToolSelection = false
     let commandPalettePresentation = CommandPalettePresentationModel()
 
     var showsCommandPalette: Bool { commandPalettePresentation.shows }

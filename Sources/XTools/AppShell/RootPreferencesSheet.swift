@@ -11,6 +11,10 @@ struct RootPreferencesSheet: View {
         AppThemePreference(preferenceValue: themeName)
     }
 
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 12) {
@@ -83,6 +87,13 @@ struct RootPreferencesSheet: View {
             HStack(spacing: 6) {
                 Image(systemName: "lock.shield")
                 Text("所有设置只保存在本机。")
+                Spacer(minLength: 12)
+                Text("版本 \(appVersion)")
+                Button("关于 XTools") {
+                    NSApp.orderFrontStandardAboutPanel(nil)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(ToolTheme.textSecondary)
             }
             .font(ToolTypography.caption)
             .foregroundStyle(ToolTheme.textTertiary)

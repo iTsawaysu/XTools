@@ -2,6 +2,18 @@ import AppKit
 import SwiftUI
 import XToolsCore
 
+extension Notification.Name {
+    static let openXToolsPreferences = Notification.Name("XTools.openXToolsPreferences")
+    static let presentXToolsPreferences = Notification.Name("XTools.presentXToolsPreferences")
+}
+
+/// 关闭窗口后从菜单打开设置时，AppDelegate 会先创建主窗口；若 RootView
+/// 尚未安装，通知会丢失。RootView 首次出现时消费这个标记并打开设置。
+@MainActor
+enum PendingPreferencesPresentation {
+    static var isPending = false
+}
+
 @MainActor
 enum AppKitUndoCommandRouter {
     enum Action {
@@ -55,8 +67,30 @@ enum AppKitUndoCommandRouter {
 @MainActor
 final class XToolsAppDelegate: NSObject, NSApplicationDelegate {
     var openWindowAction: OpenWindowAction?
+    /// Test seam for the Dock-reopen path; production uses `openWindowAction`.
+    var openWindowFallback: (() -> Void)?
+    /// Test seam for window discovery; production uses `NSApp.windows`.
+    var windowProvider: (() -> [NSWindow])?
+
+    private func windows() -> [NSWindow] {
+        windowProvider?() ?? NSApp.windows
+    }
+
+    private func requestMainWindow() {
+        openWindowFallback?() ?? openWindowAction?(id: "main")
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleOpenPreferences),
+            name: .openXToolsPreferences,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -65,20 +99,42 @@ final class XToolsAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag {
-            let candidate = sender.windows.first(where: { !($0 is NSPanel) && $0.title == "Tools" })
-                ?? sender.windows.first(where: { !($0 is NSPanel) })
-                ?? sender.windows.first
-            if let window = candidate {
-                if window.isMiniaturized {
-                    window.deminiaturize(nil)
-                } else {
-                    window.makeKeyAndOrderFront(nil)
-                }
-            } else {
-                openWindowAction?(id: "main")
+            if !showMainWindow() {
+                requestMainWindow()
             }
             sender.activate()
         }
+        return true
+    }
+
+    @objc private func handleOpenPreferences(_ notification: Notification) {
+        presentPreferences()
+    }
+
+    /// 设置菜单在窗口关闭后仍然可用：先恢复主窗口，再让 RootView 呈现 sheet。
+    private func presentPreferences() {
+        if showMainWindow() {
+            PendingPreferencesPresentation.isPending = false
+            NotificationCenter.default.post(name: .presentXToolsPreferences, object: nil)
+            return
+        }
+
+        PendingPreferencesPresentation.isPending = true
+        requestMainWindow()
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func showMainWindow() -> Bool {
+        let availableWindows = windows()
+        let candidate = availableWindows.first(where: { !($0 is NSPanel) && $0.title == "Tools" })
+            ?? availableWindows.first(where: { !($0 is NSPanel) })
+        guard let window = candidate else { return false }
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        } else {
+            window.makeKeyAndOrderFront(nil)
+        }
+        NSApp.activate(ignoringOtherApps: true)
         return true
     }
 }
@@ -126,6 +182,13 @@ struct XToolsApp: App {
             SidebarMenuCommands()
             CommandPaletteMenuCommands()
             FindMenuCommands()
+
+            CommandGroup(replacing: .appSettings) {
+                Button("设置…") {
+                    NotificationCenter.default.post(name: .openXToolsPreferences, object: nil)
+                }
+                .keyboardShortcut(",", modifiers: .command)
+            }
 
             CommandGroup(replacing: .undoRedo) {
                 Button("撤销") {

@@ -16,10 +16,9 @@ struct SidebarView: View {
     let isSectionExpanded: (ToolNavigationSection) -> Bool
     let onToggleSection: (ToolNavigationSection) -> Void
     var onToggleSectionExclusive: ((ToolNavigationSection) -> Void)? = nil
-    let onToggleTheme: () -> Void
     let onPreferences: () -> Void
-    let themeTitle: String
-    let themeIcon: String
+    let themePreference: AppThemePreference
+    let onSelectTheme: (AppThemePreference) -> Void
 
     @State private var isSearchFocused = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -229,7 +228,7 @@ struct SidebarView: View {
                 .frame(height: 0.5)
 
             HStack(spacing: 6) {
-                SidebarFooterButton(title: themeTitle, systemImage: themeIcon, action: onToggleTheme)
+                SidebarThemeMenuButton(preference: themePreference, onSelect: onSelectTheme)
                 SidebarFooterButton(title: "设置", systemImage: "gearshape", action: onPreferences)
             }
             .padding(.horizontal, 10)

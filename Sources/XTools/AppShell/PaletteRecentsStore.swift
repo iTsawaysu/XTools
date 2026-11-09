@@ -26,11 +26,11 @@ struct NoPaletteUsage: PaletteUsageScoring {
 }
 
 /// Raycast/Linear-style palette launch history: a capped ring of timestamped
-/// palette activations, persisted through the shell preference store.
+/// tool activations, persisted through the shell preference store.
 ///
-/// Only palette activations record (`RootView.launchFromPalette`) — sidebar
-/// and dashboard launches deliberately stay out, so the recents surface
-/// reflects ⌘K usage itself rather than general navigation.
+/// All tool selections record through `ToolNavigationActions.onToolSelected`
+/// (palette, sidebar, dashboard and startup resume), so the recents surface
+/// shares one mental model with the rest of the shell.
 @MainActor
 final class PaletteRecentsStore: PaletteUsageScoring {
     private struct LaunchEvent: Codable, Equatable {
@@ -62,6 +62,20 @@ final class PaletteRecentsStore: PaletteUsageScoring {
             events.removeFirst(events.count - Metrics.eventCap)
         }
         persist()
+    }
+
+    /// Records a selection only when it differs from the immediately previous
+    /// one. Startup resume can re-run `onAppear` when a window is reopened;
+    /// the persisted ring must not grow with duplicate events in that case.
+    func recordLaunchIfChanged(
+        _ toolID: ToolID,
+        previousToolID: ToolID? = nil,
+        at date: Date = Date()
+    ) {
+        guard previousToolID != toolID,
+              events.last?.toolID != toolID.rawValue
+        else { return }
+        recordLaunch(toolID, at: date)
     }
 
     func frecencyScore(for toolID: ToolID, now: Date) -> Double {

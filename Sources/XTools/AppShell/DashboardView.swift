@@ -142,7 +142,7 @@ struct DashboardView: View {
     private var favoritesPanel: some View {
         WorkbenchPanel(
             title: "收藏",
-            detail: favoriteTools.isEmpty ? "置顶工具" : "\(allFavoriteTools.count) 个置顶",
+            detail: favoriteTools.isEmpty ? "收藏工具" : "\(allFavoriteTools.count) 个收藏",
             actionTitle: allFavoriteTools.isEmpty
                 ? nil
                 : (showsAllFavorites ? "收起" : "查看全部 \(allFavoriteTools.count) 个"),

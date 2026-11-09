@@ -44,7 +44,7 @@ private struct IndexJWTWorkspaceContent: View {
 
     private static let payloadPresentationItems = [
         ("json", "JSON"),
-        ("claims", "声明")
+        ("claims", "声明（Claims）")
     ]
 
     private func jsonColorize(for text: String) -> ((String) -> AttributedString)? {

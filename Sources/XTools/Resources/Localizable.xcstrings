@@ -3528,6 +3528,30 @@
     },
     "输出编码": {
       "extractionState": "manual"
+    },
+    "关于 XTools": {
+      "extractionState": "manual"
+    },
+    "声明（Claims）": {
+      "extractionState": "manual"
+    },
+    "缩进": {
+      "extractionState": "manual"
+    },
+    "设置…": {
+      "extractionState": "manual"
+    },
+    "版本 %@": {
+      "extractionState": "manual"
+    },
+    "主题，当前%@": {
+      "extractionState": "manual"
+    },
+    "%lld 个收藏": {
+      "extractionState": "manual"
+    },
+    "个收藏": {
+      "extractionState": "manual"
     }
   },
   "version": "1.0"

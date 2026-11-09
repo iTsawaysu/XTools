@@ -48,6 +48,17 @@ struct PaletteRecentsStoreTests {
         #expect(store.frecencyScore(for: .regex, now: now) == 0)
     }
 
+    @Test func recordLaunchIfChangedDropsConsecutiveDuplicate() {
+        let store = Self.store()
+        let now = Date()
+
+        store.recordLaunchIfChanged(.json, at: now)
+        store.recordLaunchIfChanged(.json, at: now.addingTimeInterval(1))
+
+        #expect(store.recentToolIDs(limit: 5, now: now) == [.json])
+        #expect(store.frecencyScore(for: .json, now: now) == 1)
+    }
+
     @Test func recentsOrderByMostRecentLaunchAndCapTheLimit() {
         let store = Self.store()
         let now = Date()

@@ -54,6 +54,16 @@ struct IndexDiagnosticBanner: View {
         IndexDiagnosticPresentation(diagnostic: diagnostic, message: message)
     }
 
+    private var detailPopoverHeight: CGFloat {
+        var rows = 1 // summary
+        if presentation.location != nil { rows += 1 }
+        if presentation.suggestion != nil { rows += 1 }
+        rows += presentation.details.count
+        if presentation.omittedCount > 0 { rows += 1 }
+        rows += 1 // copy button
+        return min(360, max(132, 44 + CGFloat(rows) * 20))
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: tone.systemImage)
@@ -105,7 +115,7 @@ struct IndexDiagnosticBanner: View {
                         .arrowCursorOnHover()
                         .padding(14)
                     }
-                    .frame(width: 380, height: 250)
+                    .frame(width: 380, height: detailPopoverHeight)
                     .background(ToolTheme.popoverBackground)
                     .preferredColorScheme(colorScheme)
                 }

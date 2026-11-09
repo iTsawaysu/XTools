@@ -138,6 +138,52 @@ struct SidebarFooterButton: View {
     }
 }
 
+struct SidebarThemeMenuButton: View {
+    let preference: AppThemePreference
+    let onSelect: (AppThemePreference) -> Void
+
+    @StateObject private var hoverState = SidebarHoverState()
+
+    var body: some View {
+        Menu {
+            ForEach(AppThemePreference.allCases, id: \.self) { option in
+                Button {
+                    onSelect(option)
+                } label: {
+                    if option == preference {
+                        Label(option.menuTitle, systemImage: "checkmark")
+                    } else {
+                        Text(option.menuTitle)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: preference.icon)
+                    .font(.system(size: ToolMetrics.IconSize.medium, weight: .regular))
+                    .frame(width: 15)
+
+                Text(preference.title)
+                    .font(ToolTypography.label)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .foregroundStyle(hoverState.isHovered ? ToolTheme.textPrimary : ToolTheme.textSecondary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 30)
+            .background(
+                hoverState.isHovered ? ToolTheme.hoverFill : Color.clear,
+                in: RoundedRectangle(cornerRadius: SidebarMetrics.rowCornerRadius, style: .continuous)
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .accessibilityLabel("主题，当前\(preference.menuTitle)")
+        .onHover { hoverState.isHovered = $0 }
+        .toolAnimation(ToolMotion.Preset.controlFeedback, value: hoverState.isHovered)
+    }
+}
+
 struct SidebarToolRow: View {
     let toolID: ToolID
     let title: String

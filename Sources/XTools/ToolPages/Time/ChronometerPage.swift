@@ -53,7 +53,7 @@ private struct IndexChronometerWorkspaceContent: View {
             IndexPanel("秒表") {
                 VStack(spacing: 8) {
                     TimelineView(
-                        .animation(minimumInterval: 0.01, paused: !chronometer.isRunning || entryGeneration == 0)
+                        .animation(minimumInterval: 0.02, paused: !chronometer.isRunning || entryGeneration == 0)
                     ) { context in
                         Text(ChronometerFormatter.format(currentTime(tick: context.date)))
                             .font(ToolTypography.giantValueRounded)

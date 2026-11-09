@@ -346,7 +346,7 @@ extension ToolRegistry {
                 title: "Crontab 生成",
                 categoryID: .development,
                 systemImage: "clock.arrow.circlepath",
-                keywords: ["cron", "crontab", "schedule", "timer", "定时"]
+                keywords: ["cron", "crontab", "schedule", "定时"]
             ) {
                 IndexCrontabPage()
             },

@@ -41,6 +41,15 @@ enum AppThemePreference: String, CaseIterable {
         }
     }
 
+    /// 菜单项的裸名称，供主题选择菜单展示。
+    var menuTitle: String {
+        switch self {
+        case .system: return "跟随系统"
+        case .light: return "浅色"
+        case .dark: return "深色"
+        }
+    }
+
     var icon: String {
         switch self {
         case .system: return "circle.lefthalf.filled"

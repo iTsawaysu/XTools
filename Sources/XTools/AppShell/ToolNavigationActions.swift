@@ -7,20 +7,33 @@ struct ToolNavigationActions {
     let favorites: FavoritesStore
     let sidebarSections: SidebarSectionExpansionStore
     let dashboardStore: DashboardStore?
+    let onToolSelected: ((ToolID) -> Void)?
 
     init(registry: ToolRegistry, viewModel: RootViewModel, favorites: FavoritesStore,
-         sidebarSections: SidebarSectionExpansionStore, dashboardStore: DashboardStore? = nil) {
+         sidebarSections: SidebarSectionExpansionStore, dashboardStore: DashboardStore? = nil,
+         onToolSelected: ((ToolID) -> Void)? = nil) {
         self.registry = registry
         self.viewModel = viewModel
         self.favorites = favorites
         self.sidebarSections = sidebarSections
         self.dashboardStore = dashboardStore
+        self.onToolSelected = onToolSelected
     }
 
     func selectDefaultToolIfNeeded(_ defaultToolID: ToolID?) {
+        guard !viewModel.hasHandledInitialToolSelection else { return }
+        viewModel.hasHandledInitialToolSelection = true
+
         if viewModel.autoResumeLastTool,
            let selectedToolID = viewModel.selectedToolID,
-           registry.tool(for: selectedToolID) != nil { return }
+           registry.tool(for: selectedToolID) != nil {
+            // Resuming a persisted tool is still a tool open for the shared
+            // recents surfaces, even though the selection itself was restored
+            // before this action had a chance to observe a change.
+            dashboardStore?.recordLaunchIfChanged(toolID: selectedToolID, previousToolID: nil)
+            onToolSelected?(selectedToolID)
+            return
+        }
 
         guard viewModel.autoResumeLastTool, let defaultToolID else {
             viewModel.selectedToolID = nil
@@ -38,6 +51,9 @@ struct ToolNavigationActions {
         ToolPageEntryTrace.toolSelected(tool)
         viewModel.selectedToolID = toolID
         dashboardStore?.recordLaunchIfChanged(toolID: toolID, previousToolID: previousToolID)
+        if previousToolID != toolID {
+            onToolSelected?(toolID)
+        }
         sidebarSections.expand(section.groupID)
 
         if dismissCommandPalette {

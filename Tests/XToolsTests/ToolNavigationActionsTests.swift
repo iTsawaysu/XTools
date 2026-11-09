@@ -107,6 +107,18 @@ struct ToolNavigationActionsTests {
     }
 
     @MainActor
+    @Test func toolSelectionCallbackOnlyFiresWhenSelectionChanges() {
+        let recorder = ToolSelectionRecorder()
+        let fixture = Self.fixture(onToolSelected: recorder.record)
+
+        #expect(fixture.actions.selectTool(.json))
+        #expect(fixture.actions.selectTool(.json))
+        #expect(fixture.actions.selectTool(.jwt))
+
+        #expect(recorder.selections == [.json, .jwt])
+    }
+
+    @MainActor
     @Test func unknownToolIDDoesNotMutateNavigationState() {
         let fixture = Self.fixture()
         fixture.viewModel.selectedToolID = .json
@@ -121,6 +133,43 @@ struct ToolNavigationActionsTests {
         #expect(fixture.viewModel.selectedToolID == .json)
         #expect(fixture.viewModel.showsCommandPalette)
         #expect(!fixture.sidebarSections.isExpanded(ToolNavigationSection.category(.web).groupID))
+    }
+
+    @MainActor
+    @Test func startupResumeRecordsToolInBothRecentSurfaces() {
+        let recorder = ToolSelectionRecorder()
+        let dashboardStore = DashboardStore(defaults: Self.defaults()) {
+            Date(timeIntervalSince1970: 1_000)
+        }
+        let fixture = Self.fixture(
+            onToolSelected: recorder.record,
+            dashboardStore: dashboardStore
+        )
+        fixture.viewModel.selectedToolID = .json
+        fixture.viewModel.autoResumeLastTool = true
+
+        fixture.actions.selectDefaultToolIfNeeded(.json)
+        fixture.actions.selectDefaultToolIfNeeded(.json)
+
+        #expect(fixture.viewModel.selectedToolID == .json)
+        #expect(recorder.selections == [.json])
+        #expect(dashboardStore.recentTools.map(\.toolID) == [.json])
+        #expect(dashboardStore.preferences.activity.count == 1)
+    }
+
+    @MainActor
+    @Test func startupResumeRecordsIntoPaletteRecentsStore() {
+        let paletteRecents = PaletteRecentsStore(preferences: ToolPreferenceStore(defaults: Self.defaults()))
+        let fixture = Self.fixture(onToolSelected: {
+            paletteRecents.recordLaunchIfChanged($0)
+        })
+        fixture.viewModel.selectedToolID = .json
+        fixture.viewModel.autoResumeLastTool = true
+
+        fixture.actions.selectDefaultToolIfNeeded(.json)
+        fixture.actions.selectDefaultToolIfNeeded(.json)
+
+        #expect(paletteRecents.recentToolIDs(limit: 5, now: Date()) == [.json])
     }
 
     @MainActor
@@ -208,7 +257,10 @@ struct ToolNavigationActionsTests {
     }
 
     @MainActor
-    private static func fixture() -> Fixture {
+    private static func fixture(
+        onToolSelected: ((ToolID) -> Void)? = nil,
+        dashboardStore: DashboardStore? = nil
+    ) -> Fixture {
         let registry = ToolRegistry(
             categories: [
                 ToolCategory(id: .development, title: "Development", systemImage: "hammer"),
@@ -232,7 +284,9 @@ struct ToolNavigationActionsTests {
                 registry: registry,
                 viewModel: viewModel,
                 favorites: favorites,
-                sidebarSections: sidebarSections
+                sidebarSections: sidebarSections,
+                dashboardStore: dashboardStore,
+                onToolSelected: onToolSelected
             )
         )
     }
@@ -267,6 +321,15 @@ struct ToolNavigationActionsTests {
         let favorites: FavoritesStore
         let sidebarSections: SidebarSectionExpansionStore
         let actions: ToolNavigationActions
+    }
+}
+
+@MainActor
+private final class ToolSelectionRecorder {
+    private(set) var selections: [ToolID] = []
+
+    func record(_ toolID: ToolID) {
+        selections.append(toolID)
     }
 }
 
