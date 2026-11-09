@@ -47,6 +47,7 @@ struct IndexDiagnosticBanner: View {
     let message: String
     var tone: ToolFeedbackTone = .error
     var onLocate: (() -> Void)? = nil
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showsDetails = false
 
     private var presentation: IndexDiagnosticPresentation {
@@ -105,6 +106,8 @@ struct IndexDiagnosticBanner: View {
                         .padding(14)
                     }
                     .frame(width: 380, height: 250)
+                    .background(ToolTheme.popoverBackground)
+                    .preferredColorScheme(colorScheme)
                 }
         }
         .padding(.horizontal, 12)

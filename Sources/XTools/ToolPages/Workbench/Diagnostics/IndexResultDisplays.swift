@@ -476,6 +476,7 @@ struct IndexWorkspaceDiagnostic: View {
 
 struct IndexDiagnosticStatusButton: View {
     let payload: IndexWorkspaceDiagnosticPayload
+    @Environment(\.colorScheme) private var colorScheme
     @State private var showsPopover = false
 
     var body: some View {
@@ -510,6 +511,8 @@ struct IndexDiagnosticStatusButton: View {
             }
             .padding(12)
             .frame(maxWidth: min(payload.maxWidth, 360), alignment: .leading)
+            .background(ToolTheme.popoverBackground)
+            .preferredColorScheme(colorScheme)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(payload.tone.accessibilityPrefix)：\(payload.text)")
         }

@@ -938,6 +938,275 @@ struct SidebarNavigationListTests {
         #expect(track.hostedContentView.frame.height == SidebarMetrics.expandedRowHeight)
     }
 
+    @Test @MainActor func selectionRevealScrollsOffscreenToolIntoView() throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = coordinator.makeScrollView()
+        let entries = Self.tallEntries()
+        let selectedToolID = Self.tallToolID(Self.tallItemCount - 1)
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: Self.tallToolID(0),
+                selectedSection: .category(.development),
+                reduceMotion: true
+            )
+        )
+        #expect(scrollView.contentView.bounds.origin.y == 0)
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: selectedToolID,
+                selectedSection: .category(.development),
+                reduceMotion: true
+            )
+        )
+
+        let viewportHeight = scrollView.contentView.bounds.height
+        let originY = scrollView.contentView.bounds.origin.y
+        let selectedFrame = Self.frame(of: "tool.\(selectedToolID.rawValue)", in: entries)
+        let expectedOrigin = Self.expectedBottomRevealOrigin(
+            for: "tool.\(selectedToolID.rawValue)",
+            in: entries,
+            viewportHeight: viewportHeight
+        )
+        #expect(abs(originY - expectedOrigin) < 0.5)
+        #expect(selectedFrame.minY >= originY)
+        #expect(selectedFrame.maxY <= originY + viewportHeight)
+        #expect(coordinator.debugSelectionIndicatorState.frame == selectedFrame)
+        // 直接切换选中工具不改变分类展开状态。
+        #expect(coordinator.activeTrackIDs == entries.map(\.id))
+    }
+
+    @Test @MainActor func selectionRevealLeavesFullyVisibleToolInPlace() throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = coordinator.makeScrollView()
+        let entries = Self.tallEntries()
+        let visibleToolID = Self.tallToolID(3)
+        let visibleFrame = Self.frame(of: "tool.\(visibleToolID.rawValue)", in: entries)
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: Self.tallToolID(0),
+                selectedSection: .category(.development),
+                reduceMotion: true
+            )
+        )
+
+        // 行整体可见，且距视口顶部只有 3pt——小于露出逻辑的 8pt 内边距。
+        // 已可见时不得为了补内边距而滚动。
+        let initialOriginY = visibleFrame.minY - 3
+        scrollView.contentView.bounds.origin.y = initialOriginY
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: visibleToolID,
+                selectedSection: .category(.development),
+                reduceMotion: true
+            )
+        )
+
+        #expect(abs(scrollView.contentView.bounds.origin.y - initialOriginY) < 0.001)
+    }
+
+    @Test @MainActor func clearingSearchRevealsRestoredSelection() throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = coordinator.makeScrollView()
+        let entries = Self.tallEntries()
+        let selectedToolID = Self.tallToolID(Self.tallItemCount - 1)
+        let filteredEntries = SidebarNavigationEntryProjection.entries(
+            groups: [Self.group(section: .category(.development), items: [Self.alpha, Self.beta])],
+            isSearchActive: true,
+            isSectionExpanded: { _ in false }
+        )
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: filteredEntries,
+                selectedToolID: selectedToolID,
+                selectedSection: .category(.development),
+                isSearchActive: true,
+                reduceMotion: true
+            )
+        )
+        #expect(scrollView.contentView.bounds.origin.y == 0)
+        #expect(!coordinator.debugSelectionIndicatorState.isVisible)
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: selectedToolID,
+                selectedSection: .category(.development),
+                isSearchActive: false,
+                reduceMotion: true
+            )
+        )
+
+        let viewportHeight = scrollView.contentView.bounds.height
+        let originY = scrollView.contentView.bounds.origin.y
+        let selectedFrame = Self.frame(of: "tool.\(selectedToolID.rawValue)", in: entries)
+        let expectedOrigin = Self.expectedBottomRevealOrigin(
+            for: "tool.\(selectedToolID.rawValue)",
+            in: entries,
+            viewportHeight: viewportHeight
+        )
+        #expect(abs(originY - expectedOrigin) < 0.5)
+        #expect(selectedFrame.minY >= originY)
+        #expect(selectedFrame.maxY <= originY + viewportHeight)
+        #expect(coordinator.debugSelectionIndicatorState.isVisible)
+        #expect(coordinator.activeTrackIDs == entries.map(\.id))
+    }
+
+    @Test @MainActor func firstPresentationRevealsSelectedToolOutsideViewport() throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = coordinator.makeScrollView()
+        let entries = Self.tallEntries()
+        let selectedToolID = Self.tallToolID(Self.tallItemCount - 1)
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: selectedToolID,
+                selectedSection: .category(.development),
+                reduceMotion: true
+            )
+        )
+
+        let viewportHeight = scrollView.contentView.bounds.height
+        let originY = scrollView.contentView.bounds.origin.y
+        let selectedFrame = Self.frame(of: "tool.\(selectedToolID.rawValue)", in: entries)
+        let expectedOrigin = Self.expectedBottomRevealOrigin(
+            for: "tool.\(selectedToolID.rawValue)",
+            in: entries,
+            viewportHeight: viewportHeight
+        )
+        #expect(abs(originY - expectedOrigin) < 0.5)
+        #expect(selectedFrame.minY >= originY)
+        #expect(selectedFrame.maxY <= originY + viewportHeight)
+    }
+
+    @Test @MainActor func viewportBecomingReadyCompletesInitialSelectionReveal() throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = coordinator.makeScrollView()
+        let entries = Self.tallEntries()
+        let selectedToolID = Self.tallToolID(Self.tallItemCount - 1)
+
+        // SwiftUI can install the representable before AppKit assigns its real
+        // size. The first update then sees a zero-height viewport and cannot
+        // reveal anything; the pending reveal must finish when layout arrives.
+        scrollView.setFrameSize(CGSize(width: SidebarView.idealWidth, height: 0))
+        scrollView.layoutSubtreeIfNeeded()
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: selectedToolID,
+                selectedSection: .category(.development),
+                reduceMotion: true
+            )
+        )
+        #expect(scrollView.contentView.bounds.origin.y == 0)
+
+        scrollView.setFrameSize(CGSize(width: SidebarView.idealWidth, height: 600))
+        scrollView.layoutSubtreeIfNeeded()
+
+        let viewportHeight = scrollView.contentView.bounds.height
+        let originY = scrollView.contentView.bounds.origin.y
+        let selectedFrame = Self.frame(of: "tool.\(selectedToolID.rawValue)", in: entries)
+        let expectedOrigin = Self.expectedBottomRevealOrigin(
+            for: "tool.\(selectedToolID.rawValue)",
+            in: entries,
+            viewportHeight: viewportHeight
+        )
+        #expect(abs(originY - expectedOrigin) < 0.5)
+        #expect(selectedFrame.minY >= originY)
+        #expect(selectedFrame.maxY <= originY + viewportHeight)
+    }
+
+    @Test @MainActor func initialNilSelectionDoesNotReclaimScrollOnLaterResize() throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = coordinator.makeScrollView()
+        let entries = Self.tallEntries()
+        let selectedToolID = Self.tallToolID(Self.tallItemCount - 1)
+
+        // 首次呈现时没有选中项（默认 autoResumeLastTool=false 的启动路径），
+        // 初始 reveal 阶段仍应在真实 viewport 到达后结束。
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: nil,
+                selectedSection: nil,
+                reduceMotion: true
+            )
+        )
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: selectedToolID,
+                selectedSection: .category(.development),
+                reduceMotion: true
+            )
+        )
+
+        scrollView.contentView.bounds.origin.y = 200
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        scrollView.setFrameSize(CGSize(width: 260, height: 620))
+        scrollView.layoutSubtreeIfNeeded()
+
+        #expect(abs(scrollView.contentView.bounds.origin.y - 200) < 0.001)
+    }
+
+    @Test @MainActor func nonSelectionUpdateKeepsUserScrollOffset() throws {
+        let coordinator = SidebarNavigationListCoordinator()
+        let scrollView = coordinator.makeScrollView()
+        let entries = Self.tallEntries()
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: Self.tallToolID(0),
+                selectedSection: .category(.development),
+                reduceMotion: true
+            )
+        )
+
+        // 用户手动滚开，选中行在视口外；普通重布局/主题变化不得把视口拉回。
+        scrollView.contentView.bounds.origin.y = 200
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+
+        scrollView.setFrameSize(CGSize(width: 260, height: 600))
+        scrollView.layoutSubtreeIfNeeded()
+        #expect(abs(scrollView.contentView.bounds.origin.y - 200) < 0.001)
+
+        coordinator.update(
+            scrollView: scrollView,
+            configuration: Self.configuration(
+                entries: entries,
+                selectedToolID: Self.tallToolID(0),
+                selectedSection: .category(.development),
+                reduceMotion: true,
+                colorScheme: .light
+            )
+        )
+        #expect(abs(scrollView.contentView.bounds.origin.y - 200) < 0.001)
+    }
+
     @Test @MainActor func activeSectionChangeReconcilesHeaderAndToolSelectionState() throws {
         let coordinator = SidebarNavigationListCoordinator()
         let scrollView = coordinator.makeScrollView()
@@ -982,6 +1251,7 @@ struct SidebarNavigationListTests {
         selectedSection: ToolNavigationSection? = nil,
         isSearchActive: Bool = false,
         reduceMotion: Bool = true,
+        colorScheme: ColorScheme = .dark,
         onSelectTool: @escaping (ToolID) -> Void = { _ in }
     ) -> SidebarNavigationListConfiguration {
         SidebarNavigationListConfiguration(
@@ -991,7 +1261,7 @@ struct SidebarNavigationListTests {
             favoriteOrder: favoriteOrder,
             isSearchActive: isSearchActive,
             reduceMotion: reduceMotion,
-            colorScheme: .dark,
+            colorScheme: colorScheme,
             onSelectTool: onSelectTool,
             onToggleFavorite: { _ in },
             onToggleSection: { _ in }
@@ -1025,6 +1295,38 @@ struct SidebarNavigationListTests {
             isSearchActive: false,
             isSectionExpanded: { _ in true }
         )
+    }
+
+    private static let tallItemCount = 24
+
+    private static func tallToolID(_ index: Int) -> ToolID {
+        ToolID(rawValue: "list-row-\(index)")
+    }
+
+    private static func tallEntries() -> [SidebarNavigationEntry] {
+        let items = (0..<tallItemCount).map { index in
+            item(tallToolID(index), isFavorite: false, section: .category(.development))
+        }
+        return entries(groups: [
+            group(section: .category(.development), items: items),
+        ])
+    }
+
+    /// 视口下方露出所需的最小滚动目标：行底 + 8pt 内边距，再夹到文档可滚动范围。
+    @MainActor
+    private static func expectedBottomRevealOrigin(
+        for trackID: String,
+        in entries: [SidebarNavigationEntry],
+        viewportHeight: CGFloat
+    ) -> CGFloat {
+        let plan = SidebarNavigationLayout.plan(
+            entries: entries,
+            width: SidebarView.idealWidth
+        )
+        let frame = plan.targets.first(where: { $0.id == trackID })?.frame ?? .null
+        let desiredOriginY = frame.maxY - viewportHeight + 8
+        let maximumOriginY = max(0, plan.documentHeight - viewportHeight)
+        return min(max(desiredOriginY, 0), maximumOriginY)
     }
 
     private static var alpha: ToolNavigationItem {

@@ -41,6 +41,10 @@ final class SidebarNavigationListCoordinator {
     private var hostedContentKeysByTrackID: [String: HostedContentKey] = [:]
     private var currentConfiguration: SidebarNavigationListConfiguration?
     private var currentPlan: SidebarNavigationLayoutPlan?
+    /// The first presentation can run before the representable has a nonzero
+    /// viewport. Retry that one initial reveal when AppKit publishes the real
+    /// size, without turning ordinary resizes into selection re-centering.
+    private var hasCompletedInitialSelectionReveal = false
     private var animationGate = SidebarNavigationAnimationGate()
     private var activeAnimationToken: SidebarNavigationAnimationToken?
     private var scrollAnchor: SidebarNavigationScrollAnchor?
@@ -147,6 +151,8 @@ final class SidebarNavigationListCoordinator {
         let mode = updateMode(configuration: configuration, plan: plan)
         let previousActiveIDs = Set(currentPlan?.targets.map(\.id) ?? [])
         let previousSelectedToolID = currentConfiguration?.selectedToolID
+        let isFirstPresentation = currentConfiguration == nil || currentPlan == nil
+        let wasSearchActive = currentConfiguration?.isSearchActive ?? false
         let previousFavoriteOrder = Set(currentConfiguration?.favoriteOrder ?? [])
         let previousPlan = currentPlan
 
@@ -205,6 +211,111 @@ final class SidebarNavigationListCoordinator {
             )
             reconcilePointerLocation()
         }
+
+        if shouldRevealSelection(
+            mode: mode,
+            isFirstPresentation: isFirstPresentation,
+            previousSelectedToolID: previousSelectedToolID,
+            wasSearchActive: wasSearchActive,
+            configuration: configuration
+        ) {
+            _ = revealSelectedToolIfNeeded(configuration: configuration, plan: plan)
+        }
+
+        // The initial presentation can legitimately have no selection (for
+        // example when "resume last tool" is off). Once AppKit has a real
+        // viewport, the initial reveal phase is complete even if there was no
+        // row to reveal; later resizes must not start reclaiming the viewport.
+        if isFirstPresentation, scrollView.contentView.bounds.height > 0 {
+            hasCompletedInitialSelectionReveal = true
+        }
+    }
+
+    /// Selection-driven updates may move the viewport just enough to expose the
+    /// selected row. Structural paths (resize, accordion, favorites) must never
+    /// reclaim a viewport the user scrolled away.
+    private func shouldRevealSelection(
+        mode: UpdateMode,
+        isFirstPresentation: Bool,
+        previousSelectedToolID: ToolID?,
+        wasSearchActive: Bool,
+        configuration: SidebarNavigationListConfiguration
+    ) -> Bool {
+        let selectionChanged = previousSelectedToolID != configuration.selectedToolID
+        // A selection change is always user intent to see that row, even when
+        // the same update also expands a section or reorders favorites and
+        // therefore lands on an animated layout path.
+        if selectionChanged {
+            return true
+        }
+        switch mode {
+        case .contentOnly:
+            return false
+        case .immediate:
+            if isFirstPresentation {
+                return true
+            }
+            // Clearing search re-presents the selected tool without changing
+            // the selection itself, so treat that restore as a fresh reveal.
+            return wasSearchActive && !configuration.isSearchActive
+        default:
+            return false
+        }
+    }
+
+    /// Scrolls the minimal distance that makes the selected tool row fully
+    /// visible, with an 8pt breathing margin only when a scroll is required.
+    @discardableResult
+    private func revealSelectedToolIfNeeded(
+        configuration: SidebarNavigationListConfiguration,
+        plan: SidebarNavigationLayoutPlan
+    ) -> Bool {
+        guard let scrollView,
+              let selectedFrame = selectionIndicatorFrame(
+                  configuration: configuration,
+                  plan: plan
+              )
+        else { return false }
+
+        let clipView = scrollView.contentView
+        let viewport = clipView.bounds
+        guard viewport.height > 0, plan.documentHeight > viewport.height else { return false }
+        guard selectedFrame.minY < viewport.minY || selectedFrame.maxY > viewport.maxY else {
+            return true
+        }
+
+        let padding: CGFloat = 8
+        let desiredOriginY: CGFloat
+        if selectedFrame.minY < viewport.minY {
+            desiredOriginY = selectedFrame.minY - padding
+        } else {
+            desiredOriginY = selectedFrame.maxY - viewport.height + padding
+        }
+        let maximumOriginY = max(0, plan.documentHeight - viewport.height)
+        let targetOriginY = min(max(desiredOriginY, 0), maximumOriginY)
+        guard abs(viewport.origin.y - targetOriginY) > 0.25 else { return true }
+
+        if configuration.reduceMotion {
+            clipView.scroll(to: NSPoint(x: viewport.origin.x, y: targetOriginY))
+            scrollView.reflectScrolledClipView(clipView)
+            return true
+        }
+
+        let motion = ToolMotion.AppKitPreset.accordion
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = motion.duration
+            context.timingFunction = motion.timingFunction
+            clipView.animator().bounds = NSRect(
+                origin: NSPoint(x: viewport.origin.x, y: targetOriginY),
+                size: viewport.size
+            )
+        } completionHandler: { [weak scrollView, weak clipView] in
+            Task { @MainActor in
+                guard let scrollView, let clipView else { return }
+                scrollView.reflectScrolledClipView(clipView)
+            }
+        }
+        return true
     }
 
     /// Resolves the frame the sliding selection chrome should occupy, or nil
@@ -1035,12 +1146,21 @@ final class SidebarNavigationListCoordinator {
             entries: configuration.entries,
             width: size.width
         )
-        guard plan != currentPlan else { return }
-        applyWidth(plan: plan)
-        currentPlan = plan
-        // Width-only relayout: keep the chrome glued to the (resized) row.
-        positionSelectionIndicator(configuration: configuration, plan: plan, slide: false)
-        reconcilePointerLocation()
+        if plan != currentPlan {
+            applyWidth(plan: plan)
+            currentPlan = plan
+            // Width-only relayout: keep the chrome glued to the (resized) row.
+            positionSelectionIndicator(configuration: configuration, plan: plan, slide: false)
+            reconcilePointerLocation()
+        }
+
+        // A first update can arrive while the representable still has a zero
+        // viewport. Once AppKit publishes the real size, finish that pending
+        // initial reveal; later resizes keep respecting the user's scroll.
+        if !hasCompletedInitialSelectionReveal, size.height > 0 {
+            _ = revealSelectedToolIfNeeded(configuration: configuration, plan: plan)
+            hasCompletedInitialSelectionReveal = true
+        }
     }
 
     private func beginScrollAnchorIfNeeded(
