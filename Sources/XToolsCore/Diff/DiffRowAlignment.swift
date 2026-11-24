@@ -376,15 +376,12 @@ extension DiffAlignedRow {
     }
 
     static func tokenDiceSimilarity(left: Set<String>, right: Set<String>) -> Double {
-        guard !left.isEmpty || !right.isEmpty else {
-            return 0.0
-        }
-
         guard !left.isEmpty, !right.isEmpty else {
             return 0.0
         }
 
-        let sharedCount = left.intersection(right).count
+        let (smaller, larger) = left.count <= right.count ? (left, right) : (right, left)
+        let sharedCount = smaller.count(where: larger.contains)
         return (2.0 * Double(sharedCount)) / Double(left.count + right.count)
     }
 

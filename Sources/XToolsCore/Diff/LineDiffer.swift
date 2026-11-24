@@ -521,7 +521,9 @@ public enum LineDiffer {
 private struct FlatLCSMatrix {
     let rows: Int
     let cols: Int
-    private var storage: [Int]
+    // A cell is at most min(rows, cols). The validated cell count fits Int,
+    // so that minimum is below UInt32.max even with an unlimited custom budget.
+    private var storage: [UInt32]
 
     init(rows: Int, cols: Int) {
         self.rows = rows
@@ -530,7 +532,7 @@ private struct FlatLCSMatrix {
     }
 
     @inline(__always)
-    subscript(row: Int, col: Int) -> Int {
+    subscript(row: Int, col: Int) -> UInt32 {
         get {
             storage[row * (cols + 1) + col]
         }

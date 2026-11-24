@@ -181,6 +181,31 @@ struct JSONStructuralDiffTests {
         }
     }
 
+    @Test func cancellationReachesTheOrderedParserBeforeItProcessesTheInput() {
+        let started = JSONParserStartProbe()
+        let observedCancellation = JSONParserStartProbe()
+        #expect(throws: CancellationError.self) {
+            _ = try JSONStructuralDiff.cancellablePreparedDiff(
+                left: #"{"a":1}"#,
+                right: #"{"a":2}"#,
+                labels: labels,
+                shouldCancel: { started.count != 0 },
+                parserDidStart: {
+                    started.record()
+                    do {
+                        try StructuredTextExecution.checkCancellation()
+                    } catch is CancellationError {
+                        observedCancellation.record()
+                    } catch {
+                        Issue.record("Unexpected error checking cancellation: \(error)")
+                    }
+                }
+            )
+        }
+        #expect(started.count == 1)
+        #expect(observedCancellation.count == 1)
+    }
+
     @Test func preparedDiffParsesEachNonemptySideOnceAndReusesOutputs() throws {
         let parserProbe = JSONParserStartProbe()
         let prepared = try JSONStructuralDiff.cancellablePreparedDiff(

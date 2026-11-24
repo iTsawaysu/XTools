@@ -92,18 +92,11 @@ public enum JSONStructuralDiff {
         }
         try cancellation.check()
 
-        let preparedLeft = try prepareSide(
-            left,
-            options: options,
-            cancellation: cancellation,
-            parserDidStart: parserDidStart
-        )
-        let preparedRight = try prepareSide(
-            right,
-            options: options,
-            cancellation: cancellation,
-            parserDidStart: parserDidStart
-        )
+        let (preparedLeft, preparedRight) = try StructuredTextExecution.withCancellation(shouldCancel) {
+            let preparedLeft = try prepareSide(left, options: options, cancellation: cancellation, parserDidStart: parserDidStart)
+            let preparedRight = try prepareSide(right, options: options, cancellation: cancellation, parserDidStart: parserDidStart)
+            return (preparedLeft, preparedRight)
+        }
 
         switch JSONDiffValidation.decision(
             leftIsEmpty: preparedLeft.isEmpty,
