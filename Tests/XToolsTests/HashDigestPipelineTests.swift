@@ -1,4 +1,4 @@
-import XToolsCore
+@testable import XToolsCore
 import Testing
 
 struct HashDigestPipelineTests {
@@ -48,11 +48,11 @@ struct HashDigestPipelineTests {
 
         for (input, expected) in vectors {
             #expect(DigestEncoding.format(SHA3_512.hash(input), mode: "hex") == expected)
+            #expect(DigestEncoding.format(SHA3_512.hashInSwift(input), mode: "hex") == expected)
         }
     }
 
-    @Test func sha3_512PipelineOutputStaysOnFIPS202Implementation() throws {
-        // 管道里的 SHA3-512 必须继续指向本地 FIPS 202 实现（platform SHA3 要 macOS 15+）。
+    @Test func sha3_512PipelineMatchesFIPS202() throws {
         let sha3 = try HashDigestPipeline.compute(text: "abc").first { $0.algorithm == .sha3_512 }
         #expect(
             DigestEncoding.format(sha3!.bytes, mode: "hex")

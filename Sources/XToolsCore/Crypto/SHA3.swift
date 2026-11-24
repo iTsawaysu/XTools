@@ -1,21 +1,29 @@
-import Foundation
+import CryptoKit
 
-/// FIPS 202 SHA3-512（Keccak-f[1600]）。项目 target 为 macOS 13：
-/// CryptoKit 的 SHA3 要 macOS 15+，CommonCrypto 无 SHA3，因此本地实现。
-/// 产品在用的只有 SHA3-512 变体（rate 72 字节、域后缀 0x06、pad10*1），
-/// 故不引入多变体参数面，API 对齐同目录 RIPEMD160。
+/// FIPS 202 SHA3-512，兼容 macOS 14 及 Xcode 16。
 public enum SHA3_512 {
     /// rate = 1600 - 2*512 = 576 位 = 72 字节；输出 64 字节。
     private static let rateBytes = 72
     private static let digestLength = 64
 
     public static func hash(_ bytes: [UInt8]) -> [UInt8] {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            return Array(CryptoKit.SHA3_512.hash(data: bytes))
+        }
+        #endif
+        return hashInSwift(bytes)
+    }
+
+    static func hashInSwift(_ bytes: [UInt8]) -> [UInt8] {
         var state = [UInt64](repeating: 0, count: 25)
+        var c = [UInt64](repeating: 0, count: 5)
+        var b = [UInt64](repeating: 0, count: 25)
 
         var offset = 0
         while bytes.count - offset >= rateBytes {
-            absorb(Array(bytes[offset..<(offset + rateBytes)]), into: &state)
-            keccakF1600(&state)
+            absorb(bytes[offset..<(offset + rateBytes)], into: &state)
+            keccakF1600(&state, c: &c, b: &b)
             offset += rateBytes
         }
 
@@ -26,8 +34,8 @@ public enum SHA3_512 {
         finalBlock[0..<remainder] = bytes[offset...]
         finalBlock[remainder] = 0x06
         finalBlock[rateBytes - 1] |= 0x80
-        absorb(finalBlock, into: &state)
-        keccakF1600(&state)
+        absorb(finalBlock[...], into: &state)
+        keccakF1600(&state, c: &c, b: &b)
 
         // 64 字节 ≤ rate，一次挤出即可；lane 按小端读出（FIPS 202 字节序）。
         var digest = [UInt8]()
@@ -43,9 +51,9 @@ public enum SHA3_512 {
     }
 
     /// rate 块与状态前 9 个 lane 逐位异或（little-endian 组 lane）。
-    private static func absorb(_ block: [UInt8], into state: inout [UInt64]) {
+    private static func absorb(_ block: ArraySlice<UInt8>, into state: inout [UInt64]) {
         for laneIndex in 0..<(rateBytes / 8) {
-            let offset = laneIndex * 8
+            let offset = block.startIndex + laneIndex * 8
             state[laneIndex] ^= UInt64(block[offset])
                 | (UInt64(block[offset + 1]) << 8)
                 | (UInt64(block[offset + 2]) << 16)
@@ -58,10 +66,9 @@ public enum SHA3_512 {
     }
 
     /// Keccak-f[1600]：24 轮 θ/ρ/π/χ/ι。lane 下标约定为 x + 5y。
-    private static func keccakF1600(_ a: inout [UInt64]) {
+    private static func keccakF1600(_ a: inout [UInt64], c: inout [UInt64], b: inout [UInt64]) {
         for round in 0..<24 {
             // θ：列奇偶校验，再与相邻列旋转 1 位的结果异或。
-            var c = [UInt64](repeating: 0, count: 5)
             for x in 0..<5 {
                 c[x] = a[x] ^ a[x + 5] ^ a[x + 10] ^ a[x + 15] ^ a[x + 20]
             }
@@ -73,7 +80,6 @@ public enum SHA3_512 {
             }
 
             // ρ + π：B[y][(2x+3y) mod 5] = rot(A[x][y], r[x][y])。
-            var b = [UInt64](repeating: 0, count: 25)
             for x in 0..<5 {
                 for y in 0..<5 {
                     b[y + 5 * ((2 * x + 3 * y) % 5)] = rotl(a[x + 5 * y], rotationOffsets[x + 5 * y])

@@ -67,13 +67,12 @@ public enum HashDigestPipeline {
         _ bytes: [UInt8],
         shouldCancel: () -> Bool = { Task.isCancelled }
     ) throws -> [DigestItem] {
-        let data = Data(bytes)
         var items: [DigestItem] = []
         items.reserveCapacity(HashDigestAlgorithm.allCases.count)
 
         for algorithm in HashDigestAlgorithm.allCases {
             try checkCancellation(using: shouldCancel)
-            let digest = algorithm.digest(bytes: bytes, data: data)
+            let digest = algorithm.digest(bytes: bytes)
             try checkCancellation(using: shouldCancel)
             items.append(DigestItem(algorithm: algorithm, bytes: digest))
         }
@@ -96,14 +95,14 @@ public enum HashDigestPipeline {
 }
 
 private extension HashDigestAlgorithm {
-    func digest(bytes: [UInt8], data: Data) -> [UInt8] {
+    func digest(bytes: [UInt8]) -> [UInt8] {
         switch self {
         case .sha256:
-            return Array(SHA256.hash(data: data))
+            return Array(SHA256.hash(data: bytes))
         case .sha512:
-            return Array(SHA512.hash(data: data))
+            return Array(SHA512.hash(data: bytes))
         case .sha384:
-            return Array(SHA384.hash(data: data))
+            return Array(SHA384.hash(data: bytes))
         case .sha224:
             var digest = [UInt8](repeating: 0, count: Int(CC_SHA224_DIGEST_LENGTH))
             bytes.withUnsafeBytes { buffer in
@@ -111,14 +110,13 @@ private extension HashDigestAlgorithm {
             }
             return digest
         case .sha3_512:
-            // macOS 13 无平台 SHA3（CryptoKit SHA3 要 macOS 15+），走本地 FIPS 202 实现。
             return SHA3_512.hash(bytes)
         case .ripemd160:
             return RIPEMD160.hash(bytes)
         case .sha1:
-            return Array(Insecure.SHA1.hash(data: data))
+            return Array(Insecure.SHA1.hash(data: bytes))
         case .md5:
-            return Array(Insecure.MD5.hash(data: data))
+            return Array(Insecure.MD5.hash(data: bytes))
         }
     }
 }
