@@ -39,27 +39,34 @@ class IconPackagingTests(unittest.TestCase):
         product = fixture / ".build/debug"
         product.mkdir(parents=True)
         executable = product / "XTools"
-        executable.write_text("#!/bin/sh\nexit 0\n")
-        executable.chmod(0o755)
+        subprocess.run(["clang", "-x", "c", "-o", str(executable), "-"],
+                       input="int main(void) { return 0; }\n", text=True, check=True)
         resources = product / "XTools_XToolsCore.bundle/Contents/Resources"
         resources.mkdir(parents=True)
         (resources / "Readability-0.6.0.js").write_text("// fixture\n")
         compiler_bundle = product / "XTools_EmojiCatalogCompiler.bundle"
         compiler_bundle.mkdir()
         (compiler_bundle / "emoji-test.txt").write_text("compiler input only\n")
+        app_resources = product / "XTools_XTools.bundle/Contents/Resources"
+        language = app_resources / "zh-Hans.lproj"
+        language.mkdir(parents=True)
+        (app_resources / "asset.txt").write_text("keep this resource")
+        source_table = language / "Localizable.strings"
+        source_table.write_bytes(plistlib.dumps({"key": "中文"}))
         source = fixture / "Assets/AppIcon/XTools.icns"
         source.parent.mkdir(parents=True)
         source.write_bytes(b"first-icon")
         log = fixture / "register.log"
         environment = dict(os.environ, PATH=f"{binaries}:{os.environ['PATH']}",
                            SWIFT_BIN=str(binaries / "swift"), LSREGISTER=str(register),
+                           ARCH=os.uname().machine,
                            BUNDLE_ID="com.sun.xtools.icon-test", KEEP_RUNNING_APP="1",
                            OUTPUT_DIR=str(fixture / "build"),
                            REGISTER_LOG=str(log), LSREGISTER_EVERY_BUILD="0",
                            TRASH_DIR=str(fixture / "archive"))
 
-        def package():
-            result = subprocess.run(["bash", str(fixture / "build.sh"), "package"],
+        def package(*arguments):
+            result = subprocess.run(["bash", str(fixture / "build.sh"), "package", *arguments],
                                     env=environment, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
@@ -67,10 +74,24 @@ class IconPackagingTests(unittest.TestCase):
         app = fixture / "build/XTools.app"
         packaged = app / "Contents/Resources/XTools.icns"
         self.assertEqual(packaged.read_bytes(), b"first-icon")
+        packaged_resources = app / "Contents/Resources"
+        packaged_bundle_resources = packaged_resources / "XTools_XTools.bundle/Contents/Resources"
+        packaged_table = packaged_resources / "zh-Hans.lproj/Localizable.strings"
+        self.assertEqual(plistlib.loads(packaged_table.read_bytes()), {"key": "中文"})
+        self.assertTrue(packaged_table.read_bytes().startswith(b"bplist00"))
+        self.assertFalse((packaged_bundle_resources / language.name).exists())
+        self.assertEqual((packaged_bundle_resources / "asset.txt").read_text(), "keep this resource")
         self.assertFalse((app / "Contents/Resources" / compiler_bundle.name).exists(),
                          "Offline compiler inputs must not ship with the app")
         stale_compiler = app / "Contents/Resources" / compiler_bundle.name
         shutil.copytree(compiler_bundle, stale_compiler)
+        shutil.copytree(language, packaged_bundle_resources / language.name)
+        (packaged_table.parent / "Retired.strings").write_bytes(plistlib.dumps({"old": "旧"}))
+        source_table.write_bytes(plistlib.dumps({"key": "更新"}))
+        info_plist = app / "Contents/Info.plist"
+        stale_metadata = plistlib.loads(info_plist.read_bytes())
+        stale_metadata["CFBundleDisplayName"] = "Old name"
+        info_plist.write_bytes(plistlib.dumps(stale_metadata))
         source.write_bytes(b"replacement-icon")
         package()
         self.assertFalse(stale_compiler.exists(),
@@ -78,16 +99,43 @@ class IconPackagingTests(unittest.TestCase):
         self.assertTrue(any((fixture / "archive").glob(f"{compiler_bundle.name}.*")))
         self.assertEqual(packaged.read_bytes(), b"replacement-icon",
                          "An existing app must receive changed icon content")
-        metadata = plistlib.loads((app / "Contents/Info.plist").read_bytes())
+        self.assertFalse((packaged_bundle_resources / language.name).exists())
+        self.assertFalse((packaged_table.parent / "Retired.strings").exists())
+        self.assertEqual(plistlib.loads(packaged_table.read_bytes()), {"key": "更新"})
+        metadata = plistlib.loads(info_plist.read_bytes())
         self.assertEqual(metadata["CFBundleIconFile"], "XTools")
+        self.assertEqual(metadata["CFBundleDisplayName"], "XTools")
+        self.assertTrue(metadata["NSAppTransportSecurity"]["NSAllowsArbitraryLoads"])
         self.assertEqual(log.read_text().splitlines(), ["registered", "registered"])
 
         modified_at = packaged.stat().st_mtime_ns
+        unchanged_metadata = info_plist.stat().st_mtime_ns
+        unchanged_table = packaged_table.stat().st_mtime_ns
         package()
         self.assertEqual(packaged.stat().st_mtime_ns, modified_at,
                          "Unchanged icons must not be rewritten")
         self.assertEqual(len(log.read_text().splitlines()), 2,
                          "Unchanged icons must not trigger registration")
+        self.assertEqual(info_plist.stat().st_mtime_ns, unchanged_metadata)
+        self.assertEqual(packaged_table.stat().st_mtime_ns, unchanged_table)
+
+        cold_product = fixture / "swiftpm-cold-product"
+        product.rename(cold_product)
+        (binaries / "swift").write_text('#!/bin/sh\nprintf "%s\\n" "$SHOW_BIN_PATH"\n')
+        environment["SHOW_BIN_PATH"] = str(cold_product)
+        package("debug")
+
+        wrong_product = fixture / "wrong-architecture"
+        wrong_product.mkdir()
+        wrong_arch = "x86_64" if os.uname().machine == "arm64" else "arm64"
+        subprocess.run(["clang", "-arch", wrong_arch, "-x", "c", "-o", str(wrong_product / "XTools"), "-"],
+                       input="int main(void) { return 0; }\n", text=True, check=True)
+        mismatch = subprocess.run(["bash", str(fixture / "build.sh"), "package", "debug"],
+                                  env={**environment, "SHOW_BIN_PATH": str(wrong_product)},
+                                  text=True, capture_output=True)
+        self.assertNotEqual(mismatch.returncode, 0)
+        self.assertIn(f"does not contain {os.uname().machine}", mismatch.stderr)
+        cold_product.rename(product)
 
         source.rename(source.with_suffix(".archived"))
         missing = subprocess.run(["bash", str(fixture / "build.sh"), "package"],

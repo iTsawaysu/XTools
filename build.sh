@@ -180,7 +180,7 @@ find_built_product() {
     "$LEGACY_SCRATCH_DIR/$configuration" \
     "$LEGACY_SCRATCH_DIR/arm64-apple-macosx/$configuration"
   do
-    if [[ -x "$candidate/$PRODUCT_NAME" ]]; then
+    if [[ -x "$candidate/$PRODUCT_NAME" ]] && lipo "$candidate/$PRODUCT_NAME" -verify_arch "$ARCH" 2>/dev/null; then
       printf "%s\n" "$candidate"
       return 0
     fi
@@ -198,18 +198,38 @@ bin_path_for() {
     return 0
   fi
 
-  # Cold layout only.
-  "$SWIFT_BIN" build \
-    --configuration "$configuration" \
-    --product "$PRODUCT_NAME" \
-    --arch "$ARCH" \
-    --show-bin-path
+  local build_args=(build --configuration "$configuration" --product "$PRODUCT_NAME" --show-bin-path)
+  if [[ "$ARCH" != "$(uname -m)" ]]; then
+    build_args+=(--arch "$ARCH")
+  fi
+  built_product="$("$SWIFT_BIN" "${build_args[@]}")" || return 1
+  if [[ -x "$built_product/$PRODUCT_NAME" ]] && ! lipo "$built_product/$PRODUCT_NAME" -verify_arch "$ARCH" 2>/dev/null; then
+    error "Build product at $built_product/$PRODUCT_NAME does not contain $ARCH" >&2
+    return 1
+  fi
+  printf '%s\n' "$built_product"
+}
+
+localization_matches() {
+  local source="$1" destination="$2" table relative_path
+  diff -rq -x '*.strings' "$source" "$destination" >/dev/null 2>&1 || return 1
+
+  while IFS= read -r -d '' table; do
+    relative_path="${table#"$source"/}"
+    plutil -convert binary1 -o - "$table" | cmp -s - "$destination/$relative_path" || return 1
+  done < <(find "$source" -type f -name '*.strings' -print0)
+
+  while IFS= read -r -d '' table; do
+    relative_path="${table#"$destination"/}"
+    [[ -f "$source/$relative_path" ]] || return 1
+  done < <(find "$destination" -type f -name '*.strings' -print0)
 }
 
 copy_swiftpm_resource_bundles() {
   local build_product_dir="$1"
   local resource_bundle destination legacy_destination bundle_name
   local copied_bundle=0
+  local bundle_diff_options
 
   # The current SwiftPM accessor searches Bundle.main.resourceURL for packaged apps.
   # Resource bundles at the .app root are invalid macOS bundle contents and break signing.
@@ -224,12 +244,12 @@ copy_swiftpm_resource_bundles() {
     legacy_destination="$APP_PATH/$bundle_name"
     archive_path "$legacy_destination" "$bundle_name.root-bundle"
     destination="$APP_RESOURCES/$bundle_name"
-    # ditto 是合并语义：目标 bundle 中不再被产物包含的残留文件（例如从 Core
-    # 资源移除的 emoji-test.txt）会永久存活。内容不一致时先归档旧 bundle 再
-    # 整体复制，保证包内 bundle 与构建产物逐字节一致；内容相同则跳过复制，
-    # 避免每次打包重写数百 KB 资源。
+    bundle_diff_options=(-rq)
+    if [[ "$bundle_name" == "XTools_XTools.bundle" ]]; then
+      bundle_diff_options+=(-x '*.lproj')
+    fi
     if [[ -e "$destination" ]]; then
-      if diff -rq "$resource_bundle" "$destination" >/dev/null 2>&1; then
+      if diff "${bundle_diff_options[@]}" "$resource_bundle" "$destination" >/dev/null 2>&1; then
         copied_bundle=1
         continue
       fi
@@ -243,18 +263,25 @@ copy_swiftpm_resource_bundles() {
   # Sources/XTools/Resources/Localizable.xcstrings) to the .app Resources root
   # so SwiftUI Text(LocalizedStringKey) lookups through Bundle.main find them
   # without reaching into the nested SwiftPM bundle.
-  local promoted_lproj promoted_destination
-  local promoted_source_dir="$APP_RESOURCES/XTools_XTools.bundle/Contents/Resources"
+  local promoted_lproj promoted_destination table nested_lproj
+  local promoted_source_dir="$build_product_dir/XTools_XTools.bundle/Contents/Resources"
   for promoted_lproj in "$promoted_source_dir/"*.lproj; do
     [[ -e "$promoted_lproj" ]] || continue
     promoted_destination="$APP_RESOURCES/$(basename "$promoted_lproj")"
     if [[ -e "$promoted_destination" ]]; then
-      if diff -rq "$promoted_lproj" "$promoted_destination" >/dev/null 2>&1; then
+      if localization_matches "$promoted_lproj" "$promoted_destination"; then
         continue
       fi
       archive_path "$promoted_destination" "$(basename "$promoted_lproj").replaced-lproj"
     fi
     /usr/bin/ditto "$promoted_lproj" "$promoted_destination"
+    while IFS= read -r -d '' table; do
+      plutil -convert binary1 "$table"
+    done < <(find "$promoted_destination" -type f -name '*.strings' -print0)
+  done
+
+  for nested_lproj in "$APP_RESOURCES/XTools_XTools.bundle/Contents/Resources/"*.lproj; do
+    archive_path "$nested_lproj" "$(basename "$nested_lproj").nested-lproj"
   done
 
   # 从 Localizable.xcstrings 移除的语言不得滞留在 Resources 根继续供旧文案。
@@ -336,40 +363,9 @@ stop_existing_app() {
 }
 
 write_info_plist_if_needed() {
-  # 开发者工具需要访问用户自建的内网服务（http Git 等）：URLSession 默认被
-  # ATS 拦截明文请求，无此例外源码管理的 http 自建 Git 全链路不可用。
-  ensure_ats_exception() {
-    # Add 在键已存在时报错；这是幂等 ensure 语义，失败交给随后的 Set 兜底。
-    # 不能让非零状态逃出函数：set -e 会让重复打包在半成品状态下静默退出。
-    /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$INFO_PLIST" 2>/dev/null || true
-    /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$INFO_PLIST" 2>/dev/null || true
-    /usr/libexec/PlistBuddy -c "Set :NSAppTransportSecurity:NSAllowsArbitraryLoads true" "$INFO_PLIST" 2>/dev/null || true
-  }
-  if [[ -f "$INFO_PLIST" ]]; then
-    local current_bundle_id current_min_version
-    current_min_version="$(/usr/libexec/PlistBuddy -c "Print :LSMinimumSystemVersion" "$INFO_PLIST" 2>/dev/null || true)"
-    if current_bundle_id="$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$INFO_PLIST" 2>/dev/null)"; then
-      # Keep the hot path byte-for-byte stable when identity and minimum OS match.
-      if [[ "$current_bundle_id" == "$BUNDLE_ID" && "$current_min_version" == "$MIN_SYSTEM_VERSION" ]]; then
-        ensure_ats_exception
-        return 0
-      fi
-      if [[ "$current_bundle_id" != "$BUNDLE_ID" ]]; then
-        /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_ID" "$INFO_PLIST"
-      fi
-    else
-      /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string $BUNDLE_ID" "$INFO_PLIST"
-    fi
-    if [[ -n "$current_min_version" ]]; then
-      /usr/libexec/PlistBuddy -c "Set :LSMinimumSystemVersion $MIN_SYSTEM_VERSION" "$INFO_PLIST"
-    else
-      /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string $MIN_SYSTEM_VERSION" "$INFO_PLIST"
-    fi
-    ensure_ats_exception
-    return 0
-  fi
-
-  cat >"$INFO_PLIST" <<PLIST
+  # ATS allows user-supplied HTTP Git endpoints and public HTTP article URLs.
+  local expected
+  expected="$(cat <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -382,6 +378,8 @@ write_info_plist_if_needed() {
   <string>$APP_DISPLAY_NAME</string>
   <key>CFBundleDisplayName</key>
   <string>$APP_DISPLAY_NAME</string>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>zh-Hans</string>
   <key>CFBundleIconFile</key>
   <string>$ICON_NAME</string>
   <key>CFBundlePackageType</key>
@@ -392,6 +390,8 @@ write_info_plist_if_needed() {
   <string>1</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.developer-tools</string>
   <key>NSAppTransportSecurity</key>
   <dict>
     <key>NSAllowsArbitraryLoads</key>
@@ -401,9 +401,15 @@ write_info_plist_if_needed() {
   <true/>
   <key>NSPrincipalClass</key>
   <string>NSApplication</string>
+  <key>NSSupportsAutomaticTermination</key>
+  <false/>
 </dict>
 </plist>
 PLIST
+)"
+  if [[ ! -f "$INFO_PLIST" || "$(< "$INFO_PLIST")" != "$expected" ]]; then
+    printf '%s\n' "$expected" >"$INFO_PLIST"
+  fi
 }
 
 package_app() {
@@ -516,23 +522,10 @@ build_and_launch() {
   info "Total $(elapsed "$t0")ms"
 }
 
-release_build_and_package() {
-  local t0
-  t0="$(now_ms)"
-  swift_build release
-  package_app release
-  info "Total $(elapsed "$t0")ms"
-}
-
 # Package the last built product. Picks the configuration from the build state
 # file when present, otherwise falls back to the newest binary on disk.
 package_last_built() {
   local requested="${1:-}"
-  local debug_product="" release_product="" last_config="" last_product=""
-
-  debug_product="$(find_built_product debug 2>/dev/null || true)"
-  release_product="$(find_built_product release 2>/dev/null || true)"
-
   case "$requested" in
     debug|release)
       package_app "$requested"
@@ -546,6 +539,10 @@ package_last_built() {
       exit 1
       ;;
   esac
+
+  local debug_product release_product last_config="" last_product=""
+  debug_product="$(find_built_product debug 2>/dev/null || true)"
+  release_product="$(find_built_product release 2>/dev/null || true)"
 
   if [[ -f "$BUILD_STATE_FILE" ]]; then
     IFS= read -r last_config <"$BUILD_STATE_FILE" || true
@@ -578,7 +575,7 @@ package_last_built() {
 
 rebuild_and_package() {
   clean
-  release_build_and_package
+  build_and_package release
 }
 
 case "${1:-}" in
