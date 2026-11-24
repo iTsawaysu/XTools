@@ -21,11 +21,10 @@ enum TextDevelopmentToolPreferenceKeys {
         default: "token",
         allowedValues: ["token", "uuid", "password"]
     )
-    /// 「图片处理」Hub 上次使用的分段（convert/compress/grayscale/favicon），重启后恢复。
-    static let imageSegment = ToolPreferenceKey<String>.string(
+    /// 「图片处理」Hub 上次使用的分段，重启后恢复。
+    static let imageSegment = ToolPreferenceKey<ImageHubWorkspaceModel.Segment>.rawRepresentable(
         "tools.image.segment.v1",
-        default: "convert",
-        allowedValues: ["convert", "compress", "grayscale", "favicon"]
+        default: .convert
     )
     /// 「文本编码」Hub 上次使用的分段（base64/url/ascii/unicode），重启后恢复。
     static let encodingSegment = ToolPreferenceKey<String>.string(

@@ -42,7 +42,7 @@ final class ImageHubWorkspaceModel: ObservableObject {
     @Published var segment: Segment {
         didSet {
             guard segment != oldValue else { return }
-            preferences.set(segment.rawValue, for: TextDevelopmentToolPreferenceKeys.imageSegment)
+            preferences.set(segment, for: TextDevelopmentToolPreferenceKeys.imageSegment)
         }
     }
 
@@ -50,7 +50,7 @@ final class ImageHubWorkspaceModel: ObservableObject {
 
     init(preferences: ToolPreferenceStore) {
         self.preferences = preferences
-        segment = Segment(rawValue: preferences.value(for: TextDevelopmentToolPreferenceKeys.imageSegment)) ?? .convert
+        segment = preferences.value(for: TextDevelopmentToolPreferenceKeys.imageSegment)
     }
 }
 

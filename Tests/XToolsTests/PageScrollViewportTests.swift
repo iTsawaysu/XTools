@@ -7,6 +7,15 @@ import XToolsCore
 @Suite(.serialized)
 @MainActor
 struct PageScrollViewportTests {
+    @Test func imageWatermarkSegmentPersistsForTheNextWorkspace() {
+        let defaults = UserDefaults(suiteName: "ImageHubSegment.\(UUID())")!
+        let workspace = ToolWorkspaceRepository(defaults: defaults).model(for: ImageHubWorkspaceModel.key)
+        #expect(workspace.segment == .convert)
+        workspace.segment = .watermark
+        #expect(defaults.string(forKey: "tools.image.segment.v1") == "watermark")
+        #expect(ToolWorkspaceRepository(defaults: defaults).model(for: ImageHubWorkspaceModel.key).segment == .watermark)
+    }
+
     @Test func emptyUploadWorkspacesPreserveViewportHeight() async throws {
         for size in [NSSize(width: 1000, height: 1000), NSSize(width: 700, height: 700)] {
             for segment in ImageHubWorkspaceModel.Segment.allCases {
