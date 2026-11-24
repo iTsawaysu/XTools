@@ -112,17 +112,17 @@ final class FileOutputPanelCoordinator: ObservableObject, FilePanelWindowAttachi
 }
 
 @MainActor
-private final class AppKitSaveFilePanelBackend: FileOutputPanelBackend {
+final class AppKitSaveFilePanelBackend: FileOutputPanelBackend {
     private let panel: NSSavePanel
+    private let initialFilename: String
 
     init(panel: NSSavePanel = NSSavePanel()) {
         self.panel = panel
+        initialFilename = panel.nameFieldStringValue
     }
 
     func configure(for request: FileOutputPanelRequest) {
-        if let defaultFilename = request.defaultFilename {
-            panel.nameFieldStringValue = defaultFilename
-        }
+        panel.nameFieldStringValue = request.defaultFilename ?? initialFilename
         panel.canCreateDirectories = false
         panel.allowedContentTypes = request.allowedContentTypes
         panel.allowsOtherFileTypes = false

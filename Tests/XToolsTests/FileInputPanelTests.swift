@@ -6,6 +6,16 @@ import UniformTypeIdentifiers
 
 @MainActor
 struct FileInputPanelTests {
+    @Test func reusedSavePanelRestoresItsNativeDefaultFilename() {
+        let panel = NSSavePanel()
+        let initialFilename = panel.nameFieldStringValue
+        let backend = AppKitSaveFilePanelBackend(panel: panel)
+        backend.configure(for: FileOutputPanelRequest(defaultFilename: "previous.txt", allowedContentTypes: [.plainText]))
+        #expect(panel.nameFieldStringValue == "previous.txt")
+        backend.configure(for: FileOutputPanelRequest(allowedContentTypes: [.plainText]))
+        #expect(panel.nameFieldStringValue == initialFilename)
+    }
+
     @Test func coordinatorCreatesBackendLazilyAndReusesItAcrossConfiguredRequests() async throws {
         let backend = FakeFileInputPanelBackend()
         var constructionCount = 0
@@ -356,7 +366,7 @@ private final class FakeFileInputPanelBackend: FileInputPanelBackend {
 @MainActor
 struct PanelRequestBoxTests {
     @Test func panelRequestBoxRapidRequestsPermitOnlySingleInFlightTask() async {
-        var box = PanelRequestBox()
+        let box = PanelRequestBox()
         let callCounter = TestLockedCounter(initialValue: 0)
         let signal = TestAsyncSignal()
 
@@ -420,7 +430,7 @@ struct PanelRequestBoxTests {
     }
 
     @Test func panelRequestBoxCancellationSuppressesCallbacks() async {
-        var box = PanelRequestBox()
+        let box = PanelRequestBox()
         let signal = TestAsyncSignal()
         var successFired = false
         var errorFired = false
@@ -453,7 +463,7 @@ struct PanelRequestBoxTests {
 
     @Test func panelRequestBoxErrorDiagnosticsMapping() async {
         // 1. windowUnavailable
-        var box1 = PanelRequestBox()
+        let box1 = PanelRequestBox()
         var receivedError1: String?
         let t1 = box1.request(
             { throw FileInputPanelFailure.windowUnavailable },
@@ -464,7 +474,7 @@ struct PanelRequestBoxTests {
         #expect(receivedError1 == "暂时无法打开文件选择器。")
 
         // 2. requestInProgress
-        var box2 = PanelRequestBox()
+        let box2 = PanelRequestBox()
         var receivedError2: String?
         let t2 = box2.request(
             { throw FileInputPanelFailure.requestInProgress },
@@ -475,7 +485,7 @@ struct PanelRequestBoxTests {
         #expect(receivedError2 == "已有文件选择器正在打开。")
 
         // 3. invalidSelection
-        var box3 = PanelRequestBox()
+        let box3 = PanelRequestBox()
         var receivedError3: String?
         let t3 = box3.request(
             { throw FileInputPanelFailure.invalidSelection },
@@ -487,7 +497,7 @@ struct PanelRequestBoxTests {
 
         // 4. Arbitrary unknown error falls back to standard message
         struct RandomFailure: Error {}
-        var box4 = PanelRequestBox()
+        let box4 = PanelRequestBox()
         var receivedError4: String?
         let t4 = box4.request(
             { throw RandomFailure() },
@@ -499,7 +509,7 @@ struct PanelRequestBoxTests {
     }
 
     @Test func panelRequestBoxCancellationErrorDoesNotReportError() async {
-        var box = PanelRequestBox()
+        let box = PanelRequestBox()
         var errorReported = false
 
         let task = box.request(

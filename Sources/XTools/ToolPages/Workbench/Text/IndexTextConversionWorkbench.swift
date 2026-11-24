@@ -52,8 +52,14 @@ struct AppKitIndexTextConversionTextSaver: IndexTextConversionTextSaving {
             ],
             prompt: "存储"
         )
-        guard let url = try? await outputPanel.selectFile(request) else {
+        let url: URL
+        do {
+            guard let selectedURL = try await outputPanel.selectFile(request) else { return .cancelled }
+            url = selectedURL
+        } catch is CancellationError {
             return .cancelled
+        } catch {
+            return .failed
         }
 
         guard !Task.isCancelled else { return .cancelled }

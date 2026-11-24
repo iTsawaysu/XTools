@@ -33,7 +33,7 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
 
     let outputSpecs: [FaviconOutputSpec]
 
-    private var panelRequests = PanelRequestBox()
+    private let panelRequests = PanelRequestBox()
     private var selectionTask: Task<Void, Never>?
     private let workGate = AsyncWorkGate()
 
@@ -42,7 +42,6 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
     }
 
     deinit {
-        panelRequests.cancel()
         selectionTask?.cancel()
     }
 

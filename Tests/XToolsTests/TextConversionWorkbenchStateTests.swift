@@ -2,6 +2,13 @@
 import Testing
 
 struct TextConversionWorkbenchStateTests {
+    @Test @MainActor func savePanelFailureIsReportedSeparatelyFromCancellation() async {
+        let saver = AppKitIndexTextConversionTextSaver()
+        let cancelled = FileOutputPanelClient { _ in nil }
+        #expect(await saver.saveText("data", fileName: "output.txt", outputPanel: cancelled) == .cancelled)
+        #expect(await saver.saveText("data", fileName: "output.txt", outputPanel: .unavailable) == .failed)
+    }
+
     @Test @MainActor func converterInitialModeUsesValidRequestAndFallsBackSafely() {
         let modes = [
             IndexConverterMode(id: "enc", label: "编码"),

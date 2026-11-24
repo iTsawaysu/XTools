@@ -121,6 +121,7 @@ final class FilePanelSheetRequestCore<Payload: Sendable> {
 
     private func finishRequest(id: UUID, result: FilePanelSheetResult<Payload>) {
         guard let request = takeActiveRequest(id: id) else { return }
+        activeSession = nil
 
         switch result {
         case .selected(let payload):
@@ -132,7 +133,6 @@ final class FilePanelSheetRequestCore<Payload: Sendable> {
         case .cancelled:
             request.continuation.resume(returning: nil)
         }
-        activeSession = nil
     }
 
     private func cancelActiveRequest(id: UUID? = nil) {

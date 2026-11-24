@@ -67,15 +67,11 @@ final class FileTypeDetectorSession: ObservableObject {
     }
 
     private let reader: any FileTypeFileReading
-    private var panelRequests = PanelRequestBox()
+    private let panelRequests = PanelRequestBox()
     private let workGate = AsyncWorkGate()
 
     init(reader: any FileTypeFileReading = FoundationFileTypeFileReader()) {
         self.reader = reader
-    }
-
-    deinit {
-        panelRequests.cancel()
     }
 
     @discardableResult

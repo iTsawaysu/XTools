@@ -78,7 +78,7 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
 
     let maximumItemCount: Int
 
-    private var panelRequests = PanelRequestBox()
+    private let panelRequests = PanelRequestBox()
     private var importTask: Task<Void, Never>?
     private var conversionTask: Task<Void, Never>?
     private let importGate = AsyncWorkGate()
@@ -99,7 +99,6 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
     }
 
     deinit {
-        panelRequests.cancel()
         importTask?.cancel()
         conversionTask?.cancel()
         try? FileManager.default.removeItem(at: spoolDirectory)

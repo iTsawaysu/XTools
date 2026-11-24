@@ -19,12 +19,11 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
     @Published private(set) var isProcessing = false
     @Published private(set) var isSaving = false
 
-    private var panelRequests = PanelRequestBox()
+    private let panelRequests = PanelRequestBox()
     private var selectionTask: Task<Void, Never>?
     private let renderGate = AsyncWorkGate()
 
     deinit {
-        panelRequests.cancel()
         selectionTask?.cancel()
     }
 
