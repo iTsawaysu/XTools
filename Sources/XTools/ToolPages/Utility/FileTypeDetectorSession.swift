@@ -126,7 +126,7 @@ final class FileTypeDetectorSession: ObservableObject {
                 do {
                     leadingData = try reader.readLeadingData(
                         from: url,
-                        maxByteCount: FileTypeDetector.leadingByteLimit
+                        maxByteCount: FileTypeDetector.leadingByteReadLimit
                     )
                     prefixWarning = nil
                 } catch {

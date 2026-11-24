@@ -77,6 +77,8 @@ public struct FileTypeReport: Equatable, Sendable {
 
 public enum FileTypeDetector {
     public static let leadingByteLimit = 64
+    // Allow a UTF-8 scalar that starts in the sample to finish.
+    public static let leadingByteReadLimit = leadingByteLimit + 3
 
     public enum InspectionIssue: LocalizedError, Equatable {
         case notRegularFile
@@ -272,36 +274,25 @@ public enum FileTypeDetector {
             )
         }
 
-        if looksLikeUTF8Text(data) {
-            let isJSON = looksLikeJSON(data)
-            return evidence(
-                mimeType: isJSON ? "application/json" : "text/plain",
-                specificity: isJSON ? .specific : .genericText
-            )
-        }
-
-        return nil
-    }
-
-    private static func looksLikeUTF8Text(_ data: Data) -> Bool {
-        guard String(data: data, encoding: .utf8) != nil else {
-            return false
-        }
-
-        return data.allSatisfy { byte in
+        let sampleCount = min(data.count, leadingByteLimit)
+        let readCount = min(data.count, leadingByteReadLimit)
+        let text = (sampleCount...readCount).lazy.compactMap {
+            String(data: data.prefix($0), encoding: .utf8)
+        }.first
+        guard let text, text.utf8.allSatisfy({ byte in
             byte == 0x09
                 || byte == 0x0A
                 || byte == 0x0D
                 || byte >= 0x20
-        }
-    }
-
-    private static func looksLikeJSON(_ data: Data) -> Bool {
-        guard let text = String(data: data, encoding: .utf8) else {
-            return false
+        }) else {
+            return nil
         }
 
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.hasPrefix("{") || trimmed.hasPrefix("[")
+        let isJSON = trimmed.hasPrefix("{") || trimmed.hasPrefix("[")
+        return evidence(
+            mimeType: isJSON ? "application/json" : "text/plain",
+            specificity: isJSON ? .specific : .genericText
+        )
     }
 }

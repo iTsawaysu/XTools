@@ -193,6 +193,17 @@ struct FileTypeDetectorTests {
 
     @Test func exposesLeadingByteReadLimit() {
         #expect(FileTypeDetector.leadingByteLimit == 64)
+        #expect(FileTypeDetector.leadingByteReadLimit == 67)
+    }
+
+    @Test func textSampleCanFinishAScalarAcrossTheReadBoundary() {
+        let prefix = Data(String(repeating: "a", count: 63).utf8)
+        let valid = prefix + Data("🙂".utf8)
+        let invalid = prefix + Data([0xF0, 0x9F, 0x99, 0xFF])
+        for (sample, expected) in [(valid, "text/plain"), (invalid, "(未知)")] {
+            let report = FileTypeDetector.inspect(fileName: "sample", byteCount: 100, leadingData: sample)
+            #expect(report.contentMIMEType == expected)
+        }
     }
 
     @Test func inspectionIssuesAreSpecificFactualMessages() {

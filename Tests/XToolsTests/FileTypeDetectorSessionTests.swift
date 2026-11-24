@@ -6,6 +6,15 @@ import UniformTypeIdentifiers
 
 @MainActor
 struct FileTypeDetectorSessionTests {
+    @Test func detectsTextWithAScalarSplitByTheDefaultPrefixSize() async {
+        let url = URL(fileURLWithPath: "/tmp/utf8-sample")
+        let data = Data((String(repeating: "a", count: 63) + "🙂更多文字").utf8)
+        let reader = FakeFileTypeFileReader(byteCountsByURL: [url: Int64(data.count)], leadingDataByURL: [url: data])
+        let session = FileTypeDetectorSession(reader: reader)
+        await session.inspect(url).value
+        #expect(session.report?.contentMIMEType == "text/plain")
+    }
+
     @Test func inspectionReadsMetadataAndBoundedPrefixOffMainActor() async {
         let url = URL(fileURLWithPath: "/tmp/payload.json")
         let reader = FakeFileTypeFileReader(
@@ -23,7 +32,7 @@ struct FileTypeDetectorSessionTests {
         #expect(session.error == nil)
         #expect(session.warning == nil)
         #expect(session.isInspecting == false)
-        #expect(reader.requestedLeadingByteCounts == [FileTypeDetector.leadingByteLimit])
+        #expect(reader.requestedLeadingByteCounts == [FileTypeDetector.leadingByteReadLimit])
         #expect(reader.observedMainThread == false)
     }
 
@@ -405,6 +414,6 @@ private final class FakeFileTypeFileReader: FileTypeFileReading, @unchecked Send
         if let issue = prefixIssuesByURL[url] {
             throw issue
         }
-        return leadingDataByURL[url] ?? Data()
+        return leadingDataByURL[url]?.prefix(maxByteCount) ?? Data()
     }
 }
