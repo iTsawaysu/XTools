@@ -108,11 +108,9 @@ public enum TimestampInterpreter {
     }
 
     private static func integerText(_ value: Double) -> String? {
-        guard value.isFinite,
-              value >= Double(Int64.min),
-              value <= Double(Int64.max) else {
+        guard let integer = Int64(exactly: value.rounded(.towardZero)) else {
             return nil
         }
-        return String(Int64(value.rounded(.towardZero)))
+        return String(integer)
     }
 }

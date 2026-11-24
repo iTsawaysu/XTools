@@ -392,7 +392,7 @@ public enum JWTVerifier {
     private static let claimDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = .autoupdatingCurrent
         return formatter
     }()
 

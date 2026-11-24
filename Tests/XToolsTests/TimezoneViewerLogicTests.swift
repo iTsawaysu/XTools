@@ -3,6 +3,19 @@ import Foundation
 import Testing
 
 struct TimezoneViewerLogicTests {
+    @Test @MainActor func cachedClocksKeepTheirFormattingAcrossDSTAndDateBoundaries() throws {
+        let newYork = try #require(TimeZone(identifier: "America/New_York"))
+        let tokyo = try #require(TimeZone(identifier: "Asia/Tokyo"))
+        let before = Self.instant("2026-03-08T06:59:59Z")
+        let after = Self.instant("2026-03-08T07:00:00Z")
+        #expect(IndexTimezoneViewerPage.clockText(at: before, in: newYork).time == "01:59:59")
+        #expect(IndexTimezoneViewerPage.clockText(at: before, in: tokyo).time == "15:59:59")
+        #expect(IndexTimezoneViewerPage.clockText(at: after, in: newYork).time == "03:00:00")
+        let nextDate = Self.instant("2026-03-08T16:00:00Z")
+        #expect(IndexTimezoneViewerPage.clockText(at: nextDate, in: tokyo).date == "2026-03-09 星期一")
+        #expect(IndexTimezoneViewerPage.clockText(at: nextDate, in: newYork).date == "2026-03-08 星期日")
+    }
+
     @Test func defaultCatalogKeepsRegionOrderAndKeyCities() {
         let regions = TimezoneCityCatalog.defaultRegions
 

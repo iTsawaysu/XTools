@@ -118,6 +118,7 @@ struct IndexTimezoneViewerPage: View {
 
     private func timezoneGroupCard(group: TimezoneGroup, currentTime: Date) -> some View {
         let isFavorite = group.favoriteKeys.isSubset(of: favoriteStore.favoriteKeys)
+        let clock = Self.clockText(at: currentTime, in: group.cities[0].timezone)
 
         return IndexSurfaceRow(horizontalPadding: ToolMetrics.Spacing.panelInset, verticalPadding: ToolMetrics.Spacing.md) {
             HStack(spacing: 12) {
@@ -130,10 +131,10 @@ struct IndexTimezoneViewerPage: View {
                             .font(ToolTypography.bodyMedium)
                             .foregroundStyle(ToolTheme.textPrimary)
                     }
-                    Text(formatTime(for: group.cities[0].timezone, currentTime: currentTime))
+                    Text(clock.time)
                         .font(ToolTypography.statValue)
                         .foregroundStyle(ToolTheme.textPrimary)
-                    Text(formatDate(for: group.cities[0].timezone, currentTime: currentTime))
+                    Text(clock.date)
                         .font(ToolTypography.caption)
                         .foregroundStyle(ToolTheme.textSecondary)
                 }
@@ -160,27 +161,15 @@ struct IndexTimezoneViewerPage: View {
         "region.\(region)"
     }
 
-    private func formatTime(for timezone: TimeZone, currentTime: Date) -> String {
-        Self.timeFormatter.timeZone = timezone
-        return Self.timeFormatter.string(from: currentTime)
+    private static let timeFormat: Date.FormatString = "\(hour: .twoDigits(clock: .twentyFourHour, hourCycle: .zeroBased)):\(minute: .twoDigits):\(second: .twoDigits)"
+    private static let dateFormat: Date.FormatString = "\(year: .padded(4))-\(month: .twoDigits)-\(day: .twoDigits) \(weekday: .wide)"
+    private static let dateLocale = Locale(identifier: "zh_CN")
+    private static let dateCalendar = Calendar(identifier: .gregorian)
+
+    @MainActor static func clockText(at instant: Date, in timezone: TimeZone) -> (time: String, date: String) {
+        let time = instant.formatted(.verbatim(timeFormat, timeZone: timezone, calendar: .current))
+        let date = instant.formatted(.verbatim(dateFormat, locale: dateLocale, timeZone: timezone, calendar: dateCalendar))
+        return (time, date)
     }
-
-    private func formatDate(for timezone: TimeZone, currentTime: Date) -> String {
-        Self.dateFormatter.timeZone = timezone
-        return Self.dateFormatter.string(from: currentTime)
-    }
-
-    @MainActor private static let timeFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        return formatter
-    }()
-
-    @MainActor private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd EEEE"
-        formatter.locale = Locale(identifier: "zh_CN")
-        return formatter
-    }()
 }
 

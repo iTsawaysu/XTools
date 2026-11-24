@@ -104,4 +104,13 @@ struct TimestampInterpreterTests {
         #expect(TimestampInterpreter.canonicalWholeSecondDate(for: Date(timeIntervalSince1970: 253_402_300_800)) == nil)
         #expect(TimestampInterpreter.canonicalWholeSecondDate(for: Date(timeIntervalSince1970: -62_135_596_801)) == nil)
     }
+
+    @Test func renderingRejectsAnUnrepresentableIntegerWithoutTrapping() {
+        let upperBoundary = Double(Int64.max)
+        #expect(TimestampInterpreter.wholeSecondText(for: Date(timeIntervalSince1970: upperBoundary)) == nil)
+        #expect(TimestampInterpreter.wholeSecondText(for: Date(timeIntervalSince1970: upperBoundary.nextDown)) == "9223372036854774784")
+        #expect(TimestampInterpreter.wholeSecondText(for: Date(timeIntervalSince1970: Double(Int64.min))) == "-9223372036854775808")
+        #expect(TimestampInterpreter.millisecondText(for: Date(timeIntervalSince1970: upperBoundary / 1_000)) == nil)
+        #expect(TimestampInterpreter.wholeSecondText(for: Date(timeIntervalSince1970: -123.987)) == "-123")
+    }
 }
