@@ -18,6 +18,13 @@ struct SidebarNavigationListTests {
 
         #expect(scrollView.documentView === coordinator.documentView)
         #expect(coordinator.documentView.isFlipped)
+        let tracks = coordinator.documentView.subviews.compactMap { $0 as? SidebarNavigationTrackView }
+        #expect(tracks.count == beforeEntries.count)
+        for (track, entry) in zip(tracks, beforeEntries) {
+            #expect(track.trackID == entry.id)
+            #expect(track.frame.height == entry.presentedHeight)
+            #expect((type(of: track.hostedContentView) == NSView.self) == (entry.content == .spacing))
+        }
         let before = try #require(coordinator.cachedTrackObjectIdentifier(for: "tool.list-alpha"))
 
         let afterEntries = Self.entries(groups: [

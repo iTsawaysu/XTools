@@ -562,19 +562,25 @@ final class SidebarNavigationListCoordinator {
             configuration: configuration
         )
         let hoverState = SidebarNavigationTrackHoverState()
-        let hostingView = NSHostingView(rootView: trackRoot(
-            entry: entry,
-            configuration: configuration,
-            interaction: interaction,
-            hoverState: hoverState
-        ))
-        hostingView.sizingOptions = []
+        let contentView: NSView
+        if case .spacing = target.kind {
+            contentView = NSView()
+        } else {
+            let hostingView = NSHostingView(rootView: trackRoot(
+                entry: entry,
+                configuration: configuration,
+                interaction: interaction,
+                hoverState: hoverState
+            ))
+            hostingView.sizingOptions = []
+            contentView = hostingView
+        }
         let track = SidebarNavigationTrackView(
             trackID: target.id,
             groupID: target.groupID,
             kind: target.kind,
             naturalContentHeight: target.naturalHeight,
-            hostedContentView: hostingView,
+            hostedContentView: contentView,
             hoverState: hoverState
         )
         // v3 full-row hit target: the AppKit track owns row activation so the

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import Observation
 import XToolsCore
 
 /// Window-scoped clipboard observer behind the shell's smart-paste suggestion.
@@ -13,7 +14,8 @@ import XToolsCore
 ///   re-suggests. Copying again re-arms it.
 /// - Never suggests the tool the user is already looking at.
 @MainActor
-final class SmartPasteMonitor: ObservableObject {
+@Observable
+final class SmartPasteMonitor {
     struct Suggestion: Hashable {
         let kind: SmartPasteDetector.Kind
         let toolID: ToolID
@@ -47,11 +49,11 @@ final class SmartPasteMonitor: ObservableObject {
 
     /// 每次突变都包在 applyToolMotion（panelReveal 事务）里，横幅的进出场
     /// 因此落在动画事务内（ToastCenter 同构）；Reduce Motion 时自动直执行。
-    @Published private(set) var suggestion: Suggestion?
+    private(set) var suggestion: Suggestion?
 
-    private var inspectedChangeCount = -1
-    private var dismissedChangeCount = -1
-    private var currentToolID: ToolID?
+    @ObservationIgnored private var inspectedChangeCount = -1
+    @ObservationIgnored private var dismissedChangeCount = -1
+    @ObservationIgnored private var currentToolID: ToolID?
 
     /// NSPasteboard is main-thread-only and has no bounded read, so a huge
     /// clipboard still pays the fetch itself; this bound only skips building
@@ -78,11 +80,14 @@ final class SmartPasteMonitor: ObservableObject {
         }
         inspectedChangeCount = changeCount
 
-        // Any new content invalidates the previous suggestion, including content
-        // that does not classify — the old hint is about the old clipboard.
-        applyToolMotion { suggestion = nil }
+        let next = suggestion(for: changeCount, registry: registry, pasteboard: pasteboard)
+        if next != suggestion {
+            applyToolMotion { suggestion = next }
+        }
+    }
 
-        guard changeCount != dismissedChangeCount else { return }
+    private func suggestion(for changeCount: Int, registry: ToolRegistry, pasteboard: NSPasteboard) -> Suggestion? {
+        guard changeCount != dismissedChangeCount else { return nil }
         guard let data = pasteboard.data(forType: .string),
               !data.isEmpty,
               data.count <= Self.maxInspectedBytes,
@@ -93,19 +98,15 @@ final class SmartPasteMonitor: ObservableObject {
               let route = Self.routes[kind],
               let tool = registry.tool(for: route.toolID),
               tool.id != currentToolID
-        else {
-            return
-        }
+        else { return nil }
 
-        applyToolMotion {
-            suggestion = Suggestion(
-                kind: kind,
-                toolID: tool.id,
-                toolTitle: tool.title,
-                message: route.message,
-                hubSegment: route.hubSegment
-            )
-        }
+        return Suggestion(
+            kind: kind,
+            toolID: tool.id,
+            toolTitle: tool.title,
+            message: route.message,
+            hubSegment: route.hubSegment
+        )
     }
 
     func dismiss() {

@@ -1,6 +1,8 @@
 @testable import XTools
 import AppKit
 import Foundation
+import Observation
+import os
 import Testing
 import XToolsCore
 
@@ -48,6 +50,30 @@ struct SmartPasteMonitorTests {
         monitor.refresh(registry: .default, pasteboard: pasteboard, force: true)
         #expect(monitor.suggestion?.kind == .json)
         #expect(monitor.suggestion?.toolID == "formatter")
+    }
+
+    @Test func observationInvalidatesOnlyWhenTheDisplayedSuggestionChanges() {
+        let monitor = SmartPasteMonitor()
+        let pasteboard = NSPasteboard(name: .init("SmartPasteObservationTests.\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+        pasteboard.clearContents()
+        pasteboard.setString(#"{"name":"x"}"#, forType: .string)
+        monitor.refresh(registry: .default, pasteboard: pasteboard)
+        #expect(monitor.suggestion?.kind == .json)
+
+        let changes = OSAllocatedUnfairLock(initialState: 0)
+        withObservationTracking {
+            _ = monitor.suggestion
+        } onChange: {
+            changes.withLock { $0 += 1 }
+        }
+        monitor.noteSelectedTool("text-encoding")
+        monitor.refresh(registry: .default, pasteboard: pasteboard, force: true)
+        #expect(changes.withLock { $0 } == 0)
+
+        monitor.dismiss()
+        #expect(changes.withLock { $0 } == 1)
+        #expect(monitor.suggestion == nil)
     }
 
 }

@@ -10,7 +10,7 @@ struct RootView: View {
     @StateObject private var sidebarSections = SidebarSectionExpansionStore()
     @StateObject private var workspaceRepository: ToolWorkspaceRepository
     @StateObject private var dashboardStore: DashboardStore
-    @StateObject private var smartPaste = SmartPasteMonitor()
+    @State private var smartPaste = SmartPasteMonitor()
     @StateObject private var hubSegmentEntryHint = HubSegmentEntryHint()
     @StateObject private var systemAppearanceSource: SystemAppearanceSource
     @State private var showsPreferences = false
@@ -193,55 +193,16 @@ struct RootView: View {
             actions: navigationActions,
             onOpenCommandPalette: openCommandPaletteAnimated
         )
-        return VStack(spacing: 0) {
-            ToolDetailHostView(
-                registry: registry,
-                selectedToolID: viewModel.selectedToolID,
-                dashboardStore: dashboardStore,
-                workspaceRepository: workspaceRepository,
-                favorites: favorites,
-                routing: detailRouting,
-                clipboardSuggestion: smartPaste.suggestion,
-                onOpenClipboardSuggestion: openClipboardSuggestion,
-                onDismissClipboardSuggestion: smartPaste.dismiss
-            )
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(ToolTheme.workspaceBackground)
-        // v3: one reliable transaction for the tool-switch arrival — the host
-        // owns the id-driven transition; this root-level animation keyed on
-        // the selection guarantees the crossfade plays even when the switch
-        // originates outside the host (palette, sidebar, shortcuts).
-        .toolAnimation(ToolMotion.Preset.pageEnter, value: viewModel.selectedToolID)
-        // Floating suggestion: overlay keeps page layout, scroll ownership, and
-        // control positions untouched while the hint is visible. The entrance/
-        // exit transaction comes from the monitor's applyToolMotion writes; the
-        // container-level animation below is the same belt-and-braces the toast
-        // host carries. `.id(suggestion)` forces a remove+insert when a new
-        // clipboard replaces the visible banner (same-tick nil→new writes would
-        // otherwise merge into an unanimated content swap).
-        .overlay(alignment: .top) {
-            if viewModel.selectedToolID != nil, let suggestion = smartPaste.suggestion {
-                SmartPasteSuggestionBanner(
-                    suggestion: suggestion,
-                    onOpen: {
-                        // 深链目标带分段时先写提示（带 toolID，由目标 Hub 校验
-                        // 消费），再切换工具；Hub 出现时一次性消费（覆盖记忆
-                        // 的分段）。
-                        hubSegmentEntryHint.request = suggestion.hubSegment.map {
-                            HubSegmentEntryHint.Request(toolID: suggestion.toolID, segment: $0)
-                        }
-                        _ = navigationActions.selectTool(suggestion.toolID)
-                    },
-                    onDismiss: smartPaste.dismiss
-                )
-                .id(suggestion)
-                .padding(.top, ToolMetrics.Spacing.md)
-                .padding(.horizontal, ToolMetrics.Spacing.lg)
-                .toolTransition(ToolMotion.Transition.toastPanel, reduceMotion: reduceMotion)
-            }
-        }
-        .toolAnimation(ToolMotion.Preset.panelReveal, reduceMotion: reduceMotion, value: smartPaste.suggestion)
+        return ToolDetailHostView(
+            registry: registry,
+            selectedToolID: viewModel.selectedToolID,
+            dashboardStore: dashboardStore,
+            workspaceRepository: workspaceRepository,
+            favorites: favorites,
+            routing: detailRouting,
+            smartPaste: smartPaste,
+            onOpenClipboardSuggestion: openClipboardSuggestion
+        )
     }
 
     private func openClipboardSuggestion(_ suggestion: SmartPasteMonitor.Suggestion) {

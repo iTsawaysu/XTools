@@ -7,6 +7,48 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct WorkbenchAccessibilityTests {
+    @Test func detailClipboardBannerUpdatesInTheHostedWindow() async throws {
+        let monitor = SmartPasteMonitor()
+        let repository = ToolWorkspaceRepository()
+        let registry = ToolRegistry.default
+        let pasteboard = NSPasteboard(name: .init("DetailClipboardTests.\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+        var opened: SmartPasteMonitor.Suggestion?
+        let hosting = NSHostingView(rootView: ToolDetailHostView(
+            registry: registry, selectedToolID: "http-status-codes", dashboardStore: nil,
+            workspaceRepository: repository, favorites: FavoritesStore(), routing: DetailClipboardTestRouting(),
+            smartPaste: monitor, onOpenClipboardSuggestion: { opened = $0 }
+        )
+        .environmentObject(repository)
+        .environment(\.accessibilityEnabled, true))
+        hosting.frame = NSRect(x: 0, y: 0, width: 1100, height: 700)
+        let window = NSWindow(contentRect: hosting.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+        window.makeKeyAndOrderFront(nil)
+        defer { window.orderOut(nil); window.contentView = nil }
+
+        pasteboard.clearContents()
+        pasteboard.setString(#"{"name":"x"}"#, forType: .string)
+        monitor.refresh(registry: registry, pasteboard: pasteboard)
+        let suggestion = try #require(monitor.suggestion)
+        let openLabel = "打开 \(suggestion.toolTitle)"
+        let diagnostics: () -> String = { self.accessibleText(in: window).joined(separator: " | ") }
+        try await waitUntil(hosting, stage: "clipboard suggestion visible", diagnostics: diagnostics) {
+            findAction(openLabel, in: window) != nil
+        }
+        let open = try #require(findAction(openLabel, in: window))
+        #expect(open.press())
+        try await waitUntil(hosting, stage: "clipboard suggestion dispatched", diagnostics: diagnostics) {
+            opened == suggestion
+        }
+        #expect(findAction("忽略这个建议", in: window)?.press() == true)
+        try await waitUntil(hosting, stage: "clipboard suggestion dismissed", diagnostics: diagnostics) {
+            findAction(openLabel, in: window) == nil
+        }
+        #expect(monitor.suggestion == nil)
+    }
+
     @Test(arguments: [false, true])
     func actionHelpStaysWithItsButtonAndTracksCopyFeedback(_ dark: Bool) async throws {
         let model = AccessibilityWorkbenchModel()
@@ -331,6 +373,13 @@ private struct AccessibilityTestElement {
 }
 
 private enum AccessibilityTestError: Error { case timeout(stage: String, diagnostics: String) }
+
+@MainActor
+private final class DetailClipboardTestRouting: DetailActionRouting {
+    func selectTool(_ toolID: ToolID) {}
+    func selectCategory(_ categoryID: ToolCategoryID) {}
+    func openCommandPalette() {}
+}
 
 private struct AccessibilityPreferences: Equatable {
     let dark: Bool

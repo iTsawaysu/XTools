@@ -14,7 +14,7 @@ struct SmartPasteSuggestionBanner: View {
 
     /// ToastCenter 同构的自动消失簿记：悬停进入时把剩余时长折算留存并停表，
     /// 移出后续走剩余时长（≤0 立即消失），保证横幅永远不会从指针下抽走。
-    /// 建议变化由 RootView 的 .id(suggestion) 重建整个视图，onAppear 全量重置。
+    /// 详情区通过 .id(suggestion) 在建议改变时重建横幅，onAppear 重置计时。
     @State private var dismissalTask: Task<Void, Never>?
     @State private var dismissalStartedAt: Date?
     @State private var dismissalRemaining: TimeInterval?
