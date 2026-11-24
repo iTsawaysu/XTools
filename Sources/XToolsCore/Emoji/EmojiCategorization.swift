@@ -26,7 +26,6 @@ private final class EmojiStringCache: @unchecked Sendable {
 public struct EmojiEntry: Identifiable, Equatable, Sendable, Codable {
     public let base: String
     public let name: String
-    public let aliases: [String]
     public let skinToneCapable: Bool
     package let searchText: String
 
@@ -71,7 +70,6 @@ public struct EmojiEntry: Identifiable, Equatable, Sendable, Codable {
     public init(base: String, name: String, skinToneCapable: Bool, aliases: [String] = []) {
         self.base = base
         self.name = name
-        self.aliases = aliases
         self.skinToneCapable = skinToneCapable
         self.searchText = ([base, name] + aliases)
             .map(normalizedEmojiSearchText)
@@ -82,13 +80,11 @@ public struct EmojiEntry: Identifiable, Equatable, Sendable, Codable {
     package init(
         base: String,
         name: String,
-        aliases: [String],
         skinToneCapable: Bool,
         searchText: String
     ) {
         self.base = base
         self.name = name
-        self.aliases = aliases
         self.skinToneCapable = skinToneCapable
         self.searchText = searchText
     }
@@ -153,16 +149,39 @@ public struct EmojiGroup: Identifiable, Equatable, Sendable, Codable {
 
         var seen = Set<String>()
         var uniqueEntries: [EmojiEntry] = []
-        for entry in sections.flatMap({ $0.subsections }).flatMap(\.entries) where seen.insert(entry.base).inserted {
+        for entry in sections.lazy.flatMap(\.subsections).flatMap(\.entries) where seen.insert(entry.base).inserted {
             uniqueEntries.append(entry)
         }
         self.entries = uniqueEntries
     }
 
-    package init(name: String, entries: [EmojiEntry], sections: [EmojiSection]) {
+    private init(name: String, entries: [EmojiEntry], sections: [EmojiSection]) {
         self.name = name
         self.entries = entries
         self.sections = sections
+    }
+
+    private enum CodingKeys: CodingKey { case name, entries, sections }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let name = try container.decode(String.self, forKey: .name)
+        let sections = try container.decodeIfPresent([EmojiSection].self, forKey: .sections) ?? []
+        if !sections.isEmpty, !container.contains(.entries) {
+            self.init(name: name, sections: sections)
+        } else {
+            self.init(name: name, entries: try container.decode([EmojiEntry].self, forKey: .entries), sections: sections)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        if sections.isEmpty {
+            try container.encode(entries, forKey: .entries)
+        } else {
+            try container.encode(sections, forKey: .sections)
+        }
     }
 }
 
@@ -318,8 +337,8 @@ public enum EmojiCatalog {
     /// process-safe: if the user reaches the picker before the prewarm lands,
     /// the main thread joins the already-running decode instead of paying a
     /// second one.
-    public static func prewarmCatalog() {
-        Task.detached(priority: .userInitiated) {
+    public static func prewarmCatalog(priority: TaskPriority) {
+        Task.detached(priority: priority) {
             _ = groups
             _ = allEntries
         }

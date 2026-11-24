@@ -158,10 +158,10 @@ struct XToolsApp: App {
         // paying inside the first palette/sidebar query.
         ToolSearchEngine.prewarmTransliterationEngine()
 
-        // The emoji picker reads EmojiCatalog.groups inside its first render
-        // pass; decoding the 384KB plist there put the whole catalog build on
-        // the main thread at click time. Same treatment as the ICU prewarm.
-        EmojiCatalog.prewarmCatalog()
+        // The initial tool reads the catalog synchronously if Emoji is restored.
+        let lastTool = ToolPreferenceStore().value(for: AppShellPreferenceKeys.selectedToolID)
+        EmojiCatalog.prewarmCatalog(priority: lastTool == EmojiToolWorkspaceModel.key.toolID.rawValue
+            ? .userInitiated : .utility)
     }
 
     var body: some Scene {

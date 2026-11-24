@@ -46,6 +46,25 @@ struct EmojiCategorizationTests {
         #expect(EmojiCatalog.decodePrecompiledCatalog(mismatched) == nil)
     }
 
+    @Test func groupedCatalogReadsLegacyEntriesAndEncodesSectionEntriesOnce() throws {
+        struct LegacyGroup: Encodable {
+            let name: String
+            let entries: [EmojiEntry]
+            let sections: [EmojiSection]
+        }
+        let group = EmojiCatalog.buildSpecialSymbolGroup()
+        let encoder = PropertyListEncoder()
+        let decoder = PropertyListDecoder()
+        let legacy = try encoder.encode(LegacyGroup(name: group.name, entries: group.entries, sections: group.sections))
+        let compact = try encoder.encode(group)
+
+        #expect(try decoder.decode(EmojiGroup.self, from: legacy) == group)
+        #expect(try decoder.decode(EmojiGroup.self, from: compact) == group)
+        let fields = try #require(PropertyListSerialization.propertyList(from: compact, format: nil) as? [String: Any])
+        #expect(fields["entries"] == nil)
+        #expect(compact.count < legacy.count)
+    }
+
     @Test func catalogBuildsExpectedGroups() {
         let groupNames = EmojiCatalog.groups.map(\.name)
 

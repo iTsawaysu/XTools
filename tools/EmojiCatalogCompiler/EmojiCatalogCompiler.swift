@@ -59,16 +59,17 @@ package enum EmojiCatalogCompiler {
             return EmojiEntry(
                 base: entry.base,
                 name: entry.name,
-                aliases: entry.aliases,
                 skinToneCapable: entry.skinToneCapable,
                 searchText: searchText
             )
         }
 
         return groups.map { group in
-            EmojiGroup(
+            guard !group.sections.isEmpty else {
+                return EmojiGroup(name: group.name, entries: group.entries.map(entryWithAnnotations))
+            }
+            return EmojiGroup(
                 name: group.name,
-                entries: group.entries.map(entryWithAnnotations),
                 sections: group.sections.map { section in
                     EmojiSection(
                         name: section.name,
