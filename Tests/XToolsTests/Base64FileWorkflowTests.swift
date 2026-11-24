@@ -779,6 +779,25 @@ struct Base64FileWorkflowTests {
         #expect(session.decodedPayload == nil)
         #expect(session.reverseInputDirty)
         #expect(session.isDecoding == false)
+        #expect(processor.imagePreviewCount == 1)
+    }
+
+    @Test func sessionCancelledManualDecodeSkipsImagePreviewAndEndsActivity() async throws {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let suspendedDecode = SuspendedTestValue<Result<Base64Conversion.FilePayload, Base64FileWorkflowFailure>>()
+        processor.decodeHandler = { _ in await suspendedDecode.wait() }
+        session.updateReverseInput("aGVsbG8=")
+
+        let task = try #require(session.decodeReverseInput(processor: processor))
+        await suspendedDecode.waitForRequest()
+        task.cancel()
+        suspendedDecode.resume(.success(.init(data: Data("hello".utf8), mimeType: "text/plain", fileExtension: "txt")))
+        await task.value
+
+        #expect(processor.imagePreviewCount == 0)
+        #expect(session.decodedPayload == nil)
+        #expect(session.decodeActivity == nil)
     }
 
     @Test func sessionManualDecodeKeepsItsActivityUntilOutcomeIsPublished() async {
@@ -1598,6 +1617,7 @@ private final class FakeBase64FileWorkflowProcessor: @unchecked Sendable {
     private(set) var previewRequests: [(selection: Base64FileSelection, mode: Base64Conversion.FileOutputMode)] = []
     private(set) var readSelectionRequests: [(url: URL, maxBytes: Int)] = []
     private(set) var decodeInputs: [String] = []
+    private(set) var imagePreviewCount = 0
     private(set) var directDecodeSelections: [Base64FileSelection] = []
     private(set) var encodedTextReads: [(url: URL, maxBytes: Int)] = []
     private(set) var textWrites: [(text: String, url: URL)] = []
@@ -1724,7 +1744,8 @@ private final class FakeBase64FileWorkflowProcessor: @unchecked Sendable {
     }
 
     func previewImage(for _: Base64Conversion.FilePayload) async -> Base64FileImagePreview? {
-        nil
+        imagePreviewCount += 1
+        return nil
     }
 
     func write(_ data: Data, to url: URL) async -> Result<Void, Base64FileWorkflowFailure> {

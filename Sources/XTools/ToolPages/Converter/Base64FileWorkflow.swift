@@ -261,7 +261,7 @@ enum Base64FileWorkflow {
     }
 
     private static func encodedPayload(in trimmed: String) throws -> String {
-        if trimmed.lowercased().hasPrefix("data:") {
+        if Base64Conversion.hasDataURLPrefix(trimmed) {
             return try Base64Conversion.parseDataURL(trimmed).base64Payload
         } else {
             return trimmed
@@ -749,37 +749,12 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
         }
 
         let generation = beginDecodeAttempt(.manualInput)
-        let inputSnapshot = trimmed
         mutate { $0.reverseInputDirty = false }
 
         return Task {
-            let result = await processor.decodePayload(inputSnapshot)
-            let decodedPreview: Base64FileImagePreview?
-            if case .success(let payload) = result {
-                decodedPreview = await processor.previewImage(for: payload)
-            } else {
-                decodedPreview = nil
-            }
-
-            guard isCurrentDecode(input: inputSnapshot, generation: generation) else { return }
-
-            switch result {
-            case .success(let payload):
-                applyDecodedPayload(
-                    payload,
-                    preview: decodedPreview,
-                    source: .manualInput,
-                    defaultOutputFileName: "download"
-                )
-            case .failure(let failure):
-                mutate {
-                    $0.applyDecodeFailure(
-                        failure.errorDescription ?? "输入不是有效的 Base64 或 Base64 Data URL。"
-                    )
-                }
-                previewImage = nil
-            }
-            finishDecodeAttempt(.manualInput, generation: generation)
+            defer { finishDecodeAttempt(.manualInput, generation: generation) }
+            await decodeText(trimmed, source: .manualInput,
+                             defaultOutputFileName: "download", processor: processor, generation: generation)
         }
     }
 
@@ -846,7 +821,9 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
                 ) else {
                     return
                 }
-                await importEncodedTextFile(from: url, processor: processor).value
+                guard !Task.isCancelled else { return }
+                let generation = beginDecodeAttempt(.encodedTextImport)
+                await loadEncodedTextFile(from: url, processor: processor, generation: generation)
             } catch is CancellationError {
                 return
             } catch {
@@ -860,35 +837,9 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
         from url: URL,
         processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive()
     ) -> Task<Void, Never> {
-
         let generation = beginDecodeAttempt(.encodedTextImport)
-
         return Task {
-            let inputResult = await processor.readEncodedText(
-                from: url,
-                maxBytes: Self.externalEncodedTextByteLimit
-            )
-            guard state.decodeGeneration == generation else { return }
-            if Task.isCancelled {
-                finishDecodeAttempt(.encodedTextImport, generation: generation)
-                return
-            }
-
-            switch inputResult {
-            case .success(let input):
-                await decodeExternalEncodedText(
-                    input.text,
-                    source: .encodedTextFile(fileName: input.fileName),
-                    defaultOutputFileName: defaultImportedOutputName(for: input.fileName),
-                    processor: processor,
-                    existingGeneration: generation
-                )?.value
-            case .failure(let failure):
-                mutate {
-                    $0.setReverseError(failure.errorDescription ?? "无法读取所选文件。")
-                }
-                finishDecodeAttempt(.encodedTextImport, generation: generation)
-            }
+            await loadEncodedTextFile(from: url, processor: processor, generation: generation)
         }
     }
 
@@ -952,65 +903,58 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
         outputFileName = defaultOutputFileName
     }
 
-    @discardableResult
-    private func decodeExternalEncodedText(
+    private func loadEncodedTextFile(from url: URL, processor: Base64FileWorkflowProcessing, generation: Int) async {
+        defer { finishDecodeAttempt(.encodedTextImport, generation: generation) }
+        guard state.decodeGeneration == generation, !Task.isCancelled else { return }
+        let result = await processor.readEncodedText(from: url, maxBytes: Self.externalEncodedTextByteLimit)
+        guard state.decodeGeneration == generation, !Task.isCancelled else { return }
+
+        let input: Base64FileEncodedTextInput
+        switch result {
+        case .success(let value): input = value
+        case .failure(let failure):
+            mutate { $0.setReverseError(failure.errorDescription ?? "无法读取所选文件。") }
+            return
+        }
+        guard input.text.utf8.count <= Self.externalEncodedTextByteLimit else {
+            mutate {
+                $0.setReverseError(Base64FileWorkflowFailure.externalEncodedTextTooLarge(
+                    maxBytes: Self.externalEncodedTextByteLimit
+                ).errorDescription)
+            }
+            return
+        }
+        let trimmed = input.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            mutate { $0.setReverseError(Base64FileWorkflowFailure.invalidPayload.errorDescription) }
+            return
+        }
+        await decodeText(trimmed, source: .encodedTextFile(fileName: input.fileName),
+                         defaultOutputFileName: defaultImportedOutputName(for: input.fileName), processor: processor,
+                         generation: generation)
+    }
+
+    private func decodeText(
         _ text: String,
         source: Base64FileDecodedResultSource,
         defaultOutputFileName: String,
         processor: Base64FileWorkflowProcessing,
-        existingGeneration: Int? = nil
-    ) -> Task<Void, Never>? {
-        let generation = existingGeneration ?? beginDecodeAttempt(.encodedTextImport)
+        generation: Int
+    ) async {
+        guard state.decodeGeneration == generation, !Task.isCancelled else { return }
+        let result = await processor.decodePayload(text)
+        guard state.decodeGeneration == generation, !Task.isCancelled else { return }
 
-        guard text.utf8.count <= Self.externalEncodedTextByteLimit else {
+        switch result {
+        case .success(let payload):
+            let preview = await processor.previewImage(for: payload)
+            guard state.decodeGeneration == generation, !Task.isCancelled else { return }
+            applyDecodedPayload(payload, preview: preview, source: source, defaultOutputFileName: defaultOutputFileName)
+        case .failure(let failure):
             mutate {
-                $0.setReverseError(
-                    Base64FileWorkflowFailure.externalEncodedTextTooLarge(
-                        maxBytes: Self.externalEncodedTextByteLimit
-                    ).errorDescription
-                )
+                $0.applyDecodeFailure(failure.errorDescription ?? "输入不是有效的 Base64 或 Base64 Data URL。")
             }
-            finishDecodeAttempt(.encodedTextImport, generation: generation)
-            return nil
-        }
-
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            mutate {
-                $0.setReverseError(Base64FileWorkflowFailure.invalidPayload.errorDescription)
-            }
-            finishDecodeAttempt(.encodedTextImport, generation: generation)
-            return nil
-        }
-
-        return Task {
-            let result = await processor.decodePayload(trimmed)
-            let decodedPreview: Base64FileImagePreview?
-            if case .success(let payload) = result {
-                decodedPreview = await processor.previewImage(for: payload)
-            } else {
-                decodedPreview = nil
-            }
-
-            guard state.decodeGeneration == generation else { return }
-
-            switch result {
-            case .success(let payload):
-                applyDecodedPayload(
-                    payload,
-                    preview: decodedPreview,
-                    source: source,
-                    defaultOutputFileName: defaultOutputFileName
-                )
-            case .failure(let failure):
-                mutate {
-                    $0.applyDecodeFailure(
-                        failure.errorDescription ?? "输入不是有效的 Base64 或 Base64 Data URL。"
-                    )
-                }
-                previewImage = nil
-            }
-            finishDecodeAttempt(.encodedTextImport, generation: generation)
+            previewImage = nil
         }
     }
 
@@ -1028,6 +972,7 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
         _ activity: Base64FileDecodeActivity,
         generation: Int
     ) {
+        guard state.decodeGeneration == generation, state.decodeActivity == activity else { return }
         mutate { $0.finishDecodeAttempt(activity, generation: generation) }
     }
 
@@ -1101,10 +1046,6 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
             outputGeneration: outputGeneration,
             mode: mode
         )
-    }
-
-    private func isCurrentDecode(input: String, generation: Int) -> Bool {
-        state.isCurrentDecode(input: input, generation: generation)
     }
 
     private func isCurrentDecodedPayload(
