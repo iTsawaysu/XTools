@@ -63,7 +63,11 @@ let package = Package(
         ),
         .testTarget(
             name: "XToolsTests",
-            dependencies: ["XToolsCore", "XTools", "EmojiCatalogCompiler"],
+            dependencies: [
+                "XToolsCore", "XTools", "EmojiCatalogCompiler",
+                .product(name: "cmark-gfm", package: "swift-cmark"),
+                .product(name: "cmark-gfm-extensions", package: "swift-cmark")
+            ],
             path: "Tests/XToolsTests",
             resources: [
                 .copy("Fixtures/test.md")

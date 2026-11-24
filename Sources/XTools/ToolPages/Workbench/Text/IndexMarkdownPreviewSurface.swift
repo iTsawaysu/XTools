@@ -119,9 +119,11 @@ struct IndexMarkdownPreviewSurface: View {
             } catch {
                 return
             }
+            guard !Task.isCancelled else { return }
             let source = text
+            let blocks = parsedBlocks
             let containsRemoteImages = await Task.detached(priority: .utility) {
-                MarkdownRemoteImageDetector.containsRemoteImage(in: source)
+                MarkdownRemoteImageDetector.containsRemoteImage(in: source, cachedBlocks: blocks)
             }.value
             guard !Task.isCancelled else { return }
             remoteImageDetection.publish(
@@ -315,12 +317,12 @@ enum MarkdownRemoteImageDetector {
     /// 与预览的加载行为严格对齐：只有 Markdown 语法的图片（含引用式，解析期
     /// 已由 cmark 解析为 image 节点）会经图片出口加载；原始 HTML（`<img>`）在
     /// 预览中按纯文本渲染，因此不算可加载图片。直接遍历 GFM AST 判定。
-    static func containsRemoteImage(in markdown: String) -> Bool {
+    static func containsRemoteImage(in markdown: String, cachedBlocks: [MarkdownBlock]? = nil) -> Bool {
         guard !markdown.isEmpty,
               markdown.utf8.count <= maximumSourceByteCount else {
             return false
         }
-        return MarkdownDocument.parse(markdown).contains { $0.containsLoadableRemoteImage }
+        return (cachedBlocks ?? MarkdownDocument.parse(markdown)).contains { $0.containsLoadableRemoteImage }
     }
 }
 

@@ -8,6 +8,7 @@
 import cmark_gfm
 import cmark_gfm_extensions
 import Foundation
+@testable import XTools
 
 extension Array where Element == MarkdownBlock {
     func renderPlainText() -> String {

@@ -7,8 +7,7 @@
 
 import Foundation
 
-/// GFM 文档模型：`MarkdownDocument.parse` 产出、`IndexMarkdownPreviewContent`
-/// 渲染、`MarkdownDocumentRenderer` 回建 C AST 生成 oracle 输出。
+/// GFM 文档模型由 `MarkdownDocument.parse` 产出，供 `IndexMarkdownPreviewContent` 渲染。
 enum MarkdownBlock: Hashable, Sendable {
     case blockquote(children: [MarkdownBlock])
     case bulletedList(isTight: Bool, items: [MarkdownListItem])
