@@ -64,8 +64,14 @@ public enum URLFetchHostPolicy: Sendable {
         return evaluateResolvedAddresses(addresses) == .allow ? .allow : .deny
     }
 
-    // getaddrinfo cannot be interrupted; one worker bounds stuck resolutions.
-    private static let resolverQueue = DispatchQueue(label: "XTools.URLFetchHostPolicy.DNS")
+    // getaddrinfo cannot be interrupted. Bound the workers while allowing a second lookup past a slow one.
+    private static let resolverQueue: OperationQueue = {
+        let queue = OperationQueue()
+        queue.name = "XTools.URLFetchHostPolicy.DNS"
+        queue.qualityOfService = .utility
+        queue.maxConcurrentOperationCount = 2
+        return queue
+    }()
 
     static func resolveAddresses(
         _ host: String,
@@ -78,7 +84,7 @@ public enum URLFetchHostPolicy: Sendable {
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 gate.install(continuation)
-                resolverQueue.async {
+                resolverQueue.addOperation {
                     guard !gate.isFinished else { return }
                     gate.finish(lookup(host))
                 }

@@ -82,6 +82,28 @@ struct URLFetchSecurityTests {
         #expect(await pending.value == nil)
     }
 
+    @Test func slowDNSLookupLeavesAWorkerForAnotherResolution() async {
+        let paused = PausedDNSLookup()
+        defer { paused.release.signal() }
+        let pending = Task {
+            await URLFetchHostPolicy.resolveAddresses("example.com", timeout: 5) { _ in
+                paused.started.signal()
+                _ = paused.release.wait(timeout: .now() + 5)
+                return nil
+            }
+        }
+        let started = await Task.detached { paused.waitUntilStarted() }.value
+        #expect(started)
+        guard started else {
+            pending.cancel()
+            return
+        }
+        let second = await URLFetchHostPolicy.resolveAddresses("localhost", timeout: 2)
+        #expect(second?.contains { $0 == "127.0.0.1" || $0 == "::1" } == true)
+        pending.cancel()
+        #expect(await pending.value == nil)
+    }
+
     @Test func blocksLiteralBeforeURLProtocolStarts() async throws {
         RecordingURLProtocol.state.configure(data: Data("<p>ok</p>".utf8), finish: true)
         let client = makeClient(resolver: { _, _ in ["93.184.216.34"] })
@@ -121,6 +143,24 @@ struct URLFetchSecurityTests {
         #expect(RecordingURLProtocol.state.stopped > 0)
     }
 
+    @Test func callerCancellationStopsTheResponseStream() async throws {
+        let request = URLRequest(url: try #require(URL(string: "https://example.com/")))
+        let client = makeClient(resolver: { _, _ in ["93.184.216.34"] })
+        RecordingURLProtocol.state.configure(data: Data("<p>partial".utf8), finish: false)
+        let pending = Task { try await client.fetchData(for: request, byteLimit: 100) }
+        defer { pending.cancel() }
+        for _ in 0..<100 where RecordingURLProtocol.state.started == 0 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try #require(RecordingURLProtocol.state.started == 1)
+        pending.cancel()
+        await #expect(throws: CancellationError.self) { _ = try await pending.value }
+        for _ in 0..<100 where RecordingURLProtocol.state.stopped == 0 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(RecordingURLProtocol.state.stopped > 0)
+    }
+
     @Test func redirectDelegateChecksDestinationBeforeFollowing() async throws {
         let session = URLSession(configuration: .ephemeral)
         defer { session.invalidateAndCancel() }
@@ -141,6 +181,20 @@ struct URLFetchSecurityTests {
         )
         #expect(accepted?.url == publicURL)
         #expect(publicDelegate.rejection == nil)
+
+        let invalidDelegate = HTMLToMarkdownURLSessionDelegate(
+            resolver: { _, _ in
+                Issue.record("An invalid destination must not reach DNS")
+                return nil
+            }, timeout: 1
+        )
+        let invalidURL = try #require(URL(string: "https://single-label/"))
+        let invalid = await redirect(
+            invalidDelegate, session: session, task: task, response: response,
+            request: URLRequest(url: invalidURL)
+        )
+        #expect(invalid == nil)
+        #expect(invalidDelegate.rejection == .invalidURL)
 
         let privateDelegate = HTMLToMarkdownURLSessionDelegate(
             resolver: { _, _ in ["10.0.0.2"] }, timeout: 1

@@ -92,6 +92,7 @@ final class WebKitHTMLReadableArticleExtractor: HTMLReadableArticleExtracting {
                 script,
                 contentWorld: contentWorld
             )
+            try Task.checkCancellation()
             let rawResult = try await webView.callAsyncJavaScript(
                 Self.extractionFunction,
                 arguments: [
@@ -128,6 +129,7 @@ final class WebKitHTMLReadableArticleExtractor: HTMLReadableArticleExtracting {
             }
         } onCancel: {
             Task { @MainActor in
+                navigationWaiter.cancel()
                 webView.stopLoading()
             }
         }
@@ -176,7 +178,7 @@ private struct ReadabilityJavaScriptResult: Decodable {
 }
 
 @MainActor
-private final class HTMLReadabilityNavigationWaiter: NSObject, WKNavigationDelegate {
+final class HTMLReadabilityNavigationWaiter: NSObject, WKNavigationDelegate {
     private var continuation: CheckedContinuation<Void, Error>?
     private var result: Result<Void, Error>?
 
@@ -191,6 +193,14 @@ private final class HTMLReadabilityNavigationWaiter: NSObject, WKNavigationDeleg
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         finish(.success(()))
+    }
+
+    func cancel() {
+        finish(.failure(CancellationError()))
+    }
+
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        finish(.failure(HTMLReadableArticleExtractionError.readabilityUnavailable))
     }
 
     func webView(

@@ -1,10 +1,33 @@
 import Foundation
 import Testing
+import WebKit
 @testable import XTools
 @testable import XToolsCore
 
 @MainActor
 struct HTMLReadableArticleExtractorTests {
+    @Test func navigationCancellationWinsOverLateDelegateCallbacks() async {
+        let webView = WKWebView()
+        let waiter = HTMLReadabilityNavigationWaiter()
+        let pending = Task { try await waiter.waitUntilFinished() }
+        await Task.yield()
+        waiter.cancel()
+        waiter.webView(webView, didFinish: nil)
+
+        await #expect(throws: CancellationError.self) { try await pending.value }
+    }
+
+    @Test func webContentTerminationCompletesNavigationEvenBeforeAwaiting() async {
+        let webView = WKWebView()
+        let waiter = HTMLReadabilityNavigationWaiter()
+        waiter.webViewWebContentProcessDidTerminate(webView)
+        waiter.cancel()
+
+        await #expect(throws: HTMLReadableArticleExtractionError.readabilityUnavailable) {
+            try await waiter.waitUntilFinished()
+        }
+    }
+
     @Test func extractsArticleWithoutReturningPageScripts() async throws {
         let baseURL = try #require(URL(string: "https://example.com/articles/test"))
         let longBody = String(repeating: "Readable article sentence with enough words for candidate scoring. ", count: 18)
