@@ -152,7 +152,11 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
             return nil
         }
         let work = DispatchWorkItem { [weak self, weak textField] in
-            guard let self, let textField else { return }
+            guard let self else { return }
+            guard let textField else {
+                self.cancelKeystrokeHandoff()
+                return
+            }
             self.finishKeystrokeHandoff(flushTo: textField)
         }
         handoffTimeout = work

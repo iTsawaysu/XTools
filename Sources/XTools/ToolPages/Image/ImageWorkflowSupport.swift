@@ -304,6 +304,7 @@ struct ImageInspectorFactRow: View {
 /// 高度；与预览舞台并排、需要底边对齐时传 `pinsActionToBottom`：源文件与设置
 /// 留在顶部，输出摘要与动作区贴住面板底部，由外层分栏给出的高度决定中间留白。
 struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: View {
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
     let primaryTitle: String
     var primaryIcon: String? = nil
     let primaryHelp: String
@@ -529,7 +530,7 @@ struct ImageWorkflowSettingsPanel<Settings: View, Source: View, Output: View>: V
                 keycap: "⌘S",
                 action: onPrimary
             )
-            .keyboardShortcut("s", modifiers: .command)
+            .keyboardShortcut(entryGeneration > 0 ? KeyboardShortcut("s", modifiers: .command) : nil)
 
             if let statusText {
                 Text(statusText)

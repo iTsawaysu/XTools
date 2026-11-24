@@ -334,6 +334,7 @@ private final class IndexOptionsMenuDismissalBox {
     }
 
     func remove() {
+        dismiss = nil
         if let mouseMonitor {
             NSEvent.removeMonitor(mouseMonitor)
             self.mouseMonitor = nil

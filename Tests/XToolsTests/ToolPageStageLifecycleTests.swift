@@ -162,7 +162,8 @@ struct ToolPageStageLifecycleTests {
         #expect(directions == [true, false])
     }
 
-    @Test func retainedFormatWorkbenchShortcutsFollowTheActivePage() async throws {
+    @Test(arguments: [false, true])
+    func retainedToolShortcutsFollowTheActivePage(images: Bool) async throws {
         let selection = StageTestSelection()
         let recorder = StageTestRecorder()
         let window = NSWindow(
@@ -170,24 +171,31 @@ struct ToolPageStageLifecycleTests {
             styleMask: [.titled], backing: .buffered, defer: false
         )
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: StageShortcutTestHost(selection: selection, recorder: recorder))
+        window.contentView = NSHostingView(rootView: StageShortcutTestHost(selection: selection, recorder: recorder, images: images))
         window.makeKeyAndOrderFront(nil)
         defer { window.close() }
-        let commandReturn = try #require(NSEvent.keyEvent(
+        let keyCharacter = images ? "s" : "\r"
+        let shortcut = try #require(NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
-            windowNumber: window.windowNumber, context: nil, characters: "\r",
-            charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36
+            windowNumber: window.windowNumber, context: nil, characters: keyCharacter,
+            charactersIgnoringModifiers: keyCharacter, isARepeat: false, keyCode: images ? 1 : 36
         ))
         for key in ["a", "b", "a", "b"] {
             selection.key = key
             try await waitForActive(key, recorder: recorder)
             window.contentView?.layoutSubtreeIfNeeded()
             let previous = recorder.actionCount
-            #expect(window.performKeyEquivalent(with: commandReturn))
+            #expect(window.performKeyEquivalent(with: shortcut))
             #expect(recorder.actionCount[key, default: 0] == previous[key, default: 0] + 1)
             let hidden = key == "a" ? "b" : "a"
             #expect(recorder.actionCount[hidden, default: 0] == previous[hidden, default: 0])
         }
+        selection.key = "no-shortcut"
+        try await waitForActive("no-shortcut", recorder: recorder)
+        window.contentView?.layoutSubtreeIfNeeded()
+        let previous = recorder.actionCount
+        _ = window.performKeyEquivalent(with: shortcut)
+        #expect(recorder.actionCount == previous)
     }
 }
 
@@ -214,11 +222,12 @@ private final class StageTestRecorder {
 private struct StageShortcutTestHost: View {
     @ObservedObject var selection: StageTestSelection
     let recorder: StageTestRecorder
+    let images: Bool
 
     var body: some View {
         ToolPageStage(target: .tool(ToolID(rawValue: selection.key))) { key in
             if case .tool(let id) = key.payload {
-                StageShortcutTestPage(key: id.rawValue, recorder: recorder)
+                StageShortcutTestPage(key: id.rawValue, recorder: recorder, images: images)
             }
         }
     }
@@ -228,15 +237,28 @@ private struct StageShortcutTestHost: View {
 private struct StageShortcutTestPage: View {
     let key: String
     let recorder: StageTestRecorder
+    let images: Bool
     @Environment(\.toolPageEntryGeneration) private var generation
 
     var body: some View {
-        IndexFormatWorkbench<EmptyView, EmptyView, EmptyView>(
-            inputTitle: key, outputTitle: "Output", input: .constant("input"), output: "",
-            autoFocus: false,
-            onFormat: { recorder.actionCount[key, default: 0] += 1 },
-            onClear: {}, leadingControl: { EmptyView() }
-        )
+        Group {
+            if key == "no-shortcut" {
+                Text(key)
+            } else if images {
+                ImageWorkflowSettingsPanel(
+                    primaryTitle: key, primaryHelp: "Save", isPrimaryDisabled: false,
+                    onPrimary: { recorder.actionCount[key, default: 0] += 1 },
+                    settings: { EmptyView() }
+                )
+            } else {
+                IndexFormatWorkbench<EmptyView, EmptyView, EmptyView>(
+                    inputTitle: key, outputTitle: "Output", input: .constant("input"), output: "",
+                    autoFocus: false,
+                    onFormat: { recorder.actionCount[key, default: 0] += 1 },
+                    onClear: {}, leadingControl: { EmptyView() }
+                )
+            }
+        }
         .onAppear { recordActivity(generation: generation) }
         .onChange(of: generation) { _, newValue in
             recorder.events.append("\(key): changed \(newValue), captured \(generation)")
