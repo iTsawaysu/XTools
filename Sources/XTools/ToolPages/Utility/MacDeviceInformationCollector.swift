@@ -5,9 +5,16 @@ import Foundation
 
 @MainActor
 enum MacDeviceInformationCollector {
-    static func capture() -> DeviceInformationSnapshot {
+    private static let hostQueue = DispatchQueue(label: "XTools.DeviceInformation.Host", qos: .utility)
+
+    static func capture() async -> DeviceInformationSnapshot {
+        let names: (device: String?, host: String?) = await withCheckedContinuation { continuation in
+            hostQueue.async {
+                let host = Host.current()
+                continuation.resume(returning: (host.localizedName, host.name))
+            }
+        }
         let process = ProcessInfo.processInfo
-        let host = Host.current()
         let screens = NSScreen.screens
 
         return DeviceInformationSnapshot(
@@ -15,8 +22,8 @@ enum MacDeviceInformationCollector {
             architecture: architectureName,
             machineModel: sysctlString("hw.model"),
             cpuName: sysctlString("machdep.cpu.brand_string"),
-            deviceName: host.localizedName,
-            hostName: host.name,
+            deviceName: names.device,
+            hostName: names.host,
             timeZoneIdentifier: TimeZone.current.identifier,
             processorCount: process.processorCount,
             physicalMemory: process.physicalMemory,

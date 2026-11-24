@@ -6,13 +6,14 @@ struct IndexDeviceInfoPage: View {
     @StateObject private var session = DeviceInformationSession()
 
     private var rows: [(String, String, Color?)] {
-        DeviceInformationProjection.fields(from: session.snapshot).map { field in
+        guard let snapshot = session.snapshot else { return [] }
+        return DeviceInformationProjection.fields(from: snapshot).map { field in
             (field.label, field.value, nil)
         }
     }
 
     private var copySummary: String {
-        DeviceInformationProjection.copySummary(from: session.snapshot)
+        session.snapshot.map(DeviceInformationProjection.copySummary(from:)) ?? ""
     }
 
     var body: some View {

@@ -2,18 +2,15 @@ import SwiftUI
 
 @MainActor
 final class DeviceInformationSession: ObservableObject {
-    @Published private(set) var snapshot: DeviceInformationSnapshot
+    @Published private(set) var snapshot: DeviceInformationSnapshot?
 
     private var lastEntryGeneration: Int?
-    private let capture: @MainActor () -> DeviceInformationSnapshot
+    private var refreshTask: Task<Void, Never>?
+    private let capture: @MainActor () async -> DeviceInformationSnapshot
 
-    init(
-        capture: @escaping @MainActor () -> DeviceInformationSnapshot = {
-            MacDeviceInformationCollector.capture()
-        }
-    ) {
+    init(capture: @escaping @MainActor () async -> DeviceInformationSnapshot = MacDeviceInformationCollector.capture) {
         self.capture = capture
-        self.snapshot = capture()
+        refresh()
     }
 
     func enterPage(generation: Int) {
@@ -24,6 +21,17 @@ final class DeviceInformationSession: ObservableObject {
     }
 
     func refresh() {
-        snapshot = capture()
+        guard refreshTask == nil else { return }
+        refreshTask = Task { @MainActor [weak self, capture] in
+            guard !Task.isCancelled else { return }
+            let snapshot = await capture()
+            guard let self, !Task.isCancelled else { return }
+            self.snapshot = snapshot
+            self.refreshTask = nil
+        }
+    }
+
+    deinit {
+        refreshTask?.cancel()
     }
 }

@@ -105,6 +105,7 @@ public enum DeviceInspector {
             }
 
             let length = socketLength(for: socketAddress.pointee.sa_family)
+            guard socketAddress.pointee.sa_len >= length else { continue }
             var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
             let status = getnameinfo(socketAddress, length, &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST)
             guard status == 0 else {
@@ -157,27 +158,25 @@ public enum DeviceInspector {
         return 5
     }
 
-    private static func prefixLength(from netmask: UnsafeMutablePointer<sockaddr>?, family: sa_family_t) -> Int? {
-        guard let netmask else {
+    static func prefixLength(from netmask: UnsafePointer<sockaddr>?, family: sa_family_t) -> Int? {
+        guard let netmask else { return nil }
+
+        let offset: Int?
+        let byteCount: Int
+        switch Int32(family) {
+        case AF_INET:
+            offset = MemoryLayout<sockaddr_in>.offset(of: \.sin_addr)
+            byteCount = MemoryLayout<in_addr>.size
+        case AF_INET6:
+            offset = MemoryLayout<sockaddr_in6>.offset(of: \.sin6_addr)
+            byteCount = MemoryLayout<in6_addr>.size
+        default:
             return nil
         }
-
-        if Int32(family) == AF_INET {
-            let mask = netmask.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { pointer in
-                UInt32(bigEndian: pointer.pointee.sin_addr.s_addr)
-            }
-            return mask.nonzeroBitCount
-        }
-
-        if Int32(family) == AF_INET6 {
-            return netmask.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { pointer in
-                withUnsafeBytes(of: pointer.pointee.sin6_addr) { bytes in
-                    bytes.reduce(0) { count, byte in count + byte.nonzeroBitCount }
-                }
-            }
-        }
-
-        return nil
+        guard let offset else { return nil }
+        // Darwin netmasks can omit trailing zero bytes.
+        let bytes = UnsafeRawBufferPointer(start: netmask, count: Int(netmask.pointee.sa_len))
+        return bytes.dropFirst(offset).prefix(byteCount).reduce(0) { $0 + $1.nonzeroBitCount }
     }
 
     public static func stringFromCStringBuffer(_ buffer: [CChar]) -> String {

@@ -140,7 +140,7 @@ struct DeviceInformationProjectionTests {
         #expect(fields.first(where: { $0.label == "主屏幕像素" })?.value == "333 × 444")
     }
 
-    @Test @MainActor func sessionRefreshesFromInjectedCapture() {
+    @Test @MainActor func sessionRefreshesFromInjectedCapture() async throws {
         let first = Self.completeSnapshot
         let second = Self.snapshot(timeZoneIdentifier: "America/Los_Angeles")
         var snapshots = [first, second]
@@ -148,9 +148,13 @@ struct DeviceInformationProjectionTests {
             snapshots.removeFirst()
         }
 
-        #expect(session.snapshot == first)
+        #expect(session.snapshot == nil)
         session.refresh()
-        #expect(session.snapshot == second)
+        try await waitUntil { session.snapshot == first }
+        #expect(snapshots.count == 1)
+        session.refresh()
+        #expect(session.snapshot == first)
+        try await waitUntil { session.snapshot == second }
         #expect(snapshots.isEmpty)
     }
 

@@ -1,7 +1,31 @@
+import Darwin
 import Testing
 @testable import XToolsCore
 
 struct DeviceInspectorTests {
+    @Test func compactNetmasksTreatOmittedBytesAsZero() {
+        var ipv4 = sockaddr_in()
+        ipv4.sin_len = 7
+        ipv4.sin_addr.s_addr = UInt32(0xFF_FF_FF_FF).bigEndian
+        withUnsafePointer(to: &ipv4) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { mask in
+                #expect(DeviceInspector.prefixLength(from: mask, family: sa_family_t(AF_INET)) == 24)
+            }
+        }
+
+        var ipv6 = sockaddr_in6()
+        ipv6.sin6_len = 10
+        withUnsafeMutableBytes(of: &ipv6.sin6_addr) { bytes in
+            bytes[0] = 0xFF
+            bytes[1] = 0x80
+            bytes[2] = 0xFF
+        }
+        withUnsafePointer(to: &ipv6) { pointer in
+            pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { mask in
+                #expect(DeviceInspector.prefixLength(from: mask, family: sa_family_t(AF_INET6)) == 9)
+            }
+        }
+    }
     @Test func selectsTargetInterfaceAddress() {
         let selected = DeviceInspector.selectLocalNetworkAddress(
             from: [
