@@ -51,6 +51,12 @@ struct HTTPStatusCatalogTests {
         #expect(byDetail.map(\.code) == [418])
     }
 
+    @Test func detailsMatchCaseInsensitively() {
+        let category = "4xx 客户端错误"
+        #expect(HTTPStatusCatalog.entries(matching: " json ", category: category).map(\.code) == [400, 406, 415, 422])
+        #expect(HTTPStatusCatalog.entries(matching: "Cookie", category: category).map(\.code) == [431])
+    }
+
     @Test func currentRegistryNamesAndLifecycleBoundariesAreRepresented() {
         let contentTooLarge = HTTPStatusCatalog.entries.first { $0.code == 413 }
         #expect(contentTooLarge?.name == "Content Too Large")

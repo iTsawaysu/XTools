@@ -41,13 +41,13 @@ public enum HTTPStatusCatalog {
             result = result.filter { familyName($0.family) == category }
         }
 
-        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if !q.isEmpty {
             result = result.filter {
                 String($0.code).contains(q)
-                    || $0.name.lowercased().contains(q)
-                    || $0.meaning.contains(q)
-                    || $0.detail.contains(q)
+                    || $0.name.range(of: q, options: .caseInsensitive) != nil
+                    || $0.meaning.range(of: q, options: .caseInsensitive) != nil
+                    || $0.detail.range(of: q, options: .caseInsensitive) != nil
             }
         }
 

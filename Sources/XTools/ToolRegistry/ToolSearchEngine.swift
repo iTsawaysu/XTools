@@ -184,70 +184,46 @@ struct ToolSearchText: Equatable {
     let graphemes: [Range<String.Index>]
     let bonuses: [Int]
 
-    /// Title form: fold the whole string once and, when the folded character
-    /// count matches the original grapheme count (the overwhelmingly common
-    /// case for ASCII + Han text), map positions directly. Length-changing
-    /// folds (ß → ss, decomposed accents) fall back to per-grapheme folding.
-    /// Bonuses are indexed in FOLDED space in both branches — matching
-    /// (`contiguousScore` / `fuzzyAlign`) consumes folded positions, so a
-    /// grapheme-indexed array would read out of bounds whenever a fold
-    /// expands the text.
     init(title: String) {
-        let graphemes = Array(title)
-        let folded = Array(
-            title.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-        )
+        self.init(source: title, keepsRanges: true)
+    }
 
+    init(foldedSource: String) {
+        self.init(source: foldedSource, keepsRanges: false)
+    }
+
+    private init(source: String, keepsRanges: Bool) {
+        let original = Array(source)
+        let options: String.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+        let locale = Locale.current
+        let folded = Array(source.folding(options: options, locale: locale))
+        if folded.count == original.count {
+            self.folded = folded
+            self.graphemes = keepsRanges ? source.indices.map { $0..<source.index(after: $0) } : []
+            self.bonuses = Self.boundaryBonuses(for: original)
+            return
+        }
+
+        // An expanding fold earns the source character's bonus only once.
         var foldedCharacters: [Character] = []
         var graphemeRanges: [Range<String.Index>] = []
         var foldedBonuses: [Int] = []
-
-        if folded.count == graphemes.count {
-            foldedCharacters = folded
-            graphemeRanges = title.indices.map { index in
-                index..<title.index(after: index)
-            }
-            foldedBonuses = Self.boundaryBonuses(for: foldedCharacters)
-        } else {
-            var previousFolded: Character?
-            var index = title.startIndex
-            while index < title.endIndex {
-                let next = title.index(after: index)
-                let foldedGrapheme = String(title[index])
-                    .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-                // The expansion's first folded character carries the boundary
-                // bonus against the previous grapheme's last folded character;
-                // characters inside one grapheme's expansion are a continuous
-                // run and earn nothing. One bonus per written folded character
-                // keeps folded/bonuses/graphemes the same length.
-                var isFirstInGrapheme = true
-                for foldedCharacter in foldedGrapheme {
-                    foldedBonuses.append(isFirstInGrapheme
-                        ? Self.bonus(for: foldedCharacter, after: previousFolded)
-                        : 0)
-                    previousFolded = foldedCharacter
-                    isFirstInGrapheme = false
+        var previous: Character?
+        for index in source.indices {
+            let current = source[index]
+            let expansion = String(current).folding(options: options, locale: locale)
+            for (offset, character) in expansion.enumerated() {
+                foldedCharacters.append(character)
+                foldedBonuses.append(offset == 0 ? Self.bonus(for: current, after: previous) : 0)
+                if keepsRanges {
+                    graphemeRanges.append(index..<source.index(after: index))
                 }
-                foldedCharacters.append(contentsOf: foldedGrapheme)
-                graphemeRanges.append(contentsOf: Array(repeating: index..<next, count: foldedGrapheme.count))
-                index = next
             }
+            previous = current
         }
-
         self.folded = foldedCharacters
         self.graphemes = graphemeRanges
         self.bonuses = foldedBonuses
-    }
-
-    /// Keyword form: no highlight mapping needed, so fold once and classify
-    /// boundaries on the folded characters themselves.
-    init(foldedSource: String) {
-        let folded = Array(
-            foldedSource.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-        )
-        self.folded = folded
-        self.graphemes = []
-        self.bonuses = Self.boundaryBonuses(for: folded)
     }
 
     private static func boundaryBonuses(for graphemes: [Character]) -> [Int] {

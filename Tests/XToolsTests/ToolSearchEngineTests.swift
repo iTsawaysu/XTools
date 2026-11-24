@@ -89,6 +89,17 @@ struct ToolSearchEngineTests {
         #expect(match?.match?.tier == .titlePrefix)
     }
 
+    @Test func camelCaseBoundariesImproveRankForTitlesAndKeywords() {
+        let registry = Self.registry([
+            ("midword-title", "Retoken", []),
+            ("camel-title", "ReToken", []),
+            ("midword-keyword", "First", ["propoint"]),
+            ("camel-keyword", "Second", ["proPoint"])
+        ])
+        #expect(registry.matchingTools(query: "token").prefix(2).map(\.id) == ["camel-title", "midword-title"])
+        #expect(registry.matchingTools(query: "point").prefix(2).map(\.id) == ["camel-keyword", "midword-keyword"])
+    }
+
     // MARK: - Multi-token AND queries
 
     @Test func multiTokenQueriesRequireEveryTokenToMatch() {
