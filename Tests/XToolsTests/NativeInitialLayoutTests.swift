@@ -7,6 +7,57 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct NativeInitialLayoutTests {
+    @Test func caretRequestsAndReplacementKeepTheNativeTextKit2Viewport() async throws {
+        var text = String(repeating: "编辑 👩🏽‍💻\n", count: 1_000)
+        let binding = Binding(get: { text }, set: { text = $0 })
+        func editor(_ token: Int) -> IndexTextArea {
+            IndexTextArea(placeholder: "", text: binding, renderingMode: .textKit2Viewport, caretPlacementRequestToken: token)
+        }
+
+        let host = NSHostingView(rootView: editor(1))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 400),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.close() }
+
+        host.layoutSubtreeIfNeeded()
+        let view = try #require(findTextView(in: host))
+        let scroll = try #require(view.enclosingScrollView)
+        #expect(view.textLayoutManager != nil)
+        #expect(view.selectedRange() == NSRange(location: text.utf16.count, length: 0))
+
+        text += String(repeating: "新段落\n", count: 300) + "尾端🙂"
+        host.rootView = editor(2)
+        let expectedSelection = NSRange(location: text.utf16.count, length: 0)
+        try await waitUntil(timeout: .seconds(5)) {
+            host.layoutSubtreeIfNeeded()
+            return view.selectedRange() == expectedSelection && scroll.contentView.bounds.minY > 0
+        }
+        #expect(findTextView(in: host) === view)
+        #expect(view.textLayoutManager != nil)
+        #expect(view.string == text)
+    }
+
+    @Test func fixedHeightEditorDoesNotLayOutEveryParagraphOnFirstEdit() throws {
+        let text = String(repeating: "多字节字符 👩🏽‍💻 abcdefghijklmn\n", count: 2_000)
+        var editedText = text
+        let host = NSHostingView(rootView: IndexTextArea(
+            placeholder: "", text: Binding(get: { editedText }, set: { editedText = $0 }), lineNumbers: true
+        ))
+        host.frame = NSRect(x: 0, y: 0, width: 500, height: 400)
+        host.layoutSubtreeIfNeeded()
+        let view = try #require(findTextView(in: host))
+        let manager = try #require(view.layoutManager)
+        #expect(manager.firstUnlaidCharacterIndex() < text.utf16.count / 10)
+
+        view.setSelectedRange(NSRange(location: 1, length: 0))
+        view.insertText("补", replacementRange: view.selectedRange())
+        #expect(editedText.hasPrefix("多补字节"))
+        #expect(manager.firstUnlaidCharacterIndex() < text.utf16.count / 10)
+    }
+
     @Test func diffInitialHeightDoesNotTypesetEntireMultilineDocument() throws {
         let text = String(repeating: "line 0123456789\n", count: 100_000)
         let view = IndexDiffTextView(frame: NSRect(x: 0, y: 0, width: 500, height: 400))

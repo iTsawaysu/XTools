@@ -788,7 +788,7 @@ struct IndexTextAreaInputRejection {
 
 // MARK: - IndexTextKit2ViewportTextView
 
-/// layout manager opts the view into TextKit 1 compatibility mode and forces a
+/// Accessing the legacy layout manager would put the editor in TextKit 1 compatibility mode.
 struct IndexTextKit2ViewportTextView: NSViewRepresentable {
     // 停靠保活后回访不再重建视图；进入聚焦以代际驱动保持「每次进入聚焦」语义。
     @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
@@ -1390,7 +1390,8 @@ private final class IndexTextAreaScrollView: IndexTextViewportScrollView {
         IndexTextKitGeometry.synchronizeTextGeometry(
             for: textView,
             visibleWidth: contentSize.width,
-            minimumHeight: contentSize.height
+            minimumHeight: contentSize.height,
+            usesViewportLayout: !growsWithContent
         )
     }
 }

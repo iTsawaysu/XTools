@@ -165,10 +165,6 @@ enum IndexTextAreaScrollPositioning {
 
     static func revealInsertionPointNow(in textView: NSTextView, growsWithContent: Bool) {
         guard !growsWithContent else { return }
-
-        if let layoutManager = textView.layoutManager, let textContainer = textView.textContainer {
-            layoutManager.ensureLayout(for: textContainer)
-        }
         textView.scrollRangeToVisible(clampedSelectedRange(for: textView))
     }
 }
