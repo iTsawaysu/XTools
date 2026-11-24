@@ -163,10 +163,3 @@ struct ToolSnippetButtonStyle: ButtonStyle {
         }
     }
 }
-
-
-@available(*, deprecated, renamed: "ToolSmallButtonStyle")
-typealias IndexSmallButtonStyle = ToolSmallButtonStyle
-
-@available(*, deprecated, renamed: "ToolIconActionButtonStyle")
-typealias IndexIconActionButtonStyle = ToolIconActionButtonStyle

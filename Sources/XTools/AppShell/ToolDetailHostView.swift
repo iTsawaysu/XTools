@@ -69,12 +69,14 @@ struct ToolDetailHostView: View {
         return dashboardStore != nil ? .dashboard : .emptySelection
     }
 
-    static func tracedPage(for tool: RegisteredTool) -> AnyView {
+    #if DEBUG
+    fileprivate static func tracedPage(for tool: RegisteredTool) -> AnyView {
         ToolPageEntryTrace.makePageStarted(tool)
         let page = tool.makePage()
         ToolPageEntryTrace.makePageFinished(tool)
         return page
     }
+    #endif
 }
 
 private struct ToolPageHostedItem: View, Equatable {
@@ -100,12 +102,16 @@ private struct ToolPageHostedItem: View, Equatable {
         switch key.payload {
         case .tool(let toolID):
             if let tool = registry.tool(for: toolID) {
+                #if DEBUG
                 let traceContext = ToolPageEntryTraceContext(toolID: tool.id, title: tool.title)
                 ToolDetailHostView.tracedPage(for: tool)
                     .environment(\.toolPageEntryTraceContext, traceContext)
                     .background {
                         ToolPageEntryTraceProbe(context: traceContext)
                     }
+                #else
+                tool.makePage()
+                #endif
             }
         case .dashboard:
             if let dashboardStore {

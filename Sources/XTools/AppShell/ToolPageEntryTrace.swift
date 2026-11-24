@@ -11,9 +11,11 @@ struct ToolPageEntryTraceContext: Equatable, Sendable {
     let title: String
 }
 
+#if DEBUG
 private struct ToolPageEntryTraceContextKey: EnvironmentKey {
     static let defaultValue: ToolPageEntryTraceContext? = nil
 }
+#endif
 
 /// 页面进入代际：每次到达（含停靠页唤回）由 ToolPageStage 递增并注入
 /// 显示页环境（停靠页恒为 0）。页面内「每次进入都要发生」的行为（页头
@@ -25,10 +27,12 @@ private struct ToolPageEntryGenerationKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
+    #if DEBUG
     var toolPageEntryTraceContext: ToolPageEntryTraceContext? {
         get { self[ToolPageEntryTraceContextKey.self] }
         set { self[ToolPageEntryTraceContextKey.self] = newValue }
     }
+    #endif
 
     var toolPageEntryGeneration: Int {
         get { self[ToolPageEntryGenerationKey.self] }
@@ -38,6 +42,7 @@ extension EnvironmentValues {
 
 /// A view-tree activation boundary, not a displayed frame or animation completion.
 /// Retained pages do not appear again, so warm entries observe the generation.
+#if DEBUG
 struct ToolPageEntryTraceProbe: View {
     let context: ToolPageEntryTraceContext
     @Environment(\.toolPageEntryGeneration) private var generation
@@ -54,6 +59,7 @@ struct ToolPageEntryTraceProbe: View {
         ToolPageEntryTrace.pageActivated(context)
     }
 }
+#endif
 
 @MainActor
 enum ToolPageEntryTrace {

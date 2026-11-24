@@ -2,6 +2,11 @@ import AppKit
 import SwiftUI
 import XToolsCore
 
+enum IndexDiffSyntax {
+    case plain
+    case json
+}
+
 /// A toolbar/keyboard request to jump to the previous or next difference.
 struct DiffDifferenceNavigationRequest: Equatable {
     let id: Int

@@ -60,7 +60,8 @@ struct WorkbenchAccessibilityTests {
                     autoFocus: false, onFormat: { model.formatCount += 1 }, onClear: {},
                     showsOutputSave: true
                 )
-                IndexPrimaryActionButton(title: "生成", hint: "⌘↩", help: "生成 UUID（⌘↩）") {
+                ToolButton("生成", role: .primary, help: "生成 UUID（⌘↩）", keycap: "⌘↩",
+                           accessibilityLabel: "生成 UUID（⌘↩）") {
                     model.formatCount += 1
                 }
                 IndexStepperInput(value: .constant(1), range: 0...2)

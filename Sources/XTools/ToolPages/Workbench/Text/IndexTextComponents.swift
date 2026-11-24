@@ -26,7 +26,11 @@ struct IndexTextInput: View {
     var onEscape: (() -> Void)? = nil
     var onFocusChange: ((Bool) -> Void)? = nil
 
+    #if DEBUG
     @Environment(\.toolPageEntryTraceContext) private var toolPageEntryTraceContext
+    #else
+    private let toolPageEntryTraceContext: ToolPageEntryTraceContext? = nil
+    #endif
     @State private var isFocused = false
     // Keep an exact snapshot in the view value so SwiftUI can observe byte-only edits.
     private let exactTextIdentity: ExactUTF8Identity
