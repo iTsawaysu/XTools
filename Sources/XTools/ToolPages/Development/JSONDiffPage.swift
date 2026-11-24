@@ -25,6 +25,7 @@ final class DiffToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicti
     private let operation: DiffExecutionOperation
     private let debounce: Duration
     private var isMutatingDrafts = false
+    private var needsResultRestore = false
 
     init(
         kind: DiffExecutionKind = .text,
@@ -51,6 +52,7 @@ final class DiffToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicti
     }
 
     func clear() {
+        needsResultRestore = false
         execution.invalidate()
         mutateDrafts {
             left = ""
@@ -58,10 +60,16 @@ final class DiffToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicti
         }
     }
 
-    /// 离开工具时释放对齐后的 diff 行集（大文本可达十数 MB）；输入草稿保留，
-    /// 回到工具后下一次编辑会照常重算（对齐 Base64/图片的 evict 语义）。
     func evictHeavyPayloads() {
-        execution.invalidate(resetTo: DiffExecutionBinding())
+        guard !execution.isRunning,
+              !diffRows.isEmpty || leftDisplayText != nil || rightDisplayText != nil else { return }
+        needsResultRestore = true
+        execution.invalidate()
+    }
+
+    func restoreResultIfNeeded() {
+        guard needsResultRestore else { return }
+        scheduleCurrent(delay: .zero)
     }
 
     private func draftDidChange() {
@@ -80,7 +88,8 @@ final class DiffToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicti
         isMutatingDrafts = false
     }
 
-    private func scheduleCurrent() {
+    private func scheduleCurrent(delay: Duration? = nil) {
+        needsResultRestore = false
         let effectiveKind: DiffExecutionKind
         switch kind {
         case .text:
@@ -100,15 +109,13 @@ final class DiffToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicti
         let request = DiffExecutionRequest(kind: effectiveKind, left: left, right: right)
         execution.schedule(
             request: request,
-            delay: debounce,
+            delay: delay ?? debounce,
             operation: operation
         )
     }
 }
 
-/// 「对比」Hub 的 JSON 分段。workspace key 使用注册表 toolID "diff" + slot "json"
-/// （evictHeavyPayloads 按注册表 ID 淘汰，F1），输入与执行状态由
-/// ToolWorkspaceRepository 保活，分段切换不丢。
+/// 「对比」Hub 的 JSON 分段，与文本分段共用工具身份，分别保留草稿。
 struct IndexJSONDiffSegment: View {
     static let key = ToolWorkspaceKey<DiffToolWorkspaceModel>(toolID: "diff", slot: "json") { _ in
         DiffToolWorkspaceModel(
@@ -166,5 +173,6 @@ private struct IndexJSONDiffWorkspaceContent: View {
             }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onAppear(perform: workspace.restoreResultIfNeeded)
     }
 }

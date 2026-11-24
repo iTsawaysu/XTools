@@ -108,17 +108,6 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
         fileError = nil
     }
 
-    public mutating func evictHeavyPayloads() {
-        clearSelection()
-        decodeGeneration += 1
-        decodedPayload = nil
-        decodedResultSource = nil
-        reverseError = nil
-        decodeActivity = nil
-        isSavingDecoded = false
-        reverseInputDirty = false
-    }
-
     /// Updates reverse draft text and invalidates any in-flight decode result.
     public mutating func updateReverseInput(_ newValue: String) {
         reverseInput = newValue

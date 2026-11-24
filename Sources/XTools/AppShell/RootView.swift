@@ -198,6 +198,7 @@ struct RootView: View {
                 registry: registry,
                 selectedToolID: viewModel.selectedToolID,
                 dashboardStore: dashboardStore,
+                workspaceRepository: workspaceRepository,
                 favorites: favorites,
                 routing: detailRouting,
                 clipboardSuggestion: smartPaste.suggestion,

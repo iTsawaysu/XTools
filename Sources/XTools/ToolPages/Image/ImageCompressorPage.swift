@@ -2,7 +2,7 @@ import XToolsCore
 import SwiftUI
 
 @MainActor
-final class ImageCompressorToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicting {
+final class ImageCompressorToolWorkspaceModel: ObservableObject {
     static let key = ToolWorkspaceKey<ImageCompressorToolWorkspaceModel>(toolID: "image-tools", slot: "compressor") { preferences in
         ImageCompressorToolWorkspaceModel(preferences: preferences)
     }
@@ -28,9 +28,6 @@ final class ImageCompressorToolWorkspaceModel: ObservableObject, ToolWorkspacePa
         maxPixelLength = preferences.value(for: MediaToolPreferenceKeys.imageCompressorMaxPixelLength)
     }
 
-    func evictHeavyPayloads() {
-        session.evictHeavyPayloads()
-    }
 }
 
 struct IndexImageCompressorSegment: View {

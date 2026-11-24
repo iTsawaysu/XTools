@@ -13,7 +13,7 @@ struct WorkspacePayloadEvictionTests {
         return defaults
     }
 
-    @Test func base64EvictsFileBytesButKeepsReverseDraftText() async throws {
+    @Test func base64KeepsDecodedFileAndDraftDuringEviction() async throws {
         let repository = ToolWorkspaceRepository(defaults: Self.defaults())
         let session = repository.model(for: Base64FileWorkflowSession.workspaceKey)
 
@@ -24,11 +24,11 @@ struct WorkspacePayloadEvictionTests {
         try #require(session.decodedPayload?.data == data)
         try #require(session.previewImage != nil)
         session.outputFileName = "kept-name"
-        session.evictHeavyPayloads()
+        repository.evictHeavyPayloads { $0 == Base64FileWorkflowSession.workspaceKey.toolID }
 
         #expect(session.selectedFile == nil)
-        #expect(session.decodedPayload == nil)
-        #expect(session.previewImage == nil)
+        #expect(session.decodedPayload?.data == data)
+        #expect(session.previewImage != nil)
         #expect(session.outputPreview == nil)
         #expect(session.reverseInput == base64)
         #expect(session.outputFileName == "kept-name")
@@ -41,29 +41,19 @@ struct WorkspacePayloadEvictionTests {
 
     @Test func repositoryEvictsOnlyMatchingToolID() async throws {
         let repository = ToolWorkspaceRepository(defaults: Self.defaults())
-        let base64 = repository.model(for: Base64FileWorkflowSession.workspaceKey)
-        let grayscale = repository.model(for: ImageProcessedOutputSession.grayscaleWorkspaceKey)
+        let regex = repository.model(for: RegexToolWorkspaceModel.key)
+        let diff = repository.model(for: IndexTextDiffSegment.key)
+        regex.execution.run(pattern: "[a-z]", text: "abc", flags: "g")
+        diff.left = "alpha\nbeta\n"
+        diff.right = "alpha\ngamma\n"
+        try await waitForPayload { regex.execution.report != nil && !diff.diffRows.isEmpty }
 
-        let data = try imageData()
-        let encoded = data.base64EncodedString()
-        base64.updateReverseInput(encoded)
-        await base64.decodeReverseInput()?.value
-        try #require(base64.decodedPayload?.data == data)
-        try await load(data, into: grayscale)
-
-        repository.evictHeavyPayloads(for: Base64FileWorkflowSession.workspaceKey.toolID)
-        #expect(base64.reverseInput == encoded)
-        #expect(base64.decodedPayload == nil)
-        #expect(base64.previewImage == nil)
-        #expect(grayscale.source?.data == data)
-        #expect(grayscale.output?.data == data)
-
-        repository.evictHeavyPayloads(for: ImageProcessedOutputSession.grayscaleWorkspaceKey.toolID)
-        #expect(grayscale.source == nil)
-        #expect(grayscale.output == nil)
+        repository.evictHeavyPayloads { $0 == IndexTextDiffSegment.key.toolID }
+        #expect(diff.diffRows.isEmpty)
+        #expect(regex.execution.report?.matches.count == 3)
     }
 
-    @Test func imageConverterWorkspaceEvictsNestedSessionPayloads() async throws {
+    @Test func imageConverterKeepsAcceptedFileAndSpooledOutputDuringEviction() async throws {
         let repository = ToolWorkspaceRepository(defaults: Self.defaults())
         let workspace = repository.model(for: ImageConverterToolWorkspaceModel.key)
         let data = try imageData()
@@ -81,13 +71,12 @@ struct WorkspacePayloadEvictionTests {
             return
         }
         #expect(try Data(contentsOf: output.tempURL) == data)
-        workspace.evictHeavyPayloads()
-        #expect(workspace.session.items.isEmpty)
-        #expect(workspace.session.error == nil)
-        #expect(!FileManager.default.fileExists(atPath: output.tempURL.path))
+        repository.evictHeavyPayloads { $0 == ImageConverterToolWorkspaceModel.key.toolID }
+        #expect(workspace.session.items.count == 1)
+        #expect(try Data(contentsOf: output.tempURL) == data)
     }
 
-    @Test func watermarkWorkspaceEvictsNestedSessionsAndKeepsTextRecipe() async throws {
+    @Test func watermarkKeepsSourceAndGeneratedOutputsDuringEviction() async throws {
         let repository = ToolWorkspaceRepository(defaults: Self.defaults())
         let workspace = repository.model(for: ImageWatermarkToolWorkspaceModel.key)
         workspace.watermarkText = "Keep watermark"
@@ -101,13 +90,13 @@ struct WorkspacePayloadEvictionTests {
         try await waitForPayload { !workspace.previewSession.isRendering }
         try #require(workspace.previewSession.data == data)
         try #require(workspace.previewSession.image != nil)
-        workspace.evictHeavyPayloads()
+        repository.evictHeavyPayloads { $0 == ImageWatermarkToolWorkspaceModel.key.toolID }
         #expect(workspace.watermarkText == "Keep watermark")
-        #expect(workspace.session.source == nil)
-        #expect(workspace.session.output == nil)
-        #expect(workspace.session.outputImage == nil)
-        #expect(workspace.previewSession.image == nil)
-        #expect(workspace.previewSession.data == nil)
+        #expect(workspace.session.source?.data == data)
+        #expect(workspace.session.output?.data == data)
+        #expect(workspace.session.outputImage != nil)
+        #expect(workspace.previewSession.image != nil)
+        #expect(workspace.previewSession.data == data)
     }
 
     private func imageData() throws -> Data {
@@ -149,7 +138,7 @@ struct WorkspacePayloadEvictionTests {
         let jwt = repository.model(for: JWTToolWorkspaceModel.key)
         jwt.session.generateSecret = "secret-stays"
         jwt.session.generatePayload = #"{"sub":"x"}"#
-        repository.evictHeavyPayloads(for: JWTToolWorkspaceModel.key.toolID)
+        repository.evictHeavyPayloads { $0 == JWTToolWorkspaceModel.key.toolID }
         #expect(jwt.session.generateSecret == "secret-stays")
         #expect(jwt.session.generatePayload == #"{"sub":"x"}"#)
     }
@@ -172,7 +161,7 @@ struct WorkspacePayloadEvictionTests {
         #expect(workspace.execution.isRunning == false)
     }
 
-    @Test func regexWorkspaceEvictsReportButKeepsDrafts() async {
+    @Test func regexWorkspaceEvictsAndRestoresReportFromCurrentDrafts() async throws {
         let repository = ToolWorkspaceRepository(defaults: Self.defaults())
         let workspace = repository.model(for: RegexToolWorkspaceModel.key)
         workspace.pattern = "a+"
@@ -191,5 +180,11 @@ struct WorkspacePayloadEvictionTests {
         #expect(workspace.execution.isRunning == false)
         #expect(workspace.pattern == "a+")
         #expect(workspace.text == "aaa bb aaa")
+
+        workspace.text = "aaaa bb"
+        workspace.restoreResultIfNeeded()
+        try await waitForPayload { workspace.execution.report != nil }
+        #expect(workspace.execution.report?.matches.count == 1)
+        #expect(workspace.execution.reportSourceText == "aaaa bb")
     }
 }

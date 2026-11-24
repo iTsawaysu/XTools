@@ -1,10 +1,7 @@
 import Testing
 @testable import XTools
 
-/// F8 防回归守卫（架构扫描发现 F1：json-diff 等 9 个遗留 ID 令
-/// `evictHeavyPayloads(for:)` 永远无法命中，大载荷离开工具后不释放）。
-///
-/// `ToolWorkspaceRepository.evictHeavyPayloads(for:)` 以**注册表 ID** 淘汰，
+/// `ToolWorkspaceRepository` 按注册表 ID 释放重型缓存，
 /// 因此每个 `ToolWorkspaceKey` 声明点的 toolID 必须能在
 /// `ToolRegistry.default` 中解析。slot 是 Hub 分段语义（如 "json"/"text"），
 /// 不是注册表身份，无需校验。
@@ -78,7 +75,7 @@ struct ToolWorkspaceKeyRegistryAlignmentTests {
                 registry.tool(for: declared.toolID) != nil,
                 Comment(
                     rawValue: "\(declared.owner) 的 toolID \"\(declared.toolID.rawValue)\" 无法在 ToolRegistry.default 解析："
-                        + "evictHeavyPayloads(for:) 将永远无法命中该工具，大载荷离开工具后不会释放（F1 复发）"
+                        + "页面与工作区须使用相同的工具身份。"
                 )
             )
         }

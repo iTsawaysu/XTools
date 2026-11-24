@@ -438,7 +438,7 @@ struct ImageBatchConversionSessionTests {
         #expect(!FileManager.default.fileExists(atPath: removed.tempURL.path))
         #expect(FileManager.default.fileExists(atPath: session.spoolDirectory.path))
 
-        session.evictHeavyPayloads()
+        session.reset()
         #expect(session.items.isEmpty)
         #expect(session.error == nil)
         #expect(!session.isProcessing)

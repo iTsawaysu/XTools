@@ -60,7 +60,7 @@ typealias ImageSaveClientBuilder = @MainActor (
 struct OutputSpoolWriteFailure: Error {}
 
 @MainActor
-final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadEvicting {
+final class ImageBatchConversionSession: ObservableObject {
     /// 上限主要约束列表 UI 与保存循环时长；输出落盘后内存与批量数量解耦。
     static let defaultMaximumItemCount = 100
 
@@ -317,10 +317,6 @@ final class ImageBatchConversionSession: ObservableObject, ToolWorkspacePayloadE
         removeSpoolDirectory()
         items = []
         error = nil
-    }
-
-    func evictHeavyPayloads() {
-        reset()
     }
 
     // MARK: - Save

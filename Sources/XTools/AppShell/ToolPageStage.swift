@@ -37,6 +37,8 @@ struct ToolPageKey: Hashable {
 @MainActor
 struct ToolPageStage<Page: View>: View {
     let target: ToolPageKey
+    var workspaceRepository: ToolWorkspaceRepository? = nil
+    var memoryPressureEvents: AsyncStream<Void>? = nil
     @ViewBuilder let page: (ToolPageKey) -> Page
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -59,6 +61,27 @@ struct ToolPageStage<Page: View>: View {
         }
         .onChange(of: reduceMotion) { _, enabled in
             if enabled { swapImmediately(to: target) }
+        }
+        .task {
+            guard let workspaceRepository else { return }
+            if let memoryPressureEvents {
+                await handleMemoryPressure(memoryPressureEvents, repository: workspaceRepository)
+                return
+            }
+            let (events, continuation) = AsyncStream<Void>.makeStream(bufferingPolicy: .bufferingNewest(1))
+            let source = DispatchSource.makeMemoryPressureSource(eventMask: [.warning, .critical], queue: .main)
+            source.setEventHandler { continuation.yield(()) }
+            source.activate()
+            defer { source.cancel() }
+            await handleMemoryPressure(events, repository: workspaceRepository)
+        }
+    }
+
+    private func handleMemoryPressure(_ events: AsyncStream<Void>, repository: ToolWorkspaceRepository) async {
+        for await _ in events {
+            guard !Task.isCancelled else { return }
+            guard model.displayed != nil else { continue }
+            repository.evictHeavyPayloads { !model.mounted.contains(.tool($0)) }
         }
     }
 

@@ -439,7 +439,7 @@ struct SheetBase64FileWorkflowDialog: Sendable {
 }
 
 @MainActor
-final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvicting {
+final class Base64FileWorkflowSession: ObservableObject {
     static let workspaceKey = ToolWorkspaceKey<Base64FileWorkflowSession>(
         toolID: "base64-file-converter"
     ) { preferences in
@@ -606,13 +606,6 @@ final class Base64FileWorkflowSession: ObservableObject, ToolWorkspacePayloadEvi
 
     func clearSelection() {
         mutate { $0.clearSelection() }
-    }
-
-    /// Drops file bytes, previews, and decoded payloads while keeping reverse
-    /// draft text, direction, output mode, and filename preferences.
-    func evictHeavyPayloads() {
-        mutate { $0.evictHeavyPayloads() }
-        previewImage = nil
     }
 
     func rejectMultipleSourceFileDrop() {

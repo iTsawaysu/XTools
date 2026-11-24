@@ -65,8 +65,7 @@ struct IndexImageHubPage: View {
 /// 「图片处理」Hub：单一 IndexPage 外壳 + 顶部
 /// 格式转换|压缩|灰度|水印|Favicon 五段切换。五段的源图与结果由
 /// ToolWorkspaceRepository 按 (toolID, slot) 保活（key 已重挂
-/// toolID "image-tools" + 各自 slot），切换分段或离开再回来不丢输入与结果；
-/// 离开 Hub 时五个会话的重载荷按 toolID 一并驱逐（ToolWorkspacePayloadEvicting）。
+/// toolID "image-tools" + 各自 slot），切换分段或离开再回来不丢输入与结果。
 private struct IndexImageHubContent: View {
     @ObservedObject var workspace: ImageHubWorkspaceModel
 

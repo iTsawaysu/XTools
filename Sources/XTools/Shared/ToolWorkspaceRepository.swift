@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// Implemented by workspace models that pin large binary payloads so the shell
-/// can drop them when the user leaves the tool.
+/// Only derived data that can be rebuilt from the retained workspace.
 @MainActor
 protocol ToolWorkspacePayloadEvicting: AnyObject {
     func evictHeavyPayloads()
@@ -56,10 +55,8 @@ final class ToolWorkspaceRepository: ObservableObject {
         return model
     }
 
-    /// Drops heavy payloads for every retained model of `toolID`. Models that do
-    /// not conform to `ToolWorkspacePayloadEvicting` are left unchanged.
-    func evictHeavyPayloads(for toolID: ToolID) {
-        for (key, object) in instances where key.toolID == toolID {
+    func evictHeavyPayloads(where canEvict: (ToolID) -> Bool) {
+        for (key, object) in instances where canEvict(key.toolID) {
             (object as? ToolWorkspacePayloadEvicting)?.evictHeavyPayloads()
         }
     }

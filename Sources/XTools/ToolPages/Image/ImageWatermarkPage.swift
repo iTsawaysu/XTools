@@ -10,7 +10,7 @@ typealias ImageWatermarkPreviewRenderer = @Sendable (
 ) throws -> Data
 
 @MainActor
-final class ImageWatermarkPreviewSession: ObservableObject, ToolWorkspacePayloadEvicting {
+final class ImageWatermarkPreviewSession: ObservableObject {
     @Published private(set) var image: NSImage?
     @Published private(set) var data: Data?
     @Published private(set) var error: String?
@@ -91,13 +91,10 @@ final class ImageWatermarkPreviewSession: ObservableObject, ToolWorkspacePayload
         invalidate(keepingImage: false)
     }
 
-    func evictHeavyPayloads() {
-        reset()
-    }
 }
 
 @MainActor
-final class ImageWatermarkToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicting {
+final class ImageWatermarkToolWorkspaceModel: ObservableObject {
     /// 并入「图片处理」Hub 后与四段共用 toolID，slot 隔离各自的源图与结果；
     /// 偏好键沿用合并前的 imageWatermark.* 命名。
     static let key = ToolWorkspaceKey<ImageWatermarkToolWorkspaceModel>(toolID: "image-tools", slot: "watermark") { preferences in
@@ -133,12 +130,6 @@ final class ImageWatermarkToolWorkspaceModel: ObservableObject, ToolWorkspacePay
         textColor = preferences.value(for: MediaToolPreferenceKeys.imageWatermarkColor)
     }
 
-    func evictHeavyPayloads() {
-        session.evictHeavyPayloads()
-        previewSession.evictHeavyPayloads()
-        previewDebouncer.cancel()
-        finalDebouncer.cancel()
-    }
 }
 
 struct IndexImageWatermarkSegment: View {

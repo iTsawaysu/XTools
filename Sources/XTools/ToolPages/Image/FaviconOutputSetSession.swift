@@ -10,7 +10,7 @@ struct FaviconOutputSpec: Hashable, Sendable {
 typealias FaviconIconSetGenerator = @Sendable (_ data: Data, _ sizes: [Int]) throws -> [GeneratedIcon]
 
 @MainActor
-final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvicting {
+final class FaviconOutputSetSession: ObservableObject {
     static let workspaceKey = ToolWorkspaceKey<FaviconOutputSetSession>(toolID: "image-tools", slot: "favicon") { _ in
         FaviconOutputSetSession()
     }
@@ -272,10 +272,6 @@ final class FaviconOutputSetSession: ObservableObject, ToolWorkspacePayloadEvict
         icons = []
         package = nil
         error = nil
-    }
-
-    func evictHeavyPayloads() {
-        reset()
     }
 
     func cancelGeneration() {

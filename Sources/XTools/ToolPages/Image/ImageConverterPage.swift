@@ -2,7 +2,7 @@ import XToolsCore
 import SwiftUI
 
 @MainActor
-final class ImageConverterToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvicting {
+final class ImageConverterToolWorkspaceModel: ObservableObject {
     static let key = ToolWorkspaceKey<ImageConverterToolWorkspaceModel>(toolID: "image-tools", slot: "converter") { preferences in
         ImageConverterToolWorkspaceModel(preferences: preferences)
     }
@@ -47,9 +47,6 @@ final class ImageConverterToolWorkspaceModel: ObservableObject, ToolWorkspacePay
         customTransparencyFillHex = preferences.value(for: MediaToolPreferenceKeys.imageConverterCustomTransparencyFillHex)
     }
 
-    func evictHeavyPayloads() {
-        session.evictHeavyPayloads()
-    }
 }
 
 struct IndexImageConverterSegment: View {

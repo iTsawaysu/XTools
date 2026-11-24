@@ -1,8 +1,6 @@
 import SwiftUI
 
-/// 「对比」Hub 的文本分段。workspace key 使用注册表 toolID "diff" + slot "text"
-/// （evictHeavyPayloads 按注册表 ID 淘汰，F1），输入与执行状态由
-/// ToolWorkspaceRepository 保活，分段切换不丢。
+/// 「对比」Hub 的文本分段，与 JSON 分段共用工具身份，分别保留草稿。
 struct IndexTextDiffSegment: View {
     static let key = ToolWorkspaceKey<DiffToolWorkspaceModel>(toolID: "diff", slot: "text") { _ in
         DiffToolWorkspaceModel(kind: .text)
@@ -56,5 +54,6 @@ private struct IndexTextDiffWorkspaceContent: View {
             }
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .onAppear(perform: workspace.restoreResultIfNeeded)
     }
 }

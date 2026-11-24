@@ -16,6 +16,7 @@ struct ToolDetailHostView: View {
     let registry: ToolRegistry
     let selectedToolID: ToolID?
     let dashboardStore: DashboardStore?
+    let workspaceRepository: ToolWorkspaceRepository
     let favorites: FavoritesStore
     let routing: any DetailActionRouting
     let clipboardSuggestion: SmartPasteMonitor.Suggestion?
@@ -26,6 +27,7 @@ struct ToolDetailHostView: View {
         registry: ToolRegistry,
         selectedToolID: ToolID?,
         dashboardStore: DashboardStore? = nil,
+        workspaceRepository: ToolWorkspaceRepository,
         favorites: FavoritesStore,
         routing: any DetailActionRouting,
         clipboardSuggestion: SmartPasteMonitor.Suggestion? = nil,
@@ -35,6 +37,7 @@ struct ToolDetailHostView: View {
         self.registry = registry
         self.selectedToolID = selectedToolID
         self.dashboardStore = dashboardStore
+        self.workspaceRepository = workspaceRepository
         self.favorites = favorites
         self.routing = routing
         self.clipboardSuggestion = clipboardSuggestion
@@ -46,7 +49,7 @@ struct ToolDetailHostView: View {
         // 01 景深沉降: every navigation path lands here as one `target` key,
         // so tool pages, the dashboard, and the empty state share the same
         // page swap choreography (see `ToolPageStage`).
-        ToolPageStage(target: pageKey) { key in
+        ToolPageStage(target: pageKey, workspaceRepository: workspaceRepository) { key in
             ToolPageHostedItem(
                 key: key,
                 registry: registry,

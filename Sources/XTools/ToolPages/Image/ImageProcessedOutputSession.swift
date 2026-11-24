@@ -5,7 +5,7 @@ import Foundation
 import UniformTypeIdentifiers
 
 @MainActor
-final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadEvicting {
+final class ImageProcessedOutputSession: ObservableObject {
     static let grayscaleWorkspaceKey = ToolWorkspaceKey<ImageProcessedOutputSession>(
         toolID: "image-tools", slot: "grayscale"
     ) { _ in
@@ -139,10 +139,6 @@ final class ImageProcessedOutputSession: ObservableObject, ToolWorkspacePayloadE
         outputImage = nil
         error = nil
         isProcessing = false
-    }
-
-    func evictHeavyPayloads() {
-        reset()
     }
 
     func renderInBackground(

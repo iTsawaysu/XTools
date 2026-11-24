@@ -12,6 +12,7 @@ final class RegexToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvict
     @Published var text = ""
     let debouncer = IndexDebouncer()
     let execution = RegexExecutionSession()
+    private var needsResultRestore = false
 
     var hasAnyContent: Bool {
         !pattern.isEmpty
@@ -30,6 +31,7 @@ final class RegexToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvict
     }
 
     func applyPreset(_ preset: RegexMatcher.Preset) {
+        needsResultRestore = false
         debouncer.cancel()
         execution.invalidate()
         pattern = preset.pattern
@@ -38,6 +40,7 @@ final class RegexToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvict
     }
 
     func clear() {
+        needsResultRestore = false
         debouncer.cancel()
         execution.invalidate()
         pattern = ""
@@ -45,11 +48,16 @@ final class RegexToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvict
         text = ""
     }
 
-    /// 离开工具时释放匹配报告（可达 10k 匹配 + 捕获记录）与挂起的防抖执行；
-    /// pattern/flags/text 草稿保留，回到工具后下一次编辑照常重跑。
     func evictHeavyPayloads() {
-        debouncer.cancel()
+        guard !execution.isRunning, execution.report != nil else { return }
+        needsResultRestore = true
         execution.invalidate()
+    }
+
+    func restoreResultIfNeeded() {
+        guard needsResultRestore else { return }
+        needsResultRestore = false
+        execution.run(pattern: pattern, text: text, flags: flags)
     }
 }
 
@@ -226,6 +234,7 @@ private struct IndexRegexWorkspaceContent: View {
         }
         .onAppear {
             displayedReport = report
+            workspace.restoreResultIfNeeded()
         }
         .onChange(of: workspaceInput) { _, input in
             handleWorkspaceInputChange(input)

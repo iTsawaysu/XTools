@@ -9,6 +9,93 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct PageNavigationRetentionRegressionTests {
+    @Test func rootNavigationKeepsDiffResultsUntilPressureAndRebuildsBothDrafts() async throws {
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let defaults = UserDefaults(suiteName: "DiffNavigationRetention.\(UUID())")!
+        let repository = ToolWorkspaceRepository(defaults: defaults)
+        let model = RootViewModel()
+        model.selectedToolID = "diff"
+        let host = NSHostingView(rootView: RootView(viewModel: model, defaults: defaults, workspaceRepository: repository))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1200, height: 800),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        defer { window.close() }
+        try await settle(host)
+
+        let json = repository.model(for: IndexJSONDiffSegment.key)
+        let text = repository.model(for: IndexTextDiffSegment.key)
+        let largeDraft = String(repeating: "0123456789", count: 14_000)
+        let jsonLeft = #"{"draft":"\#(largeDraft)","version":1}"#
+        let textRight = "\(largeDraft)\nright"
+        json.left = jsonLeft
+        json.right = #"{"draft":"\#(largeDraft)","version":2}"#
+        text.left = "\(largeDraft)\nleft"
+        text.right = textRight
+        try await waitUntil { !json.diffRows.isEmpty && !text.diffRows.isEmpty }
+        let jsonRows = json.diffRows
+        let textRows = text.diffRows
+
+        model.selectedToolID = "http-status-codes"
+        try await settle(host)
+        if !reduceMotion {
+            #expect(json.diffRows == jsonRows)
+            #expect(text.diffRows == textRows)
+            for id: ToolID in ["integer-base-converter", "roman-numeral-converter", "date-calculator"] {
+                model.selectedToolID = id
+                try await settle(host)
+            }
+        }
+        #expect(json.diffRows == jsonRows)
+        #expect(text.diffRows == textRows)
+        repository.evictHeavyPayloads { $0 == "diff" }
+        try await waitUntil { json.diffRows.isEmpty && text.diffRows.isEmpty }
+        #expect(json.left == jsonLeft)
+        #expect(text.right == textRight)
+
+        model.selectedToolID = "diff"
+        try await settle(host)
+        try await waitUntil { !json.diffRows.isEmpty }
+        #expect(json.diffRows == jsonRows)
+        #expect(text.diffRows.isEmpty)
+
+        repository.model(for: DiffHubWorkspaceModel.key).segment = .text
+        try await settle(host)
+        try await waitUntil { !text.diffRows.isEmpty }
+        #expect(text.diffRows == textRows)
+    }
+
+    @Test func memoryPressureStreamKeepsActiveWorkspaceAndClearsOnlyIdleResult() async throws {
+        let repository = ToolWorkspaceRepository(defaults: UserDefaults(suiteName: "PagePressure.\(UUID())")!)
+        let diff = repository.model(for: IndexTextDiffSegment.key)
+        diff.left = "alpha\nbeta"
+        diff.right = "alpha\ngamma"
+        let regex = repository.model(for: RegexToolWorkspaceModel.key)
+        regex.pattern = "[a-z]"
+        regex.text = "abc"
+        regex.execution.run(pattern: regex.pattern, text: regex.text, flags: regex.flags)
+        try await waitUntil { !diff.diffRows.isEmpty && regex.execution.report != nil }
+
+        let (events, continuation) = AsyncStream<Void>.makeStream()
+        let host = NSHostingView(rootView: ToolPageStage(target: .tool("diff"), workspaceRepository: repository,
+                                                        memoryPressureEvents: events) { _ in Color.clear })
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 600, height: 400), styleMask: [.titled],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = host
+        window.orderFront(nil)
+        defer { continuation.finish(); window.close() }
+        try await settle(host)
+
+        let displayedRows = diff.diffRows
+        continuation.yield(())
+        try await waitUntil { regex.execution.report == nil }
+        #expect(diff.diffRows == displayedRows)
+        #expect(regex.pattern == "[a-z]")
+        #expect(regex.text == "abc")
+    }
+
     @Test func rootNavigationPreservesAllAcceptedImageSlotsAndPendingOutput() async throws {
         let defaults = UserDefaults(suiteName: "PageNavigationRetention.\(UUID())")!
         let repository = ToolWorkspaceRepository(defaults: defaults)
