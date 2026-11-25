@@ -5,6 +5,22 @@ import Testing
 
 @MainActor
 struct HTMLToMarkdownSessionTests {
+    @Test func articleOptionStaysWithTheInFlightURLUntilItFinishes() async throws {
+        let session = HTMLToMarkdownSession(urlOperation: { _, articleOnly, _ in
+            let mode = articleOnly ? "article" : "full"
+            return Self.urlResult(title: mode, marker: mode)
+        })
+        session.urlText = "https://example.com"
+        session.fetchURL()
+        session.setExtractArticleOnly(false)
+        #expect(session.extractArticleOnly)
+        try await waitUntil { session.markdown == "article" && session.phase == .ready }
+
+        session.setExtractArticleOnly(false)
+        #expect(!session.extractArticleOnly)
+        try await waitUntil { session.markdown == "full" && session.phase == .ready }
+    }
+
     @Test func conversionDetailsFollowTheCurrentResultAndClearWithInput() async throws {
         let session = HTMLToMarkdownSession(
             manualOperation: { _ in

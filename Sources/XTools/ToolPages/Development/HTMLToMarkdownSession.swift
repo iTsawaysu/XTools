@@ -26,15 +26,7 @@ final class HTMLToMarkdownSession: ObservableObject {
             }
         }
     }
-    @Published var extractArticleOnly: Bool = true {
-        didSet {
-            guard extractArticleOnly != oldValue else { return }
-            revokeRemoteImageAuthorization()
-            if !urlText.isEmpty && !isURLProcessing {
-                fetchURL()
-            }
-        }
-    }
+    @Published private(set) var extractArticleOnly = true
     @Published private(set) var inputHTML = ""
     @Published private(set) var markdown = ""
     @Published private(set) var error: String?
@@ -84,6 +76,15 @@ final class HTMLToMarkdownSession: ObservableObject {
             || error != nil
             || warning != nil
             || phase != .idle
+    }
+
+    func setExtractArticleOnly(_ enabled: Bool) {
+        guard !isURLProcessing, extractArticleOnly != enabled else { return }
+        extractArticleOnly = enabled
+        revokeRemoteImageAuthorization()
+        if !urlText.isEmpty {
+            fetchURL()
+        }
     }
 
     func fetchURL() {

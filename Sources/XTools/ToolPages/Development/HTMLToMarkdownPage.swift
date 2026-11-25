@@ -74,8 +74,12 @@ private struct IndexHTMLToMarkdownWorkspaceContent: View {
                         IndexOptionSwitch(
                             title: "仅提取正文",
                             style: .button,
-                            isOn: $session.extractArticleOnly
+                            isOn: Binding(
+                                get: { session.extractArticleOnly },
+                                set: { session.setExtractArticleOnly($0) }
+                            )
                         )
+                        .disabled(session.isURLProcessing)
                     )
                 },
                 outputControl: {
