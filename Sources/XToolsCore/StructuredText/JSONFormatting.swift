@@ -22,17 +22,15 @@ public enum JSONFormatting {
 
     public enum FormattingError: Error, LocalizedError, Equatable {
         case invalidJSON(FormatDiagnostic)
+        case resourceLimit(FormatDiagnostic)
 
         public var errorDescription: String? {
-            switch self {
-            case .invalidJSON(let diagnostic):
-                return diagnostic.workspaceMessage
-            }
+            diagnostic.workspaceMessage
         }
 
         public var diagnostic: FormatDiagnostic {
             switch self {
-            case .invalidJSON(let diagnostic):
+            case .invalidJSON(let diagnostic), .resourceLimit(let diagnostic):
                 return diagnostic
             }
         }
@@ -956,7 +954,9 @@ private struct OrderedJSONParser {
     }
 
     private func error(_ issue: JSONParseIssue) -> JSONFormatting.FormattingError {
-        .invalidJSON(diagnostic(for: issue))
+        let detail = diagnostic(for: issue)
+        if case .exceededMaxDepth = issue { return .resourceLimit(detail) }
+        return .invalidJSON(detail)
     }
 
     private func diagnostic(for issue: JSONParseIssue) -> FormatDiagnostic {

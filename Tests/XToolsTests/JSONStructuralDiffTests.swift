@@ -20,6 +20,16 @@ struct JSONStructuralDiffTests {
         #expect(same.decision == .comparable([]))
     }
 
+    @Test func nestingCapacityIsAResourceLimitOnEitherSide() throws {
+        let atLimit = String(repeating: "[", count: 32) + "0" + String(repeating: "]", count: 32)
+        let overLimit = "[" + atLimit + "]"
+        #expect(try JSONStructuralDiff.cancellablePreparedDiff(left: atLimit, right: atLimit, labels: labels).decision == .comparable([]))
+        for (left, right) in [(overLimit, atLimit), (atLimit, overLimit)] {
+            let result = try JSONStructuralDiff.cancellablePreparedDiff(left: left, right: right, labels: labels)
+            #expect(result.decision == .tooLarge("JSON 嵌套层级过深，超过最大安全深度 (32 层)"))
+        }
+    }
+
     /// Mirrors the canonical display form the production diff pipeline renders
     /// (sorted keys, 2-space indent), built from public formatting API.
     private func canonicalDisplayText(_ text: String, options: JSONDiffOptions = JSONDiffOptions()) -> String? {

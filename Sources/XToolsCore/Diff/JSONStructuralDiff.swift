@@ -102,6 +102,8 @@ public enum JSONStructuralDiff {
             }
         } catch let error as StructuredTextResourceError {
             return PreparedResult(decision: .tooLarge(error.diagnostic.message))
+        } catch JSONFormatting.FormattingError.resourceLimit(let diagnostic) {
+            return PreparedResult(decision: .tooLarge(diagnostic.message))
         }
 
         switch JSONDiffValidation.decision(
@@ -195,12 +197,13 @@ public enum JSONStructuralDiff {
                 diagnostic: nil
             )
         } catch let error as JSONFormatting.FormattingError {
+            guard case .invalidJSON(let diagnostic) = error else { throw error }
             return PreparedSide(
                 isEmpty: false,
                 displayText: nil,
                 exactIdentity: nil,
                 duplicateKeys: [],
-                diagnostic: error.diagnostic
+                diagnostic: diagnostic
             )
         } catch is CancellationError {
             throw CancellationError()

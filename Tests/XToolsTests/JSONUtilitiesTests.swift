@@ -588,7 +588,13 @@ struct JSONFormattingTests {
 
     @Test func maxNestingDepthSafelyRejectsDeepNesting() throws {
         let deepJSON = String(repeating: "[", count: 40) + String(repeating: "]", count: 40)
-        let diagnostic = try invalidJSONDiagnostic(for: deepJSON)
+        let error = try #require(#expect(throws: JSONFormatting.FormattingError.self) {
+            try JSONFormatting.format(deepJSON, sortKeys: false, indentWidth: 2)
+        })
+        guard case .resourceLimit(let diagnostic) = error else {
+            Issue.record("Expected JSON resource limit, got \(error)")
+            return
+        }
         #expect(diagnostic.message.contains("超过最大安全深度"))
     }
 
