@@ -1,6 +1,6 @@
 import Foundation
 
-/// JWT 分段 JSON 的统一解析入口：先验证 JSON，再检测对象成员名重复。
+/// JWT 分段 JSON 统一使用 UTF-8，先验证结构，再检测对象成员名重复。
 ///
 /// 背景：`JSONSerialization` 不拒绝重复键，而 JWT 的
 /// header 决定验证算法——重复的 `alg` 成员会让"取哪个算法"变得含糊，
@@ -9,23 +9,19 @@ import Foundation
 /// 静默放行交给序列化器，因此合法 JWT 的解析结果与既有行为逐字节一致。
 enum JWTJSONObjectParser {
     enum ParseFailure: Error, Equatable {
+        case invalidEncoding
         case duplicateKey
     }
 
     static func parse(_ data: Data) throws -> Any {
-        // 先由序列化器把关合法性，扫描器只处理合法 JSON，杜绝把畸形
-        // 输入误报成"成员名重复"。
-        let value = try JSONSerialization.jsonObject(with: data)
-        try ensureNoDuplicateKeys(in: data)
-        return value
-    }
-
-    static func ensureNoDuplicateKeys(in data: Data) throws {
-        guard let text = String(data: data, encoding: .utf8) else {
-            return
+        // 原始 NUL 在 JSON 中无效，且会让 JSONSerialization 自行探测宽字符编码。
+        guard !data.contains(0), let text = String(data: data, encoding: .utf8) else {
+            throw ParseFailure.invalidEncoding
         }
+        let value = try JSONSerialization.jsonObject(with: data)
         var scanner = DuplicateKeyScanner(text)
         try scanner.scan()
+        return value
     }
 
     /// 单遍迭代扫描，深度沿用 Foundation 已验证的 JSON 上限；不能在

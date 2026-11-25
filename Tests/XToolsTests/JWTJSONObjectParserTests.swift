@@ -15,6 +15,19 @@ struct JWTJSONObjectParserTests {
         #expect(object as? [String: Any]? != nil)
     }
 
+    @Test(arguments: [String.Encoding.utf16LittleEndian, .utf16BigEndian, .utf32LittleEndian, .utf32BigEndian])
+    func rejectsNonUTF8JSON(_ encoding: String.Encoding) throws {
+        let bytes = try #require(#"{"sub":"用户"}"#.data(using: encoding))
+        #expect(throws: JWTJSONObjectParser.ParseFailure.invalidEncoding) {
+            _ = try JWTJSONObjectParser.parse(bytes)
+        }
+    }
+
+    @Test func acceptsUTF8WithEscapedControlCharacters() throws {
+        let value = try JWTJSONObjectParser.parse(Self.data(#"{"sub":"用户\u0000"}"#))
+        #expect((value as? [String: String])?["sub"] == "用户\0")
+    }
+
     @Test func detectsTopLevelDuplicate() {
         #expect(throws: JWTJSONObjectParser.ParseFailure.duplicateKey) {
             _ = try JWTJSONObjectParser.parse(Self.data(#"{"alg":"none","alg":"HS256"}"#))
