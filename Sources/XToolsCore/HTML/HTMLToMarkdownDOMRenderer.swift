@@ -13,6 +13,7 @@ final class HTMLToMarkdownDOMRenderer {
     private let options: HTMLToMarkdownOptions
     private let cancellation: DiffCancellationChecker
     private var warnings: [HTMLToMarkdownWarning] = []
+    private var renderedTableCellCount = 0
 
     init(
         options: HTMLToMarkdownOptions,
@@ -368,41 +369,46 @@ final class HTMLToMarkdownDOMRenderer {
 
     private func renderTable(_ table: Element) throws -> String {
         try cancellation.check()
-        let rows = tableRows(in: table)
-        guard !rows.isEmpty else {
-            appendWarning(.emptyVisibleContent)
-            return ""
-        }
-
-        var renderedRows: [[String]] = []
-        for row in rows {
+        var cellRows: [[Element]] = []
+        var columnCount = 0
+        for row in tableRows(in: table) {
             try cancellation.check()
-            let cells = try tableCells(in: row).map { cell in
-                try renderTableCell(cell)
-            }
+            let cells = tableCells(in: row)
             if !cells.isEmpty {
-                renderedRows.append(cells)
+                cellRows.append(cells)
+                columnCount = max(columnCount, cells.count)
             }
         }
 
-        guard !renderedRows.isEmpty else {
+        guard let header = cellRows.first else {
             appendWarning(.emptyVisibleContent)
             return ""
         }
 
-        let columnCount = renderedRows.map(\.count).max() ?? 0
-        guard columnCount > 0 else { return "" }
+        // Reserve the whole table, including its separator row, before
+        // rendering nested cells or allocating any padding.
+        let limit = max(0, options.inputBudget.maximumRenderedTableCells)
+        let remaining = limit - renderedTableCellCount
+        guard cellRows.count + 1 <= remaining / columnCount else {
+            throw HTMLToMarkdownConversionError.tableOutputLimitExceeded
+        }
+        renderedTableCellCount += (cellRows.count + 1) * columnCount
 
-        let header = paddedRow(renderedRows[0], columnCount: columnCount)
-        let alignments = tableCells(in: rows[0]).map(tableAlignment).padded(to: columnCount, with: nil)
-        let bodyRows = renderedRows.dropFirst().map { paddedRow($0, columnCount: columnCount) }
-
-        var lines = [
-            markdownTableRow(header),
-            markdownTableRow(alignments.map { separator(for: $0) })
-        ]
-        lines.append(contentsOf: bodyRows.map(markdownTableRow))
-        return lines.joined(separator: "\n")
+        var markdown = ""
+        for (index, cells) in cellRows.enumerated() {
+            let rendered = try cells.map { cell in
+                try cancellation.check()
+                return try renderTableCell(cell)
+            }
+            if index > 0 { markdown.append("\n") }
+            markdown.append(markdownTableRow(rendered.padded(to: columnCount, with: "")))
+            if index == 0 {
+                let alignments = header.map(tableAlignment).padded(to: columnCount, with: nil)
+                markdown.append("\n")
+                markdown.append(markdownTableRow(alignments.map { separator(for: $0) }))
+            }
+        }
+        return markdown
     }
 
     private func tableRows(in table: Element) -> [Element] {
@@ -481,10 +487,6 @@ final class HTMLToMarkdownDOMRenderer {
 
     private func markdownTableRow(_ row: [String]) -> String {
         "| " + row.joined(separator: " | ") + " |"
-    }
-
-    private func paddedRow(_ row: [String], columnCount: Int) -> [String] {
-        row.padded(to: columnCount, with: "")
     }
 
     private func block(_ markdown: String) -> String {

@@ -47,16 +47,23 @@ public struct HTMLToMarkdownInputBudget: Equatable, Sendable {
 
     public var preParseByteLimit: Int
     public var completedResultThreshold: Int?
+    public var maximumRenderedTableCells: Int
 
-    public init(preParseByteLimit: Int, completedResultThreshold: Int?) {
+    public init(
+        preParseByteLimit: Int,
+        completedResultThreshold: Int?,
+        maximumRenderedTableCells: Int = 1_000_000
+    ) {
         self.preParseByteLimit = preParseByteLimit
         self.completedResultThreshold = completedResultThreshold
+        self.maximumRenderedTableCells = maximumRenderedTableCells
     }
 }
 
 public enum HTMLToMarkdownConversionError: Error, Equatable, Sendable, LocalizedError {
     case inputExceedsPreParseByteLimit(Int)
     case domDepthExceeded(Int)
+    case tableOutputLimitExceeded
 
     /// 转换失败文案；调用方经 error.localizedDescription 读取。
     public var errorDescription: String? {
@@ -65,6 +72,8 @@ public enum HTMLToMarkdownConversionError: Error, Equatable, Sendable, Localized
             return "输入超过 \(ByteSizeFormatter.format(bytes: limit))，未开始转换。"
         case .domDepthExceeded(let limit):
             return "HTML 嵌套超过 \(limit) 层，未进行转换。"
+        case .tableOutputLimitExceeded:
+            return "HTML 表格转换后的单元格过多。请拆分表格后重试。"
         }
     }
 }

@@ -6,6 +6,20 @@ import Testing
 struct HTMLToMarkdownConverterTests {
     // MARK: - Headings
 
+    @Test func tablePaddingUsesACumulativeBudgetAndTheFirstNonemptyRow() {
+        let table = "<table><tr></tr><tr><th align='right'>A</th></tr><tr><td>1</td><td>2</td></tr></table>"
+        let options = HTMLToMarkdownOptions(inputBudget: .init(
+            preParseByteLimit: 4_096, completedResultThreshold: nil, maximumRenderedTableCells: 6
+        ))
+        let result = HTMLToMarkdownConverter.convert(table, options: options)
+        #expect(result.error == nil)
+        #expect(result.markdown == "| A |  |\n| ---: | --- |\n| 1 | 2 |")
+
+        let multiple = HTMLToMarkdownConverter.convert(table + table, options: options)
+        #expect(multiple.error == .tableOutputLimitExceeded)
+        #expect(multiple.markdown.isEmpty)
+    }
+
     @Test func convertsHeadings() {
         #expect(HTMLToMarkdownConverter.convert("<h1>Title</h1>") == "# Title")
         #expect(HTMLToMarkdownConverter.convert("<h3>Sub</h3>") == "### Sub")
