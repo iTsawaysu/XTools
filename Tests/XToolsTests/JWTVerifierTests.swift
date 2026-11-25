@@ -364,6 +364,28 @@ struct JWTVerifierTests {
 
     // MARK: - Structural errors
 
+    @Test func checksSupportedHeaderParametersBeforeSignatureInspection() throws {
+        let config = JWTVerifier.VerificationConfig(secret: nil)
+        let cases = [
+            (#"{"alg":"HS256","crit":[]}"#, "crit"),
+            (#"{"alg":"HS256","crit":["vendor-option"],"vendor-option":true}"#, "crit"),
+            (#"{"alg":"HS256","crit":["b64"]}"#, "crit"),
+            (#"{"alg":"HS256","b64":true}"#, "crit"),
+            (#"{"alg":"HS256","b64":false}"#, "b64"),
+            (#"{"alg":"HS256","b64":1}"#, "b64")
+        ]
+        for (header, parameter) in cases {
+            let token = Self.makeToken(header: header, payload: #"{"sub":"x"}"#)
+            #expect(throws: JWTVerifier.VerificationError.unsupportedHeaderParameter(parameter)) {
+                try JWTVerifier.verify(token: token, config: config)
+            }
+        }
+        let standard = Self.makeToken(
+            header: #"{"alg":"HS256","crit":["b64"],"b64":true,"kid":"existing"}"#, payload: #"{"sub":"x"}"#
+        )
+        #expect(try JWTVerifier.verify(token: standard, config: config).summary == .notVerified)
+    }
+
     @Test func wrongSegmentCountThrowsParseError() throws {
         #expect(throws: JWTVerifier.VerificationError.parseError) {
             _ = try JWTVerifier.verify(token: "only.two", config: .init(secret: nil))

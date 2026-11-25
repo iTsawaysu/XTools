@@ -1,3 +1,4 @@
+import CoreFoundation
 import Foundation
 
 public enum JWTVerifier {
@@ -103,6 +104,7 @@ public enum JWTVerifier {
         case parseError
         case invalidHeaderJSON
         case duplicateJSONMember
+        case unsupportedHeaderParameter(String)
 
         /// 验证失败的文案以 core 为单一真相源；会话层直接透传，
         /// 避免 core 更新文案时页面停留旧版。
@@ -122,6 +124,8 @@ public enum JWTVerifier {
                 return "JWT Header 不是有效 JSON。"
             case .duplicateJSONMember:
                 return "JWT 的 JSON 成员名存在重复，无法明确判定取值。"
+            case .unsupportedHeaderParameter(let parameter):
+                return "JWT Header 的 \(parameter) 参数不受本地检查支持。"
             }
         }
     }
@@ -157,6 +161,17 @@ public enum JWTVerifier {
         }
         guard let algorithmName = headerJSON["alg"] as? String else {
             throw VerificationError.missingAlgorithm
+        }
+        if let encoded = headerJSON["b64"] {
+            guard let flag = encoded as? NSNumber,
+                  CFGetTypeID(flag) == CFBooleanGetTypeID(), flag.boolValue else {
+                throw VerificationError.unsupportedHeaderParameter("b64")
+            }
+        }
+        if headerJSON["crit"] != nil || headerJSON["b64"] != nil {
+            guard headerJSON["crit"] as? [String] == ["b64"], headerJSON["b64"] != nil else {
+                throw VerificationError.unsupportedHeaderParameter("crit")
+            }
         }
 
         let signatureStatus = verifySignature(
