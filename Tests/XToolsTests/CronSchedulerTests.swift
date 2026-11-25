@@ -3,6 +3,17 @@ import Foundation
 import Testing
 
 struct CronSchedulerTests {
+    @Test func previewsGregorianDatesInTheSelectedTimeZone() {
+        let zone = TimeZone(identifier: "Asia/Shanghai")!
+        var local = Calendar(identifier: .islamicCivil)
+        local.timeZone = zone
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.timeZone = zone
+        let after = date(gregorian, 2026, 12, 31, 23, 30)
+        let expected = date(gregorian, 2027, 1, 1, 0, 0)
+        #expect(CronScheduler.nextRuns("0 0 1 JAN *", count: 1, after: after, calendar: local) == [expected])
+    }
+
     // MARK: - Keyword resolution
 
     @Test func resolvesKeywordAliases() {

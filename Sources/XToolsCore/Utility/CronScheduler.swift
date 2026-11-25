@@ -154,11 +154,14 @@ public enum CronScheduler {
         _ expression: String,
         count: Int,
         after: Date,
-        calendar: Calendar
+        calendar localCalendar: Calendar
     ) -> [Date] {
         let resolved = resolveExpression(expression)
         guard !resolved.isEmpty else { return [] }
         guard let fields = parseFields(resolved) else { return [] }
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = localCalendar.timeZone
 
         // Keep the absolute position in a repeated hour and always advance past
         // the minute containing `after`, including when it has fractional seconds.
