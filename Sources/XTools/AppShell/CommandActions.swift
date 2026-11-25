@@ -22,12 +22,6 @@ struct CommandActionEntry: Identifiable, Hashable {
     let systemImage: String
     var keywords: [String] = []
 
-    func matches(query: String) -> Bool {
-        let normalized = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return true }
-        return ToolSearchEngine.match(record: searchRecord, query: normalized) != nil
-    }
-
     var searchRecord: ToolSearchRecord {
         ToolSearchRecord(title: title, keywords: keywords)
     }

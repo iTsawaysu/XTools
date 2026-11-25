@@ -308,7 +308,8 @@ final class CommandPaletteSessionModel: ObservableObject {
         actionRecords: [ToolSearchRecord]
     ) -> CommandPaletteRowSnapshot {
         // A blank query composes the landing page instead of a flat list.
-        if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        let query = ToolSearchEngine.Query(query)
+        if query.isBlank {
             return makeLandingSnapshot(actions: actions)
         }
 

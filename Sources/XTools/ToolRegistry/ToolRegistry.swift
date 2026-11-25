@@ -82,9 +82,11 @@ struct ToolRegistry {
     /// tiebreak. An empty query passes every tool through unranked, which
     /// `matchingTools(query:)` preserves as plain registration order.
     func matchingToolMatches(query rawQuery: String) -> [ToolRegistryRankedMatch] {
-        let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        matchingToolMatches(query: ToolSearchEngine.Query(rawQuery))
+    }
 
-        guard !query.isEmpty else {
+    func matchingToolMatches(query: ToolSearchEngine.Query) -> [ToolRegistryRankedMatch] {
+        guard !query.isBlank else {
             return tools.map { ToolRegistryRankedMatch(tool: $0, match: nil) }
         }
 

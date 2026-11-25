@@ -165,9 +165,10 @@ struct ToolSearchEngineTests {
             systemImage: "circle.lefthalf.filled"
         )
 
-        #expect(action.matches(query: "qieh"))
-        #expect(action.matches(query: "qhzht"))
-        #expect(!action.matches(query: "jwt"))
+        let record = action.searchRecord
+        #expect(ToolSearchEngine.match(record: record, query: "qieh") != nil)
+        #expect(ToolSearchEngine.match(record: record, query: "qhzht") != nil)
+        #expect(ToolSearchEngine.match(record: record, query: "jwt") == nil)
     }
 
     // MARK: - Title highlight ranges

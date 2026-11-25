@@ -660,10 +660,10 @@ struct CommandPaletteSearchTests {
             keywords: ["uuid", "复制", "生成"]
         )
 
-        #expect(action.matches(query: ""))
-        #expect(action.matches(query: "uuid"))
-        #expect(action.matches(query: "复制"))
-        #expect(!action.matches(query: "jwt"))
+        let record = action.searchRecord
+        #expect(ToolSearchEngine.match(record: record, query: "uuid") != nil)
+        #expect(ToolSearchEngine.match(record: record, query: "复制") != nil)
+        #expect(ToolSearchEngine.match(record: record, query: "jwt") == nil)
     }
 
     private static func entry(_ id: ToolID, title: String) -> ToolNavigationCommandEntry {

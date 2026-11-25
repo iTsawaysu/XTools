@@ -330,22 +330,34 @@ enum ToolSearchEngine {
         }
     }
 
-    /// Returns nil when the query is blank or any token fails to match.
-    /// The query folds exactly like record text, so "café" matches "Cafe".
+    struct Query {
+        let isBlank: Bool
+        fileprivate let tokens: [[Character]]
+
+        init(_ rawQuery: String) {
+            let trimmed = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            isBlank = trimmed.isEmpty
+            tokens = trimmed
+                .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                .split { $0.isWhitespace }
+                .map { Array($0) }
+        }
+    }
+
     static func match(record: ToolSearchRecord, query rawQuery: String) -> Match? {
-        let tokens = rawQuery
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-            .split { $0.isWhitespace }
-        guard !tokens.isEmpty else { return nil }
+        match(record: record, query: Query(rawQuery))
+    }
+
+    static func match(record: ToolSearchRecord, query: Query) -> Match? {
+        guard !query.tokens.isEmpty else { return nil }
 
         var tier = Tier.titlePrefix
         var score = 0
         var titleRanges: [Range<String.Index>] = []
         var aliasContributions: [(alias: AliasMatch, score: Int, position: Int)] = []
 
-        for token in tokens {
-            guard let tokenMatch = matchToken(Array(token), in: record) else { return nil }
+        for token in query.tokens {
+            guard let tokenMatch = matchToken(token, in: record) else { return nil }
             tier = max(tier, tokenMatch.tier)
             score += tokenMatch.score
             titleRanges.append(contentsOf: tokenMatch.titleRanges)

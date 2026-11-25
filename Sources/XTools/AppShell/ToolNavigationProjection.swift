@@ -84,6 +84,10 @@ struct ToolNavigationCommandProjection: Equatable {
     }
 
     init(registry: ToolRegistry, query: String) {
+        self.init(registry: registry, query: ToolSearchEngine.Query(query))
+    }
+
+    init(registry: ToolRegistry, query: ToolSearchEngine.Query) {
         let ranked = registry.matchingToolMatches(query: query)
         self.init(
             entries: ranked.map { rankedMatch in
@@ -112,10 +116,9 @@ struct ToolNavigationProjection {
         let favoriteSet = Set(favoriteIDs)
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         let favoriteTools = registry.tools(for: favoriteIDs)
-        let matchingTools = registry.matchingTools(query: normalizedQuery)
         let matchingToolIDs: Set<ToolID>? = normalizedQuery.isEmpty
             ? nil
-            : Set(matchingTools.map(\.id))
+            : Set(registry.matchingTools(query: normalizedQuery).map(\.id))
 
         func matches(_ tool: RegisteredTool) -> Bool {
             matchingToolIDs?.contains(tool.id) ?? true
