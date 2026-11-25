@@ -24,7 +24,7 @@ public enum HTMLReadabilityScriptResource {
     }
 
     private static func readFromBundle() throws -> String {
-        guard let url = Bundle.module.url(
+        guard let url = XToolsCoreResources.url(
             forResource: "Readability-\(version)",
             withExtension: "js"
         ) else {

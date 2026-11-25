@@ -2,36 +2,14 @@
 
 # build.sh - build and package XTools.app
 #
-# Default configuration is *release*（体积 + 运行时性能决策）:
-#   - the packaged app runs -O optimized code; debug is -Onone and measurably
-#     slower in the hashing/parsing hot paths,
-#   - the stripped release binary is ~14MB vs ~24MB for debug, which matters
-#     for a daily-driver toolbox app.
-# `dev` remains the fast-iteration fallback: debug compiles faster and keeps
-# full symbols for Instruments (use the .build product, not the .app).
-#
-# Why it used to feel slow even after "incremental":
-#   1) Default was *release* (LTO/opt) — much slower than debug.
-#   2) build.sh used a private .swiftpm-build cache, while `swift test`
-#      warms the normal .build cache. Two caches → almost always cold.
-#   3) Packaging rewrote Info.plist, strip, codesign --deep, lsregister
-#      every run even when only the binary changed.
-#   2) and 3) are fixed now (shared .build cache, packaging writes only what
-#   changed), which is what makes the release default tolerable again;
-#   packaged binaries are always strip -S -x (dev and release) so daily
-#   XTools.app size tracks code+resources, not a 19MB symbol table.
-#
-# This script follows the XFetch hot path: one `swift build` into .build,
-# then copy the binary into the .app.
-#
 # Usage:
 #   ./build.sh          release build + package + open  (daily default)
 #   ./build.sh dev      debug build + package + open    (fast iteration fallback)
 #   ./build.sh build    release build + package, do not open (CI / scripts)
 #   ./build.sh release  same as `build`: release build + package (no open)
-#   ./build.sh rebuild  clean caches, then release build + package
-#   ./build.sh clean    clean build caches only
-#   ./build.sh package  package last built product only (debug if present)
+#   ./build.sh rebuild  archive build caches, then build and package
+#   ./build.sh clean    archive owned build caches and app output
+#   ./build.sh package  package last built product only
 
 set -euo pipefail
 
@@ -50,11 +28,8 @@ BUILD_DIR="$PROJECT_DIR/.build"
 # guessing from binary mtimes (a resource-only rebuild may not relink the binary).
 BUILD_STATE_FILE="${SWIFTPM_BUILD_DIR:-$BUILD_DIR}/.last-build-configuration"
 LEGACY_SCRATCH_DIR="$PROJECT_DIR/.swiftpm-build"
-# 隔离验证打包：OUTPUT_DIR=/some/dir ./build.sh build 可把 .app 装到别处，
-# 配合 KEEP_RUNNING_APP=1 在不终止用户运行中窗口的前提下产出验证包
-# （quality-guidelines 的 non-terminating harness 要求）。
+# Send verification packages to an independent OUTPUT_DIR.
 OUTPUT_DIR="${OUTPUT_DIR:-$PROJECT_DIR/build}"
-LEGACY_DIST_DIR="$PROJECT_DIR/dist"
 APP_PATH="$OUTPUT_DIR/$APP_NAME"
 APP_CONTENTS="$APP_PATH/Contents"
 APP_MACOS="$APP_CONTENTS/MacOS"
@@ -74,13 +49,11 @@ LSREGISTER="${LSREGISTER:-/System/Library/Frameworks/CoreServices.framework/Fram
 
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
 info() { printf "%b\n" "${GREEN}OK${NC} $1"; }
 step() { printf "%b\n" "${BLUE}..${NC} $1"; }
-warn() { printf "%b\n" "${YELLOW}WARN${NC} $1"; }
 error() { printf "%b\n" "${RED}ERR${NC} $1" >&2; }
 
 usage() {
@@ -116,23 +89,73 @@ elapsed() {
 archive_path() {
   local path="$1"
   local label="$2"
+  shift 2
 
   if [[ ! -e "$path" ]]; then
     return 0
   fi
 
-  mkdir -p "$TRASH_DIR"
+  assert_archive_location "$path" "$@" || return 1
+  mkdir -p "$TRASH_DIR" || return 1
   local target="$TRASH_DIR/$label.$(timestamp).$$"
-  mv "$path" "$target"
+  mv "$path" "$target" || return 1
   info "Moved $path to $target"
 }
 
-clean() {
-  step "Cleaning build caches..."
+archive_packaging_scratch() {
+  local target="$1" scratch="$2"
+  if ! archive_path "$scratch" "xtools-package" "$target" >&2; then
+    printf 'WARN Kept packaging work at %s\n' "$scratch" >&2
+  fi
+}
+
+assert_archive_location() {
+  if ! python3 -B - "$TRASH_DIR" "$@" <<'PY'
+import os
+import sys
+import unicodedata
+
+archive, *sources = (
+    unicodedata.normalize("NFD", os.path.realpath(path)).casefold()
+    for path in sys.argv[1:]
+)
+sys.exit(any(os.path.commonpath((archive, source)) == source for source in sources))
+PY
+  then
+    error "Archive must be outside the paths being packaged or moved: $TRASH_DIR"
+    return 1
+  fi
+}
+
+assert_owned_app_path() {
+  if [[ -L "$APP_PATH" || ( -e "$APP_PATH" && ! -d "$APP_PATH" ) ]]; then
+    error "Invalid app destination: $APP_PATH"
+    return 1
+  fi
+  if [[ -d "$APP_PATH" ]] &&
+     [[ "$(plutil -extract CFBundleExecutable raw -o - "$INFO_PLIST" 2>/dev/null || true)" != "$PRODUCT_NAME" ]]; then
+    error "Not an XTools package: $APP_PATH"
+    return 1
+  fi
+}
+
+app_path_command() {
+  osascript -l JavaScript "$PROJECT_DIR/tools/packaging-app.js" "$@"
+}
+
+clean_build_caches() {
   archive_path "$BUILD_DIR" ".build"
   archive_path "$LEGACY_SCRATCH_DIR" ".swiftpm-build"
-  archive_path "$OUTPUT_DIR" "build"
-  archive_path "$LEGACY_DIST_DIR" "dist"
+}
+
+clean() {
+  assert_owned_app_path
+  assert_archive_location "$APP_PATH" "$BUILD_DIR" "$LEGACY_SCRATCH_DIR"
+  if [[ -d "$APP_PATH" ]]; then
+    app_path_command check "$APP_PATH"
+  fi
+  clean_build_caches
+  archive_path "$APP_PATH" "$APP_NAME"
   info "Clean complete"
 }
 
@@ -183,123 +206,87 @@ bin_path_for() {
   printf '%s\n' "$product"
 }
 
+package_input_digest() {
+  local products="$1" bundle
+  {
+    printf '%s\n' "$BUNDLE_ID" "$ARCH" "$configuration"
+    {
+      printf '%s\0' "$build_binary" "$ICON_SOURCE" "$PROJECT_DIR/build.sh" \
+        "$PROJECT_DIR/Sources/XTools/Resources/Localizable.xcstrings"
+      for bundle in "$products/XTools_XToolsCore.bundle" "$products/XTools_XTools.bundle"; do
+        if [[ -d "$bundle" ]]; then
+          find "$bundle" -type f -print0 || return 1
+        fi
+      done
+    } | xargs -0 shasum -a 256 | LC_ALL=C sort || return 1
+  } | shasum -a 256 | awk '{print $1}'
+}
+
 localization_matches() {
   local source="$1" destination="$2" table relative_path
-  diff -rq -x '*.strings' "$source" "$destination" >/dev/null 2>&1 || return 1
+  diff -rq -x '*.strings' -x '*.stringsdict' "$source" "$destination" >/dev/null 2>&1 || return 1
 
   while IFS= read -r -d '' table; do
     relative_path="${table#"$source"/}"
     plutil -convert binary1 -o - "$table" | cmp -s - "$destination/$relative_path" || return 1
-  done < <(find "$source" -type f -name '*.strings' -print0)
+  done < <(find "$source" -type f \( -name '*.strings' -o -name '*.stringsdict' \) -print0)
 
   while IFS= read -r -d '' table; do
     relative_path="${table#"$destination"/}"
     [[ -f "$source/$relative_path" ]] || return 1
-  done < <(find "$destination" -type f -name '*.strings' -print0)
+  done < <(find "$destination" -type f \( -name '*.strings' -o -name '*.stringsdict' \) -print0)
 }
 
-copy_swiftpm_resource_bundles() {
-  local build_product_dir="$1"
-  local resource_bundle destination legacy_destination bundle_name
-  local copied_bundle=0
-  local bundle_diff_options
+resource_directory() {
+  if [[ -d "$1/Contents/Resources" ]]; then
+    printf '%s\n' "$1/Contents/Resources"
+  else
+    printf '%s\n' "$1"
+  fi
+}
 
-  # The current SwiftPM accessor searches Bundle.main.resourceURL for packaged apps.
-  # Resource bundles at the .app root are invalid macOS bundle contents and break signing.
-  # Test and offline compiler bundles can coexist in the shared build cache.
-  while IFS= read -r -d '' resource_bundle; do
-    bundle_name="$(basename "$resource_bundle")"
-    case "$bundle_name" in
-      *LogicTests*.bundle|*Tests*.bundle|XTools_EmojiCatalogCompiler.bundle)
-        continue
-        ;;
-    esac
-    legacy_destination="$APP_PATH/$bundle_name"
-    archive_path "$legacy_destination" "$bundle_name.root-bundle"
-    destination="$APP_RESOURCES/$bundle_name"
-    bundle_diff_options=(-rq)
-    if [[ "$bundle_name" == "XTools_XTools.bundle" ]]; then
-      bundle_diff_options+=(-x '*.lproj')
+copy_app_resources() {
+  local products="$1" previous_resources="$2" scratch="$3"
+  local core app localized lproj destination previous resource table
+  core="$(resource_directory "$products/XTools_XToolsCore.bundle")"
+  for resource in Readability-0.6.0.js emoji-catalog-v1.plist; do
+    if [[ ! -s "$core/$resource" ]]; then
+      error "Missing XToolsCore resource: $core/$resource"
+      return 1
     fi
-    if [[ -e "$destination" ]]; then
-      if diff "${bundle_diff_options[@]}" "$resource_bundle" "$destination" >/dev/null 2>&1; then
-        copied_bundle=1
-        continue
-      fi
-      archive_path "$destination" "$bundle_name.replaced-bundle"
-    fi
-    /usr/bin/ditto "$resource_bundle" "$destination"
-    copied_bundle=1
-  done < <(find "$build_product_dir" -maxdepth 1 -type d -name '*.bundle' -print0)
+  done
+  mkdir -p "$APP_RESOURCES/XToolsCore"
+  /usr/bin/ditto "$core" "$APP_RESOURCES/XToolsCore"
 
-  # Promote the app target's localization tables (compiled from
-  # Sources/XTools/Resources/Localizable.xcstrings) to the .app Resources root
-  # so SwiftUI Text(LocalizedStringKey) lookups through Bundle.main find them
-  # without reaching into the nested SwiftPM bundle.
-  local promoted_lproj promoted_destination table nested_lproj
-  local promoted_source_dir="$build_product_dir/XTools_XTools.bundle/Contents/Resources"
-  for promoted_lproj in "$promoted_source_dir/"*.lproj; do
-    [[ -e "$promoted_lproj" ]] || continue
-    promoted_destination="$APP_RESOURCES/$(basename "$promoted_lproj")"
-    if [[ -e "$promoted_destination" ]]; then
-      if localization_matches "$promoted_lproj" "$promoted_destination"; then
-        continue
-      fi
-      archive_path "$promoted_destination" "$(basename "$promoted_lproj").replaced-lproj"
+  app="$products/XTools_XTools.bundle"
+  localized="$(resource_directory "$app")"
+  if [[ -d "$app" ]]; then
+    /usr/bin/rsync -a --exclude='*.lproj' --exclude='*.xcstrings' \
+      "$app/" "$APP_RESOURCES/XTools_XTools.bundle/"
+  fi
+  if [[ ! -f "$localized/zh-Hans.lproj/Localizable.strings" ]]; then
+    localized="$scratch/localized"
+    mkdir -p "$localized"
+    xcrun xcstringstool compile --output-directory "$localized" \
+      "$PROJECT_DIR/Sources/XTools/Resources/Localizable.xcstrings"
+  fi
+  if [[ ! -s "$localized/zh-Hans.lproj/Localizable.strings" ]]; then
+    error "Missing compiled zh-Hans localization"
+    return 1
+  fi
+
+  for lproj in "$localized/"*.lproj; do
+    destination="$APP_RESOURCES/$(basename "$lproj")"
+    previous="$previous_resources/$(basename "$lproj")"
+    if [[ -d "$previous" ]] && localization_matches "$lproj" "$previous"; then
+      /usr/bin/ditto "$previous" "$destination"
+      continue
     fi
-    /usr/bin/ditto "$promoted_lproj" "$promoted_destination"
+    /usr/bin/ditto "$lproj" "$destination"
     while IFS= read -r -d '' table; do
-      plutil -convert binary1 "$table"
-    done < <(find "$promoted_destination" -type f -name '*.strings' -print0)
+      plutil -convert binary1 "$table" || return 1
+    done < <(find "$destination" -type f \( -name '*.strings' -o -name '*.stringsdict' \) -print0)
   done
-
-  for nested_lproj in "$APP_RESOURCES/XTools_XTools.bundle/Contents/Resources/"*.lproj; do
-    archive_path "$nested_lproj" "$(basename "$nested_lproj").nested-lproj"
-  done
-
-  # 从 Localizable.xcstrings 移除的语言不得滞留在 Resources 根继续供旧文案。
-  local root_lproj
-  if [[ -d "$promoted_source_dir" ]]; then
-    for root_lproj in "$APP_RESOURCES/"*.lproj; do
-      [[ -e "$root_lproj" ]] || continue
-      if [[ ! -e "$promoted_source_dir/$(basename "$root_lproj")" ]]; then
-        archive_path "$root_lproj" "$(basename "$root_lproj").stale-lproj"
-      fi
-    done
-  fi
-
-  # Archive non-runtime bundles left by older packaging runs.
-  local stale_test_bundle
-  while IFS= read -r -d '' stale_test_bundle; do
-    archive_path "$stale_test_bundle" "$(basename "$stale_test_bundle").stale-test-bundle"
-  done < <(find "$APP_RESOURCES" -maxdepth 1 -type d \( -name '*LogicTests*.bundle' -o -name '*Tests*.bundle' -o -name 'XTools_EmojiCatalogCompiler.bundle' \) -print0 2>/dev/null)
-
-  # Remove pre-rename product resource bundles (DevToolsMac* → XTools*).
-  local stale_legacy_bundle
-  while IFS= read -r -d '' stale_legacy_bundle; do
-    archive_path "$stale_legacy_bundle" "$(basename "$stale_legacy_bundle").stale-legacy-bundle"
-  done < <(find "$APP_RESOURCES" -maxdepth 1 -type d -name 'DevToolsMac*.bundle' -print0 2>/dev/null)
-
-  # Remove app-side bundles the current product no longer ships. SwiftPM keeps
-  # stale bundle outputs for removed dependencies on incremental builds (e.g.
-  # CryptoSwift_* after the dependency left the graph); ditto would otherwise
-  # carry those zombies into the packaged app forever.
-  local app_bundle
-  while IFS= read -r -d '' app_bundle; do
-    if [[ ! -e "$build_product_dir/$(basename "$app_bundle")" ]]; then
-      archive_path "$app_bundle" "$(basename "$app_bundle").stale-product-bundle"
-    fi
-  done < <(find "$APP_RESOURCES" -maxdepth 1 -type d -name '*.bundle' -print0 2>/dev/null)
-
-  if [[ "$copied_bundle" == "0" ]]; then
-    error "No SwiftPM resource bundles found beside $build_product_dir/$PRODUCT_NAME"
-    exit 1
-  fi
-
-  if [[ -z "$(find "$APP_RESOURCES/XTools_XToolsCore.bundle" -type f -name 'Readability-0.6.0.js' -print -quit 2>/dev/null)" ]]; then
-    error "Missing Readability-0.6.0.js in packaged XToolsCore resources"
-    exit 1
-  fi
 }
 
 # 体积预算断言：打包二进制必须明显小于构建产物（strip 被绕过时该比例会失控），
@@ -330,12 +317,8 @@ assert_binary_size_budget() {
   fi
 }
 
-stop_existing_app() {
-  pkill -x "$PRODUCT_NAME" >/dev/null 2>&1 || true
-  pkill -x "$APP_DISPLAY_NAME" >/dev/null 2>&1 || true
-}
-
-write_info_plist_if_needed() {
+write_info_plist() {
+  local previous="$1"
   # ATS allows user-supplied HTTP Git endpoints and public HTTP article URLs.
   local expected
   expected="$(cat <<PLIST
@@ -361,6 +344,8 @@ write_info_plist_if_needed() {
   <string>1.0.0</string>
   <key>CFBundleVersion</key>
   <string>1</string>
+  <key>XToolsPackageInputDigest</key>
+  <string>$input_digest</string>
   <key>LSMinimumSystemVersion</key>
   <string>$MIN_SYSTEM_VERSION</string>
   <key>LSApplicationCategoryType</key>
@@ -380,23 +365,26 @@ write_info_plist_if_needed() {
 </plist>
 PLIST
 )"
-  if [[ ! -f "$INFO_PLIST" || "$(< "$INFO_PLIST")" != "$expected" ]]; then
+  if [[ -f "$previous" && "$(< "$previous")" == "$expected" ]]; then
+    cp -p "$previous" "$INFO_PLIST"
+  else
     printf '%s\n' "$expected" >"$INFO_PLIST"
   fi
+  plutil -lint "$INFO_PLIST" >/dev/null
 }
 
-package_app() {
-  local configuration="${1:-debug}"
-  local t0 build_product_dir build_binary icon_changed=0
+package_app() (
+  configuration="$1"
+  products="$2"
+  may_stop="${3:-no}"
   t0="$(now_ms)"
-  build_product_dir="$2"
-  build_binary="$build_product_dir/$PRODUCT_NAME"
+  build_binary="$products/$PRODUCT_NAME"
+  target="$APP_PATH"
 
   if [[ ! -x "$build_binary" ]]; then
     error "Missing build product: $build_binary"
     exit 1
   fi
-
   if ! lipo "$build_binary" -verify_arch "$ARCH" 2>/dev/null; then
     error "Build product at $build_binary does not contain $ARCH"
     exit 1
@@ -405,104 +393,90 @@ package_app() {
     error "Missing app icon: $ICON_SOURCE"
     exit 1
   fi
-
-  step "Packaging $APP_PATH ($configuration)..."
-  # 默认终止运行中的实例（同路径换包）；隔离目录打包时允许保留用户窗口。
-  if [[ -z "${KEEP_RUNNING_APP:-}" ]]; then
-    stop_existing_app
+  assert_owned_app_path
+  target_identity="$(stat -f '%d:%i' "$target" 2>/dev/null || printf 'missing')"
+  input_digest="$(package_input_digest "$products")"
+  if [[ -f "$INFO_PLIST" &&
+        "$(plutil -extract XToolsPackageInputDigest raw -o - "$INFO_PLIST" 2>/dev/null || true)" == "$input_digest" ]] &&
+      codesign --verify --strict "$target" >/dev/null 2>&1; then
+    if [[ "${LSREGISTER_EVERY_BUILD:-0}" == "1" && -x "$LSREGISTER" ]]; then
+      "$LSREGISTER" -f "$target" >/dev/null 2>&1 || true
+    fi
+    info "Up to date $target ($configuration, $(elapsed "$t0")ms)"
+    exit 0
   fi
-  mkdir -p "$OUTPUT_DIR" "$APP_MACOS" "$APP_RESOURCES"
 
-  cp "$build_binary" "$APP_BINARY"
-  chmod +x "$APP_BINARY"
+  step "Packaging $target ($configuration)..."
+  assert_archive_location "$target"
+  mkdir -p "$OUTPUT_DIR"
+  scratch="$(mktemp -d "$OUTPUT_DIR/.xtools-package.XXXXXXXX")"
+  # Keep an unpublished candidate or the displaced app recoverable.
+  trap 'archive_packaging_scratch "$target" "$scratch"' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  APP_PATH="$scratch/$APP_NAME"
+  APP_CONTENTS="$APP_PATH/Contents"
+  APP_MACOS="$APP_CONTENTS/MacOS"
+  APP_RESOURCES="$APP_CONTENTS/Resources"
+  APP_BINARY="$APP_MACOS/$PRODUCT_NAME"
+  INFO_PLIST="$APP_CONTENTS/Info.plist"
+  mkdir -p "$APP_MACOS" "$APP_RESOURCES"
 
-  # Compare content: an existing app still needs newly generated icon resources.
-  if ! cmp -s "$ICON_SOURCE" "$APP_RESOURCES/$ICON_NAME.icns"; then
-    cp "$ICON_SOURCE" "$APP_RESOURCES/$ICON_NAME.icns"
+  /bin/cp -c "$build_binary" "$APP_BINARY"
+  previous_resources="$target/Contents/Resources"
+  previous_icon="$previous_resources/$ICON_NAME.icns"
+  icon_changed=0
+  if cmp -s "$ICON_SOURCE" "$previous_icon"; then
+    cp -p "$previous_icon" "$APP_RESOURCES/$ICON_NAME.icns"
+  else
+    cp -p "$ICON_SOURCE" "$APP_RESOURCES/$ICON_NAME.icns"
     icon_changed=1
   fi
+  write_info_plist "$target/Contents/Info.plist"
+  copy_app_resources "$products" "$previous_resources" "$scratch"
 
-  # Drop stale pre-rename product icon if an older packaging run left it behind.
-  # Keep XTools.icns (CFBundleIconFile); never remove the active icon.
-  if [[ -f "$APP_RESOURCES/Tools.icns" ]]; then
-    archive_path "$APP_RESOURCES/Tools.icns" "Tools.icns.stale-icon"
-  fi
-
-  write_info_plist_if_needed
-  copy_swiftpm_resource_bundles "$build_product_dir"
-
-  # Strip local symbols from the packaged binary for every configuration.
-  # Debug *compilation* stays fast; only the .app payload loses LINKEDIT mass.
-  # Use .build/.../XTools when you need full symbols for Instruments.
-  # strip 失败必须中止打包：历史上 strip 静默失败后 45MB 未 strip 的半成品
-  # app 仍被 open 当成品使用，warn-continue 分支因此不允许存在。
   if ! strip -S -x "$APP_BINARY"; then
     error "strip -S -x failed for $APP_BINARY"
     exit 1
   fi
-
   assert_binary_size_budget "$configuration" "$build_binary"
-
-  # Ad-hoc sign the app only (no --deep). Nested tools are not in this bundle.
-  # Must run after strip — strip invalidates any prior code signature.
   codesign --force --sign - "$APP_PATH" >/dev/null
+  codesign --verify --strict "$APP_PATH"
 
-  # 签名后校验：--verify --strict 必须通过，且签名 Identifier 必须等于
-  # $BUNDLE_ID，防止中途夭折的半成品 app 被直接 open。
-  if ! codesign --verify --strict "$APP_PATH"; then
-    error "codesign --verify --strict failed for $APP_PATH"
-    exit 1
-  fi
-  local signed_identifier
   signed_identifier="$(codesign -dv "$APP_PATH" 2>&1 | sed -n 's/^Identifier=//p')"
   if [[ "$signed_identifier" != "$BUNDLE_ID" ]]; then
     error "Signed Identifier '$signed_identifier' does not match BUNDLE_ID '$BUNDLE_ID'"
     exit 1
   fi
 
-  # Refresh Finder/Dock icon metadata when artwork changes, keeping the normal
-  # incremental path fast. Do this after signing so registration sees the final app.
-  if [[ "$icon_changed" == "1" ]]; then
-    touch "$APP_PATH"
+  app_path_command publish "$target" "$APP_PATH" "$may_stop" "$target_identity"
+  if [[ "$icon_changed" == "1" || "${LSREGISTER_EVERY_BUILD:-0}" == "1" ]] && [[ -x "$LSREGISTER" ]]; then
+    "$LSREGISTER" -f "$target" >/dev/null 2>&1 || true
   fi
-  if [[ ( "$icon_changed" == "1" || "${LSREGISTER_EVERY_BUILD:-0}" == "1" ) && -x "$LSREGISTER" ]]; then
-    "$LSREGISTER" -f "$APP_PATH" >/dev/null 2>&1 || true
-  fi
+  app_size="$(du -sh "$target" | awk '{print $1}')"
+  info "Packaged $target (app: $app_size, configuration: $configuration, $(elapsed "$t0")ms)"
+)
 
-  local app_size binary_size
-  app_size="$(du -sh "$APP_PATH" | awk '{print $1}')"
-  binary_size="$(du -h "$APP_BINARY" | awk '{print $1}')"
-  info "Packaged $APP_PATH (app: $app_size, binary: $binary_size, configuration: $configuration, stripped: -S -x, $(elapsed "$t0")ms)"
-}
-
-# Build and package without opening; `configuration` is debug or release.
 build_and_package() {
-  local configuration="$1"
-  local t0 products
-  t0="$(now_ms)"
+  local configuration="$1" products
   swift_build "$configuration"
   products="$(bin_path_for "$configuration")"
   package_app "$configuration" "$products"
-  info "Total $(elapsed "$t0")ms"
 }
 
-# Build, package, and open. `configuration` is debug or release; the daily
-# default (no argument) uses release, `dev` is the fast-iteration debug path.
 build_and_launch() {
-  local configuration="$1"
-  local t0 products
-  t0="$(now_ms)"
+  local configuration="$1" products may_stop=no
+  if [[ -z "${KEEP_RUNNING_APP:-}" ]]; then
+    may_stop=yes
+  fi
   swift_build "$configuration"
   products="$(bin_path_for "$configuration")"
-  package_app "$configuration" "$products"
+  package_app "$configuration" "$products" "$may_stop"
   step "Opening $APP_PATH..."
-  open "$APP_PATH"
+  app_path_command launch "$APP_PATH" "" "$may_stop"
   info "Opened $APP_DISPLAY_NAME"
-  info "Total $(elapsed "$t0")ms"
 }
 
-# Package the last built product. Picks the configuration from the build state
-# file when present, otherwise falls back to the newest binary on disk.
 package_last_built() {
   local requested="${1:-}" last_config="" products debug_product release_product
   case "$requested" in
@@ -546,7 +520,8 @@ package_last_built() {
 }
 
 rebuild_and_package() {
-  clean
+  assert_archive_location "$APP_PATH" "$BUILD_DIR" "$LEGACY_SCRATCH_DIR"
+  clean_build_caches
   build_and_package release
 }
 

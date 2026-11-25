@@ -364,7 +364,7 @@ public enum EmojiCatalog {
     }
 
     package static func bundledPrecompiledCatalogData() -> Data? {
-        guard let url = Bundle.module.url(
+        guard let url = XToolsCoreResources.url(
             forResource: precompiledCatalogResourceName,
             withExtension: "plist"
         ) else {

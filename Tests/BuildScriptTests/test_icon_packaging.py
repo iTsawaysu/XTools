@@ -1,4 +1,4 @@
-"""Exercise incremental icon packaging without compiling or closing the real app.
+"""Exercise package creation, incremental resources, and recovery with fixture apps.
 
 Run with: python3 -m unittest discover -s Tests/BuildScriptTests -v
 Fixtures are kept in the OS temporary directory for inspection.
@@ -15,10 +15,33 @@ import unittest
 
 
 class IconPackagingTests(unittest.TestCase):
+    def test_fallback_restores_previous_directory_if_candidate_move_fails(self):
+        repository = Path(__file__).resolve().parents[2]
+        fixture = Path(tempfile.mkdtemp(prefix="xtools-package-recovery-"))
+        prior = fixture / "XTools.app"
+        prior.mkdir()
+        (prior / "keep.txt").write_text("previous output")
+        script = fixture / "rollback.js"
+        script.write_text((repository / "tools/packaging-app.js").read_text() + """
+function run(argv) {
+    publishByMoving(argv[0], argv[1], true);
+}
+""")
+        result = subprocess.run(["/usr/bin/osascript", "-l", "JavaScript", str(script),
+                                 str(fixture / "absent-candidate.app"), str(prior)],
+                                text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((prior / "keep.txt").read_text(), "previous output")
+
     def test_incremental_icon_replacement_and_unchanged_fast_path(self):
         repository = Path(__file__).resolve().parents[2]
         fixture = Path(tempfile.mkdtemp(prefix="xtools-icon-packaging-"))
         shutil.copy2(repository / "build.sh", fixture / "build.sh")
+        for relative in ("tools/packaging-app.js", "tools/ui-lint.py",
+                         "Sources/XTools/Resources/Localizable.xcstrings"):
+            target = fixture / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(repository / relative, target)
         binaries = fixture / "mock-bin"
         binaries.mkdir()
         swift = binaries / "swift"
@@ -31,12 +54,26 @@ class IconPackagingTests(unittest.TestCase):
         # any running app. The icon assertions below exercise the real script.
         strip = binaries / "strip"
         strip.write_text('#!/bin/sh\n[ "$1" = "-S" ] && [ "$2" = "-x" ] || exit 1\n'
+                         '[ "${FAIL_STRIP:-}" != 1 ] || exit 48\n'
                          'shasum -a 256 "$3" | awk \'{print $1}\' > "$STRIP_LOG"\n'
                          'printf "bin\\n" > "$3"\n')
         strip.chmod(0o755)
         codesign = binaries / "codesign"
-        codesign.write_text('#!/bin/sh\nif [ "$1" = "-dv" ]; then\n  printf "Identifier=%s\\n" "$BUNDLE_ID" >&2\nfi\n')
+        codesign.write_text('#!/bin/sh\n'
+                            '[ "${FAIL_SIGN:-}" != 1 ] || [ "$1" != "--force" ] || exit 49\n'
+                            'if [ "${REPLACE_DESTINATION:-}" = 1 ] && [ "$1" = "--verify" ]; then\n'
+                            '  mv "$OUTPUT_DIR/XTools.app" "$OUTPUT_DIR/prior.app" || exit 51\n'
+                            '  mkdir "$OUTPUT_DIR/XTools.app" || exit 52\n'
+                            '  printf "foreign" > "$OUTPUT_DIR/XTools.app/keep.txt"\n'
+                            'fi\n'
+                            'if [ "$1" = "-dv" ]; then\n  printf "Identifier=%s\\n" "$BUNDLE_ID" >&2\nfi\n')
         codesign.chmod(0o755)
+        osascript = binaries / "osascript"
+        osascript.write_text('#!/bin/sh\n'
+                             'if [ "$4" = "launch" ]; then printf "%s|%s\\n" "$5" "$7" >> "$LAUNCH_LOG"; exit; fi\n'
+                             '[ "${FAIL_PUBLISH:-}" != 1 ] || [ "$4" != "publish" ] || exit 50\n'
+                             'exec /usr/bin/osascript "$@"\n')
+        osascript.chmod(0o755)
         register = binaries / "lsregister"
         register.write_text('#!/bin/sh\nprintf "registered\\n" >> "$REGISTER_LOG"\n')
         register.chmod(0o755)
@@ -49,6 +86,7 @@ class IconPackagingTests(unittest.TestCase):
         resources = product / "XTools_XToolsCore.bundle/Contents/Resources"
         resources.mkdir(parents=True)
         (resources / "Readability-0.6.0.js").write_text("// fixture\n")
+        (resources / "emoji-catalog-v1.plist").write_bytes(plistlib.dumps({"catalog": "fixture"}))
         compiler_bundle = product / "XTools_EmojiCatalogCompiler.bundle"
         compiler_bundle.mkdir()
         (compiler_bundle / "emoji-test.txt").write_text("compiler input only\n")
@@ -62,6 +100,7 @@ class IconPackagingTests(unittest.TestCase):
         source.parent.mkdir(parents=True)
         source.write_bytes(b"first-icon")
         log = fixture / "register.log"
+        launch_log = fixture / "launch.log"
         strip_log = fixture / "strip.log"
         environment = dict(os.environ, PATH=f"{binaries}:{os.environ['PATH']}",
                            SWIFT_BIN=str(binaries / "swift"), LSREGISTER=str(register),
@@ -69,7 +108,9 @@ class IconPackagingTests(unittest.TestCase):
                            BUNDLE_ID="com.sun.xtools.icon-test", KEEP_RUNNING_APP="1",
                            OUTPUT_DIR=str(fixture / "build"),
                            SHOW_BIN_PATH=str(product), RELEASE_BIN_PATH=str(fixture / "missing-release"),
-                           STRIP_LOG=str(strip_log), REGISTER_LOG=str(log), LSREGISTER_EVERY_BUILD="0",
+                           STRIP_LOG=str(strip_log),
+                           LAUNCH_LOG=str(launch_log),
+                           REGISTER_LOG=str(log), LSREGISTER_EVERY_BUILD="0",
                            TRASH_DIR=str(fixture / "archive"))
 
         def package(*arguments):
@@ -86,6 +127,7 @@ class IconPackagingTests(unittest.TestCase):
         packaged_table = packaged_resources / "zh-Hans.lproj/Localizable.strings"
         self.assertEqual(plistlib.loads(packaged_table.read_bytes()), {"key": "中文"})
         self.assertTrue(packaged_table.read_bytes().startswith(b"bplist00"))
+        self.assertEqual((packaged_resources / "XToolsCore/Readability-0.6.0.js").read_text(), "// fixture\n")
         self.assertFalse((packaged_bundle_resources / language.name).exists())
         self.assertEqual((packaged_bundle_resources / "asset.txt").read_text(), "keep this resource")
         self.assertFalse((app / "Contents/Resources" / compiler_bundle.name).exists(),
@@ -103,7 +145,9 @@ class IconPackagingTests(unittest.TestCase):
         package()
         self.assertFalse(stale_compiler.exists(),
                          "Incremental packaging must archive old compiler bundles")
-        self.assertTrue(any((fixture / "archive").glob(f"{compiler_bundle.name}.*")))
+        self.assertTrue(any((fixture / "archive").glob(
+            f"xtools-package.*/XTools.app/Contents/Resources/{compiler_bundle.name}"
+        )))
         self.assertEqual(packaged.read_bytes(), b"replacement-icon",
                          "An existing app must receive changed icon content")
         self.assertFalse((packaged_bundle_resources / language.name).exists())
@@ -125,6 +169,22 @@ class IconPackagingTests(unittest.TestCase):
                          "Unchanged icons must not trigger registration")
         self.assertEqual(info_plist.stat().st_mtime_ns, unchanged_metadata)
         self.assertEqual(packaged_table.stat().st_mtime_ns, unchanged_table)
+
+        for arguments, launch_environment in (
+            (["dev"], environment),
+            ([], {**environment, "RELEASE_BIN_PATH": str(product),
+                  "OUTPUT_DIR": str(fixture / "release-launch"), "KEEP_RUNNING_APP": ""}),
+        ):
+            command = [str(fixture / "build.sh"), *arguments]
+            subprocess.run(command, env=launch_environment, check=True, capture_output=True)
+            archive = sorted((fixture / "archive").iterdir())
+            unchanged = subprocess.run(command, env={**launch_environment, "FAIL_STRIP": "1"},
+                                       check=True, capture_output=True, text=True)
+            self.assertIn("Up to date", unchanged.stdout)
+            self.assertEqual(sorted((fixture / "archive").iterdir()), archive)
+            target = Path(launch_environment["OUTPUT_DIR"]) / "XTools.app"
+            may_stop = "no" if launch_environment["KEEP_RUNNING_APP"] else "yes"
+            self.assertEqual(launch_log.read_text().splitlines()[-2:], [f"{target}|{may_stop}"] * 2)
 
         cold_product = fixture / "swiftpm-cold-product"
         product.rename(cold_product)
@@ -155,6 +215,63 @@ class IconPackagingTests(unittest.TestCase):
         self.assertNotEqual(missing.returncode, 0)
         self.assertIn("Missing app icon", missing.stdout + missing.stderr)
         self.assertEqual(packaged.read_bytes(), b"replacement-icon")
+
+        previous_metadata = info_plist.read_bytes()
+        source.write_bytes(b"unpublished-icon")
+        for failure in ("FAIL_STRIP", "FAIL_SIGN", "FAIL_PUBLISH"):
+            failed = subprocess.run([str(fixture / "build.sh"), "package", "debug"],
+                                    env={**environment, failure: "1"}, text=True, capture_output=True)
+            self.assertNotEqual(failed.returncode, 0, failed.stdout + failed.stderr)
+            self.assertEqual(packaged.read_bytes(), b"replacement-icon")
+            self.assertEqual(info_plist.read_bytes(), previous_metadata)
+
+        bad_archive = subprocess.run([str(fixture / "build.sh"), "package", "debug"],
+                                     env={**environment, "TRASH_DIR": str(app / "Contents/Resources/archive")},
+                                     text=True, capture_output=True)
+        self.assertNotEqual(bad_archive.returncode, 0)
+        self.assertFalse((app / "Contents/Resources/archive").exists())
+        self.assertEqual(info_plist.read_bytes(), previous_metadata)
+
+        replaced = subprocess.run([str(fixture / "build.sh"), "package", "debug"],
+                                  env={**environment, "REPLACE_DESTINATION": "1"}, text=True, capture_output=True)
+        self.assertNotEqual(replaced.returncode, 0)
+        self.assertIn("destination changed", replaced.stderr.lower())
+        self.assertEqual((app / "keep.txt").read_text(), "foreign")
+        app.rename(fixture / "foreign.app")
+        app.with_name("prior.app").rename(app)
+        self.assertEqual(info_plist.read_bytes(), previous_metadata)
+
+        blocked_archive = fixture / "archive-is-a-file"
+        blocked_archive.write_text("unrelated")
+        archived_locally = subprocess.run([str(fixture / "build.sh"), "package", "debug"],
+                                          env={**environment, "TRASH_DIR": str(blocked_archive)},
+                                          check=True, text=True, capture_output=True)
+        self.assertIn("Kept packaging work", archived_locally.stderr)
+        self.assertEqual(packaged.read_bytes(), b"unpublished-icon")
+        self.assertEqual(blocked_archive.read_text(), "unrelated")
+        kept = fixture / "build"
+        self.assertTrue(any(path.read_bytes() == b"replacement-icon" for path in kept.glob(
+            ".xtools-package.*/XTools.app/Contents/Resources/XTools.icns"
+        )))
+
+        native = fixture / "native-product"
+        native.mkdir()
+        shutil.copy2(cold_product / "XTools", native / "XTools")
+        shutil.copytree(cold_product / resources.relative_to(product), native / "XTools_XToolsCore.bundle")
+        native_app = native / "XTools_XTools.bundle"
+        native_app.mkdir()
+        shutil.copy2(repository / "Sources/XTools/Resources/Localizable.xcstrings", native_app)
+        environment["SHOW_BIN_PATH"] = str(native)
+        package("debug")
+        self.assertIn("复制", plistlib.loads(packaged_table.read_bytes()))
+        self.assertTrue(packaged_table.read_bytes().startswith(b"bplist00"))
+        self.assertFalse(list(packaged_resources.rglob("*.xcstrings")))
+
+        neighbor = fixture / "build/keep.txt"
+        neighbor.write_text("unrelated")
+        subprocess.run([str(fixture / "build.sh"), "clean"], env=environment, check=True, capture_output=True)
+        self.assertEqual(neighbor.read_text(), "unrelated")
+        self.assertFalse(app.exists())
 
 
 if __name__ == "__main__":
