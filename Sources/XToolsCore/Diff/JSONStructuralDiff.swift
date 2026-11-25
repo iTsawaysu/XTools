@@ -92,10 +92,16 @@ public enum JSONStructuralDiff {
         }
         try cancellation.check()
 
-        let (preparedLeft, preparedRight) = try StructuredTextExecution.withCancellation(shouldCancel) {
-            let preparedLeft = try prepareSide(left, options: options, cancellation: cancellation, parserDidStart: parserDidStart)
-            let preparedRight = try prepareSide(right, options: options, cancellation: cancellation, parserDidStart: parserDidStart)
-            return (preparedLeft, preparedRight)
+        let preparedLeft: PreparedSide
+        let preparedRight: PreparedSide
+        do {
+            (preparedLeft, preparedRight) = try StructuredTextExecution.withCancellation(shouldCancel) {
+                let left = try prepareSide(left, options: options, cancellation: cancellation, parserDidStart: parserDidStart)
+                let right = try prepareSide(right, options: options, cancellation: cancellation, parserDidStart: parserDidStart)
+                return (left, right)
+            }
+        } catch let error as StructuredTextResourceError {
+            return PreparedResult(decision: .tooLarge(error.diagnostic.message))
         }
 
         switch JSONDiffValidation.decision(
@@ -198,6 +204,8 @@ public enum JSONStructuralDiff {
             )
         } catch is CancellationError {
             throw CancellationError()
+        } catch let error as StructuredTextResourceError {
+            throw error
         } catch {
             return PreparedSide(
                 isEmpty: false,
@@ -207,10 +215,6 @@ public enum JSONStructuralDiff {
                 diagnostic: FormatDiagnostic(formatName: "JSON", message: "JSON 语法错误")
             )
         }
-    }
-
-    private static func canonicalJSON(_ text: String, options: JSONDiffOptions) throws -> String {
-        try JSONFormatting.format(text, sortKeys: true, sortArrays: options.ignoreArrayOrder, indentWidth: 2)
     }
 
 }

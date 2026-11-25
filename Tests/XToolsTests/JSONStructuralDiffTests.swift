@@ -5,6 +5,21 @@ import Testing
 struct JSONStructuralDiffTests {
     private let labels = JSONDiffValidation.SideLabels(left: "JSON A", right: "JSON B")
 
+    @Test func preparedDiffSeparatesParserCapacityFromSyntax() throws {
+        let payload = "\"" + String(repeating: "a", count: StructuredTextExecution.maximumInputBytes) + "\""
+        let oversized = try JSONStructuralDiff.cancellablePreparedDiff(left: payload, right: "", labels: labels)
+        #expect(oversized.decision == .tooLarge("JSON 输入超过 15 MB 处理上限"))
+
+        let invalid = try JSONStructuralDiff.cancellablePreparedDiff(left: "{", right: "", labels: labels)
+        guard case .invalid = invalid.decision else {
+            Issue.record("Expected a syntax diagnostic")
+            return
+        }
+        let padded = String(repeating: " ", count: StructuredTextExecution.maximumInputBytes) + "42"
+        let same = try JSONStructuralDiff.cancellablePreparedDiff(left: padded, right: "42", labels: labels)
+        #expect(same.decision == .comparable([]))
+    }
+
     /// Mirrors the canonical display form the production diff pipeline renders
     /// (sorted keys, 2-space indent), built from public formatting API.
     private func canonicalDisplayText(_ text: String, options: JSONDiffOptions = JSONDiffOptions()) -> String? {

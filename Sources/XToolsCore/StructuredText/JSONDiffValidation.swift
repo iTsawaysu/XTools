@@ -19,30 +19,8 @@ public enum JSONDiffValidation {
         case comparable
     }
 
-    /// 对每个非空侧分别校验；空侧不校验（合法的「整体缺失」场景）。
-    /// 只对非法侧提示，不报「为空」（SPEC §D1）。
-    public static func evaluate(left: String, right: String, labels: SideLabels) -> Decision {
-        let leftTrimmed = left.trimmingCharacters(in: .whitespacesAndNewlines)
-        let rightTrimmed = right.trimmingCharacters(in: .whitespacesAndNewlines)
-        return decision(
-            leftIsEmpty: leftTrimmed.isEmpty,
-            rightIsEmpty: rightTrimmed.isEmpty,
-            leftDiagnostic: leftTrimmed.isEmpty ? nil : invalidJSONDiagnostic(for: leftTrimmed),
-            rightDiagnostic: rightTrimmed.isEmpty ? nil : invalidJSONDiagnostic(for: rightTrimmed),
-            labels: labels
-        )
-    }
-
     static func sideErrorMessage(label: String, diagnostic: FormatDiagnostic) -> String {
         "\(label) 格式错误：\(diagnostic.message)"
-    }
-
-    public static func comparisonWarning(left: String, right: String, labels: SideLabels) -> String? {
-        comparisonWarning(
-            leftHasDuplicateKeys: duplicateKeySideLabel(for: left, label: labels.left) != nil,
-            rightHasDuplicateKeys: duplicateKeySideLabel(for: right, label: labels.right) != nil,
-            labels: labels
-        )
     }
 
     static func decision(
@@ -107,31 +85,4 @@ public enum JSONDiffValidation {
         }
     }
 
-    /// 使用项目自己的有序 JSON parser 校验，避免 Foundation 宽松解析把尾逗号等
-    /// 非标准输入误判为可比较 JSON，同时保留格式化器已有的行列和原因诊断。
-    private static func invalidJSONDiagnostic(for value: String) -> FormatDiagnostic? {
-        do {
-            _ = try JSONFormatting.minify(value)
-            return nil
-        } catch let error as JSONFormatting.FormattingError {
-            return error.diagnostic
-        } catch {
-            return FormatDiagnostic(
-                formatName: "JSON",
-                message: "JSON 语法错误"
-            )
-        }
-    }
-
-    private static func duplicateKeySideLabel(for value: String, label: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-
-        guard let result = try? JSONFormatting.formatResult(trimmed, sortKeys: true, indentWidth: 2),
-              !result.duplicateKeys.isEmpty else {
-            return nil
-        }
-
-        return label
-    }
 }

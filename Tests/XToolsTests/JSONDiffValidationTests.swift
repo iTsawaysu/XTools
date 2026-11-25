@@ -159,3 +159,31 @@ struct JSONDiffValidationTests {
         #expect(message.contains("左 格式错误"))
     }
 }
+
+extension JSONDiffValidation {
+    static func evaluate(left: String, right: String, labels: SideLabels) -> Decision {
+        switch preparedComparison(left: left, right: right, labels: labels)?.decision {
+        case .empty: return .empty
+        case .comparable: return .comparable
+        case .invalid(let message): return .invalid(message)
+        default:
+            Issue.record("Expected a comparison or syntax diagnostic")
+            return .invalid("")
+        }
+    }
+
+    static func comparisonWarning(left: String, right: String, labels: SideLabels) -> String? {
+        preparedComparison(left: left, right: right, labels: labels)?.warning
+    }
+
+    private static func preparedComparison(
+        left: String, right: String, labels: SideLabels
+    ) -> JSONStructuralDiff.PreparedResult? {
+        do {
+            return try JSONStructuralDiff.cancellablePreparedDiff(left: left, right: right, labels: labels)
+        } catch {
+            Issue.record("JSON test comparison unexpectedly threw: \(error)")
+            return nil
+        }
+    }
+}
