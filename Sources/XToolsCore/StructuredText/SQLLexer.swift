@@ -144,7 +144,7 @@ struct SQLLexer {
     }
 
     private mutating func readQuoted(until quote: Unicode.Scalar) throws -> String {
-        let startOffset = index
+        var startOffset = index
         var value = String(quote)
         try advance()
 
@@ -156,6 +156,12 @@ struct SQLLexer {
                 if peek() == quote {
                     value.unicodeScalars.append(quote)
                     try advance()
+                    continue
+                }
+                if quote == "'", let nextQuote = try continuedStringOffset() {
+                    startOffset = index + nextQuote
+                    try advance(nextQuote + 1)
+                    value.append("\n'")
                     continue
                 }
                 return value
@@ -174,6 +180,19 @@ struct SQLLexer {
                 suggestion: "补上结尾的 \(quote)，或检查字符串内部的转义和引号。"
             )
         )
+    }
+
+    private func continuedStringOffset() throws -> Int? {
+        var offset = 0
+        var containsLineBreak = false
+        while let scalar = peek(offset: offset), Character(scalar).isWhitespace {
+            try StructuredTextExecution.checkpoint(offset)
+            containsLineBreak = containsLineBreak || scalar == "\n" || scalar == "\r"
+            offset += 1
+        }
+        // PostgreSQL and standard SQL concatenate single-quoted literals
+        // separated by whitespace containing a newline.
+        return containsLineBreak && peek(offset: offset) == "'" ? offset : nil
     }
 
     private mutating func readPrefixedQuotedLiteral() throws -> String {

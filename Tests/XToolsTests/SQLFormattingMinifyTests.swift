@@ -2,6 +2,12 @@ import Testing
 @testable import XToolsCore
 
 @Suite struct SQLFormattingMinifyTests {
+    @Test func preservesNewlineBetweenAdjacentSingleQuotedLiteralsInBothModes() throws {
+        let input = "SELECT 'foo'\r\n  'bar'\n 'baz' FROM example;"
+        #expect(try SQLFormatting.format(input) == "SELECT\n  'foo'\n'bar'\n'baz'\nFROM\n  example;")
+        #expect(try SQLFormatting.format(input, options: .init(minify: true)) == "SELECT 'foo'\n'bar'\n'baz' FROM example;")
+    }
+
     @Test func testMinifyMultilineString() throws {
         let sql = "SELECT 'hello\n  world' FROM a;"
         let options = SQLFormatting.Options(minify: true)
