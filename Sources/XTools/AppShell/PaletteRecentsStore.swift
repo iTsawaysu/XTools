@@ -64,20 +64,6 @@ final class PaletteRecentsStore: PaletteUsageScoring {
         persist()
     }
 
-    /// Records a selection only when it differs from the immediately previous
-    /// one. Startup resume can re-run `onAppear` when a window is reopened;
-    /// the persisted ring must not grow with duplicate events in that case.
-    func recordLaunchIfChanged(
-        _ toolID: ToolID,
-        previousToolID: ToolID? = nil,
-        at date: Date = Date()
-    ) {
-        guard previousToolID != toolID,
-              events.last?.toolID != toolID.rawValue
-        else { return }
-        recordLaunch(toolID, at: date)
-    }
-
     func frecencyScore(for toolID: ToolID, now: Date) -> Double {
         let rawID = toolID.rawValue
         let nowSeconds = now.timeIntervalSince1970

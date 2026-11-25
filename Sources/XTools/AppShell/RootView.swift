@@ -192,7 +192,7 @@ struct RootView: View {
     private var detailColumn: some View {
         detailRouting.update(
             actions: navigationActions,
-            onOpenCommandPalette: openCommandPaletteAnimated
+            reduceMotion: reduceMotion
         )
         return ToolDetailHostView(
             registry: registry,
@@ -220,7 +220,7 @@ struct RootView: View {
             favorites: favorites,
             sidebarSections: sidebarSections,
             dashboardStore: dashboardStore,
-            onToolSelected: { paletteRecents.recordLaunchIfChanged($0) }
+            onToolSelected: { [paletteRecents] in paletteRecents.recordLaunch($0) }
         )
     }
 
@@ -262,12 +262,6 @@ struct RootView: View {
     private func toggleCommandPaletteAnimated() {
         withToolAnimation(ToolMotion.Preset.modal, reduceMotion: reduceMotion) {
             navigationActions.toggleCommandPalette()
-        }
-    }
-
-    private func openCommandPaletteAnimated() {
-        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: reduceMotion) {
-            navigationActions.openCommandPalette()
         }
     }
 
@@ -450,14 +444,14 @@ private final class SidebarProjectionCache {
 @MainActor
 private final class DetailActionRoutingBox: DetailActionRouting {
     private var actions: ToolNavigationActions?
-    private var onOpenCommandPalette: (() -> Void)?
+    private var reduceMotion = false
 
     func update(
         actions: ToolNavigationActions,
-        onOpenCommandPalette: @escaping () -> Void
+        reduceMotion: Bool
     ) {
         self.actions = actions
-        self.onOpenCommandPalette = onOpenCommandPalette
+        self.reduceMotion = reduceMotion
     }
 
     func selectTool(_ toolID: ToolID) {
@@ -469,6 +463,9 @@ private final class DetailActionRoutingBox: DetailActionRouting {
     }
 
     func openCommandPalette() {
-        onOpenCommandPalette?()
+        guard let actions else { return }
+        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: reduceMotion) {
+            actions.openCommandPalette()
+        }
     }
 }

@@ -36,13 +36,13 @@ final class DashboardStoreTests: XCTestCase {
         XCTAssertEqual(store.recentTools(knownToolIDs: ["json"]).map(\.toolID), ["json"])
     }
 
-    func testRepeatedSelectionCanBeIgnoredAtStoreBoundary() {
+    func testConsecutiveOpensUpdateOneRecentRow() {
         let store = DashboardStore(defaults: makeDefaults())
         let date = Date()
-        store.recordLaunchIfChanged(toolID: "json", previousToolID: nil, at: date)
-        store.recordLaunchIfChanged(toolID: "json", previousToolID: "json", at: date.addingTimeInterval(1))
+        store.recordLaunch(toolID: "json", at: date)
+        store.recordLaunch(toolID: "json", at: date.addingTimeInterval(1))
         XCTAssertEqual(store.recentTools.count, 1)
-        XCTAssertEqual(store.recentTools.first?.lastOpenedAt, date)
+        XCTAssertEqual(store.recentTools.first?.lastOpenedAt, date.addingTimeInterval(1))
     }
 
     func testBackgroundWritesPreserveEveryAcceptedLaunchOnRelease() throws {

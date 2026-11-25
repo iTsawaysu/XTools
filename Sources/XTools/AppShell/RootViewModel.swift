@@ -38,13 +38,19 @@ final class RootViewModel: ObservableObject {
 
     init(preferences: ToolPreferenceStore? = nil) {
         self.preferences = preferences
-        let selectedToolRawValue = preferences?.value(for: AppShellPreferenceKeys.selectedToolID) ?? ""
-        self.selectedToolID = selectedToolRawValue.isEmpty
-            ? nil
-            : ToolID(rawValue: selectedToolRawValue)
-        self.autoResumeLastTool = preferences?.value(for: AppShellPreferenceKeys.autoResumeLastTool) ?? false
+        let startup = Self.startupSelection(preferences: preferences)
+        self.selectedToolID = startup.toolID
+        self.autoResumeLastTool = startup.autoResume
         let sidebarPreference = preferences?.value(for: AppShellPreferenceKeys.sidebarVisibility) ?? "visible"
         self.sidebarVisibility = SidebarVisibility(preferenceValue: sidebarPreference)
+    }
+
+    static func startupSelection(preferences: ToolPreferenceStore?) -> (autoResume: Bool, toolID: ToolID?) {
+        guard let preferences, preferences.value(for: AppShellPreferenceKeys.autoResumeLastTool) else {
+            return (false, nil)
+        }
+        let rawID = preferences.value(for: AppShellPreferenceKeys.selectedToolID)
+        return (true, rawID.isEmpty ? nil : ToolID(rawValue: rawID))
     }
 
     func focusSearch() {

@@ -159,8 +159,8 @@ struct XToolsApp: App {
         ToolSearchEngine.prewarmTransliterationEngine()
 
         // The initial tool reads the catalog synchronously if Emoji is restored.
-        let lastTool = ToolPreferenceStore().value(for: AppShellPreferenceKeys.selectedToolID)
-        EmojiCatalog.prewarmCatalog(priority: lastTool == EmojiToolWorkspaceModel.key.toolID.rawValue
+        let initialTool = RootViewModel.startupSelection(preferences: ToolPreferenceStore()).toolID
+        EmojiCatalog.prewarmCatalog(priority: initialTool == EmojiToolWorkspaceModel.key.toolID
             ? .userInitiated : .utility)
     }
 

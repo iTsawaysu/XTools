@@ -78,13 +78,6 @@ final class DashboardStore: ObservableObject {
         persist()
     }
 
-    func recordLaunchIfChanged(toolID: ToolID, previousToolID: ToolID?, at date: Date? = nil) {
-        guard previousToolID != toolID,
-              preferences.activity.last?.toolID != toolID
-        else { return }
-        recordLaunch(toolID: toolID, at: date)
-    }
-
     @discardableResult
     private func trimActivity(reference: Date) -> Bool {
         guard let cutoff = calendar.date(byAdding: .day, value: -(Self.retentionDays - 1), to: calendar.startOfDay(for: reference)),

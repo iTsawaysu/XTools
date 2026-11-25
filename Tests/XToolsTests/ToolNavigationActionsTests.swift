@@ -161,7 +161,7 @@ struct ToolNavigationActionsTests {
     @Test func startupResumeRecordsIntoPaletteRecentsStore() {
         let paletteRecents = PaletteRecentsStore(preferences: ToolPreferenceStore(defaults: Self.defaults()))
         let fixture = Self.fixture(onToolSelected: {
-            paletteRecents.recordLaunchIfChanged($0)
+            paletteRecents.recordLaunch($0)
         })
         fixture.viewModel.selectedToolID = .json
         fixture.viewModel.autoResumeLastTool = true
@@ -170,6 +170,25 @@ struct ToolNavigationActionsTests {
         fixture.actions.selectDefaultToolIfNeeded(.json)
 
         #expect(paletteRecents.recentToolIDs(limit: 5, now: Date()) == [.json])
+    }
+
+    @MainActor
+    @Test func reopeningFromDashboardUpdatesBothRecentSurfaces() {
+        let start = Date()
+        var now = start
+        let dashboardStore = DashboardStore(defaults: Self.defaults(), now: { now })
+        let paletteRecents = PaletteRecentsStore(preferences: nil)
+        let fixture = Self.fixture(onToolSelected: { paletteRecents.recordLaunch($0, at: now) }, dashboardStore: dashboardStore)
+
+        #expect(fixture.actions.selectTool(.json))
+        let reopened = start.addingTimeInterval(91 * 86_400)
+        now = reopened
+        #expect(fixture.actions.selectTool(.json))
+        #expect(dashboardStore.recentTools.first?.lastOpenedAt == start)
+        fixture.actions.openDashboard()
+        #expect(fixture.actions.selectTool(.json))
+        #expect(dashboardStore.recentTools.first?.lastOpenedAt == reopened)
+        #expect(paletteRecents.frecencyScore(for: .json, now: reopened) > 1)
     }
 
     @MainActor

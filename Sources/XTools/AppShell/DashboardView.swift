@@ -106,7 +106,9 @@ struct DashboardView: View {
     // MARK: - Recent / favorites
 
     private var recentPanel: some View {
-        WorkbenchPanel(
+        let allRecentTools = allRecentTools
+        let recentTools = showsAllRecent ? allRecentTools[...] : allRecentTools.prefix(4)
+        return WorkbenchPanel(
             title: "最近使用",
             detail: "本机使用记录",
             actionTitle: allRecentTools.isEmpty
@@ -140,7 +142,9 @@ struct DashboardView: View {
     }
 
     private var favoritesPanel: some View {
-        WorkbenchPanel(
+        let allFavoriteTools = allFavoriteTools
+        let favoriteTools = showsAllFavorites ? allFavoriteTools[...] : allFavoriteTools.prefix(4)
+        return WorkbenchPanel(
             title: "收藏",
             detail: favoriteTools.isEmpty ? "收藏工具" : "\(allFavoriteTools.count) 个收藏",
             actionTitle: allFavoriteTools.isEmpty
@@ -204,16 +208,8 @@ struct DashboardView: View {
             }
     }
 
-    private var recentTools: [DashboardRecentItem] {
-        showsAllRecent ? allRecentTools : Array(allRecentTools.prefix(4))
-    }
-
     private var allFavoriteTools: [RegisteredTool] {
         favorites.favoriteIDs.compactMap(registry.tool(for:))
-    }
-
-    private var favoriteTools: [RegisteredTool] {
-        showsAllFavorites ? allFavoriteTools : Array(allFavoriteTools.prefix(4))
     }
 
     private var toolCardGrid: [GridItem] {

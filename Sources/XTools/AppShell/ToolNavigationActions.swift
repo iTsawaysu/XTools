@@ -30,8 +30,7 @@ struct ToolNavigationActions {
             // Resuming a persisted tool is still a tool open for the shared
             // recents surfaces, even though the selection itself was restored
             // before this action had a chance to observe a change.
-            dashboardStore?.recordLaunchIfChanged(toolID: selectedToolID, previousToolID: nil)
-            onToolSelected?(selectedToolID)
+            recordToolOpened(selectedToolID)
             return
         }
 
@@ -50,9 +49,8 @@ struct ToolNavigationActions {
         let previousToolID = viewModel.selectedToolID
         ToolPageEntryTrace.toolSelected(tool)
         viewModel.selectedToolID = toolID
-        dashboardStore?.recordLaunchIfChanged(toolID: toolID, previousToolID: previousToolID)
         if previousToolID != toolID {
-            onToolSelected?(toolID)
+            recordToolOpened(toolID)
         }
         sidebarSections.expand(section.groupID)
 
@@ -61,6 +59,11 @@ struct ToolNavigationActions {
         }
 
         return true
+    }
+
+    private func recordToolOpened(_ toolID: ToolID) {
+        dashboardStore?.recordLaunch(toolID: toolID)
+        onToolSelected?(toolID)
     }
 
     @discardableResult

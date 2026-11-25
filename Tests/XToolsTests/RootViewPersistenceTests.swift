@@ -15,10 +15,22 @@ struct RootViewPersistenceTests {
 
         model.selectedToolID = .persistedTool
         model.sidebarVisibility = .hidden
+        model.autoResumeLastTool = true
 
         let reloaded = RootViewModel(preferences: ToolPreferenceStore(defaults: defaults))
         #expect(reloaded.selectedToolID == .persistedTool)
         #expect(reloaded.sidebarVisibility == .hidden)
+    }
+
+    @MainActor
+    @Test func disabledResumeKeepsTheInitialSelectionEmptyAndRetainsTheStoredTool() {
+        let preferences = ToolPreferenceStore(defaults: Self.defaults())
+        preferences.set("persisted-tool", for: AppShellPreferenceKeys.selectedToolID)
+        preferences.set(false, for: AppShellPreferenceKeys.autoResumeLastTool)
+
+        #expect(RootViewModel(preferences: preferences).selectedToolID == nil)
+        #expect(RootViewModel.startupSelection(preferences: preferences).toolID == nil)
+        #expect(preferences.value(for: AppShellPreferenceKeys.selectedToolID) == "persisted-tool")
     }
 
     @MainActor
