@@ -150,7 +150,11 @@ struct ImageWorkflowClient {
     }
 
     func saveArtifacts(_ artifacts: [FaviconArtifact]) async throws -> Bool {
-        try await saveAll(artifacts, prompt: "选择 Favicon 部署包保存目录") { artifact in
+        try await saveAll(
+            artifacts,
+            prompt: "选择 Favicon 部署包保存目录",
+            fixedFilenames: artifacts.map(\.filename)
+        ) { artifact in
             (artifact.data, artifact.filename)
         }
     }
@@ -220,8 +224,7 @@ struct ImageWorkflowClient {
             result = .success(try await saveAll(
                 snapshots,
                 prompt: "保存",
-                message: "已转换的 \(candidates.count) 张图片将保存到所选文件夹",
-                uniquifyNames: true
+                message: "已转换的 \(candidates.count) 张图片将保存到所选文件夹"
             ) { snapshot in
                 let stem = snapshot.candidate.basename.isEmpty ? "converted" : snapshot.candidate.basename
                 return (try snapshot.readData(), "\(stem).\(snapshot.candidate.format.fileExtension)")
@@ -257,12 +260,15 @@ struct ImageWorkflowClient {
                 try writer.write(data, to: url, replacingExisting: false)
                 reservedFilenames.insert(candidate)
                 return
-            } catch let error as NSError where
-                (error.domain == NSPOSIXErrorDomain && error.code == Int(EEXIST))
-                || (error.domain == NSCocoaErrorDomain && error.code == NSFileWriteFileExistsError) {
+            } catch let error as NSError where isDestinationCollision(error) {
                 continue
             }
         }
+    }
+
+    nonisolated private static func isDestinationCollision(_ error: NSError) -> Bool {
+        (error.domain == NSPOSIXErrorDomain && error.code == Int(EEXIST))
+            || (error.domain == NSCocoaErrorDomain && error.code == NSFileWriteFileExistsError)
     }
 
     private static func utType(for format: ImageFileFormat) -> UTType {
@@ -321,7 +327,7 @@ struct ImageWorkflowClient {
         _ items: [Item],
         prompt: String,
         message: String? = nil,
-        uniquifyNames: Bool = false,
+        fixedFilenames: [String]? = nil,
         item: @escaping @Sendable (Item) throws -> (data: Data, filename: String)
     ) async throws -> Bool {
         guard !Task.isCancelled,
@@ -335,11 +341,19 @@ struct ImageWorkflowClient {
             var savedCount = 0
             var reservedFilenames: Set<String> = []
             do {
+                if let fixedFilenames {
+                    for filename in fixedFilenames {
+                        try Task.checkCancellation()
+                        if FileManager.default.fileExists(atPath: directory.appendingPathComponent(filename).path) {
+                            throw ImageWorkflowFailure.destinationExists(filename)
+                        }
+                    }
+                }
                 for element in items {
                     try Task.checkCancellation()
                     let (data, filename) = try item(element)
                     try Task.checkCancellation()
-                    if uniquifyNames {
+                    if fixedFilenames == nil {
                         try Self.writeUniqueConvertedImage(
                             data,
                             filename: filename,
@@ -348,7 +362,13 @@ struct ImageWorkflowClient {
                             writer: writer
                         )
                     } else {
-                        try writer.write(data, to: directory.appendingPathComponent(filename))
+                        do {
+                            try writer.write(
+                                data, to: directory.appendingPathComponent(filename), replacingExisting: false
+                            )
+                        } catch let error as NSError where Self.isDestinationCollision(error) {
+                            throw ImageWorkflowFailure.destinationExists(filename)
+                        }
                     }
                     savedCount += 1
                 }

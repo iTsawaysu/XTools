@@ -575,6 +575,30 @@ struct ImageWorkflowClientTests {
         }
     }
 
+    @Test func fixedFaviconNamesPreserveExistingFilesAndAvoidPartialWritesOnPreflight() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("XToolsFaviconCollision-\(UUID())", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        let artifacts = [
+            Self.artifact(.faviconICO, data: Data([1])),
+            Self.artifact(.siteWebManifest, data: Data([2]))
+        ]
+        let manifest = directory.appendingPathComponent(artifacts[1].filename)
+        let original = Data("existing manifest".utf8)
+        try original.write(to: manifest)
+        let client = ImageWorkflowClient(
+            dialog: FakeImageWorkflowDialog(directoryURL: directory),
+            reader: FakeImageWorkflowReader(),
+            writer: ImageWorkflowFileWriter()
+        )
+
+        await #expect(throws: ImageWorkflowFailure.destinationExists(manifest.lastPathComponent)) {
+            try await client.saveArtifacts(artifacts)
+        }
+        #expect(try Data(contentsOf: manifest) == original)
+        #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent(artifacts[0].filename).path))
+    }
+
     @Test func prepareImportOverviewReturnsMetadataAndPreviewWithoutRetainingSourceData() async throws {
         let imageData = try Self.makeImageData(width: 1800, height: 1200, format: .png)
         let url = URL(fileURLWithPath: "/tmp/overview-source.png")

@@ -52,6 +52,7 @@ enum ImageWorkflowFailure: Error, Equatable {
     case saveFailed
     case savePermissionDenied
     case saveDiskFull
+    case destinationExists(String)
     case partialSaveFailed(savedCount: Int, totalCount: Int)
     case processingFailed(ImageProcessingOperation)
     case blockedCompressionSave
@@ -108,6 +109,8 @@ extension ImageWorkflowFailure: LocalizedError {
             return "没有权限写入所选位置，请选择其他文件夹。"
         case .saveDiskFull:
             return "磁盘空间不足，无法保存图片。"
+        case .destinationExists(let filename):
+            return "所选文件夹中已存在 \(filename)。请选择其他文件夹。"
         case let .partialSaveFailed(savedCount, totalCount):
             return "已保存 \(savedCount)/\(totalCount) 个文件。"
         case let .processingFailed(operation):
