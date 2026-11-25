@@ -214,14 +214,29 @@ public enum HumanDateTimeConversion {
         )
     }
 
+    private static let isoCalendarDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.timeZone = .gmt
+        formatter.dateFormat = "u-MM-dd"
+        formatter.isLenient = false
+        return formatter
+    }()
+
     private static func isoDate(from value: String) -> Date? {
+        guard let separator = value.firstIndex(of: "T") else { return nil }
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
-        if let date = formatter.date(from: value) {
-            return date
+        var date = formatter.date(from: value)
+        if date == nil {
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            date = formatter.date(from: value)
         }
 
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter.date(from: value)
+        // The ISO formatter normalizes impossible day/month combinations.
+        // Validate the written day independently of its explicit offset.
+        guard let date, isoCalendarDayFormatter.date(from: String(value[..<separator])) != nil else { return nil }
+        return date
     }
 }

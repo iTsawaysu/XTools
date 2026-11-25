@@ -18,6 +18,25 @@ struct HumanDateTimeConversionTests {
         #expect(HumanDateTimeConversion.date(fromText: "2026-07-03T06:30:46+02:00", timeZone: shanghai) == Self.instant("2026-07-03T04:30:46Z"))
     }
 
+    @Test func rejectsImpossibleISOCalendarDatesBeforeApplyingTheOffset() {
+        let utc = TimeZone.gmt
+        #expect(HumanDateTimeConversion.date(fromText: "2025-02-29T12:00:00Z", timeZone: utc) == nil)
+        #expect(HumanDateTimeConversion.date(fromText: "2025-04-31T12:00:00.125+08:00", timeZone: utc) == nil)
+        #expect(HumanDateTimeConversion.date(fromText: "0000-02-30T00:00:00Z", timeZone: utc) == nil)
+        #expect(HumanDateTimeConversion.date(fromText: "10000-04-31T00:00:00Z", timeZone: utc) == nil)
+        let leapDay = Self.instant("2024-02-29T04:00:00Z").addingTimeInterval(0.125)
+        #expect(HumanDateTimeConversion.date(fromText: "2024-02-29T12:00:00.125+08:00", timeZone: utc) == leapDay)
+    }
+
+    @Test(arguments: [
+        "0000-02-29T00:00:00Z", "10000-01-01T00:00:00Z", "2026-7-03T06:30:46Z",
+        "2026-07-3T06:30:46Z", "2026-07-03T6:30:46Z", "２０２６-０７-０３T06:30:46Z"
+    ])
+    func preservesCalendarDatesAcceptedByTheSystemISOFormatter(text: String) {
+        let expected = ISO8601DateFormatter().date(from: text)
+        #expect(HumanDateTimeConversion.date(fromText: text, timeZone: .gmt) == expected)
+    }
+
     @Test func parsesDateOnlyAsLocalMidnight() {
         let shanghai = TimeZone(secondsFromGMT: 8 * 3600)!
 
