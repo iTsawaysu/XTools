@@ -599,7 +599,7 @@ struct ImageWorkflowClientTests {
         #expect(!FileManager.default.fileExists(atPath: directory.appendingPathComponent(artifacts[0].filename).path))
     }
 
-    @Test func prepareImportOverviewReturnsMetadataAndPreviewWithoutRetainingSourceData() async throws {
+    @Test func prepareImportOverviewReturnsMetadataAndPreviewWithoutRetainingSourceData() throws {
         let imageData = try Self.makeImageData(width: 1800, height: 1200, format: .png)
         let url = URL(fileURLWithPath: "/tmp/overview-source.png")
         let reader = FakeImageWorkflowReader(dataByURL: [url: imageData])
@@ -609,7 +609,7 @@ struct ImageWorkflowClientTests {
             writer: FakeImageWorkflowWriter()
         )
 
-        let overview = try await client.prepareImportOverview(from: url, allowedContentTypes: [.png])
+        let overview = try client.prepareImportOverview(from: url, allowedContentTypes: [.png])
 
         #expect(overview.metadata.format == .png)
         #expect(overview.metadata.pixelWidth == 1800)
@@ -619,7 +619,7 @@ struct ImageWorkflowClientTests {
         #expect(reader.readURLs == [url])
     }
 
-    @Test func prepareImportOverviewRejectsInvalidImportsThroughTheSharedPipeline() async throws {
+    @Test func prepareImportOverviewRejectsInvalidImportsThroughTheSharedPipeline() {
         let url = URL(fileURLWithPath: "/tmp/not-image-overview.png")
         let client = ImageWorkflowClient(
             dialog: FakeImageWorkflowDialog(),
@@ -628,7 +628,7 @@ struct ImageWorkflowClientTests {
         )
 
         do {
-            _ = try await client.prepareImportOverview(from: url, allowedContentTypes: [.png])
+            _ = try client.prepareImportOverview(from: url, allowedContentTypes: [.png])
             Issue.record("Expected the shared preparation pipeline to reject a non-image import")
         } catch let processorError as ImageProcessorError {
             #expect(processorError == .missingImageProperties)

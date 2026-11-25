@@ -37,35 +37,17 @@ struct ImageWorkflowClient {
         from url: URL,
         allowedContentTypes: [UTType]
     ) async throws -> ImageInputSelection {
-        let reader = self.reader
         let work = Task.detached(priority: .userInitiated) {
-            try Task.checkCancellation()
-            let prepared = try Self.prepareSelectionData(
-                from: url,
-                allowedContentTypes: allowedContentTypes,
-                reader: reader
-            )
-            try Task.checkCancellation()
-            return prepared
+            try prepareSelectionData(from: url, allowedContentTypes: allowedContentTypes)
         }
 
-        do {
-            let prepared = try await withTaskCancellationHandler {
-                try await work.value
-            } onCancel: {
-                work.cancel()
-            }
-            try Task.checkCancellation()
-            return try makeSelection(from: url, prepared: prepared)
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let failure as ImageWorkflowFailure {
-            throw failure
-        } catch let processorError as ImageProcessorError {
-            throw processorError
-        } catch {
-            throw ImageWorkflowFailure.readFailed
+        let prepared = try await withTaskCancellationHandler {
+            try await work.value
+        } onCancel: {
+            work.cancel()
         }
+        try Task.checkCancellation()
+        return try makeSelection(from: url, prepared: prepared)
     }
 
     private func makeSelection(from url: URL, prepared: PreparedImageInputSelection) throws -> ImageInputSelection {
@@ -84,12 +66,34 @@ struct ImageWorkflowClient {
 
     /// 批量导入用轻量变体：复用单张的校验/inspect/preview 管线，
     /// 返回边界处即丢弃原图 data，只留元数据与预览字节。
-    func prepareImportOverview(
+    nonisolated func prepareImportOverview(
         from url: URL,
         allowedContentTypes: [UTType]
-    ) async throws -> ImageImportOverview {
-        let selection = try await prepareSelectionInBackground(from: url, allowedContentTypes: allowedContentTypes)
+    ) throws -> ImageImportOverview {
+        let selection = try prepareSelectionData(from: url, allowedContentTypes: allowedContentTypes)
         return ImageImportOverview(metadata: selection.metadata, previewData: selection.previewData)
+    }
+
+    nonisolated func prepareSelectionData(
+        from url: URL,
+        allowedContentTypes: [UTType]
+    ) throws -> PreparedImageInputSelection {
+        try Task.checkCancellation()
+        do {
+            let prepared = try Self.prepareSelectionData(
+                from: url, allowedContentTypes: allowedContentTypes, reader: reader
+            )
+            try Task.checkCancellation()
+            return prepared
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let failure as ImageWorkflowFailure {
+            throw failure
+        } catch let processorError as ImageProcessorError {
+            throw processorError
+        } catch {
+            throw ImageWorkflowFailure.readFailed
+        }
     }
 
     nonisolated private static func prepareSelectionData(

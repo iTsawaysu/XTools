@@ -10,13 +10,23 @@ final class ImageConverterToolWorkspaceModel: ObservableObject {
     let session = ImageBatchConversionSession()
 
     @Published var targetFormat: ImageFileFormat {
-        didSet { preferences.set(targetFormat, for: MediaToolPreferenceKeys.imageConverterTargetFormat) }
+        didSet {
+            guard oldValue != targetFormat else { return }
+            session.invalidateOutputsForSettingsChange()
+            preferences.set(targetFormat, for: MediaToolPreferenceKeys.imageConverterTargetFormat)
+        }
     }
     @Published var quality: Double {
-        didSet { preferences.set(quality, for: MediaToolPreferenceKeys.imageConverterQuality) }
+        didSet {
+            guard oldValue != quality else { return }
+            session.invalidateOutputsForSettingsChange()
+            preferences.set(quality, for: MediaToolPreferenceKeys.imageConverterQuality)
+        }
     }
     @Published var transparencyFillMode: ImageTransparencyFillMode {
         didSet {
+            guard oldValue != transparencyFillMode else { return }
+            session.invalidateOutputsForSettingsChange()
             preferences.set(
                 transparencyFillMode,
                 for: MediaToolPreferenceKeys.imageConverterTransparencyFillMode
@@ -25,6 +35,8 @@ final class ImageConverterToolWorkspaceModel: ObservableObject {
     }
     @Published var customTransparencyFillHex: String {
         didSet {
+            guard oldValue != customTransparencyFillHex else { return }
+            if transparencyFillMode == .custom { session.invalidateOutputsForSettingsChange() }
             guard let color = ImageRGBColor(hex: customTransparencyFillHex) else { return }
             preferences.set(
                 color.hexString,
@@ -159,7 +171,7 @@ private struct IndexImageConverterWorkspaceContent: View {
                             primaryTitle: saveButtonTitle,
                             primaryIcon: IndexActionSymbol.save,
                             primaryHelp: session.isSaving ? "正在保存图片" : "保存转换结果",
-                            isPrimaryDisabled: session.completedCount == 0 || session.isProcessing || session.isSaving,
+                            isPrimaryDisabled: !session.canSave,
                             pinsActionToBottom: true,
                             sourceTitle: session.singleItem == nil ? "队列" : "源文件",
                             showsOutput: session.singleItem != nil,

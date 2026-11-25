@@ -163,6 +163,48 @@ struct ImageBatchConversionSessionTests {
 
     // MARK: - Conversion
 
+    @Test(arguments: [1, 2])
+    func rejectedImportKeepsTheAcceptedConversionRunning(capacity: Int) async throws {
+        let data = try Self.makeImageData(width: 12, height: 8, format: .png)
+        let url = URL(fileURLWithPath: "/tmp/accepted-conversion.png")
+        let brokenURL = URL(fileURLWithPath: "/tmp/concurrent-broken-import.png")
+        let reader = FakeImageWorkflowReader(dataByURL: [url: data, brokenURL: Data("not an image".utf8)])
+        let session = ImageBatchConversionSession(maximumItemCount: capacity)
+        let client = ImageWorkflowClient(reader: reader)
+        session.receiveImageURLs([url], allowedContentTypes: [.png], client: client)
+        try await waitUntil { session.items.count == 1 }
+
+        let started = OSAllocatedUnfairLock(initialState: false)
+        let release = DispatchSemaphore(value: 0)
+        defer { release.signal() }
+        let output = Self.processedImage(data: data, originalByteCount: data.count, format: .png)
+        session.convertAll {
+            { _ in
+                started.withLock { $0 = true }
+                guard release.wait(timeout: .now() + 5) == .success else { throw CancellationError() }
+                return output
+            }
+        }
+        try await waitUntil { started.withLock { $0 } }
+        session.receiveImageURLs([brokenURL], allowedContentTypes: [.png], client: client)
+        if capacity == 1 {
+            try await waitUntil { !session.isImporting }
+            #expect(session.error?.contains("超出 1 张上限") == true)
+        } else {
+            try await Task.sleep(for: .milliseconds(50))
+            #expect(session.isImporting)
+            #expect(!reader.readURLs.contains(brokenURL))
+        }
+        #expect(session.isProcessing)
+        release.signal()
+        try await waitUntil { session.completedCount == 1 && !session.isImporting }
+        if capacity == 2 {
+            #expect(reader.readURLs.contains(brokenURL))
+            #expect(session.error?.contains("无法读取图片的尺寸信息") == true)
+        }
+        #expect(session.canSave)
+    }
+
     @Test func convertAllTransitionsItemsSeriallyAndKeepsFailuresIsolated() async throws {
         let firstData = try Self.makeImageData(width: 12, height: 8, format: .png)
         let secondData = try Self.makeImageData(width: 5, height: 3, format: .png)
@@ -343,6 +385,17 @@ struct ImageBatchConversionSessionTests {
         // N=1 读取临时文件 data 后经 saveConvertedImage 写入。
         #expect(writer.writes.map(\.data) == [output.data])
         #expect(session.error == nil)
+
+        session.invalidateOutputsForSettingsChange()
+        #expect(!session.canSave)
+        #expect(await session.saveAll(
+            defaultBasename: "converted",
+            filePanel: .unavailable,
+            outputPanel: .unavailable
+        ) == .blocked)
+        #expect(writer.writes.count == 1)
+        session.convertAll { { _ in output } }
+        try await waitUntil { session.canSave }
 
         // 保存面板取消保持静默。
         dialog.saveURL = nil

@@ -56,6 +56,15 @@ struct OutputSpoolWriteFailure: Error {}
 
 @MainActor
 final class ImageBatchConversionSession: ObservableObject {
+    /// One background operation owns the source bytes until its overview or
+    /// spooled output is ready. Import and conversion can both stay queued.
+    private actor Worker {
+        func run<Output: Sendable>(_ operation: @Sendable () throws -> Output) throws -> Output {
+            try Task.checkCancellation()
+            return try operation()
+        }
+    }
+
     /// 上限主要约束列表 UI 与保存循环时长；输出落盘后内存与批量数量解耦。
     static let defaultMaximumItemCount = 100
 
@@ -70,6 +79,7 @@ final class ImageBatchConversionSession: ObservableObject {
     @Published private(set) var isImporting = false
     @Published private(set) var isProcessing = false
     @Published private(set) var isSaving = false
+    @Published private(set) var outputsAreStale = false
 
     let maximumItemCount: Int
 
@@ -78,6 +88,7 @@ final class ImageBatchConversionSession: ObservableObject {
     private var conversionTask: Task<Void, Never>?
     private let importGate = AsyncWorkGate()
     private let renderGate = AsyncWorkGate()
+    private let worker = Worker()
     /// convertAll 重读磁盘时使用的最近一次导入管线（含 reader 与内容类型）。
     private var workflowClient = ImageWorkflowClient()
     private var allowedInputContentTypes: [UTType] = ImageWorkflowClient.standardImageContentTypes
@@ -126,6 +137,10 @@ final class ImageBatchConversionSession: ObservableObject {
         }
     }
 
+    var canSave: Bool {
+        !outputsAreStale && !isImporting && !isProcessing && !isSaving && completedCount > 0
+    }
+
     // MARK: - Import
 
     func selectImages(
@@ -169,14 +184,12 @@ final class ImageBatchConversionSession: ObservableObject {
     ) {
         guard !urls.isEmpty else { return }
         panelRequests.cancel()
-        cancelActiveWork()
+        cancelImport()
         error = nil
         isImporting = true
-        workflowClient = client
-        allowedInputContentTypes = allowedContentTypes
         let generation = importGate.token
 
-        importTask = Task { @MainActor [weak self] in
+        importTask = Task(priority: .userInitiated) { @MainActor [weak self] in
             var imported: [BatchConversionItem] = []
             var skipped: [(name: String, reason: String)] = []
             let acceptedCount = max(0, (self?.maximumItemCount ?? 0) - (self?.items.count ?? 0))
@@ -188,10 +201,9 @@ final class ImageBatchConversionSession: ObservableObject {
                     continue
                 }
                 do {
-                    let overview = try await client.prepareImportOverview(
-                        from: url,
-                        allowedContentTypes: allowedContentTypes
-                    )
+                    let overview = try await self.worker.run {
+                        try client.prepareImportOverview(from: url, allowedContentTypes: allowedContentTypes)
+                    }
                     try Task.checkCancellation()
                     guard self.importGate.isCurrent(generation) else { return }
                     guard let thumbnail = NSImage(data: overview.previewData) else {
@@ -211,6 +223,7 @@ final class ImageBatchConversionSession: ObservableObject {
                         )
                     )
                 } catch is CancellationError {
+                    if self.importGate.isCurrent(generation) { self.cancelImport() }
                     return
                 } catch {
                     guard self.importGate.isCurrent(generation) else { return }
@@ -225,6 +238,9 @@ final class ImageBatchConversionSession: ObservableObject {
             self.isImporting = false
             self.importTask = nil
             if !imported.isEmpty {
+                self.cancelConversion()
+                self.workflowClient = client
+                self.allowedInputContentTypes = allowedContentTypes
                 importPublisher(imported) {
                     self.items.append(contentsOf: imported)
                 }
@@ -241,7 +257,7 @@ final class ImageBatchConversionSession: ObservableObject {
     /// 全量重转：新一轮使上一轮逐张取消（世代取消）；串行逐张读盘转换，
     /// 内存峰值 ≈ 单张。rendererProvider 在循环启动时取最新参数。
     func convertAll(rendererProvider: @escaping @MainActor () -> ImageBackgroundOutputRenderer) {
-        guard !items.isEmpty, !isImporting else { return }
+        guard !items.isEmpty else { return }
         error = nil
         for index in items.indices {
             if case let .done(output) = items[index].state {
@@ -250,12 +266,13 @@ final class ImageBatchConversionSession: ObservableObject {
             items[index].state = .idle
         }
         isProcessing = true
+        outputsAreStale = false
         cancelConversionTask()
         let generation = renderGate.invalidate()
         let client = workflowClient
         let allowedContentTypes = allowedInputContentTypes
 
-        conversionTask = Task { @MainActor [weak self] in
+        conversionTask = Task(priority: .userInitiated) { @MainActor [weak self] in
             await self?.convertRemaining(
                 fromIndex: 0,
                 generation: generation,
@@ -270,6 +287,10 @@ final class ImageBatchConversionSession: ObservableObject {
     /// 不整批重置（与 convertAll 的参数变更全量重转相区分）。
     func convertPendingItems(rendererProvider: @escaping @MainActor () -> ImageBackgroundOutputRenderer) {
         guard !items.isEmpty, !isImporting else { return }
+        if outputsAreStale {
+            convertAll(rendererProvider: rendererProvider)
+            return
+        }
         guard items.contains(where: { $0.state == .idle }) else { return }
         error = nil
         isProcessing = true
@@ -278,7 +299,7 @@ final class ImageBatchConversionSession: ObservableObject {
         let client = workflowClient
         let allowedContentTypes = allowedInputContentTypes
 
-        conversionTask = Task { @MainActor [weak self] in
+        conversionTask = Task(priority: .userInitiated) { @MainActor [weak self] in
             await self?.convertRemaining(
                 fromIndex: 0,
                 generation: generation,
@@ -288,6 +309,12 @@ final class ImageBatchConversionSession: ObservableObject {
                 skipsSettledItems: true
             )
         }
+    }
+
+    func invalidateOutputsForSettingsChange() {
+        guard !items.isEmpty, !outputsAreStale else { return }
+        outputsAreStale = true
+        cancelConversion()
     }
 
     func clearOutputs() {
@@ -315,6 +342,7 @@ final class ImageBatchConversionSession: ObservableObject {
         removeSpoolDirectory()
         items = []
         error = nil
+        outputsAreStale = false
     }
 
     // MARK: - Save
@@ -328,6 +356,7 @@ final class ImageBatchConversionSession: ObservableObject {
         outputPanel: FileOutputPanelClient
     ) async -> ImageSaveOutcome {
         guard !isImporting, !isProcessing, !isSaving else { return .cancelled }
+        guard !outputsAreStale else { return .blocked }
         let completed = items.compactMap { item -> BatchConversionSaveCandidate? in
             guard case let .done(output) = item.state else { return nil }
             return BatchConversionSaveCandidate(
@@ -399,24 +428,17 @@ final class ImageBatchConversionSession: ObservableObject {
             let url = items[index].url
             items[index].state = .converting
             do {
-                let selection = try await client.prepareSelectionInBackground(
-                    from: url,
-                    allowedContentTypes: allowedContentTypes
-                )
-                try Task.checkCancellation()
-                guard renderGate.isCurrent(generation) else { return }
-                let input = ImageProcessingInput(
-                    data: selection.data,
-                    filenameExtension: selection.filenameExtension,
-                    metadata: selection.metadata
-                )
-                let output = try await Self.renderOffMain(
-                    render,
-                    input,
-                    itemID: itemID,
-                    spoolDirectory: spoolDirectory,
-                    writer: spoolWriter
-                )
+                let output = try await worker.run { [spoolDirectory, spoolWriter] in
+                    let prepared = try client.prepareSelectionData(from: url, allowedContentTypes: allowedContentTypes)
+                    let input = ImageProcessingInput(
+                        data: prepared.data,
+                        filenameExtension: url.pathExtension.isEmpty ? nil : url.pathExtension,
+                        metadata: prepared.metadata
+                    )
+                    return try Self.renderAndSpool(
+                        render, input, itemID: itemID, spoolDirectory: spoolDirectory, writer: spoolWriter
+                    )
+                }
                 guard !Task.isCancelled, renderGate.isCurrent(generation),
                       index < items.count, items[index].id == itemID else {
                     Self.removeSpooledFile(at: output.tempURL)
@@ -437,43 +459,36 @@ final class ImageBatchConversionSession: ObservableObject {
 
     /// 后台执行渲染并原子落盘：输出 data 不随结果回主线程，
     /// 内存峰值保持单张。落盘失败按该张失败处理，不阻塞其余。
-    private static func renderOffMain(
+    nonisolated private static func renderAndSpool(
         _ render: @escaping ImageBackgroundOutputRenderer,
         _ input: ImageProcessingInput,
         itemID: UUID,
         spoolDirectory: URL,
         writer: ImageWorkflowFileWriter
-    ) async throws -> BatchConversionOutput {
-        let worker = Task.detached(priority: .userInitiated) {
-            let output = try render(input)
-            try Task.checkCancellation()
-            let tempURL = spoolDirectory.appendingPathComponent(
-                "\(itemID.uuidString)-\(UUID().uuidString).\(output.format.fileExtension)"
-            )
-            do {
-                try FileManager.default.createDirectory(at: spoolDirectory, withIntermediateDirectories: true)
-                try writer.write(output.data, to: tempURL)
-            } catch {
-                throw OutputSpoolWriteFailure()
-            }
-            let assessment = ImageOutputPolicy.assess(output, for: .conversion)
-            return BatchConversionOutput(
-                format: output.format,
-                pixelWidth: output.pixelWidth,
-                pixelHeight: output.pixelHeight,
-                originalByteCount: output.originalByteCount,
-                quality: output.quality,
-                byteCount: output.byteCount,
-                requiresExplicitLargerSave: assessment.requiresExplicitLargerSave,
-                summaryText: ImageOutputPresentation.processingOutputSummary(assessment),
-                tempURL: tempURL
-            )
+    ) throws -> BatchConversionOutput {
+        let output = try render(input)
+        try Task.checkCancellation()
+        let tempURL = spoolDirectory.appendingPathComponent(
+            "\(itemID.uuidString)-\(UUID().uuidString).\(output.format.fileExtension)"
+        )
+        do {
+            try FileManager.default.createDirectory(at: spoolDirectory, withIntermediateDirectories: true)
+            try writer.write(output.data, to: tempURL)
+        } catch {
+            throw OutputSpoolWriteFailure()
         }
-        return try await withTaskCancellationHandler {
-            try await worker.value
-        } onCancel: {
-            worker.cancel()
-        }
+        let assessment = ImageOutputPolicy.assess(output, for: .conversion)
+        return BatchConversionOutput(
+            format: output.format,
+            pixelWidth: output.pixelWidth,
+            pixelHeight: output.pixelHeight,
+            originalByteCount: output.originalByteCount,
+            quality: output.quality,
+            byteCount: output.byteCount,
+            requiresExplicitLargerSave: assessment.requiresExplicitLargerSave,
+            summaryText: ImageOutputPresentation.processingOutputSummary(assessment),
+            tempURL: tempURL
+        )
     }
 
     /// 渲染/读取错误沿用共享诊断；落盘失败给出稳定专属诊断。
@@ -529,11 +544,15 @@ final class ImageBatchConversionSession: ObservableObject {
     }
 
     private func cancelActiveWork() {
+        cancelImport()
+        cancelConversion()
+    }
+
+    private func cancelImport() {
         importTask?.cancel()
         importTask = nil
         importGate.invalidate()
         isImporting = false
-        cancelConversion()
     }
 
 }
