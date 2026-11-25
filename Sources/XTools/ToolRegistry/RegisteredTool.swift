@@ -27,20 +27,7 @@ struct ToolAlias: Hashable {
     }
 }
 
-protocol Tool: Identifiable, Hashable {
-    var id: ToolID { get }
-    var title: String { get }
-    var categoryID: ToolCategoryID { get }
-    var systemImage: String { get }
-    var keywords: [String] { get }
-    var aliases: [ToolAlias] { get }
-}
-
-extension Tool {
-    var aliases: [ToolAlias] { [] }
-}
-
-struct RegisteredTool: Tool {
+struct RegisteredTool: Identifiable, Hashable {
     let id: ToolID
     let title: String
     let categoryID: ToolCategoryID

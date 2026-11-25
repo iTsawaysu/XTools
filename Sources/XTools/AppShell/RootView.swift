@@ -7,7 +7,7 @@ struct RootView: View {
     @StateObject private var fileInputPanelCoordinator = FileInputPanelCoordinator()
     @StateObject private var fileOutputPanelCoordinator = FileOutputPanelCoordinator()
     @StateObject private var favorites = FavoritesStore()
-    @StateObject private var sidebarSections = SidebarSectionExpansionStore()
+    @StateObject private var sidebarSections: SidebarSectionExpansionStore
     @StateObject private var workspaceRepository: ToolWorkspaceRepository
     @StateObject private var dashboardStore: DashboardStore
     @State private var smartPaste = SmartPasteMonitor()
@@ -50,6 +50,7 @@ struct RootView: View {
         _favorites = StateObject(
             wrappedValue: FavoritesStore(defaults: defaults, validToolIDs: validToolIDs)
         )
+        _sidebarSections = StateObject(wrappedValue: SidebarSectionExpansionStore(defaults: defaults))
         _workspaceRepository = StateObject(
             wrappedValue: workspaceRepository ?? ToolWorkspaceRepository(preferences: preferences)
         )
