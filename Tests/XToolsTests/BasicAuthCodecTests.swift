@@ -23,6 +23,13 @@ struct BasicAuthCodecTests {
         #expect(credentials.password == "p@ss:w0rd!")
     }
 
+    @Test func separatorWorksAtUnicodeScalarBoundaries() throws {
+        let credentials = BasicAuthCodec.Credentials(username: "用户", password: "\u{0301}pass:word")
+        let header = try #require(BasicAuthCodec.authorizationHeader(credentials: credentials))
+        #expect(try BasicAuthCodec.parse(header) == credentials)
+        #expect(BasicAuthCodec.validationIssue(username: "user:\u{0301}", password: "password") == .usernameContainsColon)
+    }
+
     @Test func parsesUnpaddedAndBase64URLTokens() throws {
         // 网关/openssl 输出的 token 常不带填充，或用 base64url 字母表（-_）。
         let standard = Base64Conversion.encode("us?er:pass") // dXM/ZXI6cGFzcw==（含 '/'）

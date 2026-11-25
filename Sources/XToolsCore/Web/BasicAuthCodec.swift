@@ -69,7 +69,7 @@ public enum BasicAuthCodec {
     }
 
     public static func validationIssue(username: String, password: String) -> ValidationIssue? {
-        if username.contains(":") {
+        if username.unicodeScalars.contains(":") {
             return .usernameContainsColon
         }
         if containsControlCharacter(username) || containsControlCharacter(password) {
@@ -98,12 +98,13 @@ public enum BasicAuthCodec {
         guard let decoded = String(data: data, encoding: .utf8) else {
             throw ParseError.invalidUTF8
         }
-        guard let separator = decoded.firstIndex(of: ":") else {
+        let scalars = decoded.unicodeScalars
+        guard let separator = scalars.firstIndex(of: ":") else {
             throw ParseError.missingSeparator
         }
 
-        let username = String(decoded[..<separator])
-        let password = String(decoded[decoded.index(after: separator)...])
+        let username = String(scalars[..<separator])
+        let password = String(scalars[scalars.index(after: separator)...])
         guard !containsControlCharacter(username), !containsControlCharacter(password) else {
             throw ParseError.credentialsContainControlCharacter
         }
