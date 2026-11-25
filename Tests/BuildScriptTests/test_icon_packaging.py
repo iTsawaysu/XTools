@@ -4,6 +4,7 @@ Run with: python3 -m unittest discover -s Tests/BuildScriptTests -v
 Fixtures are kept in the OS temporary directory for inspection.
 """
 
+import hashlib
 import os
 from pathlib import Path
 import plistlib
@@ -20,14 +21,18 @@ class IconPackagingTests(unittest.TestCase):
         shutil.copy2(repository / "build.sh", fixture / "build.sh")
         binaries = fixture / "mock-bin"
         binaries.mkdir()
-        for name in ("pkill", "swift"):
-            executable = binaries / name
-            executable.write_text("#!/bin/sh\nexit 0\n")
-            executable.chmod(0o755)
+        swift = binaries / "swift"
+        swift.write_text('#!/bin/sh\ncase " $* " in\n'
+                         '  *" --configuration release "*" --show-bin-path "*) printf "%s\\n" "$RELEASE_BIN_PATH";;\n'
+                         '  *" --show-bin-path "*) printf "%s\\n" "$SHOW_BIN_PATH";;\n'
+                         '  *) exit 0;;\nesac\n')
+        swift.chmod(0o755)
         # Model the packaging contracts without invoking signing or changing
         # any running app. The icon assertions below exercise the real script.
         strip = binaries / "strip"
-        strip.write_text('#!/bin/sh\n[ "$1" = "-S" ] && [ "$2" = "-x" ] || exit 1\nprintf "bin\\n" > "$3"\n')
+        strip.write_text('#!/bin/sh\n[ "$1" = "-S" ] && [ "$2" = "-x" ] || exit 1\n'
+                         'shasum -a 256 "$3" | awk \'{print $1}\' > "$STRIP_LOG"\n'
+                         'printf "bin\\n" > "$3"\n')
         strip.chmod(0o755)
         codesign = binaries / "codesign"
         codesign.write_text('#!/bin/sh\nif [ "$1" = "-dv" ]; then\n  printf "Identifier=%s\\n" "$BUNDLE_ID" >&2\nfi\n')
@@ -57,12 +62,14 @@ class IconPackagingTests(unittest.TestCase):
         source.parent.mkdir(parents=True)
         source.write_bytes(b"first-icon")
         log = fixture / "register.log"
+        strip_log = fixture / "strip.log"
         environment = dict(os.environ, PATH=f"{binaries}:{os.environ['PATH']}",
                            SWIFT_BIN=str(binaries / "swift"), LSREGISTER=str(register),
                            ARCH=os.uname().machine,
                            BUNDLE_ID="com.sun.xtools.icon-test", KEEP_RUNNING_APP="1",
                            OUTPUT_DIR=str(fixture / "build"),
-                           REGISTER_LOG=str(log), LSREGISTER_EVERY_BUILD="0",
+                           SHOW_BIN_PATH=str(product), RELEASE_BIN_PATH=str(fixture / "missing-release"),
+                           STRIP_LOG=str(strip_log), REGISTER_LOG=str(log), LSREGISTER_EVERY_BUILD="0",
                            TRASH_DIR=str(fixture / "archive"))
 
         def package(*arguments):
@@ -121,9 +128,14 @@ class IconPackagingTests(unittest.TestCase):
 
         cold_product = fixture / "swiftpm-cold-product"
         product.rename(cold_product)
-        (binaries / "swift").write_text('#!/bin/sh\nprintf "%s\\n" "$SHOW_BIN_PATH"\n')
         environment["SHOW_BIN_PATH"] = str(cold_product)
+        product.mkdir()
+        stale = product / "XTools"
+        subprocess.run(["clang", "-x", "c", "-o", str(stale), "-"],
+                       input="int main(void) { return 41; }\n", text=True, check=True)
         package("debug")
+        self.assertEqual(strip_log.read_text().strip(),
+                         hashlib.sha256((cold_product / "XTools").read_bytes()).hexdigest())
 
         wrong_product = fixture / "wrong-architecture"
         wrong_product.mkdir()
@@ -135,7 +147,7 @@ class IconPackagingTests(unittest.TestCase):
                                   text=True, capture_output=True)
         self.assertNotEqual(mismatch.returncode, 0)
         self.assertIn(f"does not contain {os.uname().machine}", mismatch.stderr)
-        cold_product.rename(product)
+        environment["SHOW_BIN_PATH"] = str(cold_product)
 
         source.rename(source.with_suffix(".archived"))
         missing = subprocess.run(["bash", str(fixture / "build.sh"), "package"],

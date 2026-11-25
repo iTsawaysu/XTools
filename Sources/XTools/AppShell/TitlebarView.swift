@@ -27,9 +27,11 @@ struct WindowToolbarContent: ToolbarContent {
             )
         }
 
+        #if compiler(>=6.2)
         if #available(macOS 26, *) {
             ToolbarSpacer(.flexible)
         }
+        #endif
 
         ToolbarItemGroup(placement: .primaryAction) {
             if selectedTool != nil {

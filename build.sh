@@ -48,7 +48,7 @@ MIN_SYSTEM_VERSION="14.0"
 BUILD_DIR="$PROJECT_DIR/.build"
 # Last successful `swift build` configuration; `package` reads it instead of
 # guessing from binary mtimes (a resource-only rebuild may not relink the binary).
-BUILD_STATE_FILE="$BUILD_DIR/.last-build-configuration"
+BUILD_STATE_FILE="${SWIFTPM_BUILD_DIR:-$BUILD_DIR}/.last-build-configuration"
 LEGACY_SCRATCH_DIR="$PROJECT_DIR/.swiftpm-build"
 # 隔离验证打包：OUTPUT_DIR=/some/dir ./build.sh build 可把 .app 装到别处，
 # 配合 KEEP_RUNNING_APP=1 在不终止用户运行中窗口的前提下产出验证包
@@ -67,7 +67,8 @@ ICON_SOURCE="$PROJECT_DIR/Assets/AppIcon/$ICON_NAME.icns"
 # Set TRASH_DIR explicitly when a persistent archive location is preferred.
 TRASH_DIR="${TRASH_DIR:-${TMPDIR:-/tmp}/XTools-build-archive}"
 
-SWIFT_BIN="${SWIFT_BIN:-$(xcrun --find swift)}"
+SWIFT_OVERRIDE="${SWIFT_BIN:-}"
+SWIFT_BIN="${SWIFT_OVERRIDE:-$(xcrun --find swift)}"
 ARCH="${ARCH:-$(uname -m)}"
 LSREGISTER="${LSREGISTER:-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister}"
 
@@ -80,7 +81,7 @@ NC='\033[0m'
 info() { printf "%b\n" "${GREEN}OK${NC} $1"; }
 step() { printf "%b\n" "${BLUE}..${NC} $1"; }
 warn() { printf "%b\n" "${YELLOW}WARN${NC} $1"; }
-error() { printf "%b\n" "${RED}ERR${NC} $1"; }
+error() { printf "%b\n" "${RED}ERR${NC} $1" >&2; }
 
 usage() {
   cat <<'EOF'
@@ -135,79 +136,51 @@ clean() {
   info "Clean complete"
 }
 
-# Match XFetch: one plain SwiftPM invocation into the shared .build tree.
-# Native builds must not repeat `--arch` for the host: SwiftPM can stall after
-# dependency compilation when the destination is duplicated (macOS 27/Xcode 27).
-# Keep `--arch` for explicit cross-compilation only.
+swift_product() {
+  local configuration="$1"
+  shift
+  local args=(build --configuration "$configuration" --product "$PRODUCT_NAME")
+  if [[ "$ARCH" != "$(uname -m)" ]]; then
+    args+=(--arch "$ARCH")
+  fi
+  "$SWIFT_BIN" "${args[@]}" "$@"
+}
+
 swift_build() {
-  local configuration="${1:-debug}"
+  local configuration="$1" t0
   step "ui-lint: checking shared-control boundaries"
   python3 "$PROJECT_DIR/tools/ui-lint.py" --root "$PROJECT_DIR"
-  local host_arch
-  host_arch="$(uname -m)"
-  local build_args=(build --configuration "$configuration" --product "$PRODUCT_NAME")
-  local arch_note="native $host_arch"
-  if [[ "$ARCH" != "$host_arch" ]]; then
-    build_args+=(--arch "$ARCH")
-    arch_note="cross $ARCH"
-  fi
-  local t0
   t0="$(now_ms)"
-  step "swift build -c $configuration --product $PRODUCT_NAME ($arch_note)"
-  "$SWIFT_BIN" "${build_args[@]}"
+  step "swift build -c $configuration --product $PRODUCT_NAME ($ARCH)"
+  swift_product "$configuration"
+  mkdir -p "$(dirname "$BUILD_STATE_FILE")"
   printf '%s\n' "$configuration" >"$BUILD_STATE_FILE"
   info "Compile done ($(elapsed "$t0")ms)"
 }
 
-# Print an already-built product directory without starting a second SwiftPM
-# process. Supports the current `out/Products` layout and older caches.
-find_built_product() {
-  local configuration="${1:-debug}"
-  local configuration_directory
-
-  case "$configuration" in
-    debug) configuration_directory="Debug" ;;
-    release) configuration_directory="Release" ;;
-    *) configuration_directory="$configuration" ;;
-  esac
-
-  local candidate
-  for candidate in \
-    "$BUILD_DIR/out/Products/$configuration_directory" \
-    "$BUILD_DIR/$configuration" \
-    "$BUILD_DIR/${ARCH}-apple-macosx/$configuration" \
-    "$BUILD_DIR/arm64-apple-macosx/$configuration" \
-    "$LEGACY_SCRATCH_DIR/$configuration" \
-    "$LEGACY_SCRATCH_DIR/arm64-apple-macosx/$configuration"
-  do
-    if [[ -x "$candidate/$PRODUCT_NAME" ]] && lipo "$candidate/$PRODUCT_NAME" -verify_arch "$ARCH" 2>/dev/null; then
-      printf "%s\n" "$candidate"
-      return 0
-    fi
-  done
-
-  return 1
-}
-
 bin_path_for() {
-  local configuration="${1:-debug}"
-  local built_product
-
-  if built_product="$(find_built_product "$configuration")"; then
-    printf "%s\n" "$built_product"
-    return 0
+  local configuration="$1" product descriptor expected="" cached_key="" cached_product=""
+  descriptor="$BUILD_DIR/.xtools-product-$configuration-$ARCH"
+  # Only cache the selected Apple toolchain. A custom wrapper or scratch
+  # setting can change its output without changing the executable.
+  if [[ -z "$SWIFT_OVERRIDE" && -z "${SWIFTPM_BUILD_DIR:-}" ]]; then
+    expected="$SWIFT_BIN:$(stat -Lf '%d:%i:%m:%z' "$(dirname "$SWIFT_BIN")/swift-build"):${SDKROOT:-}"
+    if [[ -f "$descriptor" ]]; then
+      {
+        IFS= read -r cached_key
+        IFS= read -r cached_product
+      } <"$descriptor" || true
+      if [[ "$cached_key" == "$expected" && -x "$cached_product/$PRODUCT_NAME" ]]; then
+        printf '%s\n' "$cached_product"
+        return
+      fi
+    fi
   fi
-
-  local build_args=(build --configuration "$configuration" --product "$PRODUCT_NAME" --show-bin-path)
-  if [[ "$ARCH" != "$(uname -m)" ]]; then
-    build_args+=(--arch "$ARCH")
+  product="$(swift_product "$configuration" --show-bin-path)" || return 1
+  if [[ -n "$expected" && -x "$product/$PRODUCT_NAME" && -d "$BUILD_DIR" ]]; then
+    printf '%s\n' "$expected" "$product" >"$descriptor"
   fi
-  built_product="$("$SWIFT_BIN" "${build_args[@]}")" || return 1
-  if [[ -x "$built_product/$PRODUCT_NAME" ]] && ! lipo "$built_product/$PRODUCT_NAME" -verify_arch "$ARCH" 2>/dev/null; then
-    error "Build product at $built_product/$PRODUCT_NAME does not contain $ARCH" >&2
-    return 1
-  fi
-  printf '%s\n' "$built_product"
+  printf '%s\n' "$product"
 }
 
 localization_matches() {
@@ -416,7 +389,7 @@ package_app() {
   local configuration="${1:-debug}"
   local t0 build_product_dir build_binary icon_changed=0
   t0="$(now_ms)"
-  build_product_dir="$(bin_path_for "$configuration")"
+  build_product_dir="$2"
   build_binary="$build_product_dir/$PRODUCT_NAME"
 
   if [[ ! -x "$build_binary" ]]; then
@@ -424,6 +397,10 @@ package_app() {
     exit 1
   fi
 
+  if ! lipo "$build_binary" -verify_arch "$ARCH" 2>/dev/null; then
+    error "Build product at $build_binary does not contain $ARCH"
+    exit 1
+  fi
   if [[ ! -f "$ICON_SOURCE" ]]; then
     error "Missing app icon: $ICON_SOURCE"
     exit 1
@@ -501,10 +478,11 @@ package_app() {
 # Build and package without opening; `configuration` is debug or release.
 build_and_package() {
   local configuration="$1"
-  local t0
+  local t0 products
   t0="$(now_ms)"
   swift_build "$configuration"
-  package_app "$configuration"
+  products="$(bin_path_for "$configuration")"
+  package_app "$configuration" "$products"
   info "Total $(elapsed "$t0")ms"
 }
 
@@ -512,10 +490,11 @@ build_and_package() {
 # default (no argument) uses release, `dev` is the fast-iteration debug path.
 build_and_launch() {
   local configuration="$1"
-  local t0
+  local t0 products
   t0="$(now_ms)"
   swift_build "$configuration"
-  package_app "$configuration"
+  products="$(bin_path_for "$configuration")"
+  package_app "$configuration" "$products"
   step "Opening $APP_PATH..."
   open "$APP_PATH"
   info "Opened $APP_DISPLAY_NAME"
@@ -525,10 +504,11 @@ build_and_launch() {
 # Package the last built product. Picks the configuration from the build state
 # file when present, otherwise falls back to the newest binary on disk.
 package_last_built() {
-  local requested="${1:-}"
+  local requested="${1:-}" last_config="" products debug_product release_product
   case "$requested" in
     debug|release)
-      package_app "$requested"
+      products="$(bin_path_for "$requested")"
+      package_app "$requested" "$products"
       return
       ;;
     "")
@@ -540,33 +520,25 @@ package_last_built() {
       ;;
   esac
 
-  local debug_product release_product last_config="" last_product=""
-  debug_product="$(find_built_product debug 2>/dev/null || true)"
-  release_product="$(find_built_product release 2>/dev/null || true)"
-
   if [[ -f "$BUILD_STATE_FILE" ]]; then
     IFS= read -r last_config <"$BUILD_STATE_FILE" || true
   fi
-  case "$last_config" in
-    debug) last_product="$debug_product" ;;
-    release) last_product="$release_product" ;;
-  esac
-  if [[ -n "$last_product" ]]; then
-    package_app "$last_config"
-    return
+  if [[ "$last_config" == debug || "$last_config" == release ]]; then
+    products="$(bin_path_for "$last_config")"
+    if [[ -x "$products/$PRODUCT_NAME" ]]; then
+      package_app "$last_config" "$products"
+      return
+    fi
   fi
 
-  if [[ -n "$debug_product" && -z "$release_product" ]]; then
-    package_app debug
-  elif [[ -n "$release_product" && -z "$debug_product" ]]; then
-    package_app release
-  elif [[ -n "$debug_product" && -n "$release_product" ]]; then
-    # No state marker (manual/legacy build): fall back to the newest binary.
-    if [[ "$debug_product/$PRODUCT_NAME" -nt "$release_product/$PRODUCT_NAME" ]]; then
-      package_app debug
-    else
-      package_app release
-    fi
+  debug_product="$(bin_path_for debug)"
+  release_product="$(bin_path_for release)"
+  if [[ -x "$debug_product/$PRODUCT_NAME" &&
+        ( ! -x "$release_product/$PRODUCT_NAME" ||
+          "$debug_product/$PRODUCT_NAME" -nt "$release_product/$PRODUCT_NAME" ) ]]; then
+    package_app debug "$debug_product"
+  elif [[ -x "$release_product/$PRODUCT_NAME" ]]; then
+    package_app release "$release_product"
   else
     error "No built product found; run ./build.sh build-dev or ./build.sh build first"
     exit 1
