@@ -5,6 +5,21 @@ import Testing
 
 struct HTMLToMarkdownPreviewWorkspaceTests {
     @MainActor
+    @Test func backgroundParserPreservesExactSourceAndSkipsCancelledWork() async throws {
+        let parser = MarkdownPreviewParser()
+        let text = "![e\u{301}](https://example.com/image.png)"
+        let result = try #require(await parser.parse(text))
+        #expect(result.blocks == MarkdownDocument.parse(text))
+        #expect(result.identity == JSONExactTextIdentity(text))
+        #expect(result.identity != JSONExactTextIdentity("![é](https://example.com/image.png)"))
+        #expect(result.containsRemoteImages)
+
+        let pending = Task { await parser.parse("obsolete") }
+        pending.cancel()
+        #expect(await pending.value == nil)
+    }
+
+    @MainActor
     @Test func productionProvidersKeepTheScopedLoaderIdleUntilAuthorization() async throws {
         let url = try #require(URL(string: "https://images.example.com/diagram.png"))
         let session = MarkdownRemoteImageSession(loader: { _ in

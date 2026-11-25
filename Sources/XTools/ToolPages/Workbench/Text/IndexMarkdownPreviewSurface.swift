@@ -20,7 +20,8 @@ struct IndexMarkdownPreviewSurface: View {
     @State private var remoteImageAuthorization = MarkdownRemoteImageAuthorizationState()
     @State private var remoteImageDetection = MarkdownRemoteImageDetectionState()
     @State private var remoteImageLoader: MarkdownRemoteImageSession?
-    @State private var parseCache = MarkdownParseCache()
+    @State private var parser = MarkdownPreviewParser()
+    @State private var parsed: MarkdownPreviewParseResult?
 
     init(
         text: String,
@@ -54,7 +55,8 @@ struct IndexMarkdownPreviewSurface: View {
     }
 
     private var parsedBlocks: [MarkdownBlock] {
-        self.parseCache.blocks(for: self.exactTextIdentity, text: self.text)
+        guard let parsed, parsed.identity == exactTextIdentity else { return [] }
+        return parsed.blocks
     }
 
     var body: some View {
@@ -111,8 +113,22 @@ struct IndexMarkdownPreviewSurface: View {
             if generation == 0 { revokeRemoteImages() }
         }
         .task(id: entryGeneration == 0 ? nil : authorizationScope) {
-            guard entryGeneration > 0 else { return }
+            guard entryGeneration > 0, !Task.isCancelled else { return }
+            guard !text.isEmpty else {
+                parsed = nil
+                remoteImageDetection = .init()
+                return
+            }
             let scope = authorizationScope
+            let result: MarkdownPreviewParseResult
+            if let cached = parsed, cached.identity == exactTextIdentity {
+                result = cached
+            } else {
+                guard let prepared = await parser.parse(text),
+                      !Task.isCancelled else { return }
+                parsed = prepared
+                result = prepared
+            }
             guard remoteImageDetection.beginDetection(for: scope) else { return }
             do {
                 try await Task.sleep(for: .milliseconds(120))
@@ -120,14 +136,8 @@ struct IndexMarkdownPreviewSurface: View {
                 return
             }
             guard !Task.isCancelled else { return }
-            let source = text
-            let blocks = parsedBlocks
-            let containsRemoteImages = await Task.detached(priority: .utility) {
-                MarkdownRemoteImageDetector.containsRemoteImage(in: source, cachedBlocks: blocks)
-            }.value
-            guard !Task.isCancelled else { return }
             remoteImageDetection.publish(
-                containsRemoteImages: containsRemoteImages,
+                containsRemoteImages: result.containsRemoteImages,
                 for: scope,
                 currentScope: authorizationScope
             )
@@ -180,22 +190,24 @@ struct IndexMarkdownPreviewSurface: View {
     }
 }
 
-/// 单条目解析缓存：授权开关等 body 重算不再重新解析未变化的文档。
-/// 只在 MainActor（视图内）访问；故意不做成 Observable——缓存变化永不触发
-/// 视图刷新，identity 由 JSONExactTextIdentity 保证字节级一致。
-@MainActor
-private final class MarkdownParseCache {
-    private var cachedIdentity: JSONExactTextIdentity?
-    private var cachedBlocks: [MarkdownBlock] = []
+struct MarkdownPreviewParseResult: Sendable {
+    let identity: JSONExactTextIdentity
+    let blocks: [MarkdownBlock]
+    let containsRemoteImages: Bool
+}
 
-    func blocks(for identity: JSONExactTextIdentity, text: String) -> [MarkdownBlock] {
-        if self.cachedIdentity == identity {
-            return self.cachedBlocks
-        }
+/// cmark finishes a document synchronously. Serialize the work so obsolete
+/// results cannot pile up while a newer draft waits.
+actor MarkdownPreviewParser {
+    func parse(_ text: String) -> MarkdownPreviewParseResult? {
+        guard !Task.isCancelled else { return nil }
         let blocks = MarkdownDocument.parse(text)
-        self.cachedIdentity = identity
-        self.cachedBlocks = blocks
-        return blocks
+        guard !Task.isCancelled else { return nil }
+        return MarkdownPreviewParseResult(
+            identity: JSONExactTextIdentity(text),
+            blocks: blocks,
+            containsRemoteImages: MarkdownRemoteImageDetector.containsRemoteImage(in: text, cachedBlocks: blocks)
+        )
     }
 }
 

@@ -53,10 +53,13 @@ struct ToolCopyButton: View {
     var successToast: String? = nil
     /// Optional action description, scoped to the native button's hit region.
     var help: String? = nil
+    var prepareText: (@MainActor () async -> String?)? = nil
 
     @State private var feedback = IndexEphemeralActionFeedbackState()
+    @State private var copyTask: Task<Void, Never>?
     @Environment(\.toolToastCenter) private var toastCenter
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.toolPageEntryGeneration) private var entryGeneration
 
     private var copied: Bool { feedback.isPresented }
     private var actionTitle: String { title.isEmpty ? "复制" : title }
@@ -73,7 +76,9 @@ struct ToolCopyButton: View {
                 copyButton.buttonStyle(ToolSmallButtonStyle(done: copied, framed: framed))
             }
         }
-        .disabled(text.isEmpty)
+        .disabled((text.isEmpty && prepareText == nil) || copyTask != nil)
+        .onChange(of: prepareText == nil ? nil : entryGeneration) { _, _ in copyTask?.cancel() }
+        .onDisappear { copyTask?.cancel() }
         .task(id: feedback.generation) {
             let generation = feedback.generation
             guard feedback.isPresented else { return }
@@ -90,13 +95,16 @@ struct ToolCopyButton: View {
 
     private var copyButton: some View {
         Button {
-            guard !text.isEmpty else { return }
-            guard IndexPasteboard.copyString(text) else {
-                toastCenter?.show(ToolFeedbackCopy.clipboardWriteFailure, tone: .error)
-                return
+            if let prepareText {
+                guard copyTask == nil, entryGeneration > 0 else { return }
+                copyTask = Task {
+                    defer { copyTask = nil }
+                    guard let value = await prepareText(), !Task.isCancelled else { return }
+                    copy(value)
+                }
+            } else {
+                copy(text)
             }
-            toastCenter?.show(successToast ?? ToolFeedbackCopy.copied, tone: .success)
-            feedback.trigger()
         } label: {
             if iconOnly {
                 // Reduce Motion cuts directly between the SF Symbols; otherwise
@@ -133,6 +141,16 @@ struct ToolCopyButton: View {
         .modifier(ToolCopyButtonHelp(iconOnly: iconOnly || title.isEmpty, copied: copied, title: actionTitle, help: help))
         .accessibilityLabel(copied ? "已复制" : actionTitle)
         .modifier(ToolCopyButtonAccessibilityHint(iconOnly: iconOnly || title.isEmpty, copied: copied, help: help))
+    }
+
+    private func copy(_ value: String) {
+        guard !value.isEmpty else { return }
+        guard IndexPasteboard.copyString(value) else {
+            toastCenter?.show(ToolFeedbackCopy.clipboardWriteFailure, tone: .error)
+            return
+        }
+        toastCenter?.show(successToast ?? ToolFeedbackCopy.copied, tone: .success)
+        feedback.trigger()
     }
 }
 

@@ -259,7 +259,8 @@ struct TestMarkdownDiffRegexCoverageTests {
             #expect(source.contains("RegexMatcher.presets.map"))
             #expect(source.contains("workspace.applyPreset(preset)"))
             #expect(source.contains("text = preset.exampleText"))
-            #expect(source.contains("RegexMatcher.summaryText(for: report)"))
+            #expect(source.contains("prepareText: report == nil ? nil : prepareCopyText"))
+            #expect(source.contains("RegexMatcher.summaryText(for:"))
         default:
             Issue.record("Unhandled case \(id)")
         }

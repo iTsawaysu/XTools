@@ -225,7 +225,10 @@ private struct IndexRegexWorkspaceContent: View {
                         )
                     },
                     accessory: {
-                        ToolCopyButton(text: resultText, title: "复制匹配结果")
+                        ToolCopyButton(
+                            text: "", title: "复制匹配结果",
+                            prepareText: report == nil ? nil : prepareCopyText
+                        )
                     }
                 )
                 .verticallyFilling()
@@ -475,9 +478,14 @@ private struct IndexRegexWorkspaceContent: View {
         return displayedReport
     }
 
-    private var resultText: String {
-        guard let report else { return "" }
-        return RegexMatcher.summaryText(for: report)
+    private func prepareCopyText() async -> String? {
+        guard let requestedReport = report else { return nil }
+        let requestedInput = workspaceInput
+        let summary = await Task.detached(priority: .userInitiated) {
+            RegexMatcher.summaryText(for: requestedReport)
+        }.value
+        guard !Task.isCancelled, workspaceInput == requestedInput, report != nil else { return nil }
+        return summary
     }
 
     private var report: RegexMatcher.Report? {
