@@ -68,6 +68,8 @@ class IndexCaretWideningTextView: NSTextView {
     /// wiring around the shared `IndexDroppedTextFile` reader.
     func loadDroppedFile(from url: URL) {}
 
+    func rejectMultipleFileDrop() {}
+
     override func didChangeText() {
         invalidateDropState()
         super.didChangeText()
@@ -95,11 +97,21 @@ class IndexCaretWideningTextView: NSTextView {
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        guard onFileDrop != nil, let url = Self.droppedFileURL(sender) else {
-            return super.performDragOperation(sender)
+        performFileDrop(from: sender.draggingPasteboard) || super.performDragOperation(sender)
+    }
+
+    func performFileDrop(from pasteboard: NSPasteboard) -> Bool {
+        guard onFileDrop != nil else { return false }
+        switch Self.droppedFiles(from: pasteboard) {
+        case .unhandled:
+            return false
+        case .accepted(let url):
+            endDropSession()
+            loadDroppedFile(from: url)
+        case .rejectedMultipleFiles:
+            endDropSession()
+            rejectMultipleFileDrop()
         }
-        endDropSession()
-        loadDroppedFile(from: url)
         return true
     }
 
@@ -110,15 +122,13 @@ class IndexCaretWideningTextView: NSTextView {
             || types.contains(NSPasteboard.PasteboardType("NSFilenamesPboardType"))
     }
 
-    static func droppedFileURL(_ sender: any NSDraggingInfo) -> URL? {
-        if let fileURLs = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
-           let first = fileURLs.first {
-            return first
-        } else if let filenames = sender.draggingPasteboard.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String],
-                  let first = filenames.first {
-            return URL(fileURLWithPath: first)
+    private static func droppedFiles(from pasteboard: NSPasteboard) -> SingleFileDropResolution {
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
+           !urls.isEmpty {
+            return SingleFileDropResolver.resolve(urls)
         }
-        return nil
+        let filenames = pasteboard.propertyList(forType: NSPasteboard.PasteboardType("NSFilenamesPboardType")) as? [String] ?? []
+        return SingleFileDropResolver.resolve(filenames.map { URL(fileURLWithPath: $0) })
     }
 }
 
@@ -179,6 +189,11 @@ final class IndexCaretTextView: IndexCaretWideningTextView, IndexAsymmetricTextC
         }
     }
 
+    override func rejectMultipleFileDrop() {
+        if activeDroppedFile == nil { droppedFile = IndexDroppedTextFile(view: self) }
+        activeDroppedFile?.rejectMultipleFiles()
+    }
+
     func invalidateDroppedFile() {
         activeDroppedFile?.invalidate(ownedBy: self)
     }
@@ -235,7 +250,7 @@ final class IndexCaretTextView: IndexCaretWideningTextView, IndexAsymmetricTextC
 
 enum IndexDroppedTextRejection: Equatable, Sendable {
     static let maximumBytes = 15_000_000
-    case notRegularFile, tooLarge, invalidEncoding, unreadable
+    case notRegularFile, tooLarge, invalidEncoding, unreadable, multipleFiles
 
     var message: String {
         switch self {
@@ -243,6 +258,7 @@ enum IndexDroppedTextRejection: Equatable, Sendable {
         case .tooLarge: return "文件超过 15 MB 导入上限，原输入已保留。"
         case .invalidEncoding: return "文件不是有效的 UTF-8 或 UTF-16 文本，原输入已保留。"
         case .unreadable: return "无法读取文件，原输入已保留。"
+        case .multipleFiles: return SingleFileDropResolver.multipleFilesDiagnostic
         }
     }
 }
@@ -289,6 +305,11 @@ final class IndexDroppedTextFile: ObservableObject {
 
     func rejectUnreadableDrop() {
         rejection = .unreadable
+    }
+
+    func rejectMultipleFiles() {
+        gate.invalidate()
+        rejection = .multipleFiles
     }
 
     func attach(to view: NSTextView) {

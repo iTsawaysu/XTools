@@ -170,9 +170,7 @@ final class IndexDiffEditorScrollView: IndexTextViewportScrollView {
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        if let tv = documentView as? IndexDiffTextView, tv.onFileDrop != nil,
-           let url = IndexCaretTextView.droppedFileURL(sender) {
-            tv.loadDroppedFile(from: url)
+        if let tv = documentView as? IndexDiffTextView, tv.performFileDrop(from: sender.draggingPasteboard) {
             return true
         }
         return super.performDragOperation(sender)

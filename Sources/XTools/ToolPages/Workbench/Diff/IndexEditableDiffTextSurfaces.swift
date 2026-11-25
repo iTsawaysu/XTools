@@ -50,6 +50,11 @@ final class IndexDiffTextView: IndexCaretWideningTextView, IndexAsymmetricTextCo
         }
     }
 
+    override func rejectMultipleFileDrop() {
+        invalidatePendingDropRead()
+        onFileDropDiagnostic?(SingleFileDropResolver.multipleFilesDiagnostic)
+    }
+
     func invalidateDroppedFile() {
         droppedFile?.invalidate()
     }

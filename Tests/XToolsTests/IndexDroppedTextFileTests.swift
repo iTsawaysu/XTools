@@ -5,6 +5,32 @@ import Testing
 
 @MainActor
 struct IndexDroppedTextFileTests {
+    @Test func nativeTextAndDiffEditorsRejectMultipleFilesAsOneDrop() {
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        #expect(pasteboard.writeObjects([
+            URL(fileURLWithPath: "/tmp/first.txt") as NSURL,
+            URL(fileURLWithPath: "/tmp/second.txt") as NSURL
+        ]))
+        let editor = IndexCaretTextView(frame: .zero)
+        let drop = IndexDroppedTextFile()
+        editor.sharedDroppedFile = drop
+        editor.string = "existing draft"
+        editor.onFileDrop = { _ in Issue.record("Unexpected text replacement") }
+        #expect(editor.performFileDrop(from: pasteboard))
+        #expect(drop.rejection == .multipleFiles)
+        #expect(editor.string == "existing draft")
+
+        let diff = IndexDiffTextView(frame: .zero)
+        diff.string = "original side"
+        diff.onFileDrop = { _ in Issue.record("Unexpected diff replacement") }
+        var diagnostic: String?
+        diff.onFileDropDiagnostic = { diagnostic = $0 }
+        #expect(diff.performFileDrop(from: pasteboard))
+        #expect(diagnostic == SingleFileDropResolver.multipleFilesDiagnostic)
+        #expect(diff.string == "original side")
+    }
+
     @Test func typedRejectionsAreVisibleWithoutPublishingReplacementText() async throws {
         for rejection in [IndexDroppedTextRejection.tooLarge, .invalidEncoding, .unreadable, .notRegularFile] {
             let (window, view) = makeEditor()

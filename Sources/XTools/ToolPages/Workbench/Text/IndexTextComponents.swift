@@ -783,6 +783,22 @@ struct IndexTextAreaInputPolicy {
         self.undoLevels = undoLevels
         self.onRejectedInput = onRejectedInput
     }
+
+    func allowsChange(in currentText: @autoclosure () -> String, range: NSRange, replacement: String?) -> Bool {
+        guard let maxUTF8Bytes else { return true }
+        let text = currentText()
+        let nsText = text as NSString
+        guard range.location >= 0, range.location <= nsText.length,
+              range.length >= 0, range.length <= nsText.length - range.location else { return false }
+
+        let removedBytes = nsText.substring(with: range).utf8.count
+        let attemptedUTF8Bytes = text.utf8.count - removedBytes + (replacement?.utf8.count ?? 0)
+        guard attemptedUTF8Bytes <= maxUTF8Bytes else {
+            onRejectedInput?(.init(maxUTF8Bytes: maxUTF8Bytes, attemptedUTF8Bytes: attemptedUTF8Bytes))
+            return false
+        }
+        return true
+    }
 }
 
 struct IndexTextAreaInputRejection {
@@ -963,27 +979,8 @@ struct IndexTextKit2ViewportTextView: NSViewRepresentable {
             shouldChangeTextIn affectedCharRange: NSRange,
             replacementString: String?
         ) -> Bool {
-            guard let maxUTF8Bytes = inputPolicy?.maxUTF8Bytes else { return true }
-            let currentText = textView.string
-            let currentNSString = currentText as NSString
-            guard affectedCharRange.location >= 0,
-                  affectedCharRange.upperBound <= currentNSString.length else {
-                return false
-            }
-
-            let replacement = replacementString ?? ""
-            let removedText = currentNSString.substring(with: affectedCharRange)
-            let attemptedUTF8Bytes = currentText.utf8.count - removedText.utf8.count + replacement.utf8.count
-            guard attemptedUTF8Bytes <= maxUTF8Bytes else {
-                inputPolicy?.onRejectedInput?(
-                    IndexTextAreaInputRejection(
-                        maxUTF8Bytes: maxUTF8Bytes,
-                        attemptedUTF8Bytes: attemptedUTF8Bytes
-                    )
-                )
-                return false
-            }
-            return true
+            inputPolicy?.allowsChange(in: textView.string, range: affectedCharRange, replacement: replacementString)
+                ?? true
         }
 
         // resolves to the shared window undo manager. A per-instance stack dies
@@ -1299,29 +1296,9 @@ struct IndexUndoableTextView: NSViewRepresentable {
             shouldChangeTextIn affectedCharRange: NSRange,
             replacementString: String?
         ) -> Bool {
-            guard let maxUTF8Bytes = inputPolicy?.maxUTF8Bytes else {
-                diagnosticController.clear(in: textView, gutter: lineNumberGutter)
-                return true
-            }
-            let currentText = textView.string
-            let currentNSString = currentText as NSString
-            guard affectedCharRange.location >= 0,
-                  affectedCharRange.upperBound <= currentNSString.length else {
-                return false
-            }
-
-            let replacement = replacementString ?? ""
-            let removedText = currentNSString.substring(with: affectedCharRange)
-            let attemptedUTF8Bytes = currentText.utf8.count - removedText.utf8.count + replacement.utf8.count
-            guard attemptedUTF8Bytes <= maxUTF8Bytes else {
-                inputPolicy?.onRejectedInput?(
-                    IndexTextAreaInputRejection(
-                        maxUTF8Bytes: maxUTF8Bytes,
-                        attemptedUTF8Bytes: attemptedUTF8Bytes
-                    )
-                )
-                return false
-            }
+            guard inputPolicy?.allowsChange(
+                in: textView.string, range: affectedCharRange, replacement: replacementString
+            ) != false else { return false }
             diagnosticController.clear(in: textView, gutter: lineNumberGutter)
             return true
         }
