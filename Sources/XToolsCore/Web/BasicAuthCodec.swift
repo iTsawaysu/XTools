@@ -175,5 +175,3 @@ public enum BasicAuthCodec {
         }
     }
 }
-
-public typealias BasicAuthGenerator = BasicAuthCodec

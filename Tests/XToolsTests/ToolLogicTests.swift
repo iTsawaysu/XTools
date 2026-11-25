@@ -7,13 +7,13 @@ struct ToolLogicTests {
     private struct ConversionProbeError: Error {}
 
     @Test func basicAuthUsesUTF8CredentialEncoding() throws {
-        let header = BasicAuthGenerator.authorizationHeader(username: "alice", password: "päss")
+        let header = BasicAuthCodec.authorizationHeader(username: "alice", password: "päss")
 
         #expect(header == "Authorization: Basic YWxpY2U6cMOkc3M=")
     }
 
     @Test func basicAuthReturnsNilForEmptyCredentials() throws {
-        let header = BasicAuthGenerator.authorizationHeader(username: "", password: "")
+        let header = BasicAuthCodec.authorizationHeader(username: "", password: "")
 
         #expect(header == nil)
     }
