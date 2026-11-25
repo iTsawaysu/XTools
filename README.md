@@ -30,7 +30,7 @@ Download the latest DMG from [GitHub Releases](https://github.com/iTsawaysu/XToo
 
 ### 2. Build from Source
 
-Requires macOS 14+ and Xcode 16+.
+Build with Xcode 16 or later and Python 3 on a macOS version supported by your Xcode installation. The packaged app runs on macOS 14 or later.
 
 ```bash
 git clone https://github.com/iTsawaysu/XTools.git
@@ -38,7 +38,8 @@ cd XTools
 ./build.sh           # Release build, package, and open the app
 ./build.sh dev       # Debug build for fast iteration
 ./build.sh build     # Release build and package without opening
-swift test           # Run the complete automated test suite
+swift test           # Run the Swift test suite
+python3 -B -m unittest discover -s Tests/BuildScriptTests -v  # Check packaging
 ```
 
 Packaged builds are written to `build/XTools.app`.
@@ -49,7 +50,6 @@ Packaged builds are written to `build/XTools.app`.
 - **Local-First**: Cryptography, hashing, formatting, diffing, regex evaluation, and image processing execute on-device. XTools includes no telemetry or cloud tracking. HTML URL fetching and remote preview images require an explicit user action; the host policy blocks local or private address literals and known metadata hosts.
 - **Keyboard-First**: Press `Cmd + K` in the app for fuzzy search across all tools. Use `Cmd + 1` through `Cmd + 7` to switch categories, and `Cmd + Return` to run primary actions.
 - **Clay Design System**: Shared workbench components provide consistent panels, controls, diagnostics, keyboard focus, and accessibility behavior.
-- **34 Built-in Utilities**: Curated essentials across conversions, cryptography, developer tools, Web debugging, image handling, time math, and system inspectors.
 - **Automated Regression Tests**: Core behavior and selected native UI paths have automated regression tests. A passing suite does not establish complete behavior or visual coverage.
 
 ## Tool Catalog
@@ -83,8 +83,8 @@ Contributions, bug reports, and tool suggestions are welcome!
 
 1. Fork the repository and create your feature branch.
 2. Follow the established code style and keep core algorithms inside `XToolsCore`.
-3. Run `swift test` before submitting to ensure all tests pass.
+3. Run the Swift tests and the packaging checks relevant to your change.
 
 ## License
 
-[XTools](https://github.com/iTsawaysu/XTools) is released under the [MIT License](LICENSE).
+[XTools](https://github.com/iTsawaysu/XTools) is released under the [MIT License](LICENSE). See [Third-party notices](ThirdPartyNotices.txt) for bundled code and data.

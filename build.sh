@@ -212,6 +212,7 @@ package_input_digest() {
     printf '%s\n' "$BUNDLE_ID" "$ARCH" "$configuration"
     {
       printf '%s\0' "$build_binary" "$ICON_SOURCE" "$PROJECT_DIR/build.sh" \
+        "$PROJECT_DIR/ThirdPartyNotices.txt" "$PROJECT_DIR/LICENSE" \
         "$PROJECT_DIR/Sources/XTools/Resources/Localizable.xcstrings"
       for bundle in "$products/XTools_XToolsCore.bundle" "$products/XTools_XTools.bundle"; do
         if [[ -d "$bundle" ]]; then
@@ -287,6 +288,7 @@ copy_app_resources() {
       plutil -convert binary1 "$table" || return 1
     done < <(find "$destination" -type f \( -name '*.strings' -o -name '*.stringsdict' \) -print0)
   done
+  cp -p "$PROJECT_DIR/ThirdPartyNotices.txt" "$PROJECT_DIR/LICENSE" "$APP_RESOURCES/"
 }
 
 # 体积预算断言：打包二进制必须明显小于构建产物（strip 被绕过时该比例会失控），

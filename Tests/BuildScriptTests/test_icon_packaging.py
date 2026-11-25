@@ -37,7 +37,7 @@ function run(argv) {
         repository = Path(__file__).resolve().parents[2]
         fixture = Path(tempfile.mkdtemp(prefix="xtools-icon-packaging-"))
         shutil.copy2(repository / "build.sh", fixture / "build.sh")
-        for relative in ("tools/packaging-app.js", "tools/ui-lint.py",
+        for relative in ("LICENSE", "ThirdPartyNotices.txt", "tools/packaging-app.js", "tools/ui-lint.py",
                          "Sources/XTools/Resources/Localizable.xcstrings"):
             target = fixture / relative
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -128,6 +128,8 @@ function run(argv) {
         self.assertEqual(plistlib.loads(packaged_table.read_bytes()), {"key": "中文"})
         self.assertTrue(packaged_table.read_bytes().startswith(b"bplist00"))
         self.assertEqual((packaged_resources / "XToolsCore/Readability-0.6.0.js").read_text(), "// fixture\n")
+        self.assertEqual((packaged_resources / "ThirdPartyNotices.txt").read_bytes(),
+                         (repository / "ThirdPartyNotices.txt").read_bytes())
         self.assertFalse((packaged_bundle_resources / language.name).exists())
         self.assertEqual((packaged_bundle_resources / "asset.txt").read_text(), "keep this resource")
         self.assertFalse((app / "Contents/Resources" / compiler_bundle.name).exists(),
