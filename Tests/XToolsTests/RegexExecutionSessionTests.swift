@@ -1,24 +1,34 @@
 @testable import XTools
 import XToolsCore
 import Foundation
+import os
 import Testing
 
 @MainActor
 struct RegexExecutionSessionTests {
     @Test func newerRunCannotBeOverwrittenByOlderResult() async throws {
+        let oldStarted = OSAllocatedUnfairLock(initialState: false)
+        let oldCancelled = OSAllocatedUnfairLock(initialState: false)
         let operation: RegexMatchOperation = { pattern, text, flags in
             if pattern == "slow" {
-                Thread.sleep(forTimeInterval: 0.2)
+                oldStarted.withLock { $0 = true }
+                let deadline = Date().addingTimeInterval(3)
+                while !Task.isCancelled && Date() < deadline {
+                    Thread.sleep(forTimeInterval: 0.001)
+                }
+                oldCancelled.withLock { $0 = Task.isCancelled }
+                try Task.checkCancellation()
             }
             return try RegexMatcher.analyze(pattern: pattern, in: text, flags: flags)
         }
         let session = RegexExecutionSession()
 
         session.run(pattern: "slow", text: "slow", flags: "g", operation: operation)
+        try await waitUntil { oldStarted.withLock { $0 } }
         session.run(pattern: "fast", text: "fast", flags: "g", operation: operation)
 
         try await waitUntil { session.report?.pattern == "fast" }
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntil { oldCancelled.withLock { $0 } }
         #expect(session.report?.pattern == "fast")
         #expect(session.reportSourceText == "fast")
         #expect(session.error == nil)

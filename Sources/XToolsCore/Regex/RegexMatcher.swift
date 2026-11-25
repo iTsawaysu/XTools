@@ -3,8 +3,15 @@ import ICU
 
 private struct ICURegexMatchContext {
     let totalStepLimit: Int32
+    let shouldCancel: @Sendable () -> Bool
     var totalSteps: Int32 = 0
     var currentOperationSteps: Int32 = 0
+    var cancelled = false
+
+    mutating func canContinue() -> Bool {
+        cancelled = shouldCancel()
+        return !cancelled
+    }
 }
 
 private func icuRegexMatchCallback(_ rawContext: UnsafeRawPointer?, _ steps: Int32) -> Int8 {
@@ -14,7 +21,7 @@ private func icuRegexMatchCallback(_ rawContext: UnsafeRawPointer?, _ steps: Int
 
     let context = UnsafeMutableRawPointer(mutating: rawContext)
         .assumingMemoryBound(to: ICURegexMatchContext.self)
-    guard steps >= context.pointee.currentOperationSteps else {
+    guard context.pointee.canContinue(), steps >= context.pointee.currentOperationSteps else {
         return 0
     }
 
@@ -26,6 +33,13 @@ private func icuRegexMatchCallback(_ rawContext: UnsafeRawPointer?, _ steps: Int
 
     context.pointee.totalSteps += delta
     return 1
+}
+
+private func icuRegexFindProgressCallback(_ rawContext: UnsafeRawPointer?, _: Int64) -> Int8 {
+    guard let rawContext else { return 0 }
+    let context = UnsafeMutableRawPointer(mutating: rawContext)
+        .assumingMemoryBound(to: ICURegexMatchContext.self)
+    return context.pointee.canContinue() ? 1 : 0
 }
 
 public enum RegexMatcher {
@@ -241,6 +255,17 @@ public enum RegexMatcher {
         flags: String = "g",
         budget: Budget = .standard
     ) throws -> Report {
+        try analyze(pattern: pattern, in: text, flags: flags, budget: budget, cancelMatching: { Task.isCancelled })
+    }
+
+    static func analyze(
+        pattern: String,
+        in text: String,
+        flags: String = "g",
+        budget: Budget = .standard,
+        cancelMatching: @escaping @Sendable () -> Bool
+    ) throws -> Report {
+        try Task.checkCancellation()
         let normalizedFlags = try normalizeFlags(flags)
         guard !pattern.isEmpty else {
             return Report(pattern: pattern, flags: normalizedFlags, matches: [], statistics: emptyStatistics)
@@ -259,7 +284,8 @@ public enum RegexMatcher {
             text: text,
             flags: normalizedFlags,
             namedGroups: namedGroups,
-            budget: budget
+            budget: budget,
+            cancelMatching: cancelMatching
         )
 
         return Report(
@@ -339,7 +365,8 @@ public enum RegexMatcher {
         text: String,
         flags: String,
         namedGroups: [String],
-        budget: Budget
+        budget: Budget,
+        cancelMatching: @escaping @Sendable () -> Bool
     ) throws -> [Match] {
         let patternUTF16 = Array(pattern.utf16)
         let textUTF16 = Array(text.utf16)
@@ -379,6 +406,7 @@ public enum RegexMatcher {
 
                 var namedGroupNumbers: [(String, Int32)] = []
                 for name in namedGroups {
+                    try Task.checkCancellation()
                     let nameUTF16 = Array(name.utf16)
                     var groupStatus = U_ZERO_ERROR
                     let groupNumber = nameUTF16.withUnsafeBufferPointer { buffer in
@@ -398,10 +426,13 @@ public enum RegexMatcher {
                     namedGroupNumbers.append((name, groupNumber))
                 }
 
-                var matchContext = ICURegexMatchContext(totalStepLimit: budget.matchTimeLimit)
+                var matchContext = ICURegexMatchContext(
+                    totalStepLimit: budget.matchTimeLimit,
+                    shouldCancel: cancelMatching
+                )
                 // 非 ASCII 文本：一次线性建表，后续每个捕获组的偏移换算走二分。
                 let boundaries = textUTF16.contains { $0 > 0x7F || $0 == 0x0D }
-                    ? UTF16BoundaryTable(of: text)
+                    ? try UTF16BoundaryTable(of: text)
                     : nil
                 return try withUnsafeMutablePointer(to: &matchContext) { context in
                     defer {
@@ -413,6 +444,12 @@ public enum RegexMatcher {
                     uregex_setMatchCallback(
                         expression,
                         icuRegexMatchCallback,
+                        UnsafeRawPointer(context),
+                        &callbackStatus
+                    )
+                    uregex_setFindProgressCallback(
+                        expression,
+                        icuRegexFindProgressCallback,
                         UnsafeRawPointer(context),
                         &callbackStatus
                     )
@@ -441,6 +478,7 @@ public enum RegexMatcher {
                     }
 
                     while true {
+                        try Task.checkCancellation()
                         context.pointee.currentOperationSteps = 0
                         var findStatus = U_ZERO_ERROR
                         let found: Int8
@@ -450,6 +488,8 @@ public enum RegexMatcher {
                             hasStarted = true
                             found = uregex_find(expression, 0, &findStatus)
                         }
+                        if context.pointee.cancelled { throw CancellationError() }
+                        try Task.checkCancellation()
                         guard !isICUFailure(findStatus) else {
                             throw matcherError(for: findStatus, pattern: pattern)
                         }
@@ -475,6 +515,7 @@ public enum RegexMatcher {
                         captures.reserveCapacity(groupCount)
                         if groupCount > 0 {
                             for index in 1...groupCount {
+                                if index & 1_023 == 0 { try Task.checkCancellation() }
                                 if let capture = try capture(
                                     name: "\(index)",
                                     groupNumber: Int32(index),
@@ -533,10 +574,11 @@ public enum RegexMatcher {
     private struct UTF16BoundaryTable {
         let utf16Offsets: [Int]
 
-        init(of text: String) {
+        init(of text: String) throws {
             var offsets = [0]
             var offset = 0
             for character in text {
+                if offsets.count & 1_023 == 0 { try Task.checkCancellation() }
                 offset += character.utf16.count
                 offsets.append(offset)
             }

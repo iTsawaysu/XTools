@@ -39,6 +39,8 @@ final class RegexExecutionSession: ObservableObject {
         workGate.runDetached { [operation] in
             do {
                 return Outcome.success(try operation(pattern, text, flags))
+            } catch is CancellationError {
+                return .cancelled
             } catch let error as RegexMatcher.MatcherError {
                 return .failure(error)
             } catch {
@@ -49,6 +51,8 @@ final class RegexExecutionSession: ObservableObject {
             guard let self, self.workGate.isCurrent(token) else { return }
             self.isRunning = false
             switch outcome {
+            case .cancelled:
+                break
             case .success(let report):
                 self.reportSourceText = text
                 self.report = report
@@ -74,6 +78,7 @@ final class RegexExecutionSession: ObservableObject {
     }
 
     private enum Outcome: Sendable {
+        case cancelled
         case success(RegexMatcher.Report)
         case failure(RegexMatcher.MatcherError)
         case unknownFailure

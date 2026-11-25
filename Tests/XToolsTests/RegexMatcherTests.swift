@@ -1,8 +1,18 @@
-import XToolsCore
+@testable import XToolsCore
 import Foundation
 import Testing
 
 struct RegexMatcherTests {
+    @Test func nativeMatchingReportsCancellationSeparatelyFromBudgetExhaustion() throws {
+        let text = String(repeating: "a", count: 48_000) + "ab"
+        let pattern = "(?=ab)ab"
+        let report = try RegexMatcher.analyze(pattern: pattern, in: text)
+        #expect(report.matches.map(\.value) == ["ab"])
+        #expect(throws: CancellationError.self) {
+            _ = try RegexMatcher.analyze(pattern: pattern, in: text, cancelMatching: { true })
+        }
+    }
+
     @Test func honorsGlobalFlag() throws {
         let firstOnly = try RegexMatcher.analyze(pattern: #"\d+"#, in: "a1b22c333", flags: "")
         #expect(firstOnly.matches.count == 1)
