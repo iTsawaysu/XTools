@@ -2,6 +2,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 import ImageIO
+import os
 import Testing
 import UniformTypeIdentifiers
 @testable import XTools
@@ -9,6 +10,33 @@ import UniformTypeIdentifiers
 
 @MainActor
 struct ImageBatchConversionSessionTests {
+    @Test func removingItemAfterSpoolingReclaimsOnlyItsUnpublishedOutput() async throws {
+        let data = try Self.makeImageData(width: 12, height: 8, format: .png)
+        let source = URL(fileURLWithPath: "/tmp/spooled-conversion.v2.png")
+        let staged = OSAllocatedUnfairLock<URL?>(initialState: nil)
+        let gate = DispatchSemaphore(value: 0)
+        defer { gate.signal() }
+        let session = ImageBatchConversionSession(spoolWriter: ImageWorkflowFileWriter { data, url in
+            try data.write(to: url, options: .atomic)
+            staged.withLock { $0 = url }
+            guard gate.wait(timeout: .now() + 10) == .success else { throw CancellationError() }
+        })
+        session.receiveImageURLs([source], allowedContentTypes: [.png], client: Self.makeClient(dataByURL: [source: data]))
+        try await waitUntil { session.items.count == 1 }
+        let item = try #require(session.items.first)
+        let result = Self.processedImage(data: data, originalByteCount: data.count, format: .png)
+        session.convertAll { { _ in result } }
+        try await waitUntil { staged.withLock { $0 != nil } }
+        let path = try #require(staged.withLock { $0 })
+        #expect(FileManager.default.fileExists(atPath: path.path))
+        session.removeItem(id: item.id)
+        gate.signal()
+
+        try await waitUntil { !FileManager.default.fileExists(atPath: path.path) }
+        #expect(session.items.isEmpty)
+        #expect(!session.isProcessing)
+    }
+
     // MARK: - Import
 
     @Test func importSkipsInvalidEntriesAndSummarizesOnce() async throws {
@@ -327,7 +355,7 @@ struct ImageBatchConversionSessionTests {
 
     @Test func saveAllWritesBatchIntoSelectedDirectoryAndMapsPartialFailure() async throws {
         let imageData = try Self.makeImageData(width: 12, height: 8, format: .png)
-        let firstURL = URL(fileURLWithPath: "/tmp/save-batch-first.png")
+        let firstURL = URL(fileURLWithPath: "/tmp/save-batch-first.v2.png")
         let secondURL = URL(fileURLWithPath: "/tmp/save-batch-second.png")
         let directory = URL(fileURLWithPath: "/tmp/save-batch-dir", isDirectory: true)
         let output = Self.processedImage(data: imageData, originalByteCount: imageData.count, format: .jpeg)
@@ -362,7 +390,7 @@ struct ImageBatchConversionSessionTests {
         ) == .saved)
         let writtenNames = successWriter.writes.map { $0.url.lastPathComponent }
         #expect(writtenNames.count == 2)
-        #expect(writtenNames[0].hasPrefix("save-batch-first-"))
+        #expect(writtenNames[0].hasPrefix("save-batch-first.v2-"))
         #expect(writtenNames[1].hasPrefix("save-batch-second-"))
         #expect(writtenNames.allSatisfy { $0.hasSuffix(".jpg") })
         // 批量写入的数据来自落盘临时文件的读取结果。

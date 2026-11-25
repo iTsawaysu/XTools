@@ -11,6 +11,51 @@ import UniformTypeIdentifiers
 @MainActor
 @Suite(.serialized)
 struct ImageExportConcurrencyTests {
+    @Test func failedSavePanelReportsAnErrorAndCancelledPanelStaysSilent() async throws {
+        let source = try artifactDirectory().appendingPathComponent("source.bin")
+        let data = Data([1])
+        try data.write(to: source)
+        let failed = ImageWorkflowClient.sheet(filePanel: .unavailable, outputPanel: .unavailable)
+        await #expect(throws: FileInputPanelFailure.windowUnavailable) {
+            _ = try await failed.saveConvertedImage(data: data, format: .png, defaultBasename: "result")
+        }
+        await #expect(throws: FileInputPanelFailure.windowUnavailable) {
+            _ = try await failed.saveConvertedImage(at: source, format: .png, defaultBasename: "result")
+        }
+        let cancelled = ImageWorkflowClient.sheet(
+            filePanel: .unavailable,
+            outputPanel: FileOutputPanelClient { _ in throw CancellationError() }
+        )
+        #expect(try await cancelled.saveConvertedImage(data: data, format: .png, defaultBasename: "result") == false)
+        #expect(try await cancelled.saveConvertedImage(at: source, format: .png, defaultBasename: "result") == false)
+        #expect(try Self.openDescriptorCount(for: source) == 0)
+        #expect(try Data(contentsOf: source) == data)
+    }
+
+    @Test func lateFilenameCollisionPreservesExistingBytesAndReusesTheSnapshot() async throws {
+        let directory = try artifactDirectory()
+        let source = directory.appendingPathComponent("source.bin")
+        let output = Data([0x13, 0x27, 0x42])
+        let existing = Data([0xFF])
+        try output.write(to: source)
+        let liveWriter = ImageWorkflowFileWriter()
+        let client = ImageWorkflowClient(
+            dialog: ImageWorkflowDialog(selectDirectory: { _, _ in directory }),
+            writer: ImageWorkflowFileWriter { data, url in
+                if url.lastPathComponent == "design.v2.png" {
+                    try existing.write(to: url, options: .withoutOverwriting)
+                }
+                try liveWriter.write(data, to: url, replacingExisting: false)
+            }
+        )
+        let candidate = BatchConversionSaveCandidate(basename: "design.v2", tempURL: source, format: .png)
+
+        #expect(try await client.saveConvertedImages([candidate]))
+        #expect(try Data(contentsOf: directory.appendingPathComponent("design.v2.png")) == existing)
+        #expect(try Data(contentsOf: directory.appendingPathComponent("design.v2 2.png")) == output)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).count == 3)
+    }
+
     @Test(arguments: [1, 2])
     func panelResetPreservesPinnedSingleAndBatchBytes(count: Int) async throws {
         let directory = try artifactDirectory()

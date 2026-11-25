@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import XToolsCore
+import Darwin
 import Foundation
 import UniformTypeIdentifiers
 
@@ -149,7 +150,7 @@ struct ImageWorkflowClient {
     }
 
     func saveArtifacts(_ artifacts: [FaviconArtifact]) async throws -> Bool {
-        try await saveAll(artifacts, prompt: "选择 Favicon 部署包保存目录") { artifact, _, _ in
+        try await saveAll(artifacts, prompt: "选择 Favicon 部署包保存目录") { artifact in
             (artifact.data, artifact.filename)
         }
     }
@@ -193,6 +194,8 @@ struct ImageWorkflowClient {
             result = .success(try await saveConvertedImage(data: data, format: format, defaultBasename: defaultBasename))
         } catch is CancellationError {
             result = .success(false)
+        } catch let failure as FileInputPanelFailure {
+            result = .failure(failure)
         } catch {
             result = .failure(ImageWorkflowFailure.normalizedSaveFailure(error))
         }
@@ -217,17 +220,11 @@ struct ImageWorkflowClient {
             result = .success(try await saveAll(
                 snapshots,
                 prompt: "保存",
-                message: "已转换的 \(candidates.count) 张图片将保存到所选文件夹"
-            ) { snapshot, directory, reservedFilenames in
-                let data = try snapshot.readData()
-                let url = Self.uniqueConvertedImageURL(
-                    in: directory,
-                    basename: snapshot.candidate.basename,
-                    format: snapshot.candidate.format,
-                    reservedFilenames: reservedFilenames
-                )
-                reservedFilenames.insert(url.lastPathComponent)
-                return (data, url.lastPathComponent)
+                message: "已转换的 \(candidates.count) 张图片将保存到所选文件夹",
+                uniquifyNames: true
+            ) { snapshot in
+                let stem = snapshot.candidate.basename.isEmpty ? "converted" : snapshot.candidate.basename
+                return (try snapshot.readData(), "\(stem).\(snapshot.candidate.format.fileExtension)")
             })
         } catch {
             result = .failure(error)
@@ -240,22 +237,32 @@ struct ImageWorkflowClient {
 
     /// 查重含目录内既有文件与本批已占用的名字（写入可能经缓冲 seam，
     /// 不能假设上一张已落盘），冲突时追加 " 2"、" 3"…，不覆盖。
-    nonisolated private static func uniqueConvertedImageURL(
+    nonisolated private static func writeUniqueConvertedImage(
+        _ data: Data,
+        filename: String,
         in directory: URL,
-        basename: String,
-        format: ImageFileFormat,
-        reservedFilenames: Set<String>
-    ) -> URL {
-        let stem = basename.isEmpty ? "converted" : basename
-        let filename = "\(stem).\(format.fileExtension)"
-        var url = directory.appendingPathComponent(filename)
-        var index = 2
-        while reservedFilenames.contains(url.lastPathComponent)
-            || FileManager.default.fileExists(atPath: url.path) {
-            url = directory.appendingPathComponent("\(stem) \(index).\(format.fileExtension)")
+        reservedFilenames: inout Set<String>,
+        writer: ImageWorkflowFileWriter
+    ) throws {
+        let name = filename as NSString
+        var index = 1
+        while true {
+            try Task.checkCancellation()
+            let candidate = index == 1 ? filename : "\(name.deletingPathExtension) \(index).\(name.pathExtension)"
             index += 1
+            let url = directory.appendingPathComponent(candidate)
+            guard !reservedFilenames.contains(candidate),
+                  !FileManager.default.fileExists(atPath: url.path) else { continue }
+            do {
+                try writer.write(data, to: url, replacingExisting: false)
+                reservedFilenames.insert(candidate)
+                return
+            } catch let error as NSError where
+                (error.domain == NSPOSIXErrorDomain && error.code == Int(EEXIST))
+                || (error.domain == NSCocoaErrorDomain && error.code == NSFileWriteFileExistsError) {
+                continue
+            }
         }
-        return url
     }
 
     private static func utType(for format: ImageFileFormat) -> UTType {
@@ -280,7 +287,7 @@ struct ImageWorkflowClient {
         allowedContentTypes: [UTType]
     ) async throws -> Bool {
         guard !Task.isCancelled,
-              let url = await dialog.selectSaveURL(
+              let url = try await dialog.selectSaveURL(
                 defaultFilename: defaultFilename,
                 allowedContentTypes: allowedContentTypes
               ), !Task.isCancelled else {
@@ -314,10 +321,11 @@ struct ImageWorkflowClient {
         _ items: [Item],
         prompt: String,
         message: String? = nil,
-        item: @escaping @Sendable (Item, URL, inout Set<String>) throws -> (data: Data, filename: String)
+        uniquifyNames: Bool = false,
+        item: @escaping @Sendable (Item) throws -> (data: Data, filename: String)
     ) async throws -> Bool {
         guard !Task.isCancelled,
-              let directory = await dialog.selectDirectory(prompt: prompt, message: message),
+              let directory = try await dialog.selectDirectory(prompt: prompt, message: message),
               !Task.isCancelled else {
             return false
         }
@@ -329,9 +337,19 @@ struct ImageWorkflowClient {
             do {
                 for element in items {
                     try Task.checkCancellation()
-                    let (data, filename) = try item(element, directory, &reservedFilenames)
+                    let (data, filename) = try item(element)
                     try Task.checkCancellation()
-                    try writer.write(data, to: directory.appendingPathComponent(filename))
+                    if uniquifyNames {
+                        try Self.writeUniqueConvertedImage(
+                            data,
+                            filename: filename,
+                            in: directory,
+                            reservedFilenames: &reservedFilenames,
+                            writer: writer
+                        )
+                    } else {
+                        try writer.write(data, to: directory.appendingPathComponent(filename))
+                    }
                     savedCount += 1
                 }
             } catch {

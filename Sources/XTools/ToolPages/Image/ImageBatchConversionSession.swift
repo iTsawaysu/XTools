@@ -38,11 +38,6 @@ struct BatchConversionItem: Identifiable {
     let thumbnail: NSImage
     var state: ItemConversionState = .idle
 
-    /// 批量保存时的目标文件名主干（原名去扩展；空名回退 converted）。
-    var saveBasename: String {
-        let stem = url.deletingPathExtension().lastPathComponent
-        return stem.isEmpty ? "converted" : stem
-    }
 }
 
 /// 页面拥有导入结果的展示动效：importPublisher 在会话内被调用，
@@ -86,15 +81,18 @@ final class ImageBatchConversionSession: ObservableObject {
     /// convertAll 重读磁盘时使用的最近一次导入管线（含 reader 与内容类型）。
     private var workflowClient = ImageWorkflowClient()
     private var allowedInputContentTypes: [UTType] = ImageWorkflowClient.standardImageContentTypes
+    private let spoolWriter: ImageWorkflowFileWriter
     private let saveClientBuilder: ImageSaveClientBuilder
 
     init(
         maximumItemCount: Int = ImageBatchConversionSession.defaultMaximumItemCount,
+        spoolWriter: ImageWorkflowFileWriter = ImageWorkflowFileWriter(),
         saveClientBuilder: @escaping ImageSaveClientBuilder = { filePanel, outputPanel in
             ImageWorkflowClient.sheet(filePanel: filePanel, outputPanel: outputPanel)
         }
     ) {
         self.maximumItemCount = maximumItemCount
+        self.spoolWriter = spoolWriter
         self.saveClientBuilder = saveClientBuilder
     }
 
@@ -333,7 +331,7 @@ final class ImageBatchConversionSession: ObservableObject {
         let completed = items.compactMap { item -> BatchConversionSaveCandidate? in
             guard case let .done(output) = item.state else { return nil }
             return BatchConversionSaveCandidate(
-                basename: OutputFileNaming.timestampedBase(source: item.saveBasename, fallback: "converted"),
+                basename: OutputFileNaming.timestampedBase(source: item.filename, fallback: "converted"),
                 tempURL: output.tempURL,
                 format: output.format
             )
@@ -416,15 +414,19 @@ final class ImageBatchConversionSession: ObservableObject {
                     render,
                     input,
                     itemID: itemID,
-                    spoolDirectory: spoolDirectory
+                    spoolDirectory: spoolDirectory,
+                    writer: spoolWriter
                 )
-                try Task.checkCancellation()
-                guard renderGate.isCurrent(generation), index < items.count, items[index].url == url else { return }
+                guard !Task.isCancelled, renderGate.isCurrent(generation),
+                      index < items.count, items[index].id == itemID else {
+                    Self.removeSpooledFile(at: output.tempURL)
+                    return
+                }
                 items[index].state = .done(output)
             } catch is CancellationError {
                 return
             } catch {
-                guard renderGate.isCurrent(generation), index < items.count, items[index].url == url else { return }
+                guard renderGate.isCurrent(generation), index < items.count, items[index].id == itemID else { return }
                 items[index].state = .failed(Self.itemFailureMessage(for: error))
             }
         }
@@ -439,7 +441,8 @@ final class ImageBatchConversionSession: ObservableObject {
         _ render: @escaping ImageBackgroundOutputRenderer,
         _ input: ImageProcessingInput,
         itemID: UUID,
-        spoolDirectory: URL
+        spoolDirectory: URL,
+        writer: ImageWorkflowFileWriter
     ) async throws -> BatchConversionOutput {
         let worker = Task.detached(priority: .userInitiated) {
             let output = try render(input)
@@ -449,7 +452,7 @@ final class ImageBatchConversionSession: ObservableObject {
             )
             do {
                 try FileManager.default.createDirectory(at: spoolDirectory, withIntermediateDirectories: true)
-                try output.data.write(to: tempURL, options: [.atomic])
+                try writer.write(output.data, to: tempURL)
             } catch {
                 throw OutputSpoolWriteFailure()
             }

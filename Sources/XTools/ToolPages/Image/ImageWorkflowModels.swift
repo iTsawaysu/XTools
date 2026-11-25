@@ -162,28 +162,39 @@ extension ImageWorkflowFailure: LocalizedError {
             return message
         }
 
+        if error is FileInputPanelFailure {
+            return FileInputPanelFailure.diagnosticMessage(for: error)
+        }
         return unknownFailure.errorDescription ?? "图片处理失败。"
     }
 }
 
 @MainActor
 struct ImageWorkflowDialog: Sendable {
-    var selectSaveURL: @Sendable (String, [UTType]) async -> URL? = { _, _ in nil }
-    var selectDirectory: @Sendable (String, String?) async -> URL? = { _, _ in nil }
+    var selectSaveURL: @Sendable (String, [UTType]) async throws -> URL? = { _, _ in nil }
+    var selectDirectory: @Sendable (String, String?) async throws -> URL? = { _, _ in nil }
 
-    func selectSaveURL(defaultFilename: String, allowedContentTypes: [UTType]) async -> URL? {
-        await selectSaveURL(defaultFilename, allowedContentTypes)
+    func selectSaveURL(defaultFilename: String, allowedContentTypes: [UTType]) async throws -> URL? {
+        do {
+            return try await selectSaveURL(defaultFilename, allowedContentTypes)
+        } catch is CancellationError {
+            return nil
+        }
     }
 
-    func selectDirectory(prompt: String, message: String? = nil) async -> URL? {
-        await selectDirectory(prompt, message)
+    func selectDirectory(prompt: String, message: String? = nil) async throws -> URL? {
+        do {
+            return try await selectDirectory(prompt, message)
+        } catch is CancellationError {
+            return nil
+        }
     }
 
     static func sheet(filePanel: FileInputPanelClient, outputPanel: FileOutputPanelClient) -> ImageWorkflowDialog {
         ImageWorkflowDialog(
             selectSaveURL: { defaultFilename, allowedContentTypes in
                 let request = FileOutputPanelRequest(defaultFilename: defaultFilename, allowedContentTypes: allowedContentTypes)
-                return try? await outputPanel.selectFile(request)
+                return try await outputPanel.selectFile(request)
             },
             selectDirectory: { prompt, message in
                 let request = FileInputPanelRequest(
@@ -192,7 +203,7 @@ struct ImageWorkflowDialog: Sendable {
                     canChooseDirectories: true,
                     canChooseFiles: false
                 )
-                return try? await filePanel.selectFile(request)
+                return try await filePanel.selectFile(request)
             }
         )
     }
@@ -244,12 +255,48 @@ struct ImageWorkflowFileReader: Sendable {
 }
 
 struct ImageWorkflowFileWriter: Sendable {
-    var writeHandler: @Sendable (Data, URL) throws -> Void = { data, url in
-        try data.write(to: url)
-    }
+    var writeHandler: (@Sendable (Data, URL) throws -> Void)? = nil
 
-    func write(_ data: Data, to url: URL) throws {
-        try writeHandler(data, url)
+    func write(_ data: Data, to url: URL, replacingExisting: Bool = true) throws {
+        if let writeHandler {
+            try writeHandler(data, url)
+            return
+        }
+        if replacingExisting {
+            try data.write(to: url, options: .atomic)
+            return
+        }
+
+        let staged = url.deletingLastPathComponent()
+            .appendingPathComponent(".xtools-export-\(UUID().uuidString)")
+        let descriptor = open(staged.path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, mode_t(0o666))
+        guard descriptor >= 0 else {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+        }
+        defer { try? FileManager.default.removeItem(at: staged) }
+        let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        do {
+            try file.write(contentsOf: data)
+            try file.close()
+        } catch {
+            try? file.close()
+            throw error
+        }
+        try Task.checkCancellation()
+        let status = staged.withUnsafeFileSystemRepresentation { source in
+            url.withUnsafeFileSystemRepresentation { destination in
+                guard let source, let destination else { return EINVAL }
+                return renamex_np(source, destination, UInt32(RENAME_EXCL)) == 0 ? 0 : errno
+            }
+        }
+        if status == ENOTSUP || status == EOPNOTSUPP {
+            // Keep both names on the selected volume. FileManager refuses
+            // existing destinations even when the volume has no hard links.
+            try Task.checkCancellation()
+            try FileManager.default.moveItem(at: staged, to: url)
+        } else if status != 0 {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(status))
+        }
     }
 }
 
