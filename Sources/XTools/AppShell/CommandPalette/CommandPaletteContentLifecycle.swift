@@ -38,7 +38,9 @@ final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePres
             // panel is still invisible: the text is cleared here (beginSession
             // already reset the model query) and focus scheduling is re-armed
             // after the previous session's close invalidation.
-            searchField?.stringValue = ""
+            if let searchField {
+                AppKitSearchFieldLifecycle.replaceText(in: searchField, with: "")
+            }
             searchCoordinator?.rearmFocusRequests()
             // Enable the persistent field ahead of the SwiftUI update pass and
             // attempt focus on this runloop turn — waiting for the scheduled

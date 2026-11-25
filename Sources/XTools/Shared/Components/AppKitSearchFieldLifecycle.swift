@@ -50,6 +50,7 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
     private var focusedToken: Int?
     private var focusRequestGeneration = 0
     private var acceptsFocusRequests = true
+    private var handoffGeneration = 0
     private var handoffMonitor: Any?
     private var handoffEvents: [NSEvent] = []
     private var handoffTimeout: DispatchWorkItem?
@@ -136,8 +137,9 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
     /// Start buffering keys typed before the field editor is attached. Safe to
     /// call repeatedly; a no-op while already editing or already buffering.
     func beginKeystrokeHandoff(for textField: NSTextField) {
-        guard handoffMonitor == nil, !isEditing(textField) else { return }
-        handoffEvents.removeAll()
+        guard acceptsFocusRequests, handoffMonitor == nil, !isEditing(textField) else { return }
+        handoffGeneration &+= 1
+        let generation = handoffGeneration
         handoffMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak textField] event in
             guard let self, let textField else { return event }
             if self.isEditing(textField) {
@@ -145,14 +147,15 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
                 return event
             }
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            guard flags.isEmpty || flags == .shift,
+            guard textField.window.map({ $0.windowNumber == event.windowNumber }) ?? true,
+                  flags.isEmpty || flags == .shift,
                   event.specialKey == nil,
                   let characters = event.characters, !characters.isEmpty else { return event }
             self.handoffEvents.append(event)
             return nil
         }
         let work = DispatchWorkItem { [weak self, weak textField] in
-            guard let self else { return }
+            guard let self, self.handoffGeneration == generation else { return }
             guard let textField else {
                 self.cancelKeystrokeHandoff()
                 return
@@ -165,7 +168,7 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
         // 回放，会让单独敲下的第一个字符明显迟到；就绪后立即回放。
         for delay in [0.06, 0.12, 0.2, 0.35] {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak textField] in
-                guard let self, let textField else { return }
+                guard let self, self.handoffGeneration == generation, let textField else { return }
                 self.flushKeystrokeHandoffIfEditing(textField)
             }
         }
@@ -189,15 +192,24 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
         handoffTimeout = nil
         let pending = handoffEvents
         handoffEvents.removeAll()
-        guard !pending.isEmpty, isEditing(textField) else { return }
-        DispatchQueue.main.async {
+        guard !pending.isEmpty, let window = textField.window,
+              let editor = textField.currentEditor(), window.firstResponder === editor
+        else { return }
+        let generation = handoffGeneration
+        DispatchQueue.main.async { [weak self, weak textField, weak window, weak editor] in
             for event in pending {
-                NSApp.sendEvent(event)
+                guard let self, let textField, let window, let editor,
+                      self.handoffGeneration == generation, self.acceptsFocusRequests,
+                      textField.window === window, textField.currentEditor() === editor,
+                      window.firstResponder === editor
+                else { return }
+                if event.windowNumber == window.windowNumber { NSApp.sendEvent(event) }
             }
         }
     }
 
     private func cancelKeystrokeHandoff() {
+        handoffGeneration &+= 1
         if let handoffMonitor { NSEvent.removeMonitor(handoffMonitor) }
         handoffMonitor = nil
         handoffTimeout?.cancel()
@@ -329,10 +341,18 @@ enum AppKitSearchFieldLifecycle {
         configure(textField, with: configuration)
 
         if textField.stringValue != text.wrappedValue {
-            textField.stringValue = text.wrappedValue
+            replaceText(in: textField, with: text.wrappedValue)
         }
 
         coordinator.focus(textField, focusToken: focusToken)
+    }
+
+    static func replaceText(in textField: NSTextField, with text: String) {
+        if let field = textField as? IndexPaddedTextField {
+            field.setStringFromExternalBinding(text)
+        } else {
+            textField.stringValue = text
+        }
     }
 
     static func requestFocus(

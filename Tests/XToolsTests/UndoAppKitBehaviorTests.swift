@@ -221,7 +221,7 @@ struct UndoAppKitBehaviorTests {
         #expect(manager.canUndo)
 
         #expect(window.makeFirstResponder(otherField))
-        searchField.stringValue = "x"
+        AppKitSearchFieldLifecycle.replaceText(in: searchField, with: "x")
         #expect(window.makeFirstResponder(searchField))
         let refocusedEditor = try #require(searchField.currentEditor() as? NSTextView)
 
@@ -229,6 +229,36 @@ struct UndoAppKitBehaviorTests {
         #expect(searchField.stringValue == "x")
         #expect(!manager.canUndo)
         #expect(!manager.canRedo)
+    }
+
+    @Test func commandPaletteReopenStartsWithANewUndoBaseline() throws {
+        let field = IndexPaddedTextField(frame: NSRect(x: 0, y: 0, width: 240, height: 30))
+        let window = makeWindow(containing: field)
+        let lifecycle = CommandPaletteContentLifecycle(session: 1, actions: [])
+        let coordinator = AppKitSearchFieldCoordinator(
+            text: .constant(""), processedFocusToken: 0, focusRetryDelays: []
+        )
+        lifecycle.attachSearchField(field, coordinator: coordinator)
+        field.selectText(nil)
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        let manager = try #require(editor.undoManager)
+        insertUserText("abc", in: editor)
+        drainAppKitNotifications()
+        try #require(manager.canUndo)
+
+        lifecycle.commandPaletteDidClose(session: 1)
+        lifecycle.commandPaletteDidOpen(session: 2)
+        field.selectText(nil)
+        let reopenedEditor = try #require(field.currentEditor() as? NSTextView)
+        #expect(reopenedEditor === editor)
+        #expect(reopenedEditor.string.isEmpty)
+        try #require(!manager.canUndo && !manager.canRedo)
+
+        insertUserText("new", in: reopenedEditor)
+        drainAppKitNotifications()
+        manager.undo()
+        #expect(reopenedEditor.string.isEmpty)
+        #expect(window.contentView?.subviews.contains(field) == true)
     }
 
     @Test func segmentFieldEditorResolvesAPrivateManager() throws {

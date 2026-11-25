@@ -84,6 +84,8 @@ class IndexPaddedTextFieldCell: NSTextFieldCell, IndexTextFieldContentInsetConfi
 
     private var isolatedFieldEditor: IndexUndoIsolatedFieldEditor?
 
+    fileprivate var isolatedUndoManager: UndoManager? { isolatedFieldEditor?.undoManager }
+
     override func fieldEditor(for controlView: NSView) -> NSTextView? {
         if let isolatedFieldEditor { return isolatedFieldEditor }
         let editor = IndexUndoIsolatedFieldEditor(frame: .zero)
@@ -227,6 +229,16 @@ class IndexPaddedTextField: NSTextField {
     var contentInsets: IndexTextFieldContentInsets {
         get { indexContentInsets }
         set { indexContentInsets = newValue }
+    }
+
+    func setStringFromExternalBinding(_ newValue: String) {
+        let manager = (cell as? IndexPaddedTextFieldCell)?.isolatedUndoManager
+        manager?.disableUndoRegistration()
+        defer {
+            manager?.enableUndoRegistration()
+            manager?.removeAllActions()
+        }
+        stringValue = newValue
     }
 
     override func resetCursorRects() {
