@@ -5,6 +5,10 @@ final class ImageHubWorkspaceModel: ObservableObject {
     static let key = ToolWorkspaceKey<ImageHubWorkspaceModel>(toolID: "image-tools") { preferences in
         ImageHubWorkspaceModel(preferences: preferences)
     }
+    private static let segmentPreference = ToolPreferenceKey<Segment>.rawRepresentable(
+        "tools.image.segment.v1",
+        default: .convert
+    )
 
     /// Hub 分段：rawValue 即 IndexSegmentedControl 的 item id，
     /// 顺序 格式转换 | 压缩 | 灰度 | 水印 | Favicon（前三段为重编码工作流，
@@ -42,7 +46,7 @@ final class ImageHubWorkspaceModel: ObservableObject {
     @Published var segment: Segment {
         didSet {
             guard segment != oldValue else { return }
-            preferences.set(segment, for: TextDevelopmentToolPreferenceKeys.imageSegment)
+            preferences.set(segment, for: Self.segmentPreference)
         }
     }
 
@@ -50,7 +54,7 @@ final class ImageHubWorkspaceModel: ObservableObject {
 
     init(preferences: ToolPreferenceStore) {
         self.preferences = preferences
-        segment = preferences.value(for: TextDevelopmentToolPreferenceKeys.imageSegment)
+        segment = preferences.value(for: Self.segmentPreference)
     }
 }
 
