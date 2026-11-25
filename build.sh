@@ -13,7 +13,7 @@
 
 set -euo pipefail
 
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 cd "$PROJECT_DIR"
 
 PRODUCT_NAME="XTools"
@@ -22,11 +22,16 @@ APP_NAME="$APP_DISPLAY_NAME.app"
 BUNDLE_ID="${BUNDLE_ID:-com.sun.xtools}"
 MIN_SYSTEM_VERSION="14.0"
 
-# Share the default SwiftPM cache with `swift build` / `swift test`.
-BUILD_DIR="$PROJECT_DIR/.build"
-# Last successful `swift build` configuration; `package` reads it instead of
-# guessing from binary mtimes (a resource-only rebuild may not relink the binary).
-BUILD_STATE_FILE="${SWIFTPM_BUILD_DIR:-$BUILD_DIR}/.last-build-configuration"
+# Share the selected SwiftPM cache with `swift build` / `swift test`.
+DEFAULT_BUILD_DIR="$PROJECT_DIR/.build"
+BUILD_DIR="${SWIFTPM_BUILD_DIR:-$DEFAULT_BUILD_DIR}"
+case "$BUILD_DIR" in /*) ;; *) BUILD_DIR="$PROJECT_DIR/$BUILD_DIR" ;; esac
+while [[ "$BUILD_DIR" != / && ( "$BUILD_DIR" == */ || "$BUILD_DIR" == */. ) ]]; do
+  BUILD_DIR="${BUILD_DIR%/.}"
+  BUILD_DIR="${BUILD_DIR%/}"
+done
+BUILD_DIR="${BUILD_DIR:-/}"
+BUILD_OWNER_FILE="$BUILD_DIR/.xtools-cache-owner"
 LEGACY_SCRATCH_DIR="$PROJECT_DIR/.swiftpm-build"
 # Send verification packages to an independent OUTPUT_DIR.
 OUTPUT_DIR="${OUTPUT_DIR:-$PROJECT_DIR/build}"
@@ -45,6 +50,8 @@ TRASH_DIR="${TRASH_DIR:-${TMPDIR:-/tmp}/XTools-build-archive}"
 SWIFT_OVERRIDE="${SWIFT_BIN:-}"
 SWIFT_BIN="${SWIFT_OVERRIDE:-$(xcrun --find swift)}"
 ARCH="${ARCH:-$(uname -m)}"
+# Resource-only builds may leave the executable mtime unchanged.
+BUILD_STATE_FILE="$BUILD_DIR/.last-build-configuration-$ARCH"
 LSREGISTER="${LSREGISTER:-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister}"
 
 GREEN='\033[0;32m'
@@ -66,7 +73,7 @@ Usage:
   ./build.sh release      same as build
   ./build.sh rebuild      clean caches, then release build + package
   ./build.sh clean        archive build caches and packaged output
-  ./build.sh package [debug|release]  package last built product (newest by default)
+  ./build.sh package [debug|release]  package last build.sh output for this architecture (fallback: newest binary)
   ./build.sh help         show this help
 EOF
 }
@@ -143,14 +150,43 @@ app_path_command() {
   osascript -l JavaScript "$PROJECT_DIR/tools/packaging-app.js" "$@"
 }
 
+claim_custom_build_cache() {
+  if [[ -L "$BUILD_OWNER_FILE" ]] ||
+     { [[ -f "$BUILD_OWNER_FILE" ]] && [[ "$(< "$BUILD_OWNER_FILE")" != "$PROJECT_DIR" ]]; }; then
+    error "SwiftPM cache belongs to a different project: $BUILD_DIR"
+    return 1
+  fi
+  if [[ -L "$BUILD_DIR" || "$BUILD_DIR" == "$DEFAULT_BUILD_DIR" || "$BUILD_DIR" -ef "$DEFAULT_BUILD_DIR" ]]; then
+    return
+  fi
+  if [[ ! -e "$BUILD_DIR" ]] || [[ -d "$BUILD_DIR" && -z "$(ls -A "$BUILD_DIR")" ]]; then
+    mkdir -p "$BUILD_DIR"
+    (set -o noclobber; printf '%s\n' "$PROJECT_DIR" >"$BUILD_OWNER_FILE")
+  fi
+}
+
 clean_build_caches() {
-  archive_path "$BUILD_DIR" ".build"
-  archive_path "$LEGACY_SCRATCH_DIR" ".swiftpm-build"
+  if [[ -L "$BUILD_DIR" ]]; then
+    error "Build cache is a symbolic link; use its owned path directly: $BUILD_DIR"
+    return 1
+  fi
+  if [[ "$BUILD_DIR" == "$DEFAULT_BUILD_DIR" || "$BUILD_DIR" -ef "$DEFAULT_BUILD_DIR" ]]; then
+    assert_archive_location "$APP_PATH" "$DEFAULT_BUILD_DIR" "$LEGACY_SCRATCH_DIR"
+    archive_path "$DEFAULT_BUILD_DIR" ".build"
+    archive_path "$LEGACY_SCRATCH_DIR" ".swiftpm-build"
+  else
+    if [[ -e "$BUILD_DIR" ]] &&
+       [[ -L "$BUILD_OWNER_FILE" || ! -f "$BUILD_OWNER_FILE" || "$(< "$BUILD_OWNER_FILE")" != "$PROJECT_DIR" ]]; then
+      error "Kept unowned SwiftPM cache: $BUILD_DIR"
+      return 1
+    fi
+    assert_archive_location "$APP_PATH" "$BUILD_DIR"
+    archive_path "$BUILD_DIR" "xtools-swiftpm-cache"
+  fi
 }
 
 clean() {
   assert_owned_app_path
-  assert_archive_location "$APP_PATH" "$BUILD_DIR" "$LEGACY_SCRATCH_DIR"
   if [[ -d "$APP_PATH" ]]; then
     app_path_command check "$APP_PATH"
   fi
@@ -173,12 +209,17 @@ swift_build() {
   local configuration="$1" t0
   step "ui-lint: checking shared-control boundaries"
   python3 "$PROJECT_DIR/tools/ui-lint.py" --root "$PROJECT_DIR"
+  claim_custom_build_cache
   t0="$(now_ms)"
   step "swift build -c $configuration --product $PRODUCT_NAME ($ARCH)"
   swift_product "$configuration"
   mkdir -p "$(dirname "$BUILD_STATE_FILE")"
   printf '%s\n' "$configuration" >"$BUILD_STATE_FILE"
   info "Compile done ($(elapsed "$t0")ms)"
+}
+
+verify_package() {
+  codesign --verify --strict -R="identifier \"$BUNDLE_ID\"" "$1"
 }
 
 bin_path_for() {
@@ -395,12 +436,16 @@ package_app() (
     error "Missing app icon: $ICON_SOURCE"
     exit 1
   fi
+  if [[ ! "$BUNDLE_ID" =~ ^[A-Za-z0-9.-]+$ ]]; then
+    error "Invalid bundle identifier: $BUNDLE_ID"
+    exit 1
+  fi
   assert_owned_app_path
   target_identity="$(stat -f '%d:%i' "$target" 2>/dev/null || printf 'missing')"
   input_digest="$(package_input_digest "$products")"
   if [[ -f "$INFO_PLIST" &&
         "$(plutil -extract XToolsPackageInputDigest raw -o - "$INFO_PLIST" 2>/dev/null || true)" == "$input_digest" ]] &&
-      codesign --verify --strict "$target" >/dev/null 2>&1; then
+      verify_package "$target" >/dev/null 2>&1; then
     if [[ "${LSREGISTER_EVERY_BUILD:-0}" == "1" && -x "$LSREGISTER" ]]; then
       "$LSREGISTER" -f "$target" >/dev/null 2>&1 || true
     fi
@@ -443,13 +488,7 @@ package_app() (
   fi
   assert_binary_size_budget "$configuration" "$build_binary"
   codesign --force --sign - "$APP_PATH" >/dev/null
-  codesign --verify --strict "$APP_PATH"
-
-  signed_identifier="$(codesign -dv "$APP_PATH" 2>&1 | sed -n 's/^Identifier=//p')"
-  if [[ "$signed_identifier" != "$BUNDLE_ID" ]]; then
-    error "Signed Identifier '$signed_identifier' does not match BUNDLE_ID '$BUNDLE_ID'"
-    exit 1
-  fi
+  verify_package "$APP_PATH"
 
   app_path_command publish "$target" "$APP_PATH" "$may_stop" "$target_identity"
   if [[ "$icon_changed" == "1" || "${LSREGISTER_EVERY_BUILD:-0}" == "1" ]] && [[ -x "$LSREGISTER" ]]; then
@@ -501,7 +540,7 @@ package_last_built() {
   fi
   if [[ "$last_config" == debug || "$last_config" == release ]]; then
     products="$(bin_path_for "$last_config")"
-    if [[ -x "$products/$PRODUCT_NAME" ]]; then
+    if built_for_requested_arch "$products/$PRODUCT_NAME"; then
       package_app "$last_config" "$products"
       return
     fi
@@ -509,11 +548,11 @@ package_last_built() {
 
   debug_product="$(bin_path_for debug)"
   release_product="$(bin_path_for release)"
-  if [[ -x "$debug_product/$PRODUCT_NAME" &&
-        ( ! -x "$release_product/$PRODUCT_NAME" ||
-          "$debug_product/$PRODUCT_NAME" -nt "$release_product/$PRODUCT_NAME" ) ]]; then
+  if built_for_requested_arch "$debug_product/$PRODUCT_NAME" &&
+      { [[ "$debug_product/$PRODUCT_NAME" -nt "$release_product/$PRODUCT_NAME" ]] ||
+        ! built_for_requested_arch "$release_product/$PRODUCT_NAME"; }; then
     package_app debug "$debug_product"
-  elif [[ -x "$release_product/$PRODUCT_NAME" ]]; then
+  elif built_for_requested_arch "$release_product/$PRODUCT_NAME"; then
     package_app release "$release_product"
   else
     error "No built product found; run ./build.sh build-dev or ./build.sh build first"
@@ -521,8 +560,11 @@ package_last_built() {
   fi
 }
 
+built_for_requested_arch() {
+  [[ -x "$1" ]] && lipo "$1" -verify_arch "$ARCH" 2>/dev/null
+}
+
 rebuild_and_package() {
-  assert_archive_location "$APP_PATH" "$BUILD_DIR" "$LEGACY_SCRATCH_DIR"
   clean_build_caches
   build_and_package release
 }

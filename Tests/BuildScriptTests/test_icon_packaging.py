@@ -15,6 +15,66 @@ import unittest
 
 
 class IconPackagingTests(unittest.TestCase):
+    def test_custom_clean_archives_only_the_cache_claimed_by_this_project(self):
+        repository = Path(__file__).resolve().parents[2]
+        fixture = Path(tempfile.mkdtemp(prefix="xtools-cache-ownership-"))
+        project = fixture / "project"
+        project.mkdir()
+        shutil.copy2(repository / "build.sh", project / "build.sh")
+        tools = project / "tools"
+        tools.mkdir()
+        (tools / "ui-lint.py").write_text("pass\n")
+        swift = fixture / "swift"
+        swift.write_text("#!/bin/sh\nexit 42\n")
+        swift.chmod(0o755)
+        default_cache = project / ".build"
+        default_cache.mkdir()
+        (default_cache / "keep.txt").write_text("default cache")
+        cache = fixture / "custom"
+        cache.mkdir()
+        environment = dict(os.environ, SWIFT_BIN=str(swift), SWIFTPM_BUILD_DIR=str(cache),
+                           OUTPUT_DIR=str(fixture / "output"), TRASH_DIR=str(fixture / "archive"))
+        command = [str(project / "build.sh")]
+
+        unrelated = cache / "unrelated.txt"
+        unrelated.write_text("external cache")
+        result = subprocess.run([*command, "clean"], env=environment, text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Kept unowned SwiftPM cache", result.stderr)
+        self.assertEqual(unrelated.read_text(), "external cache")
+        unrelated.rename(fixture / "external-file-preserved.txt")
+
+        attempted = subprocess.run([*command, "build-dev"], env=environment, capture_output=True)
+        self.assertEqual(attempted.returncode, 42)
+        self.assertEqual((cache / ".xtools-cache-owner").read_text().strip(), str(project.resolve()))
+        (cache / "owned.txt").write_text("recoverable")
+        subprocess.run([*command, "clean"], env=environment, check=True, capture_output=True)
+        self.assertFalse(cache.exists())
+        [retired] = (fixture / "archive").glob("xtools-swiftpm-cache.*")
+        self.assertEqual((retired / "owned.txt").read_text(), "recoverable")
+        self.assertEqual((default_cache / "keep.txt").read_text(), "default cache")
+
+        foreign = fixture / "foreign-cache"
+        foreign.mkdir()
+        owner = foreign / ".xtools-cache-owner"
+        owner.write_text("another project\n")
+        cache.symlink_to(foreign, target_is_directory=True)
+        alias_environment = {**environment, "SWIFTPM_BUILD_DIR": f"{cache}/./"}
+        attempted = subprocess.run([*command, "build-dev"], env=alias_environment, text=True, capture_output=True)
+        self.assertNotEqual(attempted.returncode, 42, "Build must stop before invoking Swift")
+        self.assertIn("SwiftPM cache belongs to a different project", attempted.stderr)
+        result = subprocess.run([*command, "clean"], env=alias_environment, text=True, capture_output=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Build cache is a symbolic link", result.stderr)
+        self.assertTrue(cache.is_symlink())
+        self.assertEqual(owner.read_text(), "another project\n")
+
+        default_environment = {**environment, "SWIFTPM_BUILD_DIR": ".build/./"}
+        subprocess.run([*command, "clean"], env=default_environment, check=True, capture_output=True)
+        self.assertFalse(default_cache.exists())
+        [retired_default] = (fixture / "archive").glob(".build.*")
+        self.assertEqual((retired_default / "keep.txt").read_text(), "default cache")
+
     def test_fallback_restores_previous_directory_if_candidate_move_fails(self):
         repository = Path(__file__).resolve().parents[2]
         fixture = Path(tempfile.mkdtemp(prefix="xtools-package-recovery-"))
@@ -61,12 +121,15 @@ function run(argv) {
         codesign = binaries / "codesign"
         codesign.write_text('#!/bin/sh\n'
                             '[ "${FAIL_SIGN:-}" != 1 ] || [ "$1" != "--force" ] || exit 49\n'
+                            'if [ "$1" = "--verify" ]; then\n'
+                            '  [ "$3" = "-R=identifier \\"$BUNDLE_ID\\"" ] || exit 53\n'
+                            '  [ "${FAIL_VERIFY:-}" != 1 ] || exit 54\n'
+                            'fi\n'
                             'if [ "${REPLACE_DESTINATION:-}" = 1 ] && [ "$1" = "--verify" ]; then\n'
                             '  mv "$OUTPUT_DIR/XTools.app" "$OUTPUT_DIR/prior.app" || exit 51\n'
                             '  mkdir "$OUTPUT_DIR/XTools.app" || exit 52\n'
                             '  printf "foreign" > "$OUTPUT_DIR/XTools.app/keep.txt"\n'
-                            'fi\n'
-                            'if [ "$1" = "-dv" ]; then\n  printf "Identifier=%s\\n" "$BUNDLE_ID" >&2\nfi\n')
+                            'fi\n')
         codesign.chmod(0o755)
         osascript = binaries / "osascript"
         osascript.write_text('#!/bin/sh\n'
@@ -220,7 +283,7 @@ function run(argv) {
 
         previous_metadata = info_plist.read_bytes()
         source.write_bytes(b"unpublished-icon")
-        for failure in ("FAIL_STRIP", "FAIL_SIGN", "FAIL_PUBLISH"):
+        for failure in ("FAIL_STRIP", "FAIL_SIGN", "FAIL_VERIFY", "FAIL_PUBLISH"):
             failed = subprocess.run([str(fixture / "build.sh"), "package", "debug"],
                                     env={**environment, failure: "1"}, text=True, capture_output=True)
             self.assertNotEqual(failed.returncode, 0, failed.stdout + failed.stderr)
@@ -268,6 +331,18 @@ function run(argv) {
         self.assertIn("复制", plistlib.loads(packaged_table.read_bytes()))
         self.assertTrue(packaged_table.read_bytes().startswith(b"bplist00"))
         self.assertFalse(list(packaged_resources.rglob("*.xcstrings")))
+
+        release = fixture / "same-arch-release"
+        shutil.copytree(native, release)
+        subprocess.run(["clang", "-x", "c", "-o", str(release / "XTools"), "-"],
+                       input="int main(void) { return 23; }\n", text=True, check=True)
+        environment["RELEASE_BIN_PATH"] = str(release)
+        (fixture / ".build/.last-build-configuration").write_text("debug\n")
+        (fixture / f".build/.last-build-configuration-{wrong_arch}").write_text("debug\n")
+        (fixture / f".build/.last-build-configuration-{environment['ARCH']}").write_text("release\n")
+        package()
+        self.assertEqual(strip_log.read_text().strip(),
+                         hashlib.sha256((release / "XTools").read_bytes()).hexdigest())
 
         neighbor = fixture / "build/keep.txt"
         neighbor.write_text("unrelated")

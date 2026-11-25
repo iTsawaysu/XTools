@@ -27,9 +27,6 @@ let package = Package(
             resources: [
                 .process("Resources")
             ],
-            swiftSettings: [
-                .enableUpcomingFeature("StrictConcurrency")
-            ],
             linkerSettings: [
                 .linkedLibrary("icucore")
             ]
@@ -43,9 +40,6 @@ let package = Package(
             ],
             resources: [
                 .process("Resources")
-            ],
-            swiftSettings: [
-                .enableUpcomingFeature("StrictConcurrency")
             ]
         ),
         .executableTarget(
@@ -71,9 +65,6 @@ let package = Package(
             path: "Tests/XToolsTests",
             resources: [
                 .copy("Fixtures/test.md")
-            ],
-            swiftSettings: [
-                .enableUpcomingFeature("StrictConcurrency")
             ]
         )
     ]
