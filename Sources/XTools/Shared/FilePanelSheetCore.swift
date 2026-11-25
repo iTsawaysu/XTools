@@ -61,7 +61,7 @@ final class FilePanelSheetSession<Payload: Sendable> {
 final class FilePanelSheetRequestCore<Payload: Sendable> {
     private struct ActiveRequest {
         let id: UUID
-        let continuation: CheckedContinuation<Payload?, any Error>
+        let continuation: CheckedContinuation<Result<Payload?, any Error>, Never>
     }
 
     /// 面板确认载荷的空选择判定（打开面板：URL 数组非空；保存面板：URL 非 nil）。
@@ -101,7 +101,7 @@ final class FilePanelSheetRequestCore<Payload: Sendable> {
         let requestID = UUID()
 
         return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
+            let outcome = await withCheckedContinuation { continuation in
                 activeRequest = ActiveRequest(id: requestID, continuation: continuation)
                 activeSession = session
                 session.present(owningWindow) { [weak self] result in
@@ -112,6 +112,8 @@ final class FilePanelSheetRequestCore<Payload: Sendable> {
                     cancelActiveRequest(id: requestID)
                 }
             }
+            try Task.checkCancellation()
+            return try outcome.get()
         } onCancel: {
             Task { @MainActor [weak self] in
                 self?.cancelActiveRequest(id: requestID)
@@ -126,12 +128,12 @@ final class FilePanelSheetRequestCore<Payload: Sendable> {
         switch result {
         case .selected(let payload):
             guard acceptsPayload(payload) else {
-                request.continuation.resume(throwing: FileInputPanelFailure.invalidSelection)
+                request.continuation.resume(returning: .failure(FileInputPanelFailure.invalidSelection))
                 return
             }
-            request.continuation.resume(returning: payload)
+            request.continuation.resume(returning: .success(payload))
         case .cancelled:
-            request.continuation.resume(returning: nil)
+            request.continuation.resume(returning: .success(nil))
         }
     }
 
@@ -144,7 +146,7 @@ final class FilePanelSheetRequestCore<Payload: Sendable> {
         activeRequest = nil
         activeSession?.cancel()
         activeSession = nil
-        request.continuation.resume(throwing: CancellationError())
+        request.continuation.resume(returning: .failure(CancellationError()))
     }
 
     private func takeActiveRequest(id: UUID) -> ActiveRequest? {
@@ -204,9 +206,7 @@ final class FilePanelWindowView<PanelCoordinator: FilePanelWindowAttaching>: NSV
 
     func updateCoordinator(_ coordinator: PanelCoordinator) {
         guard panelCoordinator !== coordinator else { return }
-        if let observedWindow {
-            panelCoordinator.detach(from: observedWindow)
-        }
+        detach()
         panelCoordinator = coordinator
         reportWindowChange()
     }

@@ -361,8 +361,8 @@ typealias Base64FileWorkflowLive = Base64FileWorkflowProcessing
 
 @MainActor
 struct Base64FileWorkflowClient: Sendable {
-    var selectEncodedOutputURL: @Sendable (String) async -> URL? = { _ in nil }
-    var selectDecodedOutputURL: @Sendable (String, String) async -> URL? = { _, _ in nil }
+    var selectEncodedOutputURL: @Sendable (String) async throws -> URL? = { _ in nil }
+    var selectDecodedOutputURL: @Sendable (String, String) async throws -> URL? = { _, _ in nil }
     var pasteboard: PasteboardWriter = .init()
 
     struct PasteboardWriter: Sendable {
@@ -376,8 +376,8 @@ struct Base64FileWorkflowClient: Sendable {
     }
 
     init(
-        selectEncodedOutputURL: @escaping @Sendable (String) async -> URL? = { _ in nil },
-        selectDecodedOutputURL: @escaping @Sendable (String, String) async -> URL? = { _, _ in nil },
+        selectEncodedOutputURL: @escaping @Sendable (String) async throws -> URL? = { _ in nil },
+        selectDecodedOutputURL: @escaping @Sendable (String, String) async throws -> URL? = { _, _ in nil },
         pasteboard: PasteboardWriter = .init()
     ) {
         self.selectEncodedOutputURL = selectEncodedOutputURL
@@ -387,17 +387,17 @@ struct Base64FileWorkflowClient: Sendable {
 
     init(dialog: SheetBase64FileWorkflowDialog) {
         self.init(
-            selectEncodedOutputURL: { await dialog.selectEncodedOutputURL(defaultFilename: $0) },
-            selectDecodedOutputURL: { await dialog.selectDecodedOutputURL(defaultFilename: $0, fileExtension: $1) }
+            selectEncodedOutputURL: { try await dialog.selectEncodedOutputURL(defaultFilename: $0) },
+            selectDecodedOutputURL: { try await dialog.selectDecodedOutputURL(defaultFilename: $0, fileExtension: $1) }
         )
     }
 
-    func selectEncodedOutputURL(defaultFilename: String) async -> URL? {
-        await selectEncodedOutputURL(defaultFilename)
+    func selectEncodedOutputURL(defaultFilename: String) async throws -> URL? {
+        try await selectEncodedOutputURL(defaultFilename)
     }
 
-    func selectDecodedOutputURL(defaultFilename: String, fileExtension: String) async -> URL? {
-        await selectDecodedOutputURL(defaultFilename, fileExtension)
+    func selectDecodedOutputURL(defaultFilename: String, fileExtension: String) async throws -> URL? {
+        try await selectDecodedOutputURL(defaultFilename, fileExtension)
     }
 
     /// Sheet-based production dialog bound to the window-scoped output panel.
@@ -415,16 +415,16 @@ struct Base64FileWorkflowClient: Sendable {
 struct SheetBase64FileWorkflowDialog: Sendable {
     let outputPanel: FileOutputPanelClient
 
-    func selectEncodedOutputURL(defaultFilename: String) async -> URL? {
+    func selectEncodedOutputURL(defaultFilename: String) async throws -> URL? {
         let request = FileOutputPanelRequest(
             defaultFilename: defaultFilename,
             allowedContentTypes: [.plainText],
             prompt: "存储"
         )
-        return try? await outputPanel.selectFile(request)
+        return try await outputPanel.selectFile(request)
     }
 
-    func selectDecodedOutputURL(defaultFilename: String, fileExtension: String) async -> URL? {
+    func selectDecodedOutputURL(defaultFilename: String, fileExtension: String) async throws -> URL? {
         var allowedContentTypes: [UTType] = []
         if let contentType = UTType(filenameExtension: fileExtension) {
             allowedContentTypes = [contentType]
@@ -434,7 +434,7 @@ struct SheetBase64FileWorkflowDialog: Sendable {
             allowedContentTypes: allowedContentTypes,
             prompt: "存储"
         )
-        return try? await outputPanel.selectFile(request)
+        return try await outputPanel.selectFile(request)
     }
 }
 
@@ -672,31 +672,31 @@ final class Base64FileWorkflowSession: ObservableObject {
         mutate { $0.beginSaveEncodedAction() }
 
         return Task {
-            // Sheet selection suspends here; a cancelled panel ends the busy state.
-            guard let url = await client.selectEncodedOutputURL(defaultFilename: defaultFilename) else {
-                finishOutputAction(.saving, generation: generation)
+            defer { finishOutputAction(.saving, generation: generation) }
+            let url: URL
+            do {
+                guard let selection = try await client.selectEncodedOutputURL(defaultFilename: defaultFilename)
+                else { return }
+                url = selection
+            } catch is CancellationError {
+                return
+            } catch {
+                guard isCurrentOutputAction(.saving, selection: selectedFile, mode: mode, generation: generation),
+                      !Task.isCancelled else { return }
+                mutate { $0.setFileError(FileInputPanelFailure.diagnosticMessage(for: error)) }
                 return
             }
 
             guard isCurrentOutputAction(.saving, selection: selectedFile, mode: mode, generation: generation),
-                  !Task.isCancelled else {
-                finishOutputAction(.saving, generation: generation)
-                return
-            }
+                  !Task.isCancelled else { return }
 
             let text = await processor.fullOutput(for: selectedFile, mode: mode)
             guard isCurrentOutputAction(.saving, selection: selectedFile, mode: mode, generation: generation),
-                  !Task.isCancelled else {
-                finishOutputAction(.saving, generation: generation)
-                return
-            }
+                  !Task.isCancelled else { return }
 
             let result = await processor.write(text, to: url)
             guard isCurrentOutputAction(.saving, selection: selectedFile, mode: mode, generation: generation),
-                  !Task.isCancelled else {
-                finishOutputAction(.saving, generation: generation)
-                return
-            }
+                  !Task.isCancelled else { return }
 
             switch result {
             case .success:
@@ -705,7 +705,6 @@ final class Base64FileWorkflowSession: ObservableObject {
             case .failure(let failure):
                 mutate { $0.setFileError(failure.errorDescription ?? "无法保存文件。") }
             }
-            finishOutputAction(.saving, generation: generation)
         }
     }
 
@@ -850,40 +849,38 @@ final class Base64FileWorkflowSession: ObservableObject {
         mutate { $0.beginSavingDecoded() }
 
         return Task {
-            // Sheet selection suspends here; a cancelled panel ends the busy state.
-            guard let url = await client.selectDecodedOutputURL(
-                defaultFilename: defaultFilename,
-                fileExtension: payload.fileExtension
-            ) else {
-                finishDecodedSave(generation: generation)
+            var saveError: String?
+            defer { finishDecodedSave(generation: generation, error: saveError) }
+            let url: URL
+            do {
+                guard let selection = try await client.selectDecodedOutputURL(
+                    defaultFilename: defaultFilename,
+                    fileExtension: payload.fileExtension
+                ) else { return }
+                url = selection
+            } catch is CancellationError {
+                return
+            } catch {
+                guard isSavingDecoded, isCurrentDecodedPayload(payload, generation: generation),
+                      !Task.isCancelled else { return }
+                saveError = FileInputPanelFailure.diagnosticMessage(for: error)
                 return
             }
 
             guard isSavingDecoded, isCurrentDecodedPayload(payload, generation: generation),
-                  !Task.isCancelled else {
-                finishDecodedSave(generation: generation)
-                return
-            }
+                  !Task.isCancelled else { return }
 
             let result = await processor.write(payload.data, to: url)
             guard isSavingDecoded, isCurrentDecodedPayload(payload, generation: generation),
-                  !Task.isCancelled else {
-                finishDecodedSave(generation: generation)
-                return
-            }
+                  !Task.isCancelled else { return }
 
             switch result {
             case .success:
                 mutate { $0.setReverseError(nil) }
                 onSuccess()
             case .failure(let failure):
-                finishDecodedSave(
-                    generation: generation,
-                    error: failure.errorDescription ?? "无法保存文件。"
-                )
-                return
+                saveError = failure.errorDescription ?? "无法保存文件。"
             }
-            finishDecodedSave(generation: generation)
         }
     }
 

@@ -1258,6 +1258,29 @@ struct Base64FileWorkflowTests {
         #expect(session.reverseError == "已有文件选择器正在打开。")
     }
 
+    @Test func bothSaveDirectionsReportARealSheetFailure() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let client = Base64FileWorkflowClient.sheet(outputPanel: FileOutputPanelClient { _ in
+            throw FileInputPanelFailure.windowUnavailable
+        })
+        let selection = Self.selection()
+        processor.readSelectionResult = .success(selection)
+        await session.readSelectedFile(from: URL(fileURLWithPath: "/tmp/source.bin"), processor: processor)?.value
+        await session.saveEncodedOutput(client: client, processor: processor)?.value
+        #expect(session.fileError == FileInputPanelFailure.windowUnavailable.errorDescription)
+        #expect(session.outputAction == nil)
+
+        processor.decodeResult = .success(Base64Conversion.FilePayload(
+            data: selection.data, mimeType: selection.mimeType, fileExtension: "bin"
+        ))
+        session.updateReverseInput(selection.data.base64EncodedString())
+        await session.decodeReverseInput(processor: processor)?.value
+        await session.saveDecodedPayload(client: client, processor: processor)?.value
+        #expect(session.reverseError == FileInputPanelFailure.windowUnavailable.errorDescription)
+        #expect(!session.isSavingDecoded)
+    }
+
     @Test func sessionDecodedSaveHandlesCancelSuccessFailureAndStalePayload() async {
         let session = Base64FileWorkflowSession()
         let processor = FakeBase64FileWorkflowProcessor()

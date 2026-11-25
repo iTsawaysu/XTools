@@ -189,6 +189,42 @@ struct FileInputPanelTests {
         }
     }
 
+    @Test(arguments: [false, true])
+    func cancelledTaskRejectsSelectionBeforePanelCancellationRuns(hasSelection: Bool) async throws {
+        let backend = FakeFileInputPanelBackend()
+        let coordinator = FileInputPanelCoordinator { backend }
+        let window = makeWindow()
+        coordinator.attach(to: window)
+        let task = Task { try await coordinator.selectFile(FileInputPanelRequest()) }
+        defer { task.cancel() }
+        try #require(await backend.waitForPresentation(count: 1))
+
+        task.cancel()
+        backend.completeLatest(with: .selected(hasSelection ? [URL(fileURLWithPath: "/tmp/late.txt")] : []))
+
+        await #expect(throws: CancellationError.self) { try await task.value }
+    }
+
+    @Test func replacingTheCoordinatorRebindsTheAlreadyMountedWindow() async throws {
+        let first = FileInputPanelCoordinator { FakeFileInputPanelBackend() }
+        let backend = FakeFileInputPanelBackend()
+        let second = FileInputPanelCoordinator { backend }
+        let view = FilePanelWindowView(coordinator: first)
+        let window = makeWindow()
+        window.contentView?.addSubview(view)
+        view.updateCoordinator(second)
+        defer { view.detach() }
+
+        await #expect(throws: FileInputPanelFailure.windowUnavailable) {
+            try await first.selectFile(FileInputPanelRequest())
+        }
+        let task = Task { try await second.selectFile(FileInputPanelRequest()) }
+        defer { task.cancel() }
+        try #require(await backend.waitForPresentation(count: 1))
+        backend.completeLatest(with: .cancelled)
+        #expect(try await task.value == nil)
+    }
+
     @Test func detachingOwningWindowCancelsOnlyItsActiveRequest() async {
         let backend = FakeFileInputPanelBackend()
         let coordinator = FileInputPanelCoordinator { backend }
