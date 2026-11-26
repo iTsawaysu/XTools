@@ -8,7 +8,7 @@ import Testing
         #expect(result.status == 0, "ui-lint failed:\n\(result.output)")
     }
 
-    @Test func pagePrivateButtonStyleIsRejected() throws {
+    @Test func lintCollectsAllViolationsEvenWhenOutputExceedsPipeCapacity() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("xtools-ui-lint-\(UUID().uuidString)")
         let page = root
@@ -17,18 +17,15 @@ import Testing
             at: page.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try """
-        struct FixturePage: View {
-            var body: some View {
-                Button("x") {}
-                    .buttonStyle(.plain)
-            }
-        }
-        """.write(to: page, atomically: true, encoding: .utf8)
+        let violationCount = 900
+        let modifiers = String(repeating: "            .buttonStyle(.plain)\n", count: violationCount)
+        let source = "struct FixturePage: View {\n    var body: some View {\n        Button(\"x\") {}\n"
+            + modifiers + "    }\n}\n"
+        try source.write(to: page, atomically: true, encoding: .utf8)
 
         let result = try runLint(root: root)
-        #expect(result.status != 0)
-        #expect(result.output.contains("page-plain-button-style"))
+        #expect(result.status == 1)
+        #expect(result.output.split(separator: "\n").filter { $0.contains("page-plain-button-style") }.count == violationCount)
     }
 
     private func runLint(root: URL) throws -> (status: Int32, output: String) {
@@ -41,8 +38,8 @@ import Testing
         process.standardOutput = pipe
         process.standardError = pipe
         try process.run()
-        process.waitUntilExit()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
         return (
             process.terminationStatus,
             String(decoding: data, as: UTF8.self)

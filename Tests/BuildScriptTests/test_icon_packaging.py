@@ -15,6 +15,129 @@ import unittest
 
 
 class IconPackagingTests(unittest.TestCase):
+    def test_clean_preserves_an_app_that_appears_during_cache_archive(self):
+        repository = Path(__file__).resolve().parents[2]
+        fixture = Path(tempfile.mkdtemp(prefix="xtools-clean-handoff-"))
+        project = fixture / "project"
+        (project / "tools").mkdir(parents=True)
+        for relative in ("build.sh", "tools/packaging-app.js"):
+            shutil.copy2(repository / relative, project / relative)
+        binaries = fixture / "bin"
+        binaries.mkdir()
+        move = binaries / "mv"
+        move.write_text("""#!/bin/sh
+set -eu
+if [ "$1" = "$TEST_CACHE" ]; then
+    if [ -d "$TEST_APP" ]; then /bin/mv "$TEST_APP" "$TEST_APP.original"; fi
+    /bin/mv "$TEST_REPLACEMENT" "$TEST_APP"
+fi
+exec /bin/mv "$@"
+""")
+        move.chmod(0o755)
+
+        for original_exists in (False, True):
+            for replacement_id in ("com.sun.xtools", "com.example.other"):
+                with self.subTest(original_exists=original_exists, replacement_id=replacement_id):
+                    case = fixture / f"{original_exists}-{replacement_id}"
+                    cache = case / "cache"
+                    cache.mkdir(parents=True)
+                    (cache / ".xtools-cache-owner").write_text(str(project.resolve()) + "\n")
+                    output = case / "output"
+                    output.mkdir()
+                    app = output / "XTools.app"
+                    replacement = case / "replacement.app"
+                    archive = case / "archive"
+                    for bundle, identifier in [(replacement, replacement_id)] + (
+                        [(app, "com.sun.xtools")] if original_exists else []
+                    ):
+                        contents = bundle / "Contents"
+                        contents.mkdir(parents=True)
+                        (contents / "Info.plist").write_bytes(plistlib.dumps({
+                            "CFBundleExecutable": "XTools", "CFBundleIdentifier": identifier
+                        }))
+                    inode = replacement.stat().st_ino
+                    environment = dict(
+                        os.environ, PATH=f"{binaries}:{os.environ['PATH']}", SWIFT_BIN="/usr/bin/false",
+                        BUNDLE_ID="com.sun.xtools", SWIFTPM_BUILD_DIR=str(cache), OUTPUT_DIR=str(output),
+                        TRASH_DIR=str(archive), TEST_CACHE=str(cache), TEST_APP=str(app),
+                        TEST_REPLACEMENT=str(replacement),
+                    )
+                    result = subprocess.run([str(project / "build.sh"), "clean"], env=environment,
+                                            text=True, capture_output=True)
+                    self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                    self.assertIn("Destination changed", result.stderr)
+                    self.assertEqual(app.stat().st_ino, inode)
+                    self.assertFalse(list(archive.glob("XTools.app.*")))
+
+    def test_rebuild_keeps_existing_app_out_of_cache_archive(self):
+        repository = Path(__file__).resolve().parents[2]
+        fixture = Path(tempfile.mkdtemp(prefix="xtools-rebuild-overlap-"))
+        project = fixture / "project"
+        project.mkdir()
+        shutil.copy2(repository / "build.sh", project / "build.sh")
+        tools = project / "tools"
+        tools.mkdir()
+        shutil.copy2(repository / "tools/packaging-app.js", tools / "packaging-app.js")
+        (tools / "ui-lint.py").write_text("pass\n")
+        swift = fixture / "swift"
+        swift.write_text("#!/bin/sh\nexit 42\n")
+        swift.chmod(0o755)
+
+        app_contents = project / ".build" / "output" / "XTools.app" / "Contents"
+        app_contents.mkdir(parents=True)
+        (app_contents / "Info.plist").write_bytes(plistlib.dumps({
+            "CFBundleExecutable": "XTools", "CFBundleIdentifier": "com.sun.xtools"
+        }))
+        original = app_contents / "previous.txt"
+        original.write_text("previous app")
+        (project / "output-alias").symlink_to(app_contents.parent.parent, target_is_directory=True)
+        archive = fixture / "archive"
+        environment = dict(os.environ, SWIFT_BIN=str(swift), SWIFTPM_BUILD_DIR=".build", BUNDLE_ID="com.sun.xtools",
+                           OUTPUT_DIR="output-alias", TRASH_DIR=str(archive))
+
+        for operation in ("rebuild", "clean"):
+            with self.subTest(operation=operation):
+                preflight = subprocess.run([str(project / "build.sh"), operation], env=environment,
+                                           text=True, capture_output=True)
+                self.assertNotEqual(preflight.returncode, 0)
+                self.assertIn("App destination must be outside", preflight.stderr)
+                self.assertEqual(original.read_text(), "previous app")
+                self.assertFalse(archive.exists())
+
+    def test_clean_preserves_same_name_app_with_another_bundle_identifier(self):
+        repository = Path(__file__).resolve().parents[2]
+        fixture = Path(tempfile.mkdtemp(prefix="xtools-app-ownership-"))
+        project = fixture / "project"
+        (project / "tools").mkdir(parents=True)
+        for relative in ("build.sh", "tools/packaging-app.js"):
+            shutil.copy2(repository / relative, project / relative)
+        output = fixture / "output"
+        contents = output / "XTools.app" / "Contents"
+        contents.mkdir(parents=True)
+        metadata = contents / "Info.plist"
+        metadata.write_bytes(plistlib.dumps({
+            "CFBundleExecutable": "XTools", "CFBundleIdentifier": "com.example.other"
+        }))
+        original = contents / "keep.txt"
+        original.write_text("other project")
+        archive = fixture / "archive"
+        environment = dict(os.environ, OUTPUT_DIR=str(output), TRASH_DIR=str(archive),
+                           BUNDLE_ID="com.sun.xtools", SWIFTPM_BUILD_DIR=".build")
+
+        command = [str(project / "build.sh"), "clean"]
+        foreign = subprocess.run(command, env=environment, text=True, capture_output=True)
+        self.assertNotEqual(foreign.returncode, 0, foreign.stdout + foreign.stderr)
+        self.assertIn("bundle identifier", foreign.stderr)
+        self.assertEqual(original.read_text(), "other project")
+        self.assertFalse(archive.exists())
+
+        matching = subprocess.run(command, env={**environment, "BUNDLE_ID": "com.example.other"},
+                                  text=True, capture_output=True)
+        self.assertEqual(matching.returncode, 0, matching.stdout + matching.stderr)
+        self.assertFalse(original.exists())
+        [retired] = archive.glob("XTools.app.*")
+        self.assertEqual((retired / "Contents" / "keep.txt").read_text(), "other project")
+
     def test_custom_clean_archives_only_the_cache_claimed_by_this_project(self):
         repository = Path(__file__).resolve().parents[2]
         fixture = Path(tempfile.mkdtemp(prefix="xtools-cache-ownership-"))
@@ -129,6 +252,9 @@ function run(argv) {
                             '  mv "$OUTPUT_DIR/XTools.app" "$OUTPUT_DIR/prior.app" || exit 51\n'
                             '  mkdir "$OUTPUT_DIR/XTools.app" || exit 52\n'
                             '  printf "foreign" > "$OUTPUT_DIR/XTools.app/keep.txt"\n'
+                            'elif [ "${CHANGE_BUNDLE_ID:-}" = 1 ] && [ "$1" = "--verify" ]; then\n'
+                            '  plutil -replace CFBundleIdentifier -string com.example.other '
+                            '"$OUTPUT_DIR/XTools.app/Contents/Info.plist"\n'
                             'fi\n')
         codesign.chmod(0o755)
         osascript = binaries / "osascript"
@@ -305,6 +431,14 @@ function run(argv) {
         app.rename(fixture / "foreign.app")
         app.with_name("prior.app").rename(app)
         self.assertEqual(info_plist.read_bytes(), previous_metadata)
+
+        edited = subprocess.run([str(fixture / "build.sh"), "package", "debug"],
+                                env={**environment, "CHANGE_BUNDLE_ID": "1"}, text=True, capture_output=True)
+        self.assertNotEqual(edited.returncode, 0, edited.stdout + edited.stderr)
+        self.assertIn("bundle identifier", edited.stderr)
+        self.assertEqual(plistlib.loads(info_plist.read_bytes())["CFBundleIdentifier"], "com.example.other")
+        self.assertEqual(packaged.read_bytes(), b"replacement-icon")
+        info_plist.write_bytes(previous_metadata)
 
         blocked_archive = fixture / "archive-is-a-file"
         blocked_archive.write_text("unrelated")

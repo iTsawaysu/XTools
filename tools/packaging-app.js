@@ -58,34 +58,35 @@ function move(from, to) {
     }
 }
 
-function checkDestination(target, expectedIdentity) {
+function checkDestination(target, expectedIdentity, bundleIdentifier) {
     const attrs = fileManager.attributesOfItemAtPathError(target, null);
     const exists = !attrs.isNil();
     if ((fileIdentity(target) ?? "missing") !== expectedIdentity) {
-        throw Error("Destination changed while packaging: " + target);
+        throw Error("Destination changed: " + target);
     }
     if (exists && ObjC.unwrap(attrs.objectForKey($.NSFileType)) !== ObjC.unwrap($.NSFileTypeDirectory)) {
         throw Error("Invalid app destination: " + target);
     }
     if (exists) {
         const info = $.NSDictionary.dictionaryWithContentsOfFile(target + "/Contents/Info.plist");
-        if (info.isNil() || ObjC.unwrap(info.objectForKey("CFBundleExecutable")) !== productName) {
-            throw Error("Not an XTools package: " + target);
+        if (info.isNil() || ObjC.unwrap(info.objectForKey("CFBundleExecutable")) !== productName
+            || ObjC.unwrap(info.objectForKey("CFBundleIdentifier")) !== bundleIdentifier) {
+            throw Error("Not an XTools package for bundle identifier " + bundleIdentifier + ": " + target);
         }
     }
     return exists;
 }
 
-function publish(candidate, target, expectedIdentity) {
+function publish(candidate, target, expectedIdentity, bundleIdentifier) {
     ObjC.bindFunction("renamex_np", ["int", ["char *", "char *", "unsigned int"]]);
     ObjC.bindFunction("__error", ["int *", []]);
-    const exists = checkDestination(target, expectedIdentity);
+    const exists = checkDestination(target, expectedIdentity, bundleIdentifier);
     if ($.renamex_np(candidate, target, exists ? renameSwap : renameExclusive) === 0) return;
     const code = $.__error()[0];
     // Darwin ENOTSUP / EOPNOTSUPP. Other failures leave the old app in place.
     if (code !== 45 && code !== 102) throw Error("Cannot publish " + target + " (errno " + code + ")");
 
-    publishByMoving(candidate, target, exists);
+    publishByMoving(candidate, target, checkDestination(target, expectedIdentity, bundleIdentifier));
 }
 
 function publishByMoving(candidate, target, exists) {
@@ -104,9 +105,9 @@ function publishByMoving(candidate, target, exists) {
 }
 
 function run(argv) {
-    const [action, target, candidate, mayStop, expectedIdentity] = argv;
+    const [action, target, candidate, mayStop, expectedIdentity, bundleIdentifier] = argv;
     const path = bundlePath(target);
-    if (action === "publish") checkDestination(path, expectedIdentity);
+    if (action !== "launch") checkDestination(path, expectedIdentity, bundleIdentifier);
     const apps = runningAt(path);
     if (apps.length > 0) {
         if (action === "launch" && mayStop !== "yes") {
@@ -123,7 +124,10 @@ function run(argv) {
         }
         waitFor(path, false);
     }
-    if (action === "publish") publish(candidate, path, expectedIdentity);
+    if (action === "publish") publish(candidate, path, expectedIdentity, bundleIdentifier);
+    if (action === "archive" && checkDestination(path, expectedIdentity, bundleIdentifier)) {
+        move(path, candidate);
+    }
     if (action === "launch") {
         const task = $.NSTask.alloc.init;
         task.executableURL = $.NSURL.fileURLWithPath("/usr/bin/open");

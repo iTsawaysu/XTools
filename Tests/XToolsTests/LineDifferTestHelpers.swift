@@ -1,5 +1,3 @@
-#if DEBUG
-import Foundation
 @testable import XToolsCore
 
 extension LineDiffer {
@@ -7,4 +5,3 @@ extension LineDiffer {
         try! safeAlignedDiff(left: left, right: right, budget: LineDiffBudget(maximumLCSCells: .max), shouldCancel: { false })
     }
 }
-#endif

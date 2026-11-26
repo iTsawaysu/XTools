@@ -5,6 +5,7 @@ import SwiftUI
 import Testing
 
 struct SidebarNavigationListTests {
+    #if DEBUG
     @Test @MainActor func coordinatorOwnsOneFlippedDocumentAndReusesToolTrackAcrossFavoriteMigration() throws {
         let coordinator = SidebarNavigationListCoordinator()
         let scrollView = coordinator.makeScrollView()
@@ -142,6 +143,8 @@ struct SidebarNavigationListTests {
         #expect(coordinator.debugTrackState(for: "tool.list-beta")?.isHovered == false)
     }
 
+    #endif
+
     @Test @MainActor func favoriteReducedMotionLandsFinalFramesAndClearsFade() async throws {
         let coordinator = SidebarNavigationListCoordinator()
         let scrollView = coordinator.makeScrollView()
@@ -178,9 +181,10 @@ struct SidebarNavigationListTests {
         )
         #expect(alphaTrack.frame == expected)
         try await Task.sleep(for: .milliseconds(180))
-        #expect(coordinator.debugTrackAlpha(for: "tool.list-alpha") == 1)
+        #expect(alphaTrack.alphaValue == 1)
     }
 
+    #if DEBUG
     @Test @MainActor func favoriteAnimationCompletionReconcilesStationaryPointerAtFinalFrame() async throws {
         let pointer = SidebarPointerLocationBox()
         let coordinator = SidebarNavigationListCoordinator(
@@ -461,6 +465,8 @@ struct SidebarNavigationListTests {
         #expect(state.isAccessibilityHidden)
     }
 
+    #endif
+
     @Test @MainActor func documentReplacesItsVisiblePointerTrackingArea() {
         let documentView = SidebarNavigationDocumentView()
         documentView.frame = CGRect(x: 0, y: 0, width: 220, height: 400)
@@ -500,6 +506,7 @@ struct SidebarNavigationListTests {
         #expect(indicator.frame == scrollView.bounds)
     }
 
+    #if DEBUG
     @Test @MainActor func scrollIndicatorKnobTracksScrollProportionAndMinimumLength() throws {
         let coordinator = SidebarNavigationListCoordinator()
         let scrollView = try #require(coordinator.makeScrollView() as? SidebarNavigationScrollView)
@@ -658,6 +665,8 @@ struct SidebarNavigationListTests {
         #expect(afterSelection.isInteractionEnabled)
     }
 
+    #endif
+
     @Test @MainActor func collapsePreparationDisablesHostedControlsAndAccessibilityImmediately() {
         let button = NSButton(title: "Alpha", target: nil, action: nil)
         let track = SidebarNavigationTrackView(
@@ -676,7 +685,7 @@ struct SidebarNavigationListTests {
         #expect(!button.isEnabled)
         #expect(button.isAccessibilityHidden())
         #expect(track.hitTest(NSPoint(x: 2, y: 2)) == nil)
-        #expect(track.debugState.contentHeight == SidebarMetrics.expandedRowHeight)
+        #expect(button.frame.height == SidebarMetrics.expandedRowHeight)
     }
 
     @Test @MainActor func expansionPreparationKeepsHostedControlsEnabledWhileStandardHitTestingWaits() {
@@ -702,7 +711,9 @@ struct SidebarNavigationListTests {
         #expect(button.isEnabled)
         #expect(button.isAccessibilityHidden())
         #expect(track.hitTest(NSPoint(x: 2, y: 2)) == nil)
+        #if DEBUG
         #expect(track.debugState.acceptsPresentationSelection)
+        #endif
     }
 
     @Test @MainActor func presentationSelectionLandsLatestExpansionAndSelectsExactlyOnce() throws {
@@ -732,16 +743,19 @@ struct SidebarNavigationListTests {
             )
         )
 
+        #if DEBUG
         let preparing = try #require(
             coordinator.debugTrackState(for: "tool.list-alpha")
         )
         #expect(!preparing.isInteractionEnabled)
         #expect(preparing.areHostedControlsEnabled)
         #expect(preparing.acceptsPresentationSelection)
+        #endif
 
         #expect(coordinator.activatePresentationTool(.alpha))
         #expect(selections == [.alpha])
 
+        #if DEBUG
         let landed = try #require(
             coordinator.debugTrackState(for: "tool.list-alpha")
         )
@@ -750,6 +764,7 @@ struct SidebarNavigationListTests {
         #expect(landed.areHostedControlsEnabled)
         #expect(!landed.isAccessibilityHidden)
         #expect(!landed.acceptsPresentationSelection)
+        #endif
         #expect(!coordinator.activatePresentationTool(.alpha))
         #expect(selections == [.alpha])
     }
@@ -797,14 +812,17 @@ struct SidebarNavigationListTests {
         coordinator.documentView.keyDown(with: event)
 
         #expect(selections == [.alpha])
+        #if DEBUG
         let landed = try #require(
             coordinator.debugTrackState(for: "tool.list-alpha")
         )
         #expect(landed.isInteractionEnabled)
         #expect(!landed.isAccessibilityHidden)
         #expect(!landed.acceptsPresentationSelection)
+        #endif
     }
 
+    #if DEBUG
     @Test @MainActor func tripleToggleFinishesAtLatestTargetAndReduceMotionLandsImmediately() async throws {
         let coordinator = SidebarNavigationListCoordinator()
         let scrollView = coordinator.makeScrollView()
@@ -907,6 +925,8 @@ struct SidebarNavigationListTests {
         #expect(!restored.isInteractionEnabled)
     }
 
+    #endif
+
     @Test @MainActor func resizePreservesHostedContentGeometryAfterFinalLayoutFlush() throws {
         let coordinator = SidebarNavigationListCoordinator()
         let scrollView = coordinator.makeScrollView()
@@ -983,7 +1003,9 @@ struct SidebarNavigationListTests {
         #expect(abs(originY - expectedOrigin) < 0.5)
         #expect(selectedFrame.minY >= originY)
         #expect(selectedFrame.maxY <= originY + viewportHeight)
+        #if DEBUG
         #expect(coordinator.debugSelectionIndicatorState.frame == selectedFrame)
+        #endif
         // 直接切换选中工具不改变分类展开状态。
         #expect(coordinator.activeTrackIDs == entries.map(\.id))
     }
@@ -1046,7 +1068,9 @@ struct SidebarNavigationListTests {
             )
         )
         #expect(scrollView.contentView.bounds.origin.y == 0)
+        #if DEBUG
         #expect(!coordinator.debugSelectionIndicatorState.isVisible)
+        #endif
 
         coordinator.update(
             scrollView: scrollView,
@@ -1070,7 +1094,9 @@ struct SidebarNavigationListTests {
         #expect(abs(originY - expectedOrigin) < 0.5)
         #expect(selectedFrame.minY >= originY)
         #expect(selectedFrame.maxY <= originY + viewportHeight)
+        #if DEBUG
         #expect(coordinator.debugSelectionIndicatorState.isVisible)
+        #endif
         #expect(coordinator.activeTrackIDs == entries.map(\.id))
     }
 

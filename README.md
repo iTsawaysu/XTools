@@ -6,7 +6,6 @@
   <p><em>A quiet, native macOS developer toolbox. Fast, local-first, and keyboard-driven.</em></p>
 
   <p>
-    <a href="https://github.com/iTsawaysu/XTools/releases"><img src="https://img.shields.io/github/v/release/iTsawaysu/XTools?style=flat-square&color=black" alt="Release"></a>
     <a href="https://github.com/iTsawaysu/XTools/stargazers"><img src="https://img.shields.io/github/stars/iTsawaysu/XTools?style=flat-square&color=orange" alt="Stars"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License"></a>
     <img src="https://img.shields.io/badge/macOS-14.0%2B-orange?style=flat-square" alt="macOS 14+">
@@ -24,12 +23,6 @@ XTools packs 33 developer utilities into a single native macOS application. Most
 
 ## Quick Start
 
-### 1. Download DMG (Recommended)
-
-Download the latest DMG from [GitHub Releases](https://github.com/iTsawaysu/XTools/releases/latest), open it, and drag XTools into `Applications`. Requires macOS 14.0+ on Apple Silicon or Intel; packaged builds target the current architecture.
-
-### 2. Build from Source
-
 Build with Xcode 16 or later and Python 3 on a macOS version supported by your Xcode installation. The packaged app runs on macOS 14 or later.
 
 ```bash
@@ -38,11 +31,11 @@ cd XTools
 ./build.sh           # Release build, package, and open the app
 ./build.sh dev       # Debug build for fast iteration
 ./build.sh build     # Release build and package without opening
-swift test           # Run the Swift test suite
+swift test --no-parallel  # Run the Swift suite with isolated native focus transitions
 python3 -B -m unittest discover -s Tests/BuildScriptTests -v  # Check packaging
 ```
 
-Packaged builds are written to `build/XTools.app`.
+By default, the app is built for the Mac's current architecture and written to `build/XTools.app`. Pair a custom `BUNDLE_ID` with a separate `OUTPUT_DIR`. Keep the app output separate from the SwiftPM cache for `clean` and `rebuild`.
 
 ## Features
 

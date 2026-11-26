@@ -1,5 +1,3 @@
-#if DEBUG
-import Foundation
 @testable import XToolsCore
 
 extension JSONStructuralDiff {
@@ -7,4 +5,3 @@ extension JSONStructuralDiff {
         try! cancellablePreparedDiff(left: left, right: right, labels: labels, budget: budget, shouldCancel: { false }).decision
     }
 }
-#endif

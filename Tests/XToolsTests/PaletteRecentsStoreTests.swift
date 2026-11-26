@@ -196,6 +196,7 @@ struct PaletteRecentsStoreTests {
         #expect(ids.filter { $0 == "tool.jwt-parser" }.count == 1)
     }
 
+    #if DEBUG
     /// Warm ⌘K sessions present the same stable action list (including the
     /// static UUID command row). The landing cache keys on the full action
     /// list plus recents, so identical actions across sessions are served
@@ -259,6 +260,7 @@ struct PaletteRecentsStoreTests {
         }
         return nil
     }
+    #endif
 
     @Test func queryRankingStaysIdenticalWithoutUsageData() {
         let model = CommandPaletteSessionModel(registry: .default, actions: [])

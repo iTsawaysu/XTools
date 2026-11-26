@@ -6,9 +6,9 @@ struct TimestampInterpreterTests {
     // MARK: - Integer seconds input
 
     @Test func readsIntegerUnixSecondsOnly() {
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "1718900000") == 1_718_900_000)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "0") == 0)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "-1718900000") == -1_718_900_000)
+        #expect(TimestampInterpreter.evaluate("1718900000") == .valid(1_718_900_000))
+        #expect(TimestampInterpreter.evaluate("0") == .valid(0))
+        #expect(TimestampInterpreter.evaluate("-1718900000") == .valid(-1_718_900_000))
     }
 
     @Test func typedInputStatesDistinguishEditingFormatAndRangeFailures() {
@@ -54,30 +54,26 @@ struct TimestampInterpreterTests {
 
     // MARK: - Invalid input
 
-    @Test func returnsNilForIncompleteOrNonIntegerInput() {
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "") == nil)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "-") == nil)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "+1") == nil)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "abc") == nil)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "1718900000.5") == nil)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: ".5") == nil)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "123.") == nil)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "1e3") == nil)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "--1") == nil)
+    @Test func distinguishesIncompleteAndNonIntegerInput() {
+        #expect(TimestampInterpreter.evaluate("") == .empty)
+        #expect(TimestampInterpreter.evaluate("-") == .incomplete)
+        for text in ["+1", "abc", "1718900000.5", ".5", "123.", "1e3", "--1"] {
+            #expect(TimestampInterpreter.evaluate(text) == .invalid(.nonIntegerFormat))
+        }
     }
 
-    @Test func returnsNilForNonFiniteValues() {
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "inf") == nil)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "nan") == nil)
+    @Test func rejectsNonFiniteValues() {
+        #expect(TimestampInterpreter.evaluate("inf") == .invalid(.nonIntegerFormat))
+        #expect(TimestampInterpreter.evaluate("nan") == .invalid(.nonIntegerFormat))
     }
 
     @Test func rejectsValuesOutsideSupportedHumanDateRange() {
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "-62135596800") == -62_135_596_800)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "253402300799") == 253_402_300_799)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "-62135596801") == nil)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "253402300800") == nil)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "1718900000000") == nil)
-        #expect(TimestampInterpreter.integerSeconds(fromTrimmed: "999999999999999999999999") == nil)
+        #expect(TimestampInterpreter.evaluate("-62135596800") == .valid(-62_135_596_800))
+        #expect(TimestampInterpreter.evaluate("253402300799") == .valid(253_402_300_799))
+        #expect(TimestampInterpreter.evaluate("-62135596801") == .invalid(.outOfRange))
+        #expect(TimestampInterpreter.evaluate("253402300800") == .invalid(.outOfRangePossiblyMilliseconds))
+        #expect(TimestampInterpreter.evaluate("1718900000000") == .invalid(.outOfRangePossiblyMilliseconds))
+        #expect(TimestampInterpreter.evaluate("999999999999999999999999") == .invalid(.outOfRange))
     }
 
 

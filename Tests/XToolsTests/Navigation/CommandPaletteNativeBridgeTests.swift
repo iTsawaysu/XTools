@@ -4,6 +4,7 @@ import Testing
 
 @Suite(.serialized)
 struct CommandPaletteNativeBridgeTests {
+    #if DEBUG
     @Test @MainActor
     func suspendKeepsTheEntryButStopsNativeCallbacksUntilTheNextSession() throws {
         let registry = CommandPaletteRevealRegistry()
@@ -61,6 +62,7 @@ struct CommandPaletteNativeBridgeTests {
         #expect(registry.debugEntryCount == 0)
         #expect(registry.debugObservedClipViewCount == 0)
     }
+    #endif
 
     @Test @MainActor
     func aNewResumeInvalidatesThePriorSessionBeforeItsRowsAreReconfigured() throws {
@@ -73,16 +75,22 @@ struct CommandPaletteNativeBridgeTests {
         registry.resume(session: 31)
         document.addSubview(view)
         Self.configure(view, registry: registry, tracker: tracker, session: 31, interactionEnabled: true)
+        #if DEBUG
         #expect(registry.debugIsObserving(scrollView.contentView))
+        #endif
         #expect(Self.pointerTrackingAreaCount(in: view) == 1)
 
         registry.resume(session: 32)
+        #if DEBUG
         #expect(registry.debugEntryCount == 1)
         #expect(registry.debugObservedClipViewCount == 0)
+        #endif
         #expect(Self.pointerTrackingAreaCount(in: view) == 0)
 
         Self.configure(view, registry: registry, tracker: tracker, session: 32, interactionEnabled: true)
+        #if DEBUG
         #expect(registry.debugIsObserving(scrollView.contentView))
+        #endif
         #expect(Self.pointerTrackingAreaCount(in: view) == 1)
     }
 
@@ -107,7 +115,9 @@ struct CommandPaletteNativeBridgeTests {
         registry.resume(session: 12)
         #expect(!registry.hasLatestPendingKeyboardReveal(itemID: "tool.json"))
         #expect(!registry.hasManualScrollAfterLatestKeyboardReveal())
+        #if DEBUG
         #expect(registry.debugObservedClipViewCount == 0)
+        #endif
         #expect(Self.pointerTrackingAreaCount(in: view) == 0)
     }
 
@@ -142,14 +152,18 @@ struct CommandPaletteNativeBridgeTests {
 
         document.addSubview(view)
         Self.configure(view, registry: registry, tracker: tracker, session: 22, interactionEnabled: true)
+        #if DEBUG
         #expect(registry.debugObservedClipViewCount == 1)
+        #endif
         #expect(Self.pointerTrackingAreaCount(in: view) == 1)
 
         await Self.drainMainQueue()
         #expect(scrollView.contentView.bounds.origin.y == 0)
 
         registry.suspend(session: 22)
+        #if DEBUG
         #expect(registry.debugObservedClipViewCount == 0)
+        #endif
         #expect(Self.pointerTrackingAreaCount(in: view) == 0)
     }
 
@@ -206,7 +220,9 @@ struct CommandPaletteNativeBridgeTests {
             document.addSubview(row)
         }
         let itemIDs = rows.indices.map { "row.\($0)" }
+        #if DEBUG
         var identities: [String: ObjectIdentifier] = [:]
+        #endif
 
         for session in 1...100 {
             registry.resume(session: session)
@@ -221,6 +237,7 @@ struct CommandPaletteNativeBridgeTests {
                 )
             }
 
+            #if DEBUG
             var currentIdentities: [String: ObjectIdentifier] = [:]
             for itemID in itemIDs {
                 guard let identity = registry.debugEntryIdentity(for: itemID) else {
@@ -236,6 +253,7 @@ struct CommandPaletteNativeBridgeTests {
             }
             #expect(registry.debugEntryCount == 50)
             #expect(registry.debugObservedClipViewCount == 1)
+            #endif
             #expect(Self.pointerTrackingAreaCount(in: rows) == 50)
 
             let request = CommandPaletteRevealRequest(
@@ -248,8 +266,10 @@ struct CommandPaletteNativeBridgeTests {
             rows[49].reveal(request: request)
             registry.suspend(session: session)
 
+            #if DEBUG
             #expect(registry.debugEntryCount == 50)
             #expect(registry.debugObservedClipViewCount == 0)
+            #endif
             #expect(Self.pointerTrackingAreaCount(in: rows) == 0)
         }
 
@@ -262,18 +282,23 @@ struct CommandPaletteNativeBridgeTests {
         window.contentView = scrollView
         await Self.drainMainQueue()
         #expect(scrollView.contentView.bounds.origin.y == 0)
+        #if DEBUG
         #expect(registry.debugObservedClipViewCount == 0)
+        #endif
         #expect(Self.pointerTrackingAreaCount(in: rows) == 0)
 
         for row in rows {
             row.unregister()
             row.removeFromSuperview()
         }
+        #if DEBUG
         #expect(registry.debugEntryCount == 0)
         #expect(registry.debugObservedClipViewCount == 0)
+        #endif
         #expect(Self.pointerTrackingAreaCount(in: rows) == 0)
     }
 
+    #if DEBUG
     @Test @MainActor
     func repeatedRegistrationKeepsTheEntryAndReleasesTheOldScrollObserver() throws {
         let registry = CommandPaletteRevealRegistry()
@@ -317,6 +342,7 @@ struct CommandPaletteNativeBridgeTests {
         #expect(registry.debugEntryCount == 0)
         #expect(registry.debugObservedClipViewCount == 0)
     }
+    #endif
 
     @MainActor
     private static func configure(

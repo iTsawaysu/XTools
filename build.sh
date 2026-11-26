@@ -96,17 +96,24 @@ elapsed() {
 archive_path() {
   local path="$1"
   local label="$2"
+  local target
   shift 2
 
   if [[ ! -e "$path" ]]; then
     return 0
   fi
 
-  assert_archive_location "$path" "$@" || return 1
-  mkdir -p "$TRASH_DIR" || return 1
-  local target="$TRASH_DIR/$label.$(timestamp).$$"
+  target="$(archive_destination "$label" "$path" "$@")" || return 1
   mv "$path" "$target" || return 1
   info "Moved $path to $target"
+}
+
+archive_destination() {
+  local label="$1"
+  shift
+  assert_archive_location "$@" || return 1
+  mkdir -p "$TRASH_DIR" || return 1
+  printf '%s/%s.%s.%s\n' "$TRASH_DIR" "$label" "$(timestamp)" "$$"
 }
 
 archive_packaging_scratch() {
@@ -116,22 +123,37 @@ archive_packaging_scratch() {
   fi
 }
 
-assert_archive_location() {
-  if ! python3 -B - "$TRASH_DIR" "$@" <<'PY'
+path_is_outside() {
+  python3 -B - "$@" <<'PY'
 import os
 import sys
 import unicodedata
 
-archive, *sources = (
+mode = sys.argv[1]
+candidate, *sources = (
     unicodedata.normalize("NFD", os.path.realpath(path)).casefold()
-    for path in sys.argv[1:]
+    for path in sys.argv[2:]
 )
-sys.exit(any(os.path.commonpath((archive, source)) == source for source in sources))
+for source in sources:
+    common = os.path.commonpath((candidate, source))
+    if common == source or (mode == "disjoint" and common == candidate):
+        sys.exit(1)
 PY
-  then
+}
+
+assert_archive_location() {
+  if ! path_is_outside descendants "$TRASH_DIR" "$@"; then
     error "Archive must be outside the paths being packaged or moved: $TRASH_DIR"
     return 1
   fi
+}
+
+assert_cache_archive_location() {
+  if ! path_is_outside disjoint "$APP_PATH" "$@"; then
+    error "App destination must be outside and separate from SwiftPM caches: $APP_PATH"
+    return 1
+  fi
+  assert_archive_location "$APP_PATH" "$@"
 }
 
 assert_owned_app_path() {
@@ -139,10 +161,13 @@ assert_owned_app_path() {
     error "Invalid app destination: $APP_PATH"
     return 1
   fi
-  if [[ -d "$APP_PATH" ]] &&
-     [[ "$(plutil -extract CFBundleExecutable raw -o - "$INFO_PLIST" 2>/dev/null || true)" != "$PRODUCT_NAME" ]]; then
-    error "Not an XTools package: $APP_PATH"
-    return 1
+  if [[ -d "$APP_PATH" ]]; then
+    local identity
+    if ! identity="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' -c 'Print :CFBundleIdentifier' "$INFO_PLIST" 2>/dev/null)" ||
+       [[ "$identity" != "$PRODUCT_NAME"$'\n'"$BUNDLE_ID" ]]; then
+      error "Not an XTools package for bundle identifier $BUNDLE_ID: $APP_PATH"
+      return 1
+    fi
   fi
 }
 
@@ -171,7 +196,7 @@ clean_build_caches() {
     return 1
   fi
   if [[ "$BUILD_DIR" == "$DEFAULT_BUILD_DIR" || "$BUILD_DIR" -ef "$DEFAULT_BUILD_DIR" ]]; then
-    assert_archive_location "$APP_PATH" "$DEFAULT_BUILD_DIR" "$LEGACY_SCRATCH_DIR"
+    assert_cache_archive_location "$DEFAULT_BUILD_DIR" "$LEGACY_SCRATCH_DIR"
     archive_path "$DEFAULT_BUILD_DIR" ".build"
     archive_path "$LEGACY_SCRATCH_DIR" ".swiftpm-build"
   else
@@ -180,18 +205,28 @@ clean_build_caches() {
       error "Kept unowned SwiftPM cache: $BUILD_DIR"
       return 1
     fi
-    assert_archive_location "$APP_PATH" "$BUILD_DIR"
+    assert_cache_archive_location "$BUILD_DIR"
     archive_path "$BUILD_DIR" "xtools-swiftpm-cache"
   fi
 }
 
 clean() {
+  local identity destination
+  identity="$(stat -f '%d:%i' "$APP_PATH" 2>/dev/null || printf 'missing')"
   assert_owned_app_path
-  if [[ -d "$APP_PATH" ]]; then
-    app_path_command check "$APP_PATH"
+  if [[ "$identity" != "missing" ]]; then
+    app_path_command check "$APP_PATH" "" no "$identity" "$BUNDLE_ID"
   fi
   clean_build_caches
-  archive_path "$APP_PATH" "$APP_NAME"
+  if [[ "$identity" != "missing" || -e "$APP_PATH" || -L "$APP_PATH" ]]; then
+    if [[ "$identity" == "missing" ]]; then
+      error "Destination changed while cleaning: $APP_PATH"
+      return 1
+    fi
+    destination="$(archive_destination "$APP_NAME" "$APP_PATH")"
+    app_path_command archive "$APP_PATH" "$destination" no "$identity" "$BUNDLE_ID"
+    info "Moved $APP_PATH to $destination"
+  fi
   info "Clean complete"
 }
 
@@ -490,7 +525,7 @@ package_app() (
   codesign --force --sign - "$APP_PATH" >/dev/null
   verify_package "$APP_PATH"
 
-  app_path_command publish "$target" "$APP_PATH" "$may_stop" "$target_identity"
+  app_path_command publish "$target" "$APP_PATH" "$may_stop" "$target_identity" "$BUNDLE_ID"
   if [[ "$icon_changed" == "1" || "${LSREGISTER_EVERY_BUILD:-0}" == "1" ]] && [[ -x "$LSREGISTER" ]]; then
     "$LSREGISTER" -f "$target" >/dev/null 2>&1 || true
   fi

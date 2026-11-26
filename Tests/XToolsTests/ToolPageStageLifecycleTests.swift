@@ -17,8 +17,6 @@ struct ToolPageStageLifecycleTests {
     }
 
     @Test func parkedPageRetainsStateUntilLruEviction() async throws {
-        try #require(!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
-                     "This lifecycle case requires the retained-page motion path")
         let selection = StageTestSelection()
         let recorder = StageTestRecorder()
         let window = NSWindow(
@@ -66,7 +64,6 @@ struct ToolPageStageLifecycleTests {
     }
 
     @Test func rapidReversalKeepsBothPageIdentitiesAndLatestSelection() async throws {
-        try #require(!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         let selection = StageTestSelection()
         let recorder = StageTestRecorder()
         let window = NSWindow(
@@ -292,6 +289,7 @@ private struct StageTestHost: View {
                 StageTestPage(key: id.rawValue, recorder: recorder)
             }
         }
+        .environment(\._accessibilityReduceMotion, false)
     }
 }
 
