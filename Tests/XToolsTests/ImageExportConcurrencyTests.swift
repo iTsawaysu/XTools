@@ -272,6 +272,21 @@ struct ImageExportConcurrencyTests {
         #expect(try Self.openDescriptorCount(for: source) == 0)
     }
 
+    @Test func cancelledSinglePanelPinsTheFileBeforeReadingItsContents() async throws {
+        let directory = try artifactDirectory()
+        let source = directory.appendingPathComponent("source.bin")
+        try Data(repeating: 42, count: 4096).write(to: source)
+        let client = ImageWorkflowClient(dialog: ImageWorkflowDialog(selectSaveURL: { _, _ in
+            let descriptors = try Self.openDescriptors(for: source)
+            #expect(descriptors.count == 1)
+            #expect(descriptors.map { lseek($0, 0, SEEK_CUR) } == [0])
+            return nil
+        }))
+
+        #expect(try await client.saveConvertedImage(at: source, format: .png, defaultBasename: "image") == false)
+        #expect(try Self.openDescriptorCount(for: source) == 0)
+    }
+
     @Test func singleAndSpoolSavesWriteActualBytesOffMainThread() async throws {
         let directory = try artifactDirectory()
         let source = directory.appendingPathComponent("source.bin")
@@ -430,9 +445,13 @@ struct ImageExportConcurrencyTests {
     }
 
     nonisolated private static func openDescriptorCount(for url: URL) throws -> Int {
+        try openDescriptors(for: url).count
+    }
+
+    nonisolated private static func openDescriptors(for url: URL) throws -> [Int32] {
         var target = stat()
         guard stat(url.path, &target) == 0 else { throw CocoaError(.fileReadUnknown) }
-        return try FileManager.default.contentsOfDirectory(atPath: "/dev/fd").compactMap(Int32.init).count { descriptor in
+        return try FileManager.default.contentsOfDirectory(atPath: "/dev/fd").compactMap(Int32.init).filter { descriptor in
             var candidate = stat()
             return fstat(descriptor, &candidate) == 0 && candidate.st_ino == target.st_ino && candidate.st_dev == target.st_dev
         }

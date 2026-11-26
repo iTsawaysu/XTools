@@ -74,17 +74,46 @@ struct ImageWorkflowClient {
         return ImageImportOverview(metadata: selection.metadata, previewData: selection.previewData)
     }
 
-    nonisolated func prepareSelectionData(
+    nonisolated private func prepareSelectionData(
         from url: URL,
         allowedContentTypes: [UTType]
     ) throws -> PreparedImageInputSelection {
+        let input = try prepareProcessingInput(from: url, allowedContentTypes: allowedContentTypes)
+        let previewData = try ImageProcessor.previewImageData(data: input.data)
+        try Task.checkCancellation()
+        return PreparedImageInputSelection(data: input.data, metadata: input.metadata, previewData: previewData)
+    }
+
+    nonisolated func prepareProcessingInput(
+        from url: URL,
+        allowedContentTypes: [UTType]
+    ) throws -> ImageProcessingInput {
         try Task.checkCancellation()
         do {
-            let prepared = try Self.prepareSelectionData(
-                from: url, allowedContentTypes: allowedContentTypes, reader: reader
-            )
+            let accessedSecurityScope = url.startAccessingSecurityScopedResource()
+            defer {
+                if accessedSecurityScope { url.stopAccessingSecurityScopedResource() }
+            }
+            guard try reader.isRegularFile(at: url) else {
+                throw ImageWorkflowFailure.notRegularFile
+            }
+            if let byteCount = try reader.byteCount(for: url) {
+                try ImageProcessingBudget.validateInputByteCount(byteCount)
+            }
+            let data = try reader.readData(from: url)
+            try ImageProcessingBudget.validateInputByteCount(data.count)
+            let filenameExtension = url.pathExtension
+            let metadata = try ImageProcessor.inspect(data: data, filenameExtension: filenameExtension)
+            guard let format = metadata.format,
+                  let actualContentType = UTType(format.utTypeIdentifier),
+                  allowedContentTypes.contains(where: { actualContentType.conforms(to: $0) }) else {
+                throw ImageWorkflowFailure.unsupportedInputType
+            }
             try Task.checkCancellation()
-            return prepared
+            return ImageProcessingInput(
+                data: data, filenameExtension: filenameExtension.isEmpty ? nil : filenameExtension,
+                metadata: metadata
+            )
         } catch is CancellationError {
             throw CancellationError()
         } catch let failure as ImageWorkflowFailure {
@@ -94,40 +123,6 @@ struct ImageWorkflowClient {
         } catch {
             throw ImageWorkflowFailure.readFailed
         }
-    }
-
-    nonisolated private static func prepareSelectionData(
-        from url: URL,
-        allowedContentTypes: [UTType],
-        reader: ImageWorkflowFileReader
-    ) throws -> PreparedImageInputSelection {
-        let accessedSecurityScope = url.startAccessingSecurityScopedResource()
-        defer {
-            if accessedSecurityScope {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-
-        guard try reader.isRegularFile(at: url) else {
-            throw ImageWorkflowFailure.notRegularFile
-        }
-        if let byteCount = try reader.byteCount(for: url) {
-            try ImageProcessingBudget.validateInputByteCount(byteCount)
-        }
-        let data = try reader.readData(from: url)
-        try ImageProcessingBudget.validateInputByteCount(data.count)
-        let metadata = try ImageProcessor.inspect(data: data, filenameExtension: url.pathExtension)
-        guard let format = metadata.format,
-              let actualContentType = UTType(format.utTypeIdentifier),
-              allowedContentTypes.contains(where: { actualContentType.conforms(to: $0) }) else {
-            throw ImageWorkflowFailure.unsupportedInputType
-        }
-        let previewData = try ImageProcessor.previewImageData(data: data)
-        return PreparedImageInputSelection(
-            data: data,
-            metadata: metadata,
-            previewData: previewData
-        )
     }
 
     func saveProcessedImage(
@@ -188,27 +183,13 @@ struct ImageWorkflowClient {
         let snapshot = ConvertedImageSaveSnapshot(.init(
             basename: defaultBasename, tempURL: tempURL, format: format
         ))
-        let read = Task.detached(priority: .userInitiated) {
-            try Task.checkCancellation()
-            return try snapshot.readData()
-        }
-        let result: Result<Bool, Error>
-        do {
-            let data = try await withTaskCancellationHandler {
-                try await read.value
-            } onCancel: {
-                read.cancel()
-            }
-            result = .success(try await saveConvertedImage(data: data, format: format, defaultBasename: defaultBasename))
-        } catch is CancellationError {
-            result = .success(false)
-        } catch let failure as FileInputPanelFailure {
-            result = .failure(failure)
-        } catch {
-            result = .failure(ImageWorkflowFailure.normalizedSaveFailure(error))
-        }
-        await Task.detached { snapshot.close() }.value
-        return try result.get()
+        guard snapshot.isOpen else { throw ImageWorkflowFailure.saveFailed }
+        defer { snapshot.close() }
+        return try await save(
+            data: { try snapshot.readData() },
+            defaultFilename: "\(defaultBasename).\(format.fileExtension)",
+            allowedContentTypes: [Self.utType(for: format)]
+        )
     }
 
     /// 批量保存转换结果：先固定临时文件，再选目录逐张读取并写入
@@ -404,6 +385,7 @@ struct ImageWorkflowClient {
 private final class ConvertedImageSaveSnapshot: @unchecked Sendable {
     let candidate: BatchConversionSaveCandidate
     private var handle: FileHandle?
+    var isOpen: Bool { handle != nil }
 
     init(_ candidate: BatchConversionSaveCandidate) {
         self.candidate = candidate

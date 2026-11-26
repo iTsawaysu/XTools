@@ -429,12 +429,7 @@ final class ImageBatchConversionSession: ObservableObject {
             items[index].state = .converting
             do {
                 let output = try await worker.run { [spoolDirectory, spoolWriter] in
-                    let prepared = try client.prepareSelectionData(from: url, allowedContentTypes: allowedContentTypes)
-                    let input = ImageProcessingInput(
-                        data: prepared.data,
-                        filenameExtension: url.pathExtension.isEmpty ? nil : url.pathExtension,
-                        metadata: prepared.metadata
-                    )
+                    let input = try client.prepareProcessingInput(from: url, allowedContentTypes: allowedContentTypes)
                     return try Self.renderAndSpool(
                         render, input, itemID: itemID, spoolDirectory: spoolDirectory, writer: spoolWriter
                     )
