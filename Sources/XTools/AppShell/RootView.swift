@@ -27,6 +27,7 @@ struct RootView: View {
     @AppStorage("dt.theme") private var themeName = AppThemePreference.system.preferenceValue
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.toolPasteboard) private var toolPasteboard
 
     private let registry = ToolRegistry.default
 
@@ -159,7 +160,7 @@ struct RootView: View {
         }
         .onAppear {
             smartPaste.noteSelectedTool(viewModel.selectedToolID)
-            smartPaste.refresh(registry: registry)
+            smartPaste.refresh(registry: registry, pasteboard: toolPasteboard ?? .general)
             navigationActions.selectDefaultToolIfNeeded(sidebarProjection.defaultToolID)
             if PendingPreferencesPresentation.isPending {
                 PendingPreferencesPresentation.isPending = false
@@ -177,14 +178,14 @@ struct RootView: View {
             // Sample the clipboard only when the app comes forward — never in
             // the background.
             guard phase == .active else { return }
-            smartPaste.refresh(registry: registry)
+            smartPaste.refresh(registry: registry, pasteboard: toolPasteboard ?? .general)
         }
         .onChange(of: viewModel.selectedToolID) { _, newToolID in
             smartPaste.noteSelectedTool(newToolID)
             // Returning to the dashboard should resurface a suggestion that was
             // suppressed because the previous tool already owned the clipboard.
             if newToolID == nil {
-                smartPaste.refresh(registry: registry, force: true)
+                smartPaste.refresh(registry: registry, pasteboard: toolPasteboard ?? .general, force: true)
             }
         }
     }
@@ -320,10 +321,11 @@ struct RootView: View {
         case .copyGeneratedUUID:
             // The value is generated at activation: every run copies a fresh
             // UUID with the shared copy toast feedback.
-            let pasteboard = NSPasteboard.general
-            pasteboard.clearContents()
-            pasteboard.setString(UUID().uuidString.lowercased(), forType: .string)
-            toastCenter.show(ToolFeedbackCopy.copied, tone: .success)
+            if IndexPasteboard.copyString(UUID().uuidString.lowercased(), to: toolPasteboard) {
+                toastCenter.show(ToolFeedbackCopy.copied, tone: .success)
+            } else {
+                toastCenter.show(ToolFeedbackCopy.clipboardWriteFailure, tone: .error)
+            }
         }
     }
 

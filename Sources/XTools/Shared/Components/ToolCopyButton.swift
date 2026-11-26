@@ -58,6 +58,7 @@ struct ToolCopyButton: View {
     @State private var feedback = IndexEphemeralActionFeedbackState()
     @State private var copyTask: Task<Void, Never>?
     @Environment(\.toolToastCenter) private var toastCenter
+    @Environment(\.toolPasteboard) private var pasteboard
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.toolPageEntryGeneration) private var entryGeneration
 
@@ -145,7 +146,7 @@ struct ToolCopyButton: View {
 
     private func copy(_ value: String) {
         guard !value.isEmpty else { return }
-        guard IndexPasteboard.copyString(value) else {
+        guard IndexPasteboard.copyString(value, to: pasteboard) else {
             toastCenter?.show(ToolFeedbackCopy.clipboardWriteFailure, tone: .error)
             return
         }

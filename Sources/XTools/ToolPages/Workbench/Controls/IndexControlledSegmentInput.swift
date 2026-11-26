@@ -362,6 +362,7 @@ private struct IndexControlledSegmentInputAdapter {
 private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
     // 停靠保活后回访不再重建视图；进入聚焦以代际驱动保持「每次进入聚焦」语义。
     @Environment(\.toolPageEntryGeneration) private var entryGeneration: Int
+    @Environment(\.toolPasteboard) private var pasteboard
 
     let adapter: IndexControlledSegmentInputAdapter
     let placeholder: String
@@ -386,6 +387,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
 
     func makeNSView(context: Context) -> IndexControlledSegmentNSTextField {
         let textField = IndexControlledSegmentNSTextField()
+        context.coordinator.pasteboard = pasteboard
         textField.isPageActive = entryGeneration > 0
         textField.segmentHandler = context.coordinator
         textField.delegate = context.coordinator
@@ -397,6 +399,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
 
     func updateNSView(_ textField: IndexControlledSegmentNSTextField, context: Context) {
         textField.isPageActive = entryGeneration > 0
+        context.coordinator.pasteboard = pasteboard
         context.coordinator.adapter = adapter
         context.coordinator.timeZone = timeZone
         context.coordinator.onCommit = onCommit
@@ -429,6 +432,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject, NSTextFieldDelegate, IndexControlledSegmentFieldHandling {
+        var pasteboard: NSPasteboard?
         var adapter: IndexControlledSegmentInputAdapter
         var timeZone: TimeZone
         var onCommit: (Date) -> Void
@@ -537,7 +541,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
 
         func handlePaste(in textField: IndexControlledSegmentNSTextField) -> Bool {
             guard textField.canHandleSegmentCommands else { return false }
-            let text = NSPasteboard.general.string(forType: .string) ?? ""
+            let text = (pasteboard ?? .general).string(forType: .string) ?? ""
             switch adapter.paste(text, timeZone) {
             case .accepted(let date):
                 onCommit(date)

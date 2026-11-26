@@ -207,58 +207,30 @@ struct CommandPalettePresentationTests {
         let fixture = try Fixture()
         defer { fixture.dispose() }
 
-        // The command writes the real system pasteboard: snapshot its items
-        // first and restore them afterwards so the test leaves the user's
-        // clipboard untouched (best effort, by value).
-        let pasteboard = NSPasteboard.general
-        let savedItems: [[NSPasteboard.PasteboardType: Data]] = (pasteboard.pasteboardItems ?? [])
-            .map { item in
-                var entries: [NSPasteboard.PasteboardType: Data] = [:]
-                for type in item.types {
-                    if let data = item.data(forType: type) {
-                        entries[type] = data
-                    }
-                }
-                return entries
-            }
-        defer {
-            pasteboard.clearContents()
-            let items = savedItems.map { saved -> NSPasteboardItem in
-                let item = NSPasteboardItem()
-                for (type, data) in saved {
-                    item.setData(data, forType: type)
-                }
-                return item
-            }
-            if !items.isEmpty {
-                pasteboard.writeObjects(items)
-            }
-        }
-
-        withToolAnimation(ToolMotion.Preset.modal, reduceMotion: false) {
+        var copiedValues = Set<String>()
+        for _ in 0..<2 {
             fixture.viewModel.openCommandPalette()
+            let field = try await Self.waitForReadyField(in: fixture)
+            let delegate = try #require(field.delegate)
+            Self.replaceText("生成并复制", in: field, delegate: delegate)
+            try await Self.waitForCondition(label: "uuid command row") {
+                fixture.flush()
+                return Self.commandPaletteRevealViews(in: fixture.hostingView).count == 1
+            }
+            let editor = try #require(field.currentEditor() as? NSTextView)
+            #expect(Self.sendCommand(
+                #selector(NSResponder.insertNewline(_:)),
+                field: field,
+                editor: editor,
+                delegate: delegate
+            ))
+            #expect(!fixture.viewModel.showsCommandPalette)
+            let copied = try #require(fixture.pasteboard.string(forType: .string))
+            #expect(UUID(uuidString: copied) != nil)
+            #expect(copied == copied.lowercased())
+            copiedValues.insert(copied)
         }
-        let field = try await Self.waitForReadyField(in: fixture)
-        let delegate = try #require(field.delegate)
-        Self.replaceText("生成并复制", in: field, delegate: delegate)
-        try await Self.waitForCondition(label: "uuid command row") {
-            fixture.flush()
-            return Self.commandPaletteRevealViews(in: fixture.hostingView).count == 1
-        }
-        let editor = try #require(field.currentEditor() as? NSTextView)
-        #expect(Self.sendCommand(
-            #selector(NSResponder.insertNewline(_:)),
-            field: field,
-            editor: editor,
-            delegate: delegate
-        ))
-        #expect(!fixture.viewModel.showsCommandPalette)
-
-        // Activation generates a fresh lowercase UUID at runtime and copies
-        // it — no pre-previewed per-session value involved.
-        let copied = try #require(pasteboard.string(forType: .string))
-        #expect(UUID(uuidString: copied) != nil)
-        #expect(copied == copied.lowercased())
+        #expect(copiedValues.count == 2)
     }
 
     @Test @MainActor
@@ -699,6 +671,7 @@ final class CommandPaletteWindowFixture {
     let suiteName: String
     let defaults: UserDefaults
     let viewModel: RootViewModel
+    let pasteboard: NSPasteboard
     let hostingView: NSHostingView<AnyView>
     let window: NSWindow
 
@@ -707,9 +680,11 @@ final class CommandPaletteWindowFixture {
         defaults = try #require(UserDefaults(suiteName: suiteName))
         viewModel = RootViewModel()
         viewModel.selectedToolID = ToolID(rawValue: "base64-file-converter")
+        pasteboard = NSPasteboard.withUniqueName()
         hostingView = NSHostingView(rootView: AnyView(
             RootView(viewModel: viewModel, defaults: defaults)
                 .environment(\._accessibilityReduceMotion, reduceMotion)
+                .environment(\.toolPasteboard, pasteboard)
         ))
         hostingView.frame = NSRect(x: 0, y: 0, width: 1_200, height: 800)
         window = NSWindow(
@@ -741,6 +716,7 @@ final class CommandPaletteWindowFixture {
         window.resignKey()
         window.orderOut(nil)
         window.contentView = nil
+        pasteboard.releaseGlobally()
         defaults.removePersistentDomain(forName: suiteName)
     }
 }

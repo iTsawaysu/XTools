@@ -84,6 +84,8 @@ struct NativeTextBridgeRegressionTests {
     }
 
     @Test func dateInputPasteRequiresAnActivePageAndItsOwnFocusedEditor() async throws {
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
         var input = ControlledDateInput(components: DateOnlyComponents(year: 2026, month: 10, day: 11))
         var otherText = "other editor"
         var committedDates: [Date] = []
@@ -95,6 +97,7 @@ struct NativeTextBridgeRegressionTests {
                     .environment(\.toolPageEntryGeneration, generation)
                 IndexTextInput(placeholder: "", text: otherBinding)
             }
+            .environment(\.toolPasteboard, pasteboard)
         }
         let host = NSHostingView(rootView: root(1))
         let window = makeWindow(host)
@@ -104,19 +107,6 @@ struct NativeTextBridgeRegressionTests {
         let otherField = try #require(descendants(NSTextField.self, in: host).first { !($0 is IndexControlledSegmentNSTextField) })
         try #require(window.makeFirstResponder(field))
         let previousEditor = try #require(field.currentEditor() as? IndexControlledSegmentFieldEditor)
-        let pasteboard = NSPasteboard.general
-        let originalItems = pasteboard.pasteboardItems?.map { item in
-            item.types.compactMap { type in item.data(forType: type).map { (type, $0) } }
-        } ?? []
-        defer {
-            pasteboard.clearContents()
-            let items = originalItems.map { values in
-                let item = NSPasteboardItem()
-                for (type, data) in values { item.setData(data, forType: type) }
-                return item
-            }
-            pasteboard.writeObjects(items)
-        }
         let commandV = try #require(NSEvent.keyEvent(
             with: .keyDown, location: .zero, modifierFlags: .command,
             timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,

@@ -86,9 +86,21 @@ struct IndexButtonStyle: ButtonStyle {
 enum IndexPasteboard {
     @discardableResult
     @MainActor
-    static func copyString(_ string: String) -> Bool {
-        NSPasteboard.general.clearContents()
-        return NSPasteboard.general.setString(string, forType: .string)
+    static func copyString(_ string: String, to pasteboard: NSPasteboard? = nil) -> Bool {
+        let destination = pasteboard ?? .general
+        destination.clearContents()
+        return destination.setString(string, forType: .string)
+    }
+}
+
+private enum ToolPasteboardKey: EnvironmentKey {
+    static var defaultValue: NSPasteboard? { nil }
+}
+
+extension EnvironmentValues {
+    var toolPasteboard: NSPasteboard? {
+        get { self[ToolPasteboardKey.self] }
+        set { self[ToolPasteboardKey.self] = newValue }
     }
 }
 

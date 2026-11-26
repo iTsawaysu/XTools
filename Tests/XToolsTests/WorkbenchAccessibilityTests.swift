@@ -53,6 +53,8 @@ struct WorkbenchAccessibilityTests {
     func actionHelpStaysWithItsButtonAndTracksCopyFeedback(_ dark: Bool) async throws {
         let model = AccessibilityWorkbenchModel()
         let payload = "SELECT 1;"
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
         let hosting = NSHostingView(rootView:
             VStack {
                 IndexFormatWorkbench(
@@ -68,6 +70,7 @@ struct WorkbenchAccessibilityTests {
                 ToolCopyButton(text: payload, title: "")
             }
             .environment(\.accessibilityEnabled, true)
+            .environment(\.toolPasteboard, pasteboard)
             .environment(\.colorScheme, dark ? .dark : .light))
         hosting.frame = NSRect(x: 0, y: 0, width: 1100, height: 600)
         let window = NSWindow(contentRect: hosting.frame, styleMask: [.titled], backing: .buffered, defer: false)
@@ -104,7 +107,7 @@ struct WorkbenchAccessibilityTests {
         #expect(copy.isEnabled)
         #expect(copy.press())
         try await wait("successful copy feedback") {
-            NSPasteboard.general.string(forType: .string) == payload
+            pasteboard.string(forType: .string) == payload
                 && findAction("已复制", in: window)?.help == "已复制"
         }
         #expect(model.formatCount == 0)
