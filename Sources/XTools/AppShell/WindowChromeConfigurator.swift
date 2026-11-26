@@ -12,31 +12,34 @@ struct WindowChromeConfigurator: NSViewRepresentable {
         Coordinator()
     }
 
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        Task { @MainActor in
-            configure(window: view.window, coordinator: context.coordinator)
-        }
+    func makeNSView(context: Context) -> WindowBindingView {
+        let view = WindowBindingView()
+        updateNSView(view, context: context)
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        Task { @MainActor in
-            configure(window: nsView.window, coordinator: context.coordinator)
+    func updateNSView(_ nsView: WindowBindingView, context: Context) {
+        nsView.onWindowChange = { [weak coordinator = context.coordinator] window in
+            guard let coordinator else { return }
+            configure(window: window, coordinator: coordinator)
         }
+        nsView.onWindowChange?(nsView.window)
     }
 
-    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
-        coordinator.removeMouseMonitor()
-        coordinator.uninstallShortcutRouter()
+    static func dismantleNSView(_ nsView: WindowBindingView, coordinator: Coordinator) {
+        nsView.onWindowChange = nil
+        coordinator.detach()
     }
 
     private func configure(window: NSWindow?, coordinator: Coordinator) {
-        guard let window else { return }
+        guard let window else {
+            coordinator.detach()
+            return
+        }
 
         coordinator.installMouseMonitor(for: window)
         if let shortcutTarget {
-            coordinator.installShortcutRouter(viewModel: shortcutTarget)
+            coordinator.installShortcutRouter(viewModel: shortcutTarget, window: window)
         }
 
         // 启动时清掉初始 key focus（P1）。AppKit 默认把窗口里第一个可聚焦控件
@@ -45,24 +48,39 @@ struct WindowChromeConfigurator: NSViewRepresentable {
         // 反复调用时不重复清。延后到下一拍，确保在 AppKit 赋初始焦点之后执行。
         if !coordinator.didClearInitialFocus {
             coordinator.didClearInitialFocus = true
-            Task { @MainActor in
+            Task { @MainActor [weak window, weak coordinator] in
+                guard let window, coordinator?.monitoredWindow === window else { return }
+                if let shortcutTarget,
+                   shortcutTarget.searchFocusToken > 0 || shortcutTarget.showsCommandPalette {
+                    return
+                }
                 window.makeFirstResponder(nil)
             }
+        }
+    }
+
+    final class WindowBindingView: NSView {
+        var onWindowChange: ((NSWindow?) -> Void)?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onWindowChange?(window)
         }
     }
 
     @MainActor
     final class Coordinator {
         var didClearInitialFocus = false
-        private weak var monitoredWindow: NSWindow?
+        private(set) weak var monitoredWindow: NSWindow?
         private var mouseMonitor: Any?
         private let shortcutRouter = AppShortcutRouter()
 
-        func installShortcutRouter(viewModel: RootViewModel) {
-            shortcutRouter.install(viewModel: viewModel)
+        func installShortcutRouter(viewModel: RootViewModel, window: NSWindow) {
+            shortcutRouter.install(viewModel: viewModel, window: window)
         }
 
-        func uninstallShortcutRouter() {
+        func detach() {
+            removeMouseMonitor()
             shortcutRouter.uninstall()
         }
 

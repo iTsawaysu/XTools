@@ -233,6 +233,147 @@ struct CommandPalettePresentationTests {
         #expect(copiedValues.count == 2)
     }
 
+    @Test(arguments: [false, true]) @MainActor
+    func shortcutOpeningDeliversImmediateTypingAndReturnToTheCurrentPalette(warm: Bool) async throws {
+        let fixture = try Fixture(reduceMotion: true)
+        defer { fixture.dispose() }
+        if warm {
+            fixture.viewModel.openCommandPalette()
+            let previous = try await Self.waitForReadyField(in: fixture)
+            fixture.viewModel.closeCommandPalette()
+            #expect(!previous.isEnabled)
+        }
+        fixture.viewModel.focusSearch()
+        try await Self.waitForCondition(label: "sidebar search is editing before the shortcut") {
+            fixture.flush()
+            guard let field = Self.searchField(in: fixture.hostingView, identifier: "sidebar.search"),
+                  let editor = field.currentEditor() else { return false }
+            return fixture.window.firstResponder === editor
+        }
+        #expect((Self.searchField(in: fixture.hostingView) != nil) == warm)
+
+        func send(_ characters: String, keyCode: UInt16, flags: NSEvent.ModifierFlags = []) throws {
+            let event = try #require(NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+                windowNumber: fixture.window.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode
+            ))
+            NSApp.sendEvent(event)
+        }
+
+        try send("k", keyCode: 40, flags: .command)
+        try #require(fixture.viewModel.showsCommandPalette)
+        try send("j", keyCode: 38)
+        try send("w", keyCode: 13)
+        try send("t", keyCode: 17)
+        try send("\r", keyCode: 36)
+
+        try await Self.waitForCondition(label: "immediate Return selects the JWT tool", diagnostic: {
+            let field = Self.searchField(in: fixture.hostingView)
+            return "tool=\(fixture.viewModel.selectedToolID?.rawValue ?? "none") "
+                + "palette=\(fixture.viewModel.showsCommandPalette) "
+                + "query=\(field?.stringValue ?? "missing") sidebar=\(fixture.viewModel.searchText) "
+                + "waiting=\(fixture.viewModel.commandPalettePresentation.isWaitingForOpeningKeys)"
+        }) {
+            fixture.flush()
+            return !fixture.viewModel.showsCommandPalette
+                && fixture.viewModel.selectedToolID == ToolID(rawValue: "jwt-parser")
+        }
+        #expect(fixture.viewModel.searchText.isEmpty)
+    }
+
+    @Test @MainActor
+    func hidingSidebarReleasesItsEditorAndFindReturnsFromPalette() async throws {
+        let fixture = try Fixture(reduceMotion: true)
+        defer { fixture.dispose() }
+        fixture.viewModel.focusSearch()
+        try await Self.waitForCondition(label: "sidebar search is editing") {
+            fixture.flush()
+            guard let field = Self.searchField(in: fixture.hostingView, identifier: "sidebar.search"),
+                  let editor = field.currentEditor() else { return false }
+            return fixture.window.firstResponder === editor
+        }
+        let field = try #require(Self.searchField(in: fixture.hostingView, identifier: "sidebar.search"))
+        let editor = try #require(field.currentEditor())
+
+        fixture.viewModel.toggleSidebar(reduceMotion: true)
+        try await Self.waitForCondition(label: "hidden sidebar loses editing") {
+            fixture.flush()
+            return !field.isEnabled && fixture.window.firstResponder !== editor
+        }
+
+        fixture.viewModel.openCommandPalette()
+        _ = try await Self.waitForReadyField(in: fixture)
+        let router = AppShortcutRouter()
+        router.install(viewModel: fixture.viewModel, window: fixture.window)
+        defer { router.uninstall() }
+        let otherWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 100, height: 100),
+            styleMask: [.titled], backing: .buffered, defer: false
+        )
+        otherWindow.isReleasedWhenClosed = false
+        defer { otherWindow.close() }
+        func find(in window: NSWindow) throws -> NSEvent {
+            try #require(NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, characters: "f",
+                charactersIgnoringModifiers: "f", isARepeat: false, keyCode: 3
+            ))
+        }
+        #expect(try !router.handle(find(in: otherWindow)))
+        #expect(fixture.viewModel.showsCommandPalette)
+        try #require(router.handle(find(in: fixture.window)))
+        try await Self.waitForCondition(
+            label: "find focuses visible sidebar, closing palette",
+            diagnostic: {
+                "key=\(NSApp.keyWindow === fixture.window) title=\(fixture.window.title) "
+                    + "sidebar=\(fixture.viewModel.sidebarVisibility) palette=\(fixture.viewModel.showsCommandPalette) "
+                    + "firstResponder=\(String(describing: fixture.window.firstResponder))"
+            }
+        ) {
+            fixture.flush()
+            guard let editor = field.currentEditor() else { return false }
+            return field.isEnabled && !fixture.viewModel.showsCommandPalette
+                && fixture.window.firstResponder === editor
+        }
+
+        let document = try #require(Self.sidebarDocument(in: fixture.hostingView))
+        #expect(fixture.window.makeFirstResponder(document))
+        #expect(fixture.window.firstResponder === document)
+        fixture.viewModel.toggleSidebar(reduceMotion: true)
+        try await Self.waitForCondition(label: "hidden navigation document loses focus") {
+            fixture.flush()
+            return !document.acceptsFirstResponder && fixture.window.firstResponder !== document
+        }
+    }
+
+    @Test @MainActor
+    func openingPaletteInvalidatesAnAlreadyQueuedSidebarFocus() async throws {
+        let fixture = try Fixture(reduceMotion: true)
+        defer { fixture.dispose() }
+        for useToggle in [false, true] {
+            fixture.viewModel.focusSearch()
+            fixture.flush()
+            if useToggle {
+                fixture.viewModel.toggleCommandPalette()
+            } else {
+                fixture.viewModel.openCommandPalette()
+            }
+            let field = try await Self.waitForReadyField(in: fixture)
+            // Let the sidebar's scheduled focus retry and the representable update run.
+            try await Task.sleep(for: .milliseconds(100))
+            fixture.flush()
+            let editor = try #require(
+                field.currentEditor(),
+                "firstResponder=\(String(describing: fixture.window.firstResponder)) useToggle=\(useToggle)"
+            )
+            #expect(fixture.viewModel.showsCommandPalette)
+            #expect(fixture.window.firstResponder === editor)
+            fixture.viewModel.closeCommandPalette()
+            fixture.flush()
+        }
+    }
+
     @Test @MainActor
     func realRootWindowImmediateEditThenSubmitUsesCurrentQuerySnapshot() async throws {
         let fixture = try Fixture()
@@ -433,7 +574,7 @@ struct CommandPalettePresentationTests {
             diagnostic: { fieldDiagnostic(in: fixture.hostingView, window: fixture.window) }
         ) {
             fixture.flush()
-            guard let field = commandPaletteField(in: fixture.hostingView) else { return false }
+            guard let field = searchField(in: fixture.hostingView) else { return false }
             if layoutMilliseconds == nil,
                fixture.hostingView.frame.width > 0,
                fixture.hostingView.frame.height > 0,
@@ -478,7 +619,7 @@ struct CommandPalettePresentationTests {
             #expect(snapshot.counters[.revealMake, default: 0] == 0)
         }
         #expect(snapshot.counters[.hoverMake, default: 0] == 0)
-        let field = try #require(commandPaletteField(in: fixture.hostingView))
+        let field = try #require(searchField(in: fixture.hostingView))
         let rowViews = commandPaletteRevealViews(in: fixture.hostingView)
         var rowIdentities: [String: ObjectIdentifier] = [:]
         for row in rowViews {
@@ -506,7 +647,7 @@ struct CommandPalettePresentationTests {
         }
         try await waitForCondition(label: "palette session \(session) suspension") {
             fixture.flush()
-            guard let field = commandPaletteField(in: fixture.hostingView),
+            guard let field = searchField(in: fixture.hostingView),
                   let afterClose = CommandPaletteTrace.snapshot(session: session)
             else {
                 return false
@@ -597,15 +738,20 @@ struct CommandPalettePresentationTests {
     }
 
     @MainActor
-    private static func commandPaletteField(in root: NSView) -> NSTextField? {
+    private static func searchField(in root: NSView, identifier: String = "command-palette.search") -> NSTextField? {
         if let field = root as? NSTextField,
-           field.accessibilityIdentifier() == "command-palette.search" {
+           field.accessibilityIdentifier() == identifier {
             return field
         }
         for subview in root.subviews {
-            if let field = commandPaletteField(in: subview) { return field }
+            if let field = searchField(in: subview, identifier: identifier) { return field }
         }
         return nil
+    }
+
+    @MainActor
+    private static func sidebarDocument(in root: NSView) -> SidebarNavigationDocumentView? {
+        (root as? SidebarNavigationDocumentView) ?? root.subviews.lazy.compactMap { sidebarDocument(in: $0) }.first
     }
 
     @MainActor
@@ -635,7 +781,7 @@ struct CommandPalettePresentationTests {
 
     @MainActor
     private static func fieldDiagnostic(in root: NSView, window: NSWindow) -> String {
-        guard let field = commandPaletteField(in: root) else {
+        guard let field = searchField(in: root) else {
             return "field=nil key=\(window.isKeyWindow) first=\(String(describing: window.firstResponder))"
         }
         return "fieldWindow=\(field.window === window) fieldFrame=\(field.frame) key=\(window.isKeyWindow) currentEditor=\(String(describing: field.currentEditor())) first=\(String(describing: window.firstResponder))"

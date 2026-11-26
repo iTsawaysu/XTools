@@ -54,6 +54,8 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
     private var handoffMonitor: Any?
     private var handoffEvents: [NSEvent] = []
     private var handoffTimeout: DispatchWorkItem?
+    private var isHandoffReplayScheduled = false
+    private var takeOpeningKeys: (() -> [NSEvent])?
     private let focusRetryDelays: [TimeInterval]
     private let focusRequester: FocusRequester
 
@@ -79,7 +81,12 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
     static func armSidebarSearchKeystrokeHandoff() {
         guard let field = sidebarSearchField,
               let coordinator = sidebarSearchCoordinator else { return }
+        coordinator.rearmFocusRequests()
         coordinator.beginKeystrokeHandoff(for: field)
+    }
+
+    static func invalidateSidebarSearchFocus() {
+        sidebarSearchCoordinator?.invalidateFocusRequests()
     }
 
     init(
@@ -130,27 +137,56 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
     //
     // Focus is requested on the next runloop turn; a user who starts typing
     // immediately after ⌘F/⌘K can beat the field editor. Buffer those key
-    // events (plain text keys only) and replay them through the normal event
+    // text and deletion events and replay them through the normal event
     // path once editing begins, so IME composition and the text-change
     // pipeline still run exactly as if the field had been ready.
 
     /// Start buffering keys typed before the field editor is attached. Safe to
     /// call repeatedly; a no-op while already editing or already buffering.
-    func beginKeystrokeHandoff(for textField: NSTextField) {
-        guard acceptsFocusRequests, handoffMonitor == nil, !isEditing(textField) else { return }
+    static let keystrokeHandoffTimeout: TimeInterval = 0.8
+
+    static func canBufferBeforeFocus(_ event: NSEvent, includesSubmit: Bool = false) -> Bool {
+        guard event.modifierFlags.intersection([.command, .control]).isEmpty else { return false }
+        switch event.specialKey {
+        case .delete, .backspace, .deleteForward: return true
+        case .carriageReturn, .newline, .enter: return includesSubmit
+        case nil: return event.characters?.isEmpty == false
+        default: return false
+        }
+    }
+
+    func beginKeystrokeHandoff(for textField: NSTextField, takeOpeningKeys: (() -> [NSEvent])? = nil) {
+        guard acceptsFocusRequests else { return }
+        if let takeOpeningKeys { self.takeOpeningKeys = takeOpeningKeys }
+        if handoffMonitor != nil {
+            flushKeystrokeHandoffIfEditing(textField)
+            return
+        }
+        guard !isEditing(textField) || self.takeOpeningKeys != nil else { return }
         handoffGeneration &+= 1
         let generation = handoffGeneration
         handoffMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self, weak textField] event in
             guard let self, let textField else { return event }
+            guard (textField.window ?? NSApp.keyWindow)?.windowNumber == event.windowNumber else { return event }
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            // Shell shortcuts can transfer focus and invalidate this queue on this turn.
+            guard !flags.contains(.command) else { return event }
             if self.isEditing(textField) {
+                // The editor may be ready a run-loop turn before its queued
+                // prefix replays. Keep subsequent keys behind that prefix.
+                guard !self.handoffEvents.isEmpty else {
+                    self.finishKeystrokeHandoff(flushTo: textField)
+                    return event
+                }
+                self.handoffEvents.append(event)
                 self.finishKeystrokeHandoff(flushTo: textField)
+                return nil
+            }
+            guard !self.isHandoffReplayScheduled else {
+                self.cancelKeystrokeHandoff()
                 return event
             }
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            guard textField.window.map({ $0.windowNumber == event.windowNumber }) ?? true,
-                  flags.isEmpty || flags == .shift,
-                  event.specialKey == nil,
-                  let characters = event.characters, !characters.isEmpty else { return event }
+            guard Self.canBufferBeforeFocus(event, includesSubmit: self.commandHandler != nil) else { return event }
             self.handoffEvents.append(event)
             return nil
         }
@@ -163,7 +199,8 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
             self.finishKeystrokeHandoff(flushTo: textField)
         }
         handoffTimeout = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.keystrokeHandoffTimeout, execute: work)
+        flushKeystrokeHandoffIfEditing(textField)
         // 字段编辑器通常在 50–150ms 内就绪。只靠「下一次按键」或 0.8s 超时
         // 回放，会让单独敲下的第一个字符明显迟到；就绪后立即回放。
         for delay in [0.06, 0.12, 0.2, 0.35] {
@@ -186,20 +223,30 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
     }
 
     private func finishKeystrokeHandoff(flushTo textField: NSTextField) {
-        if let handoffMonitor { NSEvent.removeMonitor(handoffMonitor) }
-        handoffMonitor = nil
+        guard handoffMonitor != nil, !isHandoffReplayScheduled else { return }
+        guard !handoffEvents.isEmpty || takeOpeningKeys != nil, let window = textField.window,
+              let editor = textField.currentEditor(), window.firstResponder === editor else {
+            cancelKeystrokeHandoff()
+            return
+        }
+        isHandoffReplayScheduled = true
         handoffTimeout?.cancel()
         handoffTimeout = nil
-        let pending = handoffEvents
-        handoffEvents.removeAll()
-        guard !pending.isEmpty, let window = textField.window,
-              let editor = textField.currentEditor(), window.firstResponder === editor
-        else { return }
         let generation = handoffGeneration
         DispatchQueue.main.async { [weak self, weak textField, weak window, weak editor] in
+            guard let self, self.handoffGeneration == generation else { return }
+            guard let textField, let window, let editor,
+                  self.canRequestFocusNow(), textField.window === window,
+                  textField.currentEditor() === editor, window.firstResponder === editor else {
+                self.cancelKeystrokeHandoff()
+                return
+            }
+            // A provisional field can be dismantled while mounting. Claim the
+            // shell's keys only after this field owns the current editor.
+            var pending = self.takeOpeningKeys?() ?? []
+            pending.append(contentsOf: self.takeKeystrokeHandoffEvents())
             for event in pending {
-                guard let self, let textField, let window, let editor,
-                      self.handoffGeneration == generation, self.acceptsFocusRequests,
+                guard self.handoffGeneration == generation, self.acceptsFocusRequests,
                       textField.window === window, textField.currentEditor() === editor,
                       window.firstResponder === editor
                 else { return }
@@ -210,11 +257,19 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
 
     private func cancelKeystrokeHandoff() {
         handoffGeneration &+= 1
+        _ = takeKeystrokeHandoffEvents()
+    }
+
+    private func takeKeystrokeHandoffEvents() -> [NSEvent] {
         if let handoffMonitor { NSEvent.removeMonitor(handoffMonitor) }
         handoffMonitor = nil
         handoffTimeout?.cancel()
         handoffTimeout = nil
+        isHandoffReplayScheduled = false
+        takeOpeningKeys = nil
+        let pending = handoffEvents
         handoffEvents.removeAll()
+        return pending
     }
 
     /// Live validity for a focus grab performed outside the token-scheduled
@@ -237,13 +292,24 @@ final class AppKitSearchFieldCoordinator: NSObject, NSTextFieldDelegate {
     func controlTextDidBeginEditing(_ notification: Notification) {
         if let textField = notification.object as? NSTextField {
             AppKitTextEditingConfiguration.configureCurrentFieldEditor(for: textField)
-            finishKeystrokeHandoff(flushTo: textField)
+            flushKeystrokeHandoffIfEditing(textField)
         }
         onFocusChange?(true)
     }
 
     func controlTextDidEndEditing(_ notification: Notification) {
+        let openingKeys = takeOpeningKeys
         cancelKeystrokeHandoff()
+        // First attachment can briefly end editing before the live field
+        // settles. The unclaimed keys still belong to the opening session.
+        if let openingKeys, let field = notification.object as? NSTextField {
+            let generation = handoffGeneration
+            DispatchQueue.main.async { [weak self, weak field] in
+                guard let self, let field, self.handoffGeneration == generation,
+                      self.canRequestFocusNow() else { return }
+                self.beginKeystrokeHandoff(for: field, takeOpeningKeys: openingKeys)
+            }
+        }
         onFocusChange?(false)
     }
 

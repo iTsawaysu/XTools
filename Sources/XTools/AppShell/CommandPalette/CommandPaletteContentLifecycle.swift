@@ -13,12 +13,15 @@ final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePres
     private var revealRequestToken = 0
     private weak var searchField: NSTextField?
     private weak var searchCoordinator: AppKitSearchFieldCoordinator?
+    private weak var presentation: CommandPalettePresentationModel?
 
     init(
         session: Int,
-        actions: [CommandActionEntry]
+        actions: [CommandActionEntry],
+        presentation: CommandPalettePresentationModel? = nil
     ) {
         self.baseActions = actions
+        self.presentation = presentation
         resume(session: session)
     }
 
@@ -52,7 +55,6 @@ final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePres
             if let field = searchField {
                 field.isEnabled = true
                 field.window?.makeFirstResponder(field)
-                searchCoordinator?.beginKeystrokeHandoff(for: field)
             }
             sessionRevealRequest = makeRevealRequest(
                 source: .openReset,
@@ -108,10 +110,16 @@ final class CommandPaletteContentLifecycle: ObservableObject, CommandPalettePres
 
     func attachSearchField(
         _ field: NSTextField,
-        coordinator: AppKitSearchFieldCoordinator
+        coordinator: AppKitSearchFieldCoordinator,
+        session: Int? = nil
     ) {
         searchField = field
         searchCoordinator = coordinator
+        if let session, let presentation, presentation.isWaitingForOpeningKeys {
+            coordinator.beginKeystrokeHandoff(for: field) { [weak presentation] in
+                presentation?.takeOpeningKeys(session: session) ?? []
+            }
+        }
     }
 
     func detachSearchField(_ field: NSTextField) {

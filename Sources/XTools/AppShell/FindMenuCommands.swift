@@ -51,12 +51,9 @@ struct FindMenuCommands: Commands {
             // focus the command targets it; otherwise ⌘F keeps its historical
             // meaning of jumping to the sidebar tool search.
             Button("查找…") {
-                guard !AppKitFindCommandRouter.perform(.showFindInterface) else { return }
-                guard let viewModel else { return }
-                if viewModel.sidebarVisibility == .hidden {
-                    viewModel.sidebarVisibility = .visible
-                }
-                viewModel.focusSearch()
+                guard viewModel?.showsCommandPalette == true
+                    || !AppKitFindCommandRouter.perform(.showFindInterface) else { return }
+                viewModel?.focusSearch()
             }
             .keyboardShortcut("f", modifiers: .command)
 

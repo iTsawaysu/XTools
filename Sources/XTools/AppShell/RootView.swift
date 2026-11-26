@@ -98,6 +98,7 @@ struct RootView: View {
                 .frame(width: viewModel.sidebarVisibility == .visible ? SidebarView.idealWidth : 0)
                 .clipped()
                 .allowsHitTesting(viewModel.sidebarVisibility == .visible)
+                .disabled(viewModel.sidebarVisibility == .hidden)
                 .accessibilityHidden(viewModel.sidebarVisibility == .hidden)
 
                 detailColumn

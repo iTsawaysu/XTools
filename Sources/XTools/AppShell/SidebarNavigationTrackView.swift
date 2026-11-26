@@ -184,12 +184,19 @@ final class SidebarNavigationDocumentView: NSView {
     var onActivateSelection: (() -> Void)?
     var onActivatePresentationSelection: ((NSPoint) -> Bool)?
     var onPointerLocationChange: ((CGPoint?) -> Void)?
+    var isKeyboardNavigationEnabled = true {
+        didSet {
+            if !isKeyboardNavigationEnabled, let window, window.firstResponder === self {
+                window.makeFirstResponder(nil)
+            }
+        }
+    }
 
     private var pointerTrackingArea: NSTrackingArea?
     private var lastKnownPointerLocationInWindow: CGPoint?
 
     override var isFlipped: Bool { true }
-    override var acceptsFirstResponder: Bool { true }
+    override var acceptsFirstResponder: Bool { isKeyboardNavigationEnabled }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -255,6 +262,10 @@ final class SidebarNavigationDocumentView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
+        guard isKeyboardNavigationEnabled else {
+            super.keyDown(with: event)
+            return
+        }
         switch event.keyCode {
         case 125:
             onMoveSelection?(1)

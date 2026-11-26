@@ -54,6 +54,11 @@ final class RootViewModel: ObservableObject {
     }
 
     func focusSearch() {
+        closeCommandPalette()
+        if sidebarVisibility == .hidden { sidebarVisibility = .visible }
+        // Arm on the key event's turn. The representable sees the new focus
+        // token on a later update and would otherwise miss the first key.
+        AppKitSearchFieldCoordinator.armSidebarSearchKeystrokeHandoff()
         searchFocusToken += 1
     }
 
@@ -62,6 +67,7 @@ final class RootViewModel: ObservableObject {
     }
 
     func openCommandPalette() {
+        AppKitSearchFieldCoordinator.invalidateSidebarSearchFocus()
         commandPalettePresentation.open()
     }
 
@@ -69,7 +75,11 @@ final class RootViewModel: ObservableObject {
     /// Keeping this separate from `openCommandPalette()` preserves idempotent
     /// opening for navigation flows that need to reveal the palette.
     func toggleCommandPalette() {
-        commandPalettePresentation.toggle()
+        if showsCommandPalette {
+            closeCommandPalette()
+        } else {
+            openCommandPalette()
+        }
     }
 
     func closeCommandPalette() {
@@ -81,8 +91,12 @@ final class RootViewModel: ObservableObject {
     }
 
     func toggleSidebar(reduceMotion: Bool) {
+        let nextVisibility: SidebarVisibility = sidebarVisibility == .visible ? .hidden : .visible
+        if nextVisibility == .hidden {
+            AppKitSearchFieldCoordinator.invalidateSidebarSearchFocus()
+        }
         withToolAnimation(ToolMotion.Preset.shellResize, reduceMotion: reduceMotion) {
-            sidebarVisibility = sidebarVisibility == .hidden ? .visible : .hidden
+            sidebarVisibility = nextVisibility
         }
     }
 }

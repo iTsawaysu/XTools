@@ -134,7 +134,8 @@ struct CommandPaletteSearchField: NSViewRepresentable {
         }
         contentLifecycle.attachSearchField(
             textField,
-            coordinator: coordinator
+            coordinator: coordinator,
+            session: isSessionActive ? presentationSession : nil
         )
         CommandPaletteTrace.observeNativeReady(
             textField,
@@ -161,7 +162,8 @@ struct CommandPaletteSearchField: NSViewRepresentable {
         )
         contentLifecycle.attachSearchField(
             textField,
-            coordinator: context.coordinator.search
+            coordinator: context.coordinator.search,
+            session: isSessionActive ? presentationSession : nil
         )
         CommandPaletteTrace.observeNativeReady(
             textField,

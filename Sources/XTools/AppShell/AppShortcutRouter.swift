@@ -10,15 +10,15 @@ import SwiftUI
 @MainActor
 final class AppShortcutRouter {
     private weak var viewModel: RootViewModel?
+    private weak var window: NSWindow?
     private var monitor: Any?
 
-    func install(viewModel: RootViewModel) {
+    func install(viewModel: RootViewModel, window: NSWindow) {
         self.viewModel = viewModel
+        self.window = window
         guard monitor == nil else { return }
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self, let action = self.action(for: event) else { return event }
-            action()
-            return nil
+            self?.handle(event) == true ? nil : event
         }
     }
 
@@ -27,42 +27,38 @@ final class AppShortcutRouter {
             NSEvent.removeMonitor(monitor)
         }
         monitor = nil
+        window = nil
     }
 
-    private func action(for event: NSEvent) -> (() -> Void)? {
-        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard flags == .command,
-              let characters = event.charactersIgnoringModifiers?.lowercased(),
-              let window = NSApp.keyWindow,
-              window.title == "Tools",
+    func handle(_ event: NSEvent) -> Bool {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.capsLock)
+        guard let viewModel,
+              flags == .command || viewModel.commandPalettePresentation.isWaitingForOpeningKeys,
+              let window,
+              (event.window ?? NSApp.keyWindow) === window,
               window.attachedSheet == nil,
-              NSApp.modalWindow == nil else { return nil }
+              NSApp.modalWindow == nil else { return false }
+        guard flags == .command else {
+            return viewModel.commandPalettePresentation.bufferOpeningKey(event)
+        }
+        guard let characters = event.charactersIgnoringModifiers?.lowercased() else { return false }
 
         switch characters {
         case "k":
-            return { [weak self] in
-                withToolAnimation(ToolMotion.Preset.modal, reduceMotion: ToolMotion.systemReduceMotionEnabled) {
-                    self?.viewModel?.toggleCommandPalette()
-                }
+            withToolAnimation(ToolMotion.Preset.modal, reduceMotion: ToolMotion.systemReduceMotionEnabled) {
+                viewModel.toggleCommandPalette()
             }
         case "f":
             // An editor with its native find bar keeps ⌘F for incremental
             // search; the Edit menu routes it there.
-            if let textView = window.firstResponder as? NSTextView, textView.usesFindBar {
-                return nil
+            if !viewModel.showsCommandPalette,
+               let textView = window.firstResponder as? NSTextView, textView.usesFindBar {
+                return false
             }
-            return { [weak self] in
-                guard let self, let viewModel = self.viewModel else { return }
-                if viewModel.sidebarVisibility == .hidden {
-                    viewModel.sidebarVisibility = .visible
-                }
-                // 先装首字缓冲再要焦点：SwiftUI 的 focusToken 更新落下一拍，
-                // 用户紧随 ⌘F 敲下的第一个字符会先于字段就绪到达。
-                AppKitSearchFieldCoordinator.armSidebarSearchKeystrokeHandoff()
-                viewModel.focusSearch()
-            }
+            viewModel.focusSearch()
         default:
-            return nil
+            return false
         }
+        return true
     }
 }

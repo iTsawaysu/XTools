@@ -4,6 +4,71 @@ import SwiftUI
 import Testing
 
 struct AppKitSearchFieldLifecycleTests {
+    @Test(arguments: [false, true])
+    @MainActor func replayKeepsNewKeysBehindTheBufferedPrefix(invalidate: Bool) async throws {
+        let application = NSApplication.shared
+        let bounds = NSRect(x: 0, y: 0, width: 320, height: 120)
+        let window = NSWindow(contentRect: bounds, styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let coordinator = AppKitSearchFieldCoordinator(
+            text: .constant(""), processedFocusToken: 0, focusRetryDelays: []
+        )
+        let field = AppKitSearchFieldLifecycle.makeTextField(
+            configuration: .init(placeholder: "Search", font: .systemFont(ofSize: 12)),
+            text: .constant(""), focusToken: 0, coordinator: coordinator
+        )
+        field.frame = NSRect(x: 20, y: 40, width: 250, height: 27)
+        window.contentView?.addSubview(field)
+        window.makeKeyAndOrderFront(nil)
+        window.makeKey()
+        window.makeFirstResponder(nil)
+        let root = RootViewModel()
+        let shortcuts = AppShortcutRouter()
+        shortcuts.install(viewModel: root, window: window)
+        AppKitSearchFieldCoordinator.registerSidebarSearch(field: field, coordinator: coordinator)
+        defer {
+            shortcuts.uninstall()
+            AppKitSearchFieldCoordinator.unregisterSidebarSearch()
+        }
+        coordinator.beginKeystrokeHandoff(for: field)
+        defer { coordinator.invalidateFocusRequests() }
+
+        @MainActor func send(_ characters: String, keyCode: UInt16, flags: NSEvent.ModifierFlags = []) throws {
+            let event = try #require(NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: keyCode
+            ))
+            application.sendEvent(event)
+        }
+
+        try send("a", keyCode: 0)
+        try send("\u{7F}", keyCode: 51, flags: .option)
+        try send("å", keyCode: 0, flags: .option)
+        field.selectText(nil)
+        let editor = try #require(field.currentEditor() as? NSTextView)
+        #expect(window.firstResponder === editor)
+        coordinator.controlTextDidBeginEditing(.init(name: NSControl.textDidBeginEditingNotification, object: field))
+        try send("b", keyCode: 11)
+        #expect(editor.string.isEmpty)
+
+        if invalidate {
+            try send("k", keyCode: 40, flags: .command)
+            #expect(root.showsCommandPalette)
+            root.closeCommandPalette()
+            coordinator.rearmFocusRequests()
+        }
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
+        let prefix = invalidate ? "" : "åb"
+        #expect(editor.string == prefix)
+
+        try send("c", keyCode: 8)
+        #expect(editor.string == prefix + "c")
+    }
+
     @Test @MainActor func createsAndUpdatesAPlainNativeSearchField() {
         let state = TestState(text: "initial")
         let coordinator = AppKitSearchFieldCoordinator(

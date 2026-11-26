@@ -2,6 +2,19 @@
 import Testing
 
 struct SidebarCommandTests {
+    @Test @MainActor func findClosesThePaletteAndRevealsTheSidebar() {
+        let viewModel = RootViewModel()
+        viewModel.toggleSidebar(reduceMotion: true)
+        viewModel.openCommandPalette()
+        let focusToken = viewModel.searchFocusToken
+
+        viewModel.focusSearch()
+
+        #expect(!viewModel.showsCommandPalette)
+        #expect(viewModel.sidebarVisibility == .visible)
+        #expect(viewModel.searchFocusToken == focusToken + 1)
+    }
+
     @Test @MainActor func titleAndToggleTrackVisibleAndHiddenStates() {
         let viewModel = RootViewModel()
 

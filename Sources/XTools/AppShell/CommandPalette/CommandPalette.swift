@@ -81,7 +81,8 @@ struct CommandPaletteView: View {
         _contentLifecycle = StateObject(
             wrappedValue: CommandPaletteContentLifecycle(
                 session: presentationSession,
-                actions: actions
+                actions: actions,
+                presentation: presentation
             )
         )
     }
