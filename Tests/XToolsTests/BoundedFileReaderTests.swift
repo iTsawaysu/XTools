@@ -3,6 +3,12 @@ import Foundation
 import Testing
 
 struct BoundedFileReaderTests {
+    @Test func rejectsAnOpenedSpecialFile() {
+        #expect(throws: BoundedFileReader.ReadError.notRegularFile) {
+            _ = try BoundedFileReader.read(from: URL(fileURLWithPath: "/dev/null"), maxBytes: 8)
+        }
+    }
+
     @Test func readsExactlyTheBudgetAndRejectsTheNextByte() throws {
         let url = try sourcePackageRoot()
             .appendingPathComponent("Tests/XToolsTests/BoundedFileReaderTests.swift")

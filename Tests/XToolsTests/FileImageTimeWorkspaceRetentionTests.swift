@@ -483,8 +483,8 @@ private struct SlowRetentionFileTypeReader: FileTypeFileReading {
         return FileTypeFileMetadata(byteCount: 2)
     }
 
-    func readLeadingData(from url: URL, maxByteCount: Int) throws -> Data {
-        Data("{}".utf8.prefix(maxByteCount))
+    func readLeadingSample(from url: URL, maxByteCount: Int) throws -> (data: Data, byteCount: Int64) {
+        (Data("{}".utf8.prefix(maxByteCount)), 2)
     }
 }
 

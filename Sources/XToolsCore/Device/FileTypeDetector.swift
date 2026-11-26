@@ -109,7 +109,7 @@ public enum FileTypeDetector {
         let rawExtension = (fileName as NSString).pathExtension
         let fileExtension = rawExtension.isEmpty ? "(无)" : rawExtension
         let extensionEvidence = extensionEvidence(for: fileExtension)
-        let contentEvidence = leadingData.flatMap(detectedFileEvidence)
+        let contentEvidence = leadingData.flatMap { detectedFileEvidence(from: $0, byteCount: byteCount) }
         let resolution = resolve(extensionEvidence: extensionEvidence, contentEvidence: contentEvidence)
 
         return FileTypeReport(
@@ -255,7 +255,7 @@ public enum FileTypeDetector {
         )
     }
 
-    private static func detectedFileEvidence(from data: Data) -> FileTypeEvidence? {
+    private static func detectedFileEvidence(from data: Data, byteCount: Int64?) -> FileTypeEvidence? {
         if data.isEmpty {
             return nil
         }
@@ -274,8 +274,9 @@ public enum FileTypeDetector {
             )
         }
 
-        let sampleCount = min(data.count, leadingByteLimit)
         let readCount = min(data.count, leadingByteReadLimit)
+        let isComplete = byteCount == Int64(readCount)
+        let sampleCount = isComplete ? readCount : min(readCount, leadingByteLimit)
         let text = (sampleCount...readCount).lazy.compactMap {
             String(data: data.prefix($0), encoding: .utf8)
         }.first
@@ -288,11 +289,29 @@ public enum FileTypeDetector {
             return nil
         }
 
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isJSON = trimmed.hasPrefix("{") || trimmed.hasPrefix("[")
+        let isJSON = hasJSONEvidence(in: text, isComplete: isComplete)
         return evidence(
             mimeType: isJSON ? "application/json" : "text/plain",
             specificity: isJSON ? .specific : .genericText
         )
+    }
+
+    private static func hasJSONEvidence(in text: String, isComplete: Bool) -> Bool {
+        let trimmed = text.unicodeScalars.drop(while: { $0.properties.isWhitespace })
+        guard let opener = trimmed.first, opener == "{" || opener == "[" else { return false }
+        if isComplete {
+            return JSONFormatting.isValidSample(text, maximumDepth: leadingByteReadLimit / 2)
+        }
+
+        let remaining = trimmed.dropFirst().drop(while: { $0.properties.isWhitespace })
+        guard let first = remaining.first else { return true }
+        if opener == "{" { return first == "\"" || first == "}" }
+        if "[{\"-0123456789]".unicodeScalars.contains(first) { return true }
+        return ["true", "false", "null"].contains { literal in
+            if literal.unicodeScalars.starts(with: remaining) { return true }
+            guard remaining.starts(with: literal.unicodeScalars),
+                  let next = remaining.dropFirst(literal.utf8.count).first else { return false }
+            return next.properties.isWhitespace || next == "," || next == "]"
+        }
     }
 }

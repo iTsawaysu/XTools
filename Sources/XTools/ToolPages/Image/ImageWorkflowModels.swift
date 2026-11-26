@@ -223,6 +223,8 @@ struct ImageWorkflowFileReader: Sendable {
     var readDataWithLimit: @Sendable (URL, Int) throws -> Data = { url, maxBytes in
         do {
             return try BoundedFileReader.read(from: url, maxBytes: maxBytes)
+        } catch BoundedFileReader.ReadError.notRegularFile {
+            throw ImageWorkflowFailure.notRegularFile
         } catch BoundedFileReader.ReadError.tooLarge {
             let actualBytes = maxBytes == Int.max ? Int.max : maxBytes + 1
             throw ImageProcessorError.inputFileTooLarge(

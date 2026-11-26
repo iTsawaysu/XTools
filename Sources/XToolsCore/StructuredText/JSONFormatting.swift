@@ -44,6 +44,11 @@ public enum JSONFormatting {
         try minifyResult(text).text
     }
 
+    static func isValidSample(_ text: String, maximumDepth: Int) -> Bool {
+        var parser = OrderedJSONParser(text, maximumDepth: maximumDepth)
+        return (try? parser.parse()) != nil
+    }
+
     public static func formatResult(_ text: String, sortKeys: Bool, sortArrays: Bool = false, indentWidth: Int) throws -> FormattingResult {
         try formatResult(
             text,
@@ -436,12 +441,13 @@ private struct OrderedJSONParser {
     private var duplicateKeys: [String] = []
     private var openContainers: [OpenContainer] = []
     private var depth: Int = 0
-    private static let maxDepth: Int = 32
+    private let maximumDepth: Int
 
-    init(_ text: String) {
+    init(_ text: String, maximumDepth: Int = 32) {
         self.text = text
         self.scalars = Array(text.unicodeScalars)
         self.index = 0
+        self.maximumDepth = maximumDepth
     }
 
     mutating func parse() throws -> OrderedJSONDocument {
@@ -469,14 +475,14 @@ private struct OrderedJSONParser {
         case "{":
             depth += 1
             defer { depth -= 1 }
-            guard depth <= Self.maxDepth else {
+            guard depth <= maximumDepth else {
                 throw error(.exceededMaxDepth)
             }
             return try parseObject(currentKey: currentKey)
         case "[":
             depth += 1
             defer { depth -= 1 }
-            guard depth <= Self.maxDepth else {
+            guard depth <= maximumDepth else {
                 throw error(.exceededMaxDepth)
             }
             return try parseArray(currentKey: currentKey)

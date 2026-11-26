@@ -9,7 +9,7 @@ struct FileTypeFileMetadata: Equatable, Sendable {
 
 protocol FileTypeFileReading: Sendable {
     func metadata(for url: URL) throws -> FileTypeFileMetadata
-    func readLeadingData(from url: URL, maxByteCount: Int) throws -> Data
+    func readLeadingSample(from url: URL, maxByteCount: Int) throws -> (data: Data, byteCount: Int64)
 }
 
 struct FoundationFileTypeFileReader: FileTypeFileReading {
@@ -32,11 +32,11 @@ struct FoundationFileTypeFileReader: FileTypeFileReading {
         return FileTypeFileMetadata(byteCount: Int64(byteCount))
     }
 
-    func readLeadingData(from url: URL, maxByteCount: Int) throws -> Data {
+    func readLeadingSample(from url: URL, maxByteCount: Int) throws -> (data: Data, byteCount: Int64) {
         do {
-            let handle = try FileHandle(forReadingFrom: url)
-            defer { try? handle.close() }
-            return try handle.read(upToCount: maxByteCount) ?? Data()
+            return try BoundedFileReader.withRegularFile(at: url) { handle, byteCount in
+                (try handle.read(upToCount: maxByteCount) ?? Data(), byteCount)
+            }
         } catch {
             throw FileTypeDetector.InspectionIssue.contentReadFailed
         }
@@ -121,16 +121,16 @@ final class FileTypeDetectorSession: ObservableObject {
                 let metadata = try reader.metadata(for: url)
                 try Task.checkCancellation()
 
-                let leadingData: Data?
+                let sample: (data: Data, byteCount: Int64)?
                 let prefixWarning: String?
                 do {
-                    leadingData = try reader.readLeadingData(
+                    sample = try reader.readLeadingSample(
                         from: url,
                         maxByteCount: FileTypeDetector.leadingByteReadLimit
                     )
                     prefixWarning = nil
                 } catch {
-                    leadingData = nil
+                    sample = nil
                     prefixWarning = FileTypeDetector.diagnosticMessage(
                         for: error,
                         defaultIssue: .contentReadFailed
@@ -139,8 +139,8 @@ final class FileTypeDetectorSession: ObservableObject {
                 try Task.checkCancellation()
                 let report = FileTypeDetector.inspect(
                     fileName: url.lastPathComponent,
-                    byteCount: metadata.byteCount,
-                    leadingData: leadingData
+                    byteCount: sample?.byteCount ?? metadata.byteCount,
+                    leadingData: sample?.data
                 )
                 return InspectionOutcome.success(
                     report,

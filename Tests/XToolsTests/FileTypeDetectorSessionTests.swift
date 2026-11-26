@@ -6,6 +6,20 @@ import UniformTypeIdentifiers
 
 @MainActor
 struct FileTypeDetectorSessionTests {
+    @Test func replacementFileSizeAndPrefixComeFromTheOpenedFile() async throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("xtools-type-\(UUID().uuidString)")
+        try Data("x".utf8).write(to: url)
+        let json = Data(("{\"document\":\"" + String(repeating: "a", count: 150) + "\"}").utf8)
+        let session = FileTypeDetectorSession(reader: ReplacingFileTypeReader(replacement: json))
+
+        await session.inspect(url).value
+
+        let report = try #require(session.report)
+        #expect(report.fileSize == ByteSizeFormatter.format(bytes: Int64(json.count)))
+        #expect(report.contentMIMEType == "application/json")
+        #expect(session.warning == nil)
+    }
+
     @Test func detectsTextWithAScalarSplitByTheDefaultPrefixSize() async {
         let url = URL(fileURLWithPath: "/tmp/utf8-sample")
         let data = Data((String(repeating: "a", count: 63) + "🙂更多文字").utf8)
@@ -406,7 +420,7 @@ private final class FakeFileTypeFileReader: FileTypeFileReading, @unchecked Send
         return FileTypeFileMetadata(byteCount: byteCount)
     }
 
-    func readLeadingData(from url: URL, maxByteCount: Int) throws -> Data {
+    func readLeadingSample(from url: URL, maxByteCount: Int) throws -> (data: Data, byteCount: Int64) {
         lock.withLock {
             storedRequestedLeadingByteCounts.append(maxByteCount)
             storedObservedMainThread = storedObservedMainThread || Thread.isMainThread
@@ -414,6 +428,20 @@ private final class FakeFileTypeFileReader: FileTypeFileReading, @unchecked Send
         if let issue = prefixIssuesByURL[url] {
             throw issue
         }
-        return leadingDataByURL[url]?.prefix(maxByteCount) ?? Data()
+        return (leadingDataByURL[url]?.prefix(maxByteCount) ?? Data(), byteCountsByURL[url] ?? 0)
+    }
+}
+
+private struct ReplacingFileTypeReader: FileTypeFileReading {
+    let replacement: Data
+
+    func metadata(for url: URL) throws -> FileTypeFileMetadata {
+        let metadata = try FoundationFileTypeFileReader().metadata(for: url)
+        try replacement.write(to: url, options: .atomic)
+        return metadata
+    }
+
+    func readLeadingSample(from url: URL, maxByteCount: Int) throws -> (data: Data, byteCount: Int64) {
+        try FoundationFileTypeFileReader().readLeadingSample(from: url, maxByteCount: maxByteCount)
     }
 }

@@ -70,6 +70,21 @@ struct FileTypeDetectorTests {
         #expect(report.conflictDiagnostic == nil)
     }
 
+    @Test(arguments: ["[1,]", #"{"a":1,}"#])
+    func completeJSONSamplesRejectTrailingCommas(sample: String) {
+        let bytes = Data(sample.utf8)
+        let report = FileTypeDetector.inspect(fileName: "payload", byteCount: Int64(bytes.count), leadingData: bytes)
+        #expect(report.contentMIMEType == "text/plain")
+    }
+
+    @Test func completeJSONSamplesKeepBOMAndMaximumPossibleDepthCompatible() {
+        for text in ["\u{FEFF}[1]", String(repeating: "[", count: 33) + String(repeating: "]", count: 33)] {
+            let bytes = Data(text.utf8)
+            let report = FileTypeDetector.inspect(fileName: "payload", byteCount: Int64(bytes.count), leadingData: bytes)
+            #expect(report.contentMIMEType == "application/json")
+        }
+    }
+
     @Test func specificJSONContentWinsOverGenericPlainTextExtensionWithoutConflict() {
         let bytes = Data("{\"ok\":true}".utf8)
         let report = FileTypeDetector.inspect(fileName: "payload.txt", byteCount: Int64(bytes.count), leadingData: bytes)
@@ -80,6 +95,29 @@ struct FileTypeDetectorTests {
         #expect(report.evidenceAgreement == .compatible)
         #expect(report.resolvedMIMEType == "application/json")
         #expect(report.conflictDiagnostic == nil)
+    }
+
+    @Test(arguments: ["[Guide](https://example.org)", "[General]\nenabled=1", "{hello: world}", "[true] trailing"])
+    func structuredLookingCompleteTextNeedsMoreThanAnOpeningBracket(_ input: String) {
+        let bytes = Data(input.utf8)
+        let report = FileTypeDetector.inspect(fileName: "notes.md", byteCount: Int64(bytes.count), leadingData: bytes)
+
+        #expect(report.contentMIMEType == "text/plain")
+        #expect(report.contentEvidence?.specificity == .genericText)
+        #expect(report.resolvedMIMEType == report.extensionMIMEType)
+    }
+
+    @Test func distinguishesCompleteAndPartialJSONSamplesAtTheReadLimit() {
+        let complete = Data((String(repeating: " ", count: 64) + "[1]").utf8)
+        let partial = Data(("{\"value\":\"" + String(repeating: "a", count: 60) + "\"}").utf8)
+        let notJSON = Data(("[General]\n" + String(repeating: "a", count: 70)).utf8)
+
+        #expect(FileTypeDetector.inspect(fileName: "payload", byteCount: Int64(complete.count),
+            leadingData: complete).contentMIMEType == "application/json")
+        #expect(FileTypeDetector.inspect(fileName: "payload", byteCount: Int64(partial.count),
+            leadingData: partial.prefix(FileTypeDetector.leadingByteReadLimit)).contentMIMEType == "application/json")
+        #expect(FileTypeDetector.inspect(fileName: "payload", byteCount: Int64(notJSON.count),
+            leadingData: notJSON.prefix(FileTypeDetector.leadingByteReadLimit)).contentMIMEType == "text/plain")
     }
 
     @Test func genericContentThatCannotProveCompatibilityIsIndeterminateAndDoesNotWarn() {
