@@ -116,15 +116,16 @@ final class HTMLToMarkdownDOMRenderer {
         case "p":
             return block(try renderInlineChildren(of: element))
         case "br":
-            return "  \n"
+            // A literal break also survives inline whitespace normalization in table cells.
+            return "<br>"
         case "hr":
             return block("---")
         case "strong", "b":
-            return wrapInline("**", try renderInlineChildren(of: element))
+            return try wrapInline("**", childrenOf: element)
         case "em", "i":
-            return wrapInline("*", try renderInlineChildren(of: element))
+            return try wrapInline("*", childrenOf: element)
         case "del", "s", "strike":
-            return wrapInline("~~", try renderInlineChildren(of: element))
+            return try wrapInline("~~", childrenOf: element)
         case "code":
             if element.parent()?.nodeName().lowercased() == "pre" {
                 return rawText(in: element)
@@ -163,9 +164,41 @@ final class HTMLToMarkdownDOMRenderer {
         var parts: [String] = []
         for child in node.getChildNodes() {
             try cancellation.check()
-            parts.append(try renderNode(child, context: context))
+            let rendered = try renderNode(child, context: context)
+            guard !rendered.isEmpty else { continue }
+            if context != .preformatted, let previous = parts.last,
+               needsEmphasisSeparator(between: previous, and: rendered) {
+                parts.append("<!-- -->")
+            }
+            parts.append(rendered)
         }
         return parts.joined()
+    }
+
+    private func needsEmphasisSeparator(between left: String, and right: String) -> Bool {
+        guard let tail = left.unicodeScalars.last, let head = right.unicodeScalars.first else { return false }
+        let closes = tail == "*" || tail == "~"
+        let opens = head == "*" || head == "~"
+        if closes && tail == head { return true }
+        // CommonMark's delimiter flanks depend on the rendered neighbors,
+        // including text emitted by transparent elements such as spans.
+        if opens && preventsDelimiter(inside: right.unicodeScalars.drop { $0 == head }.first, outside: tail) {
+            return true
+        }
+        return closes && preventsDelimiter(inside: left.unicodeScalars.reversed().drop { $0 == tail }.first, outside: head)
+    }
+
+    private func preventsDelimiter(inside: Unicode.Scalar?, outside: Unicode.Scalar) -> Bool {
+        guard let inside, !outside.properties.isWhitespace, !isDelimiterPunctuation(outside) else { return false }
+        return isDelimiterPunctuation(inside)
+    }
+
+    private func isDelimiterPunctuation(_ scalar: Unicode.Scalar) -> Bool {
+        // CommonMark adds ASCII symbols to the Unicode punctuation classes.
+        switch scalar.value {
+        case 33...47, 58...64, 91...96, 123...126: return true
+        default: return CharacterSet.punctuationCharacters.contains(scalar)
+        }
     }
 
     private func renderInlineChildren(of node: Node) throws -> String {
@@ -254,6 +287,7 @@ final class HTMLToMarkdownDOMRenderer {
     }
 
     private func inlineCode(_ text: String) -> String {
+        guard !text.isEmpty else { return "" }
         let fence = String(repeating: "`", count: max(1, longestBacktickRun(in: text) + 1))
         let needsPadding = text.hasPrefix("`") || text.hasSuffix("`") || text.hasPrefix(" ") || text.hasSuffix(" ")
         let body = needsPadding ? " \(text) " : text
@@ -506,9 +540,13 @@ final class HTMLToMarkdownDOMRenderer {
             .joined(separator: "\n")
     }
 
-    private func wrapInline(_ marker: String, _ content: String) -> String {
-        guard !content.isEmpty else { return "" }
-        return marker + content + marker
+    private func wrapInline(_ marker: String, childrenOf node: Node) throws -> String {
+        let rendered = collapseWhitespaceRuns(try renderChildren(of: node, context: .normal))
+        let content = rendered.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return rendered }
+        let leading = rendered.hasPrefix(" ") ? " " : ""
+        let trailing = rendered.hasSuffix(" ") ? " " : ""
+        return "\(leading)\(marker)\(escapeLineStartMarkers(in: content))\(marker)\(trailing)"
     }
 
     private func normalizeDocumentMarkdown(_ markdown: String) -> String {
@@ -531,6 +569,9 @@ final class HTMLToMarkdownDOMRenderer {
             if let openingLength = fenceLengthLineLength(line), openingLength >= 3 {
                 fenceLength = openingLength
                 normalized.append((line, true))
+            } else if line.contains("<br>"), fenceContent(in: line).trimmingCharacters(in: .whitespaces) == "<br>" {
+                // On its own line a bare tag becomes an HTML block in CommonMark.
+                normalized.append((line + "<!-- -->", false))
             } else {
                 normalized.append((
                     line.trimmingCharacters(in: .whitespaces).isEmpty ? "" : line,

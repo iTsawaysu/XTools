@@ -44,6 +44,34 @@ struct HTMLToMarkdownConverterTests {
         #expect(HTMLToMarkdownConverter.convert("<strike>x</strike>") == "~~x~~")
     }
 
+    @Test func keepsWordSeparatorsAndOmitsEmptyInlineCode() {
+        let source = "<p>First<strong> second </strong>third<em> </em>fourth<code></code>.</p>"
+        let markdown = HTMLToMarkdownConverter.convert(source)
+        #expect(markdown == "First **second** third fourth.")
+        #expect(MarkdownDocument.parse(markdown).renderHTML() == "<p>First <strong>second</strong> third fourth.</p>\n")
+    }
+
+    @Test func preservesInlineBreaksAndPunctuationFlankedEmphasis() {
+        let source = "<p>one<br>two and <span>A</span><em>“b”</em><span>c</span></p>"
+        let markdown = HTMLToMarkdownConverter.convert(source)
+        let document = MarkdownDocument.parse(markdown)
+        #expect(markdown.contains("one<br>two"))
+        #expect(document.renderHTML().contains("<em>“b”</em>"))
+        for source in ["<p>😀<em>“b”</em>c</p>", "<p>a<em>“b”</em>€</p>", "<p>a+<em>“b”</em>+c</p>"] {
+            let rendered = MarkdownDocument.parse(HTMLToMarkdownConverter.convert(source)).renderHTML()
+            #expect(rendered.contains("<em>“b”</em>"))
+        }
+
+        let adjacent = HTMLToMarkdownConverter.convert("<p>a<em>b</em><i>c</i>d</p>")
+        let adjacentHTML = MarkdownDocument.parse(adjacent).renderHTML()
+        #expect(adjacentHTML.contains("<em>b</em>"))
+        #expect(adjacentHTML.contains("<em>c</em>"))
+
+        let isolatedBreak = HTMLToMarkdownConverter.convert("<p><br></p><p>text</p>")
+        let adjacentBlocks = MarkdownDocument.parse(isolatedBreak)
+        #expect(adjacentBlocks.first == .paragraph(content: [.html("<br>"), .html("<!-- -->")]))
+    }
+
     @Test func isCaseInsensitiveOnTags() {
         #expect(HTMLToMarkdownConverter.convert("<STRONG>x</STRONG>") == "**x**")
     }
