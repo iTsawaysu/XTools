@@ -518,17 +518,20 @@ final class Base64FileWorkflowSession: ObservableObject {
         maxBytes: Int = maxFileBytes,
         processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive()
     ) -> Task<Void, Never> {
-        Task {
+        let generation = state.fileReadGeneration
+        return Task {
+            guard state.fileReadGeneration == generation, !Task.isCancelled else { return }
             do {
                 guard let url = try await filePanel.selectFile(
                     FileInputPanelRequest(allowedContentTypes: [.data])
-                ) else {
+                ), state.fileReadGeneration == generation, !Task.isCancelled else {
                     return
                 }
                 await readSelectedFile(from: url, maxBytes: maxBytes, processor: processor)?.value
             } catch is CancellationError {
                 return
             } catch {
+                guard state.fileReadGeneration == generation, !Task.isCancelled else { return }
                 mutate { $0.setFileError(FileInputPanelFailure.diagnosticMessage(for: error)) }
             }
         }
@@ -540,7 +543,7 @@ final class Base64FileWorkflowSession: ObservableObject {
         maxBytes: Int = maxFileBytes,
         processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive()
     ) -> Task<Void, Never>? {
-        guard !isReadingFile else { return nil }
+        guard direction == .encode, !isReadingFile else { return nil }
 
         mutate { $0.beginFileRead() }
         let fileGeneration = state.fileReadGeneration
@@ -806,19 +809,22 @@ final class Base64FileWorkflowSession: ObservableObject {
         filePanel: FileInputPanelClient,
         processor: Base64FileWorkflowProcessing = Base64FileWorkflowLive()
     ) -> Task<Void, Never> {
-        Task {
+        let requestedGeneration = state.decodeGeneration
+        return Task {
+            guard state.decodeGeneration == requestedGeneration, !Task.isCancelled else { return }
             do {
                 guard let url = try await filePanel.selectFile(
                     FileInputPanelRequest(allowedContentTypes: Self.encodedTextContentTypes)
                 ) else {
                     return
                 }
-                guard !Task.isCancelled else { return }
+                guard state.decodeGeneration == requestedGeneration, !Task.isCancelled else { return }
                 let generation = beginDecodeAttempt(.encodedTextImport)
                 await loadEncodedTextFile(from: url, processor: processor, generation: generation)
             } catch is CancellationError {
                 return
             } catch {
+                guard state.decodeGeneration == requestedGeneration, !Task.isCancelled else { return }
                 mutate { $0.setReverseError(FileInputPanelFailure.diagnosticMessage(for: error)) }
             }
         }

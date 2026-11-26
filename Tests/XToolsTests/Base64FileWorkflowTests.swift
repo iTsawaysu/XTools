@@ -181,6 +181,68 @@ struct Base64FileWorkflowTests {
         #expect(session.isPreparingOutput == false)
     }
 
+    @Test func directionChangesKeepTheAcceptedFilesPreviewRefresh() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let selection = Self.selection(fileName: "direction.bin", data: Data("hi".utf8))
+        processor.readSelectionResult = .success(selection)
+        await session.readSelectedFile(
+            from: URL(fileURLWithPath: "/tmp/direction.bin"), processor: processor
+        )?.value
+
+        let suspended = SuspendedTestValue<Base64Conversion.EncodedFileOutputPreview>()
+        processor.outputPreviewHandler = { _, _ in await suspended.wait() }
+        let refresh = session.changeOutputMode(to: .base64, processor: processor)
+        await suspended.waitForRequest()
+        session.changeDirection(to: .decode)
+        session.changeDirection(to: .encode)
+        #expect(session.isPreparingOutput)
+
+        suspended.resume(Base64Conversion.encodedOutputPreview(
+            for: selection.data, mimeType: selection.mimeType, mode: .base64
+        ))
+        await refresh?.value
+        #expect(session.outputMode == .base64)
+        #expect(session.outputPreview?.visibleText == "aGk=")
+        #expect(!session.isPreparingOutput)
+    }
+
+    @Test func lateSourcePanelSelectionDoesNotStartAnObsoleteRead() async {
+        let session = Base64FileWorkflowSession()
+        let processor = FakeBase64FileWorkflowProcessor()
+        let selection = SuspendedTestValue<URL?>()
+        let panel = FileInputPanelClient { _ in await selection.wait() }
+        let request = session.selectSourceFile(filePanel: panel, processor: processor)
+        await selection.waitForRequest()
+
+        session.changeDirection(to: .decode)
+        session.changeDirection(to: .encode)
+        selection.resume(URL(fileURLWithPath: "/tmp/obsolete.bin"))
+        await request.value
+
+        #expect(processor.readSelectionRequests.isEmpty)
+        #expect(session.selectedFile == nil)
+        #expect(!session.isReadingFile)
+    }
+
+    @Test func invalidatedRequestsDoNotPresentEitherFilePanel() async {
+        let session = Base64FileWorkflowSession()
+        var selections = 0
+        let panel = FileInputPanelClient { _ in
+            selections += 1
+            return nil
+        }
+        let source = session.selectSourceFile(filePanel: panel)
+        session.changeDirection(to: .decode)
+        await source.value
+
+        let importRequest = session.importEncodedTextFile(filePanel: panel)
+        session.changeDirection(to: .encode)
+        await importRequest.value
+
+        #expect(selections == 0)
+    }
+
     @Test func rapidOutputModeSwitchPublishesOnlyTheLatestPreview() async {
         let session = Base64FileWorkflowSession()
         let processor = FakeBase64FileWorkflowProcessor()

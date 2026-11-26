@@ -87,9 +87,8 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
     public mutating func changeDirection(to newDirection: Base64FileWorkflowDirection) {
         guard direction != newDirection else { return }
         direction = newDirection
-        bumpAllGenerations()
+        bumpAllGenerations(preservingOutputPreview: true)
         isReadingFile = false
-        isPreparingOutput = false
         outputAction = nil
         decodeActivity = nil
         isSavingDecoded = false
@@ -101,7 +100,6 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
         bumpAllGenerations()
         encodedWorkspaceState = .empty
         isReadingFile = false
-        isPreparingOutput = false
         outputAction = nil
         decodeActivity = nil
         isSavingDecoded = false
@@ -165,9 +163,8 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
     }
 
     public mutating func beginFileRead() {
-        bumpAllGenerations()
+        bumpAllGenerations(preservingOutputPreview: true)
         isReadingFile = true
-        isPreparingOutput = false
         outputAction = nil
         decodeActivity = nil
         isSavingDecoded = false
@@ -198,6 +195,10 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
         selection: Base64FileSelection,
         preview: Base64Conversion.EncodedFileOutputPreview?
     ) {
+        if isPreparingOutput {
+            outputGeneration += 1
+            isPreparingOutput = false
+        }
         encodedWorkspaceState = Base64FileEncodedWorkspaceState(selection: selection, preview: preview)
         fileError = nil
         isReadingFile = false
@@ -218,10 +219,10 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
         reverseError = nil
         reverseInputDirty = false
         decodeActivity = nil
-        self.defaultOutputFileName = defaultOutputFileName
-        if outputFileName == "download" || outputFileName.isEmpty {
+        if outputFileName == self.defaultOutputFileName || outputFileName.isEmpty {
             outputFileName = defaultOutputFileName
         }
+        self.defaultOutputFileName = defaultOutputFileName
     }
 
     public mutating func applyDecodeFailure(_ message: String) {
@@ -231,10 +232,13 @@ public struct Base64FileWorkspaceSessionState: Equatable, Sendable {
         decodeActivity = nil
     }
 
-    mutating func bumpAllGenerations() {
+    private mutating func bumpAllGenerations(preservingOutputPreview: Bool = false) {
         fileReadGeneration += 1
-        outputGeneration += 1
         decodeGeneration += 1
+        if !preservingOutputPreview || !isPreparingOutput {
+            outputGeneration += 1
+            isPreparingOutput = false
+        }
     }
 
 

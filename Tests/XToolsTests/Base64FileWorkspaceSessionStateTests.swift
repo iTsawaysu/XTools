@@ -56,6 +56,33 @@ struct Base64FileWorkspaceSessionStateTests {
         #expect(state.decodedResultSource == .manualInput)
         #expect(state.defaultOutputFileName == "note")
         #expect(state.outputFileName == "note")
+
+        state.applyDecodedPayload(payload, source: .manualInput, defaultOutputFileName: "next")
+        #expect(state.outputFileName == "next")
+
+        state.outputFileName = "chosen-by-user"
+        state.applyDecodedPayload(payload, source: .manualInput, defaultOutputFileName: "latest")
+        #expect(state.defaultOutputFileName == "latest")
+        #expect(state.outputFileName == "chosen-by-user")
+    }
+
+    @Test func failedReplacementReadDoesNotInvalidateTheAcceptedPreviewRefresh() {
+        var state = Base64FileWorkspaceSessionState()
+        let selection = Base64FileSelection(fileName: "a.txt", data: Data("a".utf8), mimeType: "text/plain")
+        state.applySuccessfulFileRead(selection: selection, preview: nil)
+        state.beginOutputPreviewRefresh()
+        let generation = state.outputGeneration
+
+        state.beginFileRead()
+        state.applyFileReadFailure("read failed")
+        #expect(state.isPreparingOutput)
+        #expect(state.isCurrentEncodedOutput(selection: selection, mode: .dataURL, generation: generation))
+
+        let replacement = Base64FileSelection(fileName: "b.txt", data: Data("b".utf8), mimeType: "text/plain")
+        state.beginFileRead()
+        state.applySuccessfulFileRead(selection: replacement, preview: nil)
+        #expect(!state.isPreparingOutput)
+        #expect(!state.isCurrentEncodedOutput(selection: selection, mode: .dataURL, generation: generation))
     }
 
     @Test func fileReadAndSelectionClearInvalidateDecodedSaveBusyState() {
