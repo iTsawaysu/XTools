@@ -220,6 +220,7 @@ private struct IndexControlledSegmentInput<TrailingAccessory: View>: View {
 private enum IndexControlledSegmentPasteResult {
     case accepted(Date)
     case rejected
+    case rejectedOutOfRange(Date)
     case rejectedNonexistentLocalTime
 }
 
@@ -292,6 +293,8 @@ extension ControlledHumanTimeInput: IndexControlledSegmentInputSource {
             return .accepted(date)
         case .rejected:
             return .rejected
+        case .rejectedOutOfRange(let date):
+            return .rejectedOutOfRange(date)
         case .rejectedNonexistentLocalTime:
             return .rejectedNonexistentLocalTime
         }
@@ -543,7 +546,7 @@ private struct IndexControlledSegmentInputRepresentable: NSViewRepresentable {
             guard textField.canHandleSegmentCommands else { return false }
             let text = (pasteboard ?? .general).string(forType: .string) ?? ""
             switch adapter.paste(text, timeZone) {
-            case .accepted(let date):
+            case .accepted(let date), .rejectedOutOfRange(let date):
                 onCommit(date)
             case .rejected:
                 onInvalidPaste()

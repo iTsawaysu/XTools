@@ -54,7 +54,7 @@ By default, the app is built for the Mac's current architecture and written to `
 | **Development (8)** | Formatters (JSON / SQL / XML / YAML), Diff (Text / JSON), Regex Tester, Docker Run ↔ Compose, HTML → Markdown, Crontab Generator, Random Port, Chmod Calculator |
 | **Web (5)** | JWT Parser & Signer, Basic Auth Generator, HTTP Status Codes, User-Agent Parser, Keycode Inspector |
 | **Image & Color (2)** | Image Processing (Format Converter / Compressor / Grayscale / Watermark / Favicon), Color Converter (HEX, RGB, HSL) |
-| **Time & Date (4)** | Unix Timestamp Converter (s/ms), Timezone Viewer, Date Calculator, Chronometer & Stopwatch |
+| **Time & Date (4)** | Unix Timestamp Converter (seconds input, seconds and milliseconds output), Timezone Viewer, Date Calculator, Chronometer & Stopwatch |
 | **Utilities (5)** | Device & Hardware Info, MIME File Type Detector, Math Evaluator, Text Statistics, Emoji & Symbol Catalog |
 
 ## Shortcuts

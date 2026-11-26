@@ -145,6 +145,35 @@ struct NativeTextBridgeRegressionTests {
         #expect(otherText == "other editor")
     }
 
+    @Test func outOfRangeHumanTimePasteKeepsTheResultAndUsesTheTimestampDiagnostic() async throws {
+        let suite = "NativeTimePaste.\(UUID())"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        let repository = ToolWorkspaceRepository(defaults: defaults)
+        let workspace = repository.model(for: DateTimeToolWorkspaceModel.key)
+        let before = workspace.humanTimeInput.displayText
+        let previousTimestamp = workspace.timestamp
+        let host = NSHostingView(rootView: IndexDateTimePage()
+            .environmentObject(repository)
+            .environment(\.toolPageEntryGeneration, 1)
+            .environment(\.toolPasteboard, pasteboard))
+        let window = makeWindow(host)
+        defer { window.close() }
+        await settle(host)
+        let field = try #require(descendant(IndexControlledSegmentNSTextField.self, in: host))
+        try #require(window.makeFirstResponder(field))
+        #expect(pasteboard.setString("9999-12-31T24:00:00Z", forType: .string))
+
+        field.paste(nil)
+
+        #expect(workspace.timestampError == TimestampInterpreter.ValidationIssue.outOfRange.errorDescription)
+        #expect(workspace.humanError == nil)
+        #expect(workspace.timestamp == previousTimestamp)
+        #expect(workspace.humanTimeInput.displayText == before)
+    }
+
     private func makeWindow<V: View>(_ host: NSHostingView<V>) -> NSWindow {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 220), styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false

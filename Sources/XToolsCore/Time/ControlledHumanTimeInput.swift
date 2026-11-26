@@ -66,6 +66,7 @@ extension HumanDateTimeSegment: SegmentedFieldSegment {}
 public enum ControlledHumanTimePasteResult: Equatable, Sendable {
     case accepted(Date)
     case rejected
+    case rejectedOutOfRange(Date)
     /// 粘贴文本格式合法，但该本地时间因夏令时切换不存在。
     case rejectedNonexistentLocalTime
 }
@@ -88,13 +89,16 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
     }
 
     public init(components: HumanDateTimeComponents) {
-        self.components = Self.normalized(components)
+        var initial = components
+        initial.year = FieldState.clamp(initial.year, to: 1...9999)
+        self.components = Self.normalized(initial)
         self.state = FieldState()
         self.lastCommitFailure = nil
     }
 
     public init(date: Date, timeZone: TimeZone) {
-        self.init(components: HumanDateTimeConversion.components(from: date, timeZone: timeZone))
+        self.init()
+        replace(with: date, timeZone: timeZone)
     }
 
     public var isEmpty: Bool {
@@ -217,6 +221,7 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
     @discardableResult
     public mutating func commitActiveSegment(timeZone: TimeZone, advance: Bool = false) -> Date? {
         lastCommitFailure = nil
+        let previousComponents = components
         var failure: HumanDateTimeConversion.ParseFailure?
         let date = state.commitActiveSegment(
             components: &components,
@@ -234,6 +239,11 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
                 }
             }
         )
+        if let date, TimestampInterpreter.canonicalWholeSecondDate(for: date) == nil {
+            // Keep the accepted display. The caller still receives the
+            // attempted date to show its existing range diagnostic.
+            components = previousComponents
+        }
         lastCommitFailure = failure
         return date
     }
@@ -241,8 +251,11 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
     public mutating func paste(_ text: String, timeZone: TimeZone) -> ControlledHumanTimePasteResult {
         switch HumanDateTimeConversion.parseResult(fromText: text, timeZone: timeZone) {
         case .date(let date):
-            replace(with: date, timeZone: timeZone)
-            return .accepted(date)
+            guard let wholeSecond = TimestampInterpreter.canonicalWholeSecondDate(for: date) else {
+                return .rejectedOutOfRange(date)
+            }
+            replace(with: wholeSecond, timeZone: timeZone)
+            return .accepted(wholeSecond)
         case .failure(.nonexistentLocalTime):
             return .rejectedNonexistentLocalTime
         case .failure:
@@ -251,21 +264,15 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
     }
 
     public static func lastDay(year: Int, month: Int) -> Int {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-
-        var components = DateComponents()
-        components.calendar = calendar
-        components.timeZone = calendar.timeZone
-        components.year = FieldState.clamp(year, to: 1...9999)
-        components.month = FieldState.clamp(month, to: 1...12)
-        components.day = 1
-
-        guard let date = calendar.date(from: components),
-              let range = calendar.range(of: .day, in: .month, for: date) else {
+        switch FieldState.clamp(month, to: 1...12) {
+        case 2:
+            let year = FieldState.clamp(year, to: 0...10000)
+            return year.isMultiple(of: 4) && (!year.isMultiple(of: 100) || year.isMultiple(of: 400)) ? 29 : 28
+        case 4, 6, 9, 11:
+            return 30
+        default:
             return 31
         }
-        return range.count
     }
 
     private mutating func ensureComponentsForEditing(timeZone: TimeZone, editingSeed: Date) {
@@ -333,7 +340,6 @@ public struct ControlledHumanTimeInput: Equatable, Sendable {
 
     private static func normalized(_ components: HumanDateTimeComponents) -> HumanDateTimeComponents {
         var normalized = components
-        normalized.year = FieldState.clamp(normalized.year, to: 1...9999)
         normalized.month = FieldState.clamp(normalized.month, to: 1...12)
         normalized.day = FieldState.clamp(normalized.day, to: 1...lastDay(year: normalized.year, month: normalized.month))
         normalized.hour = FieldState.clamp(normalized.hour, to: 0...23)

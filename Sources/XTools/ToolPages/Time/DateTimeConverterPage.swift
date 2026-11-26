@@ -209,11 +209,19 @@ private struct IndexDateTimeWorkspaceContent: View {
 
 @MainActor
 private enum DateTimeFormatters {
-    static let iso8601 = ISO8601DateFormatter()
+    static let iso8601: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .gmt
+        formatter.gregorianStartDate = HumanDateTimeConversion.gregorianStartDate
+        formatter.dateFormat = "uuuu-MM-dd'T'HH:mm:ss'Z'"
+        return formatter
+    }()
 
     static let localMedium: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
+        formatter.gregorianStartDate = HumanDateTimeConversion.gregorianStartDate
         formatter.dateStyle = .medium
         formatter.timeStyle = .medium
         return formatter
@@ -223,6 +231,7 @@ private enum DateTimeFormatters {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.gregorianStartDate = HumanDateTimeConversion.gregorianStartDate
         formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss 'GMT'"
         return formatter
     }()

@@ -16,6 +16,24 @@ struct HumanDateTimeConversionTests {
 
         #expect(HumanDateTimeConversion.date(fromText: "2026-07-03T06:30:46Z", timeZone: shanghai) == Self.instant("2026-07-03T06:30:46Z"))
         #expect(HumanDateTimeConversion.date(fromText: "2026-07-03T06:30:46+02:00", timeZone: shanghai) == Self.instant("2026-07-03T04:30:46Z"))
+        for offset in ["+02", "+0200"] {
+            #expect(HumanDateTimeConversion.date(fromText: "2026-07-03T06:30:46\(offset)", timeZone: shanghai) == Self.instant("2026-07-03T04:30:46Z"))
+        }
+    }
+
+    @Test(arguments: ["Ztail", "Z+08:00", "+08:00tail", "+99:00", "+00:99", ".125Ztail"])
+    func rejectsISOInstantsWithUnconsumedInput(suffix: String) {
+        let input = "2026-07-03T06:30:46\(suffix)"
+        #expect(HumanDateTimeConversion.parseResult(fromText: input, timeZone: .gmt) == .failure(.unrecognizedFormat))
+    }
+
+    @Test func acceptsHour24OnlyForExactMidnight() {
+        let date = "2026-11-26T"
+        #expect(HumanDateTimeConversion.date(fromText: date + "24:00:00Z", timeZone: .gmt)
+            == Self.instant("2026-11-27T00:00:00Z"))
+        for clock in ["24:01:00Z", "24:00:01Z", "24:00:00.01Z", "００２４:００:００.１+00:00"] {
+            #expect(HumanDateTimeConversion.date(fromText: date + clock, timeZone: .gmt) == nil)
+        }
     }
 
     @Test func rejectsImpossibleISOCalendarDatesBeforeApplyingTheOffset() {
@@ -29,12 +47,17 @@ struct HumanDateTimeConversionTests {
     }
 
     @Test(arguments: [
-        "0000-02-29T00:00:00Z", "10000-01-01T00:00:00Z", "2026-7-03T06:30:46Z",
+        "10000-01-01T00:00:00Z", "2026-7-03T06:30:46Z",
         "2026-07-3T06:30:46Z", "2026-07-03T6:30:46Z", "２０２６-０７-０３T06:30:46Z"
     ])
     func preservesCalendarDatesAcceptedByTheSystemISOFormatter(text: String) {
         let expected = ISO8601DateFormatter().date(from: text)
         #expect(HumanDateTimeConversion.date(fromText: text, timeZone: .gmt) == expected)
+    }
+
+    @Test func parsesTheISOLegalYearZeroWithoutApplyingTheTimestampFieldRange() {
+        let leapDay = Date(timeIntervalSince1970: -62_135_596_800 - 307 * 86_400)
+        #expect(HumanDateTimeConversion.date(fromText: "0000-02-29T00:00:00Z", timeZone: .gmt) == leapDay)
     }
 
     @Test func parsesDateOnlyAsLocalMidnight() {
@@ -108,6 +131,68 @@ struct HumanDateTimeConversionTests {
 
         #expect(HumanDateTimeConversion.components(from: Self.instant("2026-07-03T06:30:46Z"), timeZone: utc) == components)
         #expect(HumanDateTimeConversion.date(from: components, timeZone: utc) == Self.instant("2026-07-03T06:30:46Z"))
+    }
+
+    @Test(arguments: [
+        ("0001-01-01", -62_135_596_800.0),
+        ("1582-10-10", -12_219_724_800.0),
+        ("1582-10-20", -12_218_860_800.0)
+    ])
+    func historicalDatesUseTheSameCalendarForParsingEditingAndDisplay(day: String, seconds: Double) {
+        let expected = Date(timeIntervalSince1970: seconds)
+        #expect(HumanDateTimeConversion.date(fromText: day + "T00:00:00Z", timeZone: .gmt) == expected)
+        #expect(HumanDateTimeConversion.date(fromText: day + " 00:00:00", timeZone: .gmt) == expected)
+        #expect(HumanDateTimeConversion.string(from: expected, timeZone: .gmt) == day + " 00:00:00")
+        var input = ControlledHumanTimeInput()
+        #expect(input.paste(day + "T00:00:00Z", timeZone: .gmt) == .accepted(expected))
+        #expect(input.displayText == day + " 00:00:00")
+        #expect(ControlledHumanTimeInput.lastDay(year: 1500, month: 2) == 28)
+    }
+
+    @Test func pasteKeepsPriorTimeOnRangeFailureAndDisplaysTheCanonicalSecond() {
+        var input = ControlledHumanTimeInput(date: Date(timeIntervalSince1970: 42), timeZone: .gmt)
+        let previous = input
+        let outOfRange: [(String, Double)] = [
+            ("0000-12-31 23:59:59", -62_135_596_801),
+            ("0000-12-31T23:59:59Z", -62_135_596_801),
+            ("9999-12-31T24:00:00Z", 253_402_300_800)
+        ]
+        for (text, seconds) in outOfRange {
+            #expect(input.paste(text, timeZone: .gmt) == .rejectedOutOfRange(Date(timeIntervalSince1970: seconds)))
+            #expect(input == previous)
+        }
+        #expect(input.paste("1969-12-31T23:59:59.750Z", timeZone: .gmt)
+            == .accepted(Date(timeIntervalSince1970: 0)))
+        #expect(input.displayText == "1970-01-01 00:00:00")
+    }
+
+    @Test(arguments: [
+        (-12, -62_135_596_800.0, "0000-12-31 12:00:00", "00", "11"),
+        (14, 253_402_300_799.0, "10000-01-01 13:59:59", "59", "14")
+    ])
+    func localProjectionOfAnEpochBoundaryCanBePastedAndEdited(
+        offsetHours: Int, seconds: Double, display: String, minutes: String, outsideHour: String
+    ) throws {
+        let zone = try #require(TimeZone(secondsFromGMT: offsetHours * 3600))
+        let date = Date(timeIntervalSince1970: seconds)
+        var input = ControlledHumanTimeInput(date: date, timeZone: zone)
+        #expect(input.displayText == display)
+        #expect(input.paste(display, timeZone: zone) == .accepted(date))
+        input.select(.minute)
+        var result: Date?
+        for digit in minutes {
+            result = input.inputDigit(digit, timeZone: zone)
+        }
+        #expect(result == date)
+        #expect(input.displayText == display)
+
+        input.select(.hour)
+        for digit in outsideHour {
+            result = input.inputDigit(digit, timeZone: zone)
+        }
+        let attempted = try #require(result)
+        #expect(TimestampInterpreter.canonicalWholeSecondDate(for: attempted) == nil)
+        #expect(input.displayText == display)
     }
 
     @Test func rejectsInvalidEditableComponents() {

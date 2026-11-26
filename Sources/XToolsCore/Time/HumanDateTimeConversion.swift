@@ -1,3 +1,4 @@
+import CoreFoundation
 import Foundation
 
 public struct HumanDateTimeComponents: Equatable, Hashable, Sendable {
@@ -19,6 +20,9 @@ public struct HumanDateTimeComponents: Equatable, Hashable, Sendable {
 }
 
 public enum HumanDateTimeConversion {
+    // Use a cutover before year 0000, which can occur in a local UTC projection.
+    package static let gregorianStartDate = Date.distantPast.addingTimeInterval(-366 * 86_400)
+
     /// 文本/分量解析失败原因。`.nonexistentLocalTime` 表示格式与数值合法，
     /// 但该本地墙钟时间因夏令时切换被跳过（spring-forward 空洞）；回退式
     /// 歧义时间（一个本地时间出现两次）由系统的双遍历 Calendar 解析，不属失败。
@@ -67,13 +71,28 @@ public enum HumanDateTimeConversion {
         from components: HumanDateTimeComponents,
         timeZone: TimeZone
     ) -> ParseResult {
-        guard (1...9999).contains(components.year),
+        // Time-zone projection of the supported UTC endpoints can reach
+        // the previous or next local calendar year.
+        guard (0...10000).contains(components.year),
               (1...12).contains(components.month),
               (1...31).contains(components.day),
               (0...23).contains(components.hour),
               (0...59).contains(components.minute),
               (0...59).contains(components.second) else {
             return .failure(.invalidComponents)
+        }
+
+        // Use the same proleptic Gregorian calendar as the epoch bounds.
+        // Foundation's Calendar applies a historical Julian cutover.
+        if components.year <= 1582 {
+            let text = String(
+                format: "%04d-%02d-%02d %02d:%02d:%02d",
+                components.year, components.month, components.day, components.hour, components.minute, components.second
+            )
+            guard let date = fixedFormatter(timeZone: timeZone).date(from: text) else {
+                return .failure(.invalidComponents)
+            }
+            return .date(date)
         }
 
         var calendar = Calendar(identifier: .gregorian)
@@ -131,6 +150,10 @@ public enum HumanDateTimeConversion {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = timeZone
         let components = calendar.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
+        if let year = components.year, year <= 1582,
+           let historical = fixedFormatComponents(from: string(from: date, timeZone: timeZone)) {
+            return historical
+        }
 
         return HumanDateTimeComponents(
             year: components.year ?? 1,
@@ -151,7 +174,8 @@ public enum HumanDateTimeConversion {
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = timeZone
         formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        formatter.gregorianStartDate = gregorianStartDate
+        formatter.dateFormat = "uuuu-MM-dd HH:mm:ss"
         formatter.isLenient = false
         return formatter
     }
@@ -176,7 +200,7 @@ public enum HumanDateTimeConversion {
 
         let dateNumbers = datePart.split(separator: "-", omittingEmptySubsequences: false)
         guard dateNumbers.count == 3,
-              dateNumbers[0].count == 4,
+              dateNumbers[0].count == 4 || dateNumbers[0] == "10000",
               dateNumbers[1].count == 2,
               dateNumbers[2].count == 2,
               let year = Int(dateNumbers[0]),
@@ -217,8 +241,9 @@ public enum HumanDateTimeConversion {
     private static let isoCalendarDayFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.calendar = Calendar(identifier: .gregorian)
         formatter.timeZone = .gmt
+        formatter.gregorianStartDate = gregorianStartDate
         formatter.dateFormat = "u-MM-dd"
         formatter.isLenient = false
         return formatter
@@ -226,17 +251,38 @@ public enum HumanDateTimeConversion {
 
     private static func isoDate(from value: String) -> Date? {
         guard let separator = value.firstIndex(of: "T") else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        var date = formatter.date(from: value)
-        if date == nil {
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            date = formatter.date(from: value)
-        }
+        let clock = value[value.index(after: separator)...]
+        guard isValidISOEndOfDay(clock) else { return nil }
+        let source = value as CFString
+        let date = parseCompleteISODate(source, options: .withInternetDateTime)
+            ?? parseCompleteISODate(source, options: [.withInternetDateTime, .withFractionalSeconds])
 
         // The ISO formatter normalizes impossible day/month combinations.
         // Validate the written day independently of its explicit offset.
         guard let date, isoCalendarDayFormatter.date(from: String(value[..<separator])) != nil else { return nil }
         return date
+    }
+
+    private static func isValidISOEndOfDay(_ clock: Substring) -> Bool {
+        guard let colon = clock.firstIndex(of: ":"),
+              clock[..<colon].lazy.compactMap(\.wholeNumberValue).drop(while: { $0 == 0 }).elementsEqual([2, 4])
+        else { return true }
+        // ISO 8601 reserves hour 24 for the exact end of day.
+        let remainder = clock[clock.index(after: colon)...].prefix {
+            $0.isNumber || $0.isWhitespace || ":.,".contains($0)
+        }
+        return !remainder.contains { character in
+            character.wholeNumberValue.map { $0 != 0 } ?? false
+        }
+    }
+
+    private static func parseCompleteISODate(_ source: CFString, options: CFISO8601DateFormatOptions) -> Date? {
+        let length = CFStringGetLength(source)
+        var consumed = CFRange(location: 0, length: length)
+        guard let formatter = CFDateFormatterCreateISO8601Formatter(nil, options) else { return nil }
+        CFDateFormatterSetProperty(formatter, CFDateFormatterKey.gregorianStartDate.rawValue, gregorianStartDate as CFDate)
+        guard let date = CFDateFormatterCreateDateFromString(nil, formatter, source, &consumed),
+              consumed.length == length else { return nil }
+        return date as Date
     }
 }
