@@ -114,6 +114,23 @@ struct ToolSearchEngineTests {
         #expect(registry.matchingTools(query: "json 不存在的词").isEmpty)
     }
 
+    @Test func repeatedFoldedTermsKeepTheirWeightAndFirstAliasOrder() throws {
+        let record = ToolSearchRecord(title: "Bé Alpha", keywords: [], aliases: [
+            ToolAlias("json", segment: "json"),
+            ToolAlias("yaml", segment: "yaml")
+        ])
+        let distinct = try #require(ToolSearchEngine.match(record: record, query: "be yaml json"))
+        let yaml = try #require(ToolSearchEngine.match(record: record, query: "yaml"))
+        let repeated = try #require(ToolSearchEngine.match(record: record, query: "be yaml json YÁML be"))
+        let title = try #require(ToolSearchEngine.match(record: record, query: "be"))
+
+        #expect(repeated.tier == distinct.tier)
+        #expect(repeated.score == distinct.score + yaml.score + title.score)
+        #expect(repeated.titleRanges == distinct.titleRanges)
+        #expect(repeated.aliasMatches == distinct.aliasMatches)
+        #expect(repeated.deepLinkSegment == "yaml")
+    }
+
     // MARK: - Fuzzy + pinyin recall (default registry)
 
     @Test func titleSubsequenceMatchesScatteredLatinQueries() {

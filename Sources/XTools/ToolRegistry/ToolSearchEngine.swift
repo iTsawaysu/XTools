@@ -331,16 +331,38 @@ enum ToolSearchEngine {
     }
 
     struct Query {
+        fileprivate struct Token {
+            let characters: [Character]
+            var count = 1
+        }
+
         let isBlank: Bool
-        fileprivate let tokens: [[Character]]
+        fileprivate let tokens: [Token]
 
         init(_ rawQuery: String) {
             let trimmed = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
             isBlank = trimmed.isEmpty
-            tokens = trimmed
+            let foldedTokens = trimmed
                 .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
                 .split { $0.isWhitespace }
-                .map { Array($0) }
+            guard foldedTokens.count > 1 else {
+                tokens = foldedTokens.map { Token(characters: Array($0)) }
+                return
+            }
+
+            // Repeated terms contribute their original weight without
+            // repeating alignment and highlight work for every record.
+            var unique: [Token] = []
+            var indexByToken: [Substring: Int] = [:]
+            for token in foldedTokens {
+                if let index = indexByToken[token] {
+                    unique[index].count += 1
+                } else {
+                    indexByToken[token] = unique.count
+                    unique.append(Token(characters: Array(token)))
+                }
+            }
+            tokens = unique
         }
     }
 
@@ -357,9 +379,9 @@ enum ToolSearchEngine {
         var aliasContributions: [(alias: AliasMatch, score: Int, position: Int)] = []
 
         for token in query.tokens {
-            guard let tokenMatch = matchToken(token, in: record) else { return nil }
+            guard let tokenMatch = matchToken(token.characters, in: record) else { return nil }
             tier = max(tier, tokenMatch.tier)
-            score += tokenMatch.score
+            score += tokenMatch.score * token.count
             titleRanges.append(contentsOf: tokenMatch.titleRanges)
             if let alias = tokenMatch.alias {
                 aliasContributions.append((alias, tokenMatch.score, aliasContributions.count))
