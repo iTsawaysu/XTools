@@ -31,11 +31,13 @@ final class RegexToolWorkspaceModel: ObservableObject, ToolWorkspacePayloadEvict
     }
 
     func applyPreset(_ preset: RegexMatcher.Preset) {
+        let target = RegexWorkspaceInput(preset: preset)
+        guard target != RegexWorkspaceInput(workspace: self) else { return }
         needsResultRestore = false
         debouncer.cancel()
         execution.invalidate()
-        pattern = preset.pattern
-        flags = RegexMatcher.normalizeFlagsForUI(preset.flags)
+        pattern = target.pattern
+        flags = target.flags
         text = preset.exampleText
     }
 
@@ -93,7 +95,6 @@ struct RegexWorkspaceInput: Equatable {
 }
 
 private enum RegexResultMotionIntent: Equatable {
-    case preset(RegexWorkspaceInput)
     case clear
     case immediate
 }
@@ -295,8 +296,6 @@ private struct IndexRegexWorkspaceContent: View {
 
     private func handleWorkspaceInputChange(_ input: RegexWorkspaceInput) {
         switch resultMotionIntent {
-        case .preset(let target) where target == input:
-            break
         case .clear where input == RegexWorkspaceInput(pattern: "", flags: "g", text: ""):
             break
         default:
@@ -317,18 +316,6 @@ private struct IndexRegexWorkspaceContent: View {
         let flagsSnapshot = input.flags
         workspace.debouncer.schedule {
             execution.run(pattern: patternSnapshot, text: textSnapshot, flags: flagsSnapshot)
-        }
-    }
-
-    private func applyPreset(_ preset: RegexMatcher.Preset) {
-        let previousInput = workspaceInput
-        let targetInput = RegexWorkspaceInput(preset: preset)
-        resultMotionIntent = .preset(targetInput)
-        withToolAnimation(ToolMotion.Preset.resultPresenceExit, reduceMotion: reduceMotion) {
-            workspace.applyPreset(preset)
-        }
-        if previousInput == targetInput {
-            schedule(targetInput)
         }
     }
 
@@ -370,7 +357,7 @@ private struct IndexRegexWorkspaceContent: View {
         guard let candidate,
               candidate == report else {
             switch resultMotionIntent {
-            case .preset, .clear:
+            case .clear:
                 withToolAnimation(ToolMotion.Preset.resultPresenceExit, reduceMotion: reduceMotion) {
                     displayedReport = nil
                 }
@@ -380,19 +367,12 @@ private struct IndexRegexWorkspaceContent: View {
             return
         }
 
-        switch resultMotionIntent {
-        case .preset(let target) where target == workspaceInput:
-            withToolAnimation(ToolMotion.Preset.resultPresenceAppearance, reduceMotion: reduceMotion) {
-                displayedReport = candidate
-            }
-        case .clear, .preset, .immediate:
-            displayedReport = candidate
-        }
+        displayedReport = candidate
     }
 
     private var resultTransition: AnyTransition {
         switch resultMotionIntent {
-        case .preset, .clear:
+        case .clear:
             ToolMotion.Transition.modeContent
         case .immediate:
             .identity

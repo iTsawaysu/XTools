@@ -88,6 +88,16 @@ struct RegexMatcherTests {
         #expect(report.statistics.namedGroupCount == 1)
     }
 
+    @Test func unmatchedGroupsDoNotReserveStorageInEachResult() throws {
+        let report = try RegexMatcher.analyze(pattern: "x(y)?(?<suffix>z)?", in: "x xz")
+
+        #expect(report.matches.map(\.value) == ["x", "xz"])
+        let first = try firstMatch(from: report)
+        #expect(first.captures.capacity == 0)
+        #expect(first.groups.capacity == 0)
+        #expect(report.matches.last?.groups.map(\.value) == ["z"])
+    }
+
     @Test func formatsCopySummaryWithCapturesAndNamedGroups() throws {
         let report = try RegexMatcher.analyze(pattern: #"(?<word>\w+)-(\d+)"#, in: "item-42", flags: "")
         let summary = RegexMatcher.summaryText(for: report)

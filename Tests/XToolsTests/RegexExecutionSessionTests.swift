@@ -6,6 +6,23 @@ import Testing
 
 @MainActor
 struct RegexExecutionSessionTests {
+    @Test func reapplyingIdenticalPresetKeepsItsResult() async throws {
+        let workspace = RegexToolWorkspaceModel()
+        let preset = try #require(RegexMatcher.presets.first)
+        workspace.applyPreset(preset)
+        workspace.execution.run(pattern: workspace.pattern, text: workspace.text, flags: workspace.flags)
+        try await waitUntil { workspace.execution.report != nil }
+        let report = try #require(workspace.execution.report)
+
+        workspace.applyPreset(preset)
+        #expect(workspace.execution.report == report)
+
+        workspace.text = "changed example"
+        workspace.applyPreset(preset)
+        #expect(workspace.text == preset.exampleText)
+        #expect(workspace.execution.report == nil)
+    }
+
     @Test func newerRunCannotBeOverwrittenByOlderResult() async throws {
         let oldStarted = OSAllocatedUnfairLock(initialState: false)
         let oldCancelled = OSAllocatedUnfairLock(initialState: false)

@@ -458,6 +458,8 @@ public enum RegexMatcher {
                     }
 
                     var matches: [Match] = []
+                    var captures: [Capture] = []
+                    var groups: [Capture] = []
                     var captureCount = 0
                     var resultUTF16Length = 0
                     var hasStarted = false
@@ -511,8 +513,7 @@ public enum RegexMatcher {
                         }
                         try accountForResult(fullMatch, isCapture: false)
 
-                        var captures: [Capture] = []
-                        captures.reserveCapacity(groupCount)
+                        captures.removeAll(keepingCapacity: true)
                         if groupCount > 0 {
                             for index in 1...groupCount {
                                 if index & 1_023 == 0 { try Task.checkCancellation() }
@@ -529,8 +530,7 @@ public enum RegexMatcher {
                             }
                         }
 
-                        var groups: [Capture] = []
-                        groups.reserveCapacity(namedGroupNumbers.count)
+                        groups.removeAll(keepingCapacity: true)
                         for (name, groupNumber) in namedGroupNumbers {
                             if let capture = try capture(
                                 name: name,
@@ -549,8 +549,9 @@ public enum RegexMatcher {
                                 value: fullMatch.value,
                                 index: fullMatch.start,
                                 end: fullMatch.end,
-                                captures: captures,
-                                groups: groups,
+                                // Keep scratch capacity for the next match without retaining it in the report.
+                                captures: captures.withUnsafeBufferPointer { Array($0) },
+                                groups: groups.withUnsafeBufferPointer { Array($0) },
                                 utf16Range: fullMatch.utf16Range,
                                 hasPartialCharacterBoundary: fullMatch.hasPartialCharacterBoundary
                             )
@@ -611,10 +612,13 @@ public enum RegexMatcher {
         }
         guard start >= 0, end >= start else { return nil }
         guard end <= textUTF16.count else { throw MatcherError.internalFailure }
-        // Preserve Range(NSRange, in:) rejection of a split surrogate pair.
-        for offset in [start, end] where offset > 0 && offset < textUTF16.count {
-            if (0xD800...0xDBFF).contains(textUTF16[offset - 1]),
-               (0xDC00...0xDFFF).contains(textUTF16[offset]) {
+        if boundaries != nil {
+            func splitsSurrogate(at offset: Int) -> Bool {
+                offset > 0 && offset < textUTF16.count
+                    && (0xD800...0xDBFF).contains(textUTF16[offset - 1])
+                    && (0xDC00...0xDFFF).contains(textUTF16[offset])
+            }
+            guard !splitsSurrogate(at: start), !splitsSurrogate(at: end) else {
                 throw MatcherError.internalFailure
             }
         }
