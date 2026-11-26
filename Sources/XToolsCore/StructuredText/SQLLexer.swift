@@ -46,7 +46,9 @@ struct SQLLexer {
             if Character(character).isWhitespace {
                 try advance()
             } else if character == "'" || character == "\"" || character == "`" {
-                tokens.append(SQLPositionedToken(token: .stringLiteral(try readQuoted(until: character)), offset: startOffset))
+                let usesBackslashEscapes = character != "'" || !followsUnicodeEscapeKeyword(tokens)
+                let literal = try readQuoted(until: character, usesBackslashEscapes: usesBackslashEscapes)
+                tokens.append(SQLPositionedToken(token: .stringLiteral(literal), offset: startOffset))
             } else if character == "$", try startsDollarQuotedLiteral() {
                 throw SQLFormatting.ValidationError.unsupportedDialectLiteral(
                     diagnostic(
@@ -65,8 +67,12 @@ struct SQLLexer {
                 tokens.append(SQLPositionedToken(token: .comment(try readLineComment()), offset: startOffset))
             } else if character == "/", peek(offset: 1) == "*" {
                 tokens.append(SQLPositionedToken(token: .comment(try readBlockComment()), offset: startOffset))
-            } else if startsPrefixedQuotedLiteral() {
-                tokens.append(SQLPositionedToken(token: .stringLiteral(try readPrefixedQuotedLiteral()), offset: startOffset))
+            } else if let (length, quote) = quotedLiteralPrefix() {
+                let start = stringIndex
+                try advance(length)
+                let prefix = String(input.unicodeScalars[start..<stringIndex])
+                let literal = try readQuoted(until: quote, usesBackslashEscapes: length == 1)
+                tokens.append(SQLPositionedToken(token: .stringLiteral(prefix + literal), offset: startOffset))
             } else if Character(character).isLetter || character == "_" || startsAtPrefixedWord() {
                 tokens.append(SQLPositionedToken(token: .word(try readWord()), offset: startOffset))
             } else if isASCIIDigit(character) {
@@ -124,11 +130,18 @@ struct SQLLexer {
         return isASCIIIdentifierStart(next)
     }
 
-    private func startsPrefixedQuotedLiteral() -> Bool {
-        guard let prefix = peek(), peek(offset: 1) == "'" else { return false }
-        return prefix == "b" || prefix == "B"
-            || prefix == "n" || prefix == "N"
-            || prefix == "x" || prefix == "X"
+    private func quotedLiteralPrefix() -> (length: Int, quote: Unicode.Scalar)? {
+        if peek(offset: 1) == "'" {
+            switch peek() {
+            case "b", "B", "n", "N", "x", "X", "e", "E": return (1, "'")
+            default: break
+            }
+        }
+        if (peek() == "u" || peek() == "U"), peek(offset: 1) == "&",
+           let quote = peek(offset: 2), quote == "'" || quote == "\"" {
+            return (2, quote)
+        }
+        return nil
     }
 
     private func peek(offset: Int = 0) -> Unicode.Scalar? {
@@ -143,7 +156,17 @@ struct SQLLexer {
         stringIndex = input.unicodeScalars.index(stringIndex, offsetBy: amount)
     }
 
-    private mutating func readQuoted(until quote: Unicode.Scalar) throws -> String {
+    private func followsUnicodeEscapeKeyword(_ tokens: [SQLPositionedToken]) -> Bool {
+        var significant = tokens.reversed().lazy.map(\.token).filter { token in
+            if case .comment = token { return false }
+            return true
+        }.makeIterator()
+        guard case .word(let keyword) = significant.next(), keyword.uppercased() == "UESCAPE",
+              case .stringLiteral(let literal) = significant.next() else { return false }
+        return literal.hasPrefix("U&") || literal.hasPrefix("u&")
+    }
+
+    private mutating func readQuoted(until quote: Unicode.Scalar, usesBackslashEscapes: Bool) throws -> String {
         var startOffset = index
         var value = String(quote)
         try advance()
@@ -167,7 +190,7 @@ struct SQLLexer {
                 return value
             }
 
-            if character == "\\", let escaped = peek() {
+            if usesBackslashEscapes, character == "\\", let escaped = peek() {
                 value.unicodeScalars.append(escaped)
                 try advance()
             }
@@ -193,12 +216,6 @@ struct SQLLexer {
         // PostgreSQL and standard SQL concatenate single-quoted literals
         // separated by whitespace containing a newline.
         return containsLineBreak && peek(offset: offset) == "'" ? offset : nil
-    }
-
-    private mutating func readPrefixedQuotedLiteral() throws -> String {
-        let prefix = String(peek() ?? " ")
-        try advance()
-        return prefix + (try readQuoted(until: "'"))
     }
 
     private mutating func readBracketIdentifier() throws -> String {

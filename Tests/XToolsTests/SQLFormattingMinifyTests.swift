@@ -2,6 +2,16 @@ import Testing
 @testable import XToolsCore
 
 @Suite struct SQLFormattingMinifyTests {
+    @Test(arguments: [
+        #"E'line\nnext'"#, #"e'it\'s quoted'"#, #"U&'d\0061ta'"#, #"u&"d\0061ta""#,
+        #"U&'a\' UESCAPE '!'"#, #"u&"a\" UESCAPE '!'"#, #"U&'d\0061ta' UESCAPE '\'"#
+    ])
+    func keepsPostgreSQLPrefixesAttached(literal: String) throws {
+        let input = "SELECT \(literal);"
+        #expect(try SQLFormatting.format(input) == "SELECT\n  \(literal);")
+        #expect(try SQLFormatting.format(input, options: .init(minify: true)) == input)
+    }
+
     @Test func preservesNewlineBetweenAdjacentSingleQuotedLiteralsInBothModes() throws {
         let input = "SELECT 'foo'\r\n  'bar'\n 'baz' FROM example;"
         #expect(try SQLFormatting.format(input) == "SELECT\n  'foo'\n'bar'\n'baz'\nFROM\n  example;")
