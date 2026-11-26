@@ -163,10 +163,6 @@ public enum CronScheduler {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = localCalendar.timeZone
 
-        // Keep the absolute position in a repeated hour and always advance past
-        // the minute containing `after`, including when it has fractional seconds.
-        guard var cursor = calendar.dateInterval(of: .minute, for: after)?.end else { return [] }
-
         // Map cron weekdays (0=Sun...6=Sat, 7=Sun) to Calendar's (1=Sun...7=Sat)
         let normalizedWeekdays = Set(fields.weekdays.map { ($0 == 0 || $0 == 7) ? 1 : $0 + 1 })
 
@@ -179,16 +175,23 @@ public enum CronScheduler {
 
         var results: [Date] = []
         let horizon = calendar.date(byAdding: .year, value: 5, to: after) ?? after
+        let timeZone = calendar.timeZone
+        var localClock = calendar
+        var cursor = after
+        var nextOffsetChange: Date? = after
 
         while results.count < count, cursor < horizon {
-            // Adding one calendar day to a 01:00 start on a missing-midnight
-            // day can land at 01:00 tomorrow. The day interval ends at the
-            // actual next local-day boundary, which may be 00:00 tomorrow.
-            guard let dayInterval = calendar.dateInterval(of: .day, for: cursor),
-                  dayInterval.end > cursor else { break }
-            let dayStart = dayInterval.start
-            let nextDay = dayInterval.end
-            let comps = calendar.dateComponents([.year, .month, .day, .weekday], from: dayStart)
+            // Enumerate one constant-offset interval at a time. A rollback
+            // can revisit an earlier local date as well as an earlier hour.
+            if let change = nextOffsetChange, cursor >= change {
+                guard let offset = TimeZone(secondsFromGMT: timeZone.secondsFromGMT(for: cursor)) else { break }
+                localClock.timeZone = offset
+                nextOffsetChange = timeZone.nextDaylightSavingTimeTransition(after: cursor)
+            }
+            guard let dayInterval = localClock.dateInterval(of: .day, for: cursor) else { break }
+            let end = min(dayInterval.end, nextOffsetChange ?? horizon, horizon)
+            guard end > cursor else { break }
+            let comps = localClock.dateComponents([.year, .month, .day, .weekday], from: cursor)
             guard let month = comps.month, let day = comps.day, let weekday = comps.weekday else { break }
 
             let dayMatches: Bool
@@ -200,76 +203,26 @@ public enum CronScheduler {
             }
 
             if !fields.months.contains(month) || !dayMatches {
-                cursor = nextDay
+                cursor = end
                 continue
             }
 
-            let offsetAtStart = calendar.timeZone.secondsFromGMT(for: dayStart)
-            let offsetAtEnd = calendar.timeZone.secondsFromGMT(for: nextDay.addingTimeInterval(-1))
-            let offsetChange = abs(offsetAtEnd - offsetAtStart)
-
-            // A repeated local hour is not ordered by its wall-clock fields:
-            // first 01:45 precedes second 01:30. Collect both occurrences on
-            // offset-change days, then order them by their absolute Date values.
-            if offsetChange != 0 {
-                var candidates: Set<Date> = []
-                for hour in sortedHours {
-                    for minute in sortedMinutes {
-                        var slot = comps
-                        slot.hour = hour
-                        slot.minute = minute
-                        slot.second = 0
-                        guard let date = calendar.date(from: slot) else { continue }
-
-                        for occurrence in [
-                            date,
-                            date.addingTimeInterval(TimeInterval(offsetChange)),
-                            date.addingTimeInterval(-TimeInterval(offsetChange))
-                        ] where occurrence >= cursor && occurrence < nextDay && occurrence < horizon {
-                            if matchesLocalSlot(occurrence, hour: hour, minute: minute, calendar: calendar) {
-                                candidates.insert(occurrence)
-                            }
-                        }
-                    }
-                }
-
-                for date in candidates.sorted() {
-                    results.append(date)
-                    if results.count == count { break }
-                }
-                cursor = nextDay
-                continue
-            }
-
-            var advanced = false
-            outer: for hour in sortedHours {
+            for hour in sortedHours {
                 for minute in sortedMinutes {
                     var slot = comps
                     slot.hour = hour
                     slot.minute = minute
                     slot.second = 0
-                    guard let date = calendar.date(from: slot) else { continue }
-                    if date >= cursor, date < nextDay, date < horizon,
-                       matchesLocalSlot(date, hour: hour, minute: minute, calendar: calendar) {
+                    if let date = localClock.date(from: slot), date >= cursor, date > after, date < end {
                         results.append(date)
-                        cursor = date.addingTimeInterval(60)
-                        advanced = true
-                        break outer
+                        if results.count == count { return results }
                     }
                 }
             }
-
-            if !advanced {
-                cursor = nextDay
-            }
+            cursor = end
         }
 
         return results
-    }
-
-    private static func matchesLocalSlot(_ date: Date, hour: Int, minute: Int, calendar: Calendar) -> Bool {
-        let actual = calendar.dateComponents([.hour, .minute, .second], from: date)
-        return actual.hour == hour && actual.minute == minute && actual.second == 0
     }
 
     // MARK: - Field explanation

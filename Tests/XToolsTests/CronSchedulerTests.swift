@@ -299,6 +299,17 @@ struct CronSchedulerTests {
         ])
     }
 
+    @Test func fallBackAcrossMidnightRevisitsThePreviousLocalDate() {
+        let canada = CronScheduler.nextRuns(
+            "30 22 * * *", count: 2, after: utc("1988-10-29T22:30:00Z"), calendar: gregorian("America/Goose_Bay")
+        )
+        #expect(canada == [utc("1988-10-30T00:30:00Z"), utc("1988-10-30T02:30:00Z")])
+        let antarctica = CronScheduler.nextRuns(
+            "30 23 * * *", count: 2, after: utc("2010-03-04T10:00:00Z"), calendar: gregorian("Antarctica/Casey")
+        )
+        #expect(antarctica == [utc("2010-03-04T12:30:00Z"), utc("2010-03-04T15:30:00Z")])
+    }
+
     @Test func springForwardSkipsMissingHourInsteadOfNormalizing() {
         let calendar = gregorian("America/Los_Angeles")
         let runs = CronScheduler.nextRuns(
