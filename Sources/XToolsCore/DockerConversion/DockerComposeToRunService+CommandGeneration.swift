@@ -520,7 +520,7 @@ extension DockerComposeToRunService {
                 skipped.append("volumes.type(结构无法映射)")
                 continue
             }
-            guard let target = scalarString(long["target"]) else {
+            guard let target = scalarString(long["target"]), DockerMountFields.preservesPath(target) else {
                 skipped.append("volumes.\(mountPathType(type)).target")
                 continue
             }
@@ -554,19 +554,28 @@ extension DockerComposeToRunService {
         _ long: [String: Any],
         target: String
     ) -> (mount: String, unsupportedPaths: [String]) {
-        var mount = "type=tmpfs,target=\(target)"
+        var fields = ["type=tmpfs", "target=\(target)"]
         var unsupportedPaths: [String] = []
         if let tmpfs = long["tmpfs"] as? [String: Any] {
             if tmpfs["size"] != nil {
                 if let size = scalarString(tmpfs["size"]) {
-                    mount += ",tmpfs-size=\(size)"
+                    fields.append("tmpfs-size=\(size)")
                 } else {
                     unsupportedPaths.append("volumes.tmpfs.tmpfs.size(结构无法映射)")
                 }
             }
-            if tmpfs["mode"] != nil {
-                if let mode = scalarString(tmpfs["mode"]) {
-                    mount += ",tmpfs-mode=\(mode)"
+            if let value = tmpfs["mode"] {
+                let mode: UInt32?
+                switch value {
+                case let bits as Int:
+                    mode = UInt32(exactly: bits)
+                case let octal as String:
+                    mode = DockerMountFields.modeBits(octal: octal)
+                default:
+                    mode = nil
+                }
+                if let mode {
+                    fields.append("tmpfs-mode=\(String(mode, radix: 8))")
                 } else {
                     unsupportedPaths.append("volumes.tmpfs.tmpfs.mode(结构无法映射)")
                 }
@@ -576,9 +585,16 @@ extension DockerComposeToRunService {
         } else if long["tmpfs"] != nil {
             unsupportedPaths.append("volumes.tmpfs.tmpfs(结构无法映射)")
         }
-        let unsupported = long.keys.filter { !["type", "target", "tmpfs"].contains($0) }.sorted()
+        if let readOnly = long["read_only"] {
+            if let enabled = readOnly as? Bool {
+                if enabled { fields.append("readonly") }
+            } else {
+                unsupportedPaths.append("volumes.tmpfs.read_only(结构无法映射)")
+            }
+        }
+        let unsupported = long.keys.filter { !["type", "target", "tmpfs", "read_only"].contains($0) }.sorted()
         unsupportedPaths.append(contentsOf: unsupported.map { "volumes.tmpfs.\($0)" })
-        return (mount, unsupportedPaths)
+        return (DockerMountFields.encode(fields), unsupportedPaths)
     }
 
     /// 把 bind/volume 长式挂载折叠为 `--mount` 参数体；mount 为 nil 表示该项
@@ -602,7 +618,7 @@ extension DockerComposeToRunService {
         guard unsupportedPaths.isEmpty else { return (nil, unsupportedPaths) }
         let source: String?
         if let rawSource = long["source"] {
-            guard let value = scalarString(rawSource), !value.isEmpty else {
+            guard let value = scalarString(rawSource), DockerMountFields.preservesPath(value) else {
                 unsupportedPaths.append("volumes.\(type).source")
                 return (nil, unsupportedPaths)
             }
@@ -618,15 +634,15 @@ extension DockerComposeToRunService {
             return (nil, unsupportedPaths)
         }
         let readOnly = long["read_only"] as? Bool == true
-        var mount = "type=\(type)"
+        var fields = ["type=\(type)"]
         if let source {
-            mount += ",source=\(source)"
+            fields.append("source=\(source)")
         }
-        mount += ",target=\(target)"
+        fields.append("target=\(target)")
         if readOnly {
-            mount += ",readonly"
+            fields.append("readonly")
         }
-        return (mount, unsupportedPaths)
+        return (DockerMountFields.encode(fields), unsupportedPaths)
     }
 
     private static func mountPathType(_ type: String) -> String {

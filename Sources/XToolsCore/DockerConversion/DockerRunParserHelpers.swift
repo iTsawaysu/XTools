@@ -1,5 +1,62 @@
 import Foundation
 
+enum DockerMountFields {
+    // Docker parses the argument as a single CSV record before reading key=value.
+    static func encode(_ fields: [String]) -> String {
+        fields.map { field in
+            guard field.unicodeScalars.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" || $0 == "\r" })
+            else { return field }
+            return "\"\(field.replacingOccurrences(of: "\"", with: "\"\""))\""
+        }.joined(separator: ",")
+    }
+
+    static func decode(_ argument: String) -> [String]? {
+        enum State { case unquoted, quoted, afterQuote }
+        var state = State.unquoted
+        var fields: [String] = []
+        var field = ""
+        let trimmed = argument.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalized = trimmed.replacingOccurrences(of: "\r\n", with: "\n")
+        for scalar in normalized.unicodeScalars {
+            switch scalar {
+            case "\"":
+                switch state {
+                case .unquoted:
+                    guard field.isEmpty else { return nil }
+                    state = .quoted
+                case .quoted:
+                    state = .afterQuote
+                case .afterQuote:
+                    field.append("\"")
+                    state = .quoted
+                }
+            case "," where state != .quoted:
+                fields.append(field)
+                field = ""
+                state = .unquoted
+            default:
+                guard state != .afterQuote, state == .quoted || scalar != "\n" else { return nil }
+                field.unicodeScalars.append(scalar)
+            }
+        }
+        guard state != .quoted else { return nil }
+        fields.append(field)
+        return fields
+    }
+
+    static func modeBits(octal: String) -> UInt32? {
+        guard octal.utf8.allSatisfy({ (48...55).contains($0) }) else { return nil }
+        return UInt32(octal, radix: 8)
+    }
+
+    static func preservesPath(_ path: String) -> Bool {
+        // The CLI rejects edge whitespace and its CSV reader converts CRLF to LF.
+        path.unicodeScalars.first?.properties.isWhitespace == false &&
+            path.unicodeScalars.last?.properties.isWhitespace == false &&
+            !path.contains("\r\n") && !path.utf8.contains(0)
+    }
+}
+
 extension DockerRunToDockerComposeService {
     /// 仅识别相邻、未引用的完整 docker/run 词元；不猜测普通参数中的子串。
     /// 扫描保留 tokenizer 的引号/反斜杠规则，续行不形成词元边界。
@@ -208,7 +265,7 @@ extension DockerRunToDockerComposeService {
         var source: String?
         var target: String?
         var tmpfsSize: String?
-        var tmpfsMode: String?
+        var tmpfsMode: UInt32?
         var isReadonly = false
         var unsupported: [String] = []
     }
@@ -250,35 +307,31 @@ extension DockerRunToDockerComposeService {
         )
     }
 
-    /// 按逗号切分 `--mount` 值并识别每个字段；未识别的键记入 unsupported。
+    /// 识别 `--mount` 的 CSV 字段，将未识别的键记入 unsupported。
     private static func collectMountOptions(_ mountString: String) -> MountOptions {
         var options = MountOptions()
-        let parts = mountString.split(separator: ",")
+        guard let parts = DockerMountFields.decode(mountString) else {
+            options.unsupported.append("option")
+            return options
+        }
         for part in parts {
-            let trimmed = part.trimmingCharacters(in: .whitespaces)
-
-            if trimmed == "readonly" || trimmed == "ro" {
-                options.isReadonly = true
-                continue
-            }
-            if trimmed.hasPrefix("readonly=") {
-                let value = String(trimmed.dropFirst("readonly=".count))
-                if value == "true" {
-                    options.isReadonly = true
-                } else if value != "false" {
-                    options.unsupported.append("readonly")
+            let keyValue = part.unicodeScalars.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            let key = (keyValue.first.map { String($0) } ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+            if key == "readonly" || key == "ro" {
+                switch keyValue.count == 2 ? String(keyValue[1]) : "true" {
+                case "1", "t", "T", "true", "TRUE", "True": options.isReadonly = true
+                case "0", "f", "F", "false", "FALSE", "False": options.isReadonly = false
+                default: options.unsupported.append(key)
                 }
                 continue
             }
-
-            let keyValue = trimmed.split(separator: "=", maxSplits: 1)
-            guard keyValue.count == 2 else {
+            guard keyValue.count == 2, !key.isEmpty, !keyValue[1].isEmpty else {
                 options.unsupported.append("option")
                 continue
             }
 
-            let key = String(keyValue[0]).trimmingCharacters(in: .whitespaces)
-            let value = String(keyValue[1]).trimmingCharacters(in: .whitespaces)
+            let rawValue = String(keyValue[1])
+            let value = rawValue.trimmingCharacters(in: .whitespaces)
 
             switch key {
             case "type":
@@ -287,13 +340,25 @@ extension DockerRunToDockerComposeService {
                     options.unsupported.append("type")
                 }
             case "source", "src":
-                options.source = value
+                if DockerMountFields.preservesPath(rawValue) {
+                    options.source = rawValue
+                } else {
+                    options.unsupported.append("source")
+                }
             case "target", "dst", "destination":
-                options.target = value
+                if DockerMountFields.preservesPath(rawValue) {
+                    options.target = rawValue
+                } else {
+                    options.unsupported.append("target")
+                }
             case "tmpfs-size":
                 options.tmpfsSize = value
             case "tmpfs-mode":
-                options.tmpfsMode = value
+                if let mode = DockerMountFields.modeBits(octal: value) {
+                    options.tmpfsMode = mode
+                } else {
+                    options.unsupported.append(key)
+                }
             default:
                 options.unsupported.append(key)
             }

@@ -20,7 +20,7 @@ extension DockerRunToDockerComposeService {
         var target: String
         var readOnly = false
         var size: String?
-        var mode: String?
+        var mode: UInt32?
     }
 
     struct ComposeService {

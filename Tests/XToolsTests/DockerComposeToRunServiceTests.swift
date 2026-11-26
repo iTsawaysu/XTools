@@ -222,7 +222,7 @@ struct DockerComposeToRunServiceTests {
                 target: /cache
                 tmpfs:
                   size: 65536
-                  mode: 1770
+                  mode: 01770
         """
         let result = try DockerComposeToRunService.convert(yaml)
         let command = try #require(result.commands.first)
@@ -241,7 +241,7 @@ struct DockerComposeToRunServiceTests {
                 target: /cache
                 tmpfs:
                   size: 65536
-                  mode: 1770
+                  mode: 01770
         """
         let reverse = try DockerComposeToRunService.convert(yaml)
         let run = try #require(reverse.commands.first)
@@ -256,6 +256,111 @@ struct DockerComposeToRunServiceTests {
         #expect(semantics.mounts == [
             .init(kind: .tmpfs, target: "/cache", tmpfsSize: "65536", tmpfsMode: "1770")
         ])
+    }
+
+    @Test func longFormMountRoundTripsQuotedFieldsBeforeShellEscaping() throws {
+        let yaml = """
+        services:
+          app:
+            image: alpine
+            volumes:
+              - type: bind
+                source: '/tmp/folder,"draft"'
+                target: '/data,\u{0301}archive'
+                read_only: true
+        """
+        let reverse = try DockerComposeToRunService.convert(yaml)
+        let command = try #require(reverse.commands.first)
+        let words = try DockerRunToDockerComposeService.tokenize(command)
+        let mountIndex = try #require(words.firstIndex(of: "--mount"))
+        let mount = "type=bind,\"source=/tmp/folder,\"\"draft\"\"\",\"target=/data,\u{0301}archive\",readonly"
+        #expect(words.dropFirst(mountIndex + 1).first == mount)
+        #expect(reverse.warnings.isEmpty)
+
+        let forward = try DockerRunToDockerComposeService.convert(command)
+        #expect(forward.notImplemented.isEmpty)
+        #expect(try DockerComposeToRunService.convert(forward.yaml).commands == [command])
+    }
+
+    @Test(arguments: [("0755", "755"), ("0o755", "755"), ("\"755\"", "755"), ("1770", "3352")])
+    func tmpfsConvertsComposePermissionBitsToDockerOctal(yamlMode: String, dockerMode: String) throws {
+        let yaml = """
+        services:
+          app:
+            image: alpine
+            volumes:
+              - type: tmpfs
+                target: /cache
+                tmpfs:
+                  mode: \(yamlMode)
+        """
+        let reverse = try DockerComposeToRunService.convert(yaml)
+        let command = try #require(reverse.commands.first)
+        #expect(reverse.warnings.isEmpty)
+        #expect(command.contains("tmpfs-mode=\(dockerMode) "))
+
+        let forward = try DockerRunToDockerComposeService.convert(command)
+        #expect(forward.notImplemented.isEmpty)
+        #expect(forward.yaml.contains("mode: 0o\(dockerMode)"))
+        #expect(try DockerComposeToRunService.convert(forward.yaml).commands == [command])
+    }
+
+    @Test func malformedMountFieldsReportStructuredLoss() throws {
+        let malformedCSV = #"docker run --mount 'type=bind,"source=/tmp/draft,target=/data' alpine"#
+        let invalidMode = "docker run --mount type=tmpfs,target=/cache,tmpfs-mode=998 alpine"
+
+        let malformed = try DockerRunToDockerComposeService.convert(malformedCSV)
+        #expect(malformed.notImplemented.contains("--mount.option"))
+        #expect(!malformed.yaml.contains("volumes:"))
+        let invalid = try DockerRunToDockerComposeService.convert(invalidMode)
+        #expect(invalid.notImplemented.contains("--mount.tmpfs-mode"))
+        #expect(!invalid.yaml.contains("volumes:"))
+    }
+
+    @Test(arguments: [
+        ("readonly,readonly=false", false), ("readonly=false,ro", true),
+        ("ro=false", false), ("readonly=0", false), ("ro=TRUE", true)
+    ])
+    func dockerMountUsesTheLastReadOnlyValue(options: String, readOnly: Bool) throws {
+        let run = "docker run --mount type=bind,source=/tmp/folder,target=/data,\(options) alpine"
+        let result = try DockerRunToDockerComposeService.convert(run)
+        #expect(result.notImplemented.isEmpty)
+        #expect(result.yaml.contains("source: /tmp/folder"))
+        #expect(result.yaml.contains("read_only: true") == readOnly)
+    }
+
+    @Test func readOnlyTmpfsKeepsItsModeInBothDirections() throws {
+        let run = "docker run --mount type=tmpfs,target=/cache,tmpfs-mode=755,readonly alpine"
+        let compose = try DockerRunToDockerComposeService.convert(run)
+        #expect(compose.notImplemented.isEmpty)
+        let restored = try DockerComposeToRunService.convert(compose.yaml)
+        #expect(restored.warnings.isEmpty)
+        let mount = try #require(restored.commands.first)
+        #expect(mount.contains("type=tmpfs"))
+        #expect(mount.contains("tmpfs-mode=755"))
+        #expect(mount.contains(",readonly"))
+    }
+
+    @Test func mountPathThatTheCLIWouldRejectOrChangeIsReported() throws {
+        for path in [#"/tmp/draft "#, #"/tmp/first\r\nsecond"#] {
+            let yaml = """
+            services:
+              app:
+                image: alpine
+                volumes:
+                  - type: bind
+                    source: "\(path)"
+                    target: /data
+            """
+            let result = try DockerComposeToRunService.convert(yaml)
+            #expect(result.commands.allSatisfy { !$0.contains("--mount") })
+            #expect(result.warnings.contains { $0.contains("volumes.bind.source") })
+        }
+
+        let run = #"docker run --mount 'type=bind,"source=/tmp/draft ",target=/data' alpine"#
+        let result = try DockerRunToDockerComposeService.convert(run)
+        #expect(result.notImplemented.contains("--mount.source"))
+        #expect(!result.yaml.contains("volumes:"))
     }
 
     @Test func unsupportedLongFormMountFieldsWarnAndDoNotEmitWeakerVolume() throws {

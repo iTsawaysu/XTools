@@ -95,7 +95,7 @@ extension DockerRunToDockerComposeService {
                         lines.append("          size: \(yamlScalar(size))")
                     }
                     if let mode = mount.mode {
-                        lines.append("          mode: \(yamlScalar(mode))")
+                        lines.append("          mode: 0o\(String(mode, radix: 8))")
                     }
                 }
             }
