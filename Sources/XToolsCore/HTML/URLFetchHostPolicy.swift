@@ -177,7 +177,7 @@ public enum URLFetchHostPolicy: Sendable {
         if a == 172 && (16...31).contains(b) { return true }
         if a == 192 && b == 168 { return true }
         if a == 100 && (64...127).contains(b) { return true }
-        if a == 192 && b == 0 { return true }
+        if a == 192 && b == 0 && (ip.2 == 0 || ip.2 == 2) { return true }
         // 198.18.0.0/15（RFC 2544 基准测试段）是本机代理客户端（Clash/Surge 等
         // fake-IP 模式）的标准标记网段：代理 DNS 会把所有公网域名解析到这里，
         // 连接由 TUN 接管并按代理自身的路由规则转发，并非内网地址；封锁它会让

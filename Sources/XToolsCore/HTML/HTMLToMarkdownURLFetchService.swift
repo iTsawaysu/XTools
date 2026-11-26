@@ -117,6 +117,7 @@ public struct LiveHTMLToMarkdownURLFetchClient: HTMLToMarkdownURLFetchClient {
 /// the lock also protects state from the caller's cancellation handler.
 final class HTMLToMarkdownURLSessionDelegate: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     private typealias Completion = CheckedContinuation<(Data, URLResponse), any Error>
+    private typealias RedirectValidation = Task<URLFetchHostPolicy.ResolvedHostDecision, Never>
     private static let maximumRedirects = 5
     private let resolver: URLFetchHostPolicy.Resolver
     private let timeout: TimeInterval
@@ -126,7 +127,8 @@ final class HTMLToMarkdownURLSessionDelegate: NSObject, URLSessionDataDelegate, 
     private var failure: HTMLToMarkdownURLFetchError?
     private var body = Data()
     private var completion: Completion?
-    private var cancelled = false
+    private var redirectValidation: RedirectValidation?
+    private var isFinished = false
 
     init(
         resolver: @escaping URLFetchHostPolicy.Resolver,
@@ -146,7 +148,7 @@ final class HTMLToMarkdownURLSessionDelegate: NSObject, URLSessionDataDelegate, 
         try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { completion in
                 let shouldStart = lock.withLock {
-                    guard !cancelled else { return false }
+                    guard !isFinished else { return false }
                     self.completion = completion
                     return true
                 }
@@ -157,11 +159,12 @@ final class HTMLToMarkdownURLSessionDelegate: NSObject, URLSessionDataDelegate, 
                 }
             }
         } onCancel: {
-            let completion = self.lock.withLock {
-                self.cancelled = true
+            let (completion, validation) = self.lock.withLock {
+                self.isFinished = true
                 self.body = Data()
-                return self.takeCompletion()
+                return (self.takeCompletion(), self.takeRedirectValidation())
             }
+            validation?.cancel()
             task.cancel()
             completion?.resume(throwing: CancellationError())
         }
@@ -190,6 +193,11 @@ final class HTMLToMarkdownURLSessionDelegate: NSObject, URLSessionDataDelegate, 
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        let validation = lock.withLock {
+            isFinished = true
+            return takeRedirectValidation()
+        }
+        validation?.cancel()
         let outcome: (Completion, Result<(Data, URLResponse), any Error>)? = lock.withLock {
             guard let completion = takeCompletion() else { return nil }
             defer { body = Data() }
@@ -208,6 +216,11 @@ final class HTMLToMarkdownURLSessionDelegate: NSObject, URLSessionDataDelegate, 
         return completion
     }
 
+    private func takeRedirectValidation() -> RedirectValidation? {
+        defer { redirectValidation = nil }
+        return redirectValidation
+    }
+
     func urlSession(
         _ session: URLSession,
         task: URLSessionTask,
@@ -215,6 +228,7 @@ final class HTMLToMarkdownURLSessionDelegate: NSObject, URLSessionDataDelegate, 
         newRequest request: URLRequest
     ) async -> URLRequest? {
         let withinLimit = lock.withLock { () -> Bool in
+            guard !isFinished else { return false }
             redirectCount += 1
             return redirectCount <= Self.maximumRedirects
         }
@@ -231,11 +245,21 @@ final class HTMLToMarkdownURLSessionDelegate: NSObject, URLSessionDataDelegate, 
             return reject(error)
         }
 
-        let decision = await URLFetchHostPolicy.evaluateResolvedHost(
-            host,
-            timeout: timeout,
-            resolver: resolver
-        )
+        let validation: RedirectValidation? = lock.withLock {
+            guard !isFinished else { return nil }
+            let validation = Task { [timeout, resolver] in
+                await URLFetchHostPolicy.evaluateResolvedHost(host, timeout: timeout, resolver: resolver)
+            }
+            redirectValidation = validation
+            return validation
+        }
+        guard let validation else { return nil }
+        let decision = await validation.value
+        let isActive = lock.withLock {
+            redirectValidation = nil
+            return !isFinished
+        }
+        guard isActive else { return nil }
         switch decision {
         case .allow: return request
         case .deny: return reject(.privateNetworkDisallowed)
@@ -244,7 +268,9 @@ final class HTMLToMarkdownURLSessionDelegate: NSObject, URLSessionDataDelegate, 
     }
 
     private func reject(_ error: HTMLToMarkdownURLFetchError) -> URLRequest? {
-        lock.withLock { failure = error }
+        lock.withLock {
+            if !isFinished { failure = error }
+        }
         return nil
     }
 }
@@ -270,21 +296,20 @@ public struct HTMLToMarkdownURLFetchService: Sendable {
         let response: URLResponse
         do {
             (data, response) = try await client.fetchData(for: request, byteLimit: options.responseBodyByteLimit)
-        } catch let fetchError as HTMLToMarkdownURLFetchError {
-            throw fetchError
         } catch {
+            try Task.checkCancellation()
+            if error is CancellationError { throw error }
+            if let fetchError = error as? HTMLToMarkdownURLFetchError { throw fetchError }
             throw HTMLToMarkdownURLFetchError.requestFailed
         }
+        try Task.checkCancellation()
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw HTMLToMarkdownURLFetchError.nonHTTPResponse
         }
 
         guard let responseURL = httpResponse.url,
-              let responseHost = responseURL.host,
-              let responseScheme = responseURL.scheme?.lowercased(),
-              (responseScheme == "http" || responseScheme == "https"),
-              URLFetchHostPolicy.evaluate(host: responseHost) == .allow else {
+              (try? Self.validateDestination(responseURL)) != nil else {
             throw HTMLToMarkdownURLFetchError.privateNetworkDisallowed
         }
 
@@ -330,7 +355,7 @@ public struct HTMLToMarkdownURLFetchService: Sendable {
         guard scheme == "http" || scheme == "https" else {
             throw .unsupportedScheme(scheme)
         }
-        guard let host = url.host, !host.isEmpty else {
+        guard let host = url.host, !host.isEmpty, url.user == nil, url.password == nil else {
             throw .invalidURL
         }
 

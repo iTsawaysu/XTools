@@ -9,7 +9,7 @@ struct URLFetchSecurityTests {
             "0:0:0:0:0:0:0:1", "::", "fe90::1", "febf::1",
             "ff02::1", "2002:c0a8:101::1", "2001:0::1",
             "::ffff:127.0.0.1", "::ffff:192.168.1.1", "[fe80::1]",
-            "192.0.0.1", "198.51.100.7", "203.0.113.9", "224.0.0.1"
+            "192.0.0.1", "192.0.2.1", "198.51.100.7", "203.0.113.9", "224.0.0.1"
         ]
         for host in blocked {
             #expect(URLFetchHostPolicy.evaluate(host: host) == .deny, "\(host)")
@@ -23,6 +23,7 @@ struct URLFetchSecurityTests {
         }
         #expect(URLFetchHostPolicy.evaluate(host: "2606:4700:4700::1111") == .allow)
         #expect(URLFetchHostPolicy.evaluate(host: "::ffff:8.8.8.8") == .allow)
+        #expect(URLFetchHostPolicy.evaluate(host: "192.0.43.8") == .allow)
     }
 
     @Test func fakeIPDNSAnswersAreAllowedWhileRealPrivateAnswersStayDenied() async {
@@ -144,10 +145,12 @@ struct URLFetchSecurityTests {
     }
 
     @Test func callerCancellationStopsTheResponseStream() async throws {
-        let request = URLRequest(url: try #require(URL(string: "https://example.com/")))
         let client = makeClient(resolver: { _, _ in ["93.184.216.34"] })
+        let service = HTMLToMarkdownURLFetchService(client: client)
         RecordingURLProtocol.state.configure(data: Data("<p>partial".utf8), finish: false)
-        let pending = Task { try await client.fetchData(for: request, byteLimit: 100) }
+        let pending = Task {
+            try await service.fetchHTML(from: "https://example.com/", options: .init(responseBodyByteLimit: 100))
+        }
         defer { pending.cancel() }
         for _ in 0..<100 where RecordingURLProtocol.state.started == 0 {
             try await Task.sleep(for: .milliseconds(10))
@@ -159,6 +162,15 @@ struct URLFetchSecurityTests {
             try await Task.sleep(for: .milliseconds(10))
         }
         #expect(RecordingURLProtocol.state.stopped > 0)
+    }
+
+    @Test func publicResourceURLsRejectEmbeddedCredentialsBeforeTransport() async {
+        RecordingURLProtocol.state.configure(data: Data("<p>ok</p>".utf8), finish: true)
+        let service = HTMLToMarkdownURLFetchService(client: makeClient(resolver: { _, _ in ["93.184.216.34"] }))
+        await #expect(throws: HTMLToMarkdownURLFetchError.invalidURL) {
+            _ = try await service.fetchHTML(from: "https://demo@example.com/")
+        }
+        #expect(RecordingURLProtocol.state.started == 0)
     }
 
     @Test func redirectDelegateChecksDestinationBeforeFollowing() async throws {
@@ -230,6 +242,33 @@ struct URLFetchSecurityTests {
         )
         #expect(sixth == nil)
         #expect(limitedDelegate.rejection == .requestFailed)
+    }
+
+    @Test func requestCompletionCancelsThePendingRedirectResolver() async throws {
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
+        let source = try #require(URL(string: "https://example.com/start"))
+        let destination = try #require(URL(string: "https://next.example.com/"))
+        let task = session.dataTask(with: source)
+        let response = try #require(HTTPURLResponse(url: source, statusCode: 302, httpVersion: nil, headerFields: nil))
+        let lookup = PausedDNSLookup()
+        let signal = AsyncStream<Bool>.makeStream()
+        let delegate = HTMLToMarkdownURLSessionDelegate(resolver: { _, _ in
+            lookup.started.signal()
+            try? await Task.sleep(for: .milliseconds(500))
+            signal.continuation.yield(Task.isCancelled)
+            signal.continuation.finish()
+            return nil
+        }, timeout: 1)
+        let redirecting = Task {
+            await redirect(delegate, session: session, task: task, response: response, request: URLRequest(url: destination))
+        }
+        try #require(await Task.detached { lookup.waitUntilStarted() }.value)
+        delegate.urlSession(session, task: task, didCompleteWithError: URLError(.timedOut))
+
+        #expect(await redirecting.value == nil)
+        var observations = signal.stream.makeAsyncIterator()
+        #expect(await observations.next() == true)
     }
 
     private func makeClient(
